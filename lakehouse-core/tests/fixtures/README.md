@@ -12,3 +12,9 @@ Expected parser behavior:
 - Return a `pandas.DataFrame` inside `ParsedBatch`.
 - Preserve `source_id`, `dataset_id`, and `artifact_sha256` from the `FetchedAsset`.
 - Apply no cleaning, normalization, or Silver/Gold semantics.
+
+## Source-specific fixtures
+
+`raw/evds/` holds trimmed excerpts of real EVDS3 responses. `raw/bddk_monthly/` holds trimmed
+excerpts of real BDDK monthly bulletin responses. Each directory has its own README
+documenting the capture method, the response envelope, and the source anomalies encoded.
