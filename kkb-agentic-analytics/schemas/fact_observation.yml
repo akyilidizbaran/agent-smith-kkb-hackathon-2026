@@ -1,0 +1,80 @@
+version: "1.0"
+name: fact_observation
+description: Minimal future Silver observation contract; this phase does not implement Silver.
+fields:
+  - name: series_id
+    type: string
+    nullable: false
+    description: Stable source-namespaced series identifier.
+  - name: entity_id
+    type: string
+    nullable: true
+    description: Entity represented by the observation, such as a bank group or country.
+  - name: date_key
+    type: date
+    nullable: false
+    description: Canonical observation period date, represented by the period end.
+  - name: period_start
+    type: date
+    nullable: true
+    description: First date covered by the observation when the source exposes it.
+  - name: period_end
+    type: date
+    nullable: true
+    description: Last date covered by the observation when it differs from date_key.
+  - name: frequency
+    type: string
+    nullable: false
+    description: Native source frequency code; vocabulary is established by a later semantic contract.
+  - name: value
+    type: float
+    nullable: true
+    description: Numeric observation value; source nulls remain null.
+  - name: unit
+    type: string
+    nullable: true
+    description: Unit for the canonical value.
+  - name: measure_type
+    type: string
+    nullable: false
+    description: One of the controlled measure type values listed below.
+  - name: quality_flag
+    type: string
+    nullable: true
+    description: Primary quality status for the observation; detailed results belong in meta.quality_result.
+  - name: vintage_id
+    type: string
+    nullable: false
+    description: Source or dataset ingestion vintage identifier.
+  - name: source_id
+    type: string
+    nullable: false
+    description: Stable lowercase snake_case source identifier.
+  - name: artifact_sha256
+    type: string
+    nullable: false
+    description: SHA-256 identifier of the originating immutable RAW artifact.
+  - name: fetched_at
+    type: timestamp_utc
+    nullable: false
+    description: UTC timestamp at which the source bytes were fetched.
+  - name: run_id
+    type: uuid
+    nullable: false
+    description: UUID identifying the ingestion run.
+
+measure_type_vocabulary:
+  - stock
+  - flow_periodic
+  - flow_ytd
+  - flow_cumulative
+  - rate
+  - ratio
+  - index
+  - count
+  - unknown
+
+notes:
+  - value_original and unit_original belong in the later Silver schema when source-to-canonical transformations are implemented.
+  - Aggregation behavior is intentionally not defined globally in this phase.
+  - rate, ratio, and index rules require verified source semantics before implementation.

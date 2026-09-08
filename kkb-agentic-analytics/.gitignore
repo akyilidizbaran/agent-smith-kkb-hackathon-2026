@@ -1,0 +1,16 @@
+.venv/
+.DS_Store
+**pycache**/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+*.pyc
+.env
+data/raw/
+data/bronze/
+data/silver/
+data/quarantine/
+data/clean/
+data/normalized/
+data/lakehouse.duckdb*
+.ipynb_checkpoints/
