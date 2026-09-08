@@ -6,10 +6,14 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
+# agent-core/ dizini: veri ve yapılandırma yolları buna göre çözülür.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(PROJECT_ROOT / ".env")
+
+# .env takımın ortak deposunda, repo kökünde durur (agent-core'un bir üstü).
+# find_dotenv yukarı doğru aradığı için hangi dizinden çalıştırıldığımız fark etmez.
+load_dotenv(find_dotenv(usecwd=False) or PROJECT_ROOT.parent / ".env")
 
 
 @dataclass(frozen=True)

@@ -74,20 +74,23 @@ cevaplanabilir.
 
 | Yol | İçerik |
 |---|---|
-| `src/kkb_agent/` | Agentic analytics motoru — [teknik doküman](docs/AGENT.md) |
-| `src/kkb_agent/contracts/` | Veri katmanıyla sözleşme (Protocol + semantic catalog) |
-| `src/kkb_agent/core/` | Harness, analiz durumu, araç soyutlaması |
-| `src/kkb_agent/tools/` | Araçlar — her yetenek bağımsız modül |
-| `tests/golden/` | Golden set: ilerlemenin objektif ölçüsü |
-| `scripts/` | Geliştirme seed'i, golden koşucusu |
+| `agent-core/src/kkb_agent/` | Agentic analytics motoru — [teknik doküman](docs/AGENT.md) |
+| `agent-core/src/kkb_agent/contracts/` | Veri katmanıyla sözleşme (Protocol + semantic catalog) |
+| `agent-core/src/kkb_agent/core/` | Harness, analiz durumu, araç soyutlaması |
+| `agent-core/src/kkb_agent/tools/` | Araçlar — her yetenek bağımsız modül |
+| `agent-core/tests/golden/` | Golden set: ilerlemenin objektif ölçüsü |
+| `agent-core/scripts/` | Geliştirme seed'i, golden koşucusu |
+| `lakehouse-core/` | Data Lakehouse — ingestion, Bronze/Silver/Gold, semantic catalog |
 | `docs/` | Sözleşme dokümanları, açılış toplantısı slaytları |
 
 ## Hızlı başlangıç
 
 ```bash
-uv venv && uv pip install duckdb httpx pandas pydantic openai python-dotenv
 cp .env.example .env          # değerleri doldurun — .env asla commit edilmez
 ollama pull qwen3:8b          # geliştirme modeli
+
+cd agent-core
+uv venv && uv pip install duckdb httpx pandas pydantic openai python-dotenv
 python scripts/dev_seed.py    # gerçek BDDK verisiyle geliştirme lakehouse'u
 
 PYTHONPATH=src python -m kkb_agent.cli --trace "2025'te konut kredisi nasıl değişti?"

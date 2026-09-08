@@ -27,10 +27,13 @@ daha güçlü modelle daha da iyi çalışır.
 
 ## Kurulum
 
+Tüm komutlar `agent-core/` dizininden çalıştırılır.
+
 ```bash
-uv venv && uv pip install duckdb httpx pandas pydantic openai python-dotenv
-cp .env.example .env          # değerleri doldurun; .env asla commit edilmez
+cp ../.env.example ../.env    # değerleri doldurun; .env asla commit edilmez
 ollama pull qwen3:8b          # geliştirme modeli
+
+uv venv && uv pip install duckdb httpx pandas pydantic openai python-dotenv
 python scripts/dev_seed.py    # gerçek BDDK verisiyle geliştirme lakehouse'u
 ```
 
@@ -67,13 +70,13 @@ LLM_MODEL=<model adı>
 
 | Yol | İçerik |
 |---|---|
-| `src/kkb_agent/contracts/` | Veri katmanıyla sözleşme (Protocol + semantic catalog) |
-| `src/kkb_agent/core/` | Harness, workspace, araç soyutlaması, kayıt defteri |
-| `src/kkb_agent/tools/` | Araçlar — her yetenek bağımsız bir modül |
-| `src/kkb_agent/adapters/` | Lakehouse uygulamaları (şimdilik DuckDB) |
-| `src/kkb_agent/llm/` | Sağlayıcıdan bağımsız LLM katmanı |
-| `tests/golden/` | Golden set vakaları |
-| `docs/` | Sözleşme dokümanı, açılış toplantısı slaytları |
+| `agent-core/src/kkb_agent/contracts/` | Veri katmanıyla sözleşme (Protocol + semantic catalog) |
+| `agent-core/src/kkb_agent/core/` | Harness, workspace, araç soyutlaması, kayıt defteri |
+| `agent-core/src/kkb_agent/tools/` | Araçlar — her yetenek bağımsız bir modül |
+| `agent-core/src/kkb_agent/adapters/` | Lakehouse uygulamaları (şimdilik DuckDB) |
+| `agent-core/src/kkb_agent/llm/` | Sağlayıcıdan bağımsız LLM katmanı |
+| `agent-core/tests/golden/` | Golden set vakaları |
+| `docs/` | Sözleşme dokümanı, açılış toplantısı slaytları (repo kökünde) |
 
 ## Kurallar (KKB şartnamesi)
 
