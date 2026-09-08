@@ -1,0 +1,251 @@
+"""Lakehouse Tool ailesi — agent'ın veri havuzuna erişimi.
+
+Yarışma şartnamesi bunu tek bir 'Lakehouse Tool' olarak sayıyor; burada üç
+tek-amaçlı araca bölündü. Sebep pratik: küçük parametreli ve tek işi olan
+araçlarda küçük modellerin isabet oranı belirgin biçimde yüksek. Motor
+açısından hepsi aynı kayıt defterinde duran sıradan araçlardır.
+
+Akış modele şu sırayı dayatır: önce KEŞFET, sonra İNCELE, sonra SORGULA.
+Bu sıra, modelin var olmayan kolon adı uydurmasını büyük ölçüde engeller.
+"""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, Field
+
+from ..contracts.lakehouse import LakehouseClient, LakehouseError
+from ..core.tool import Tool, ToolResult
+from ..core.workspace import AnalysisWorkspace
+
+
+class SearchParams(BaseModel):
+    query: str = Field(
+        description="Aranan konuyu anlatan Türkçe ifade, ör. 'konut kredisi aylık bakiye'"
+    )
+
+
+class LakehouseSearchTool(Tool):
+    name = "lakehouse_search"
+    description = (
+        "Veri havuzunda hangi tabloların bulunduğunu keşfeder. Bir soruyu cevaplamadan ÖNCE "
+        "hangi verinin mevcut olduğunu öğrenmek için bunu kullan. Tablo adlarını ve ne "
+        "içerdiklerini döndürür."
+    )
+    Params = SearchParams
+
+    def __init__(self, lakehouse: LakehouseClient) -> None:
+        self.lakehouse = lakehouse
+
+    def run(self, params: SearchParams) -> ToolResult:
+        specs = self.lakehouse.search_datasets(params.query)
+        if not specs:
+            return ToolResult(content="Bu konuyla ilgili tablo bulunamadı.", ok=True)
+        lines = ["Bulunan tablolar:"]
+        for s in specs:
+            lines.append(
+                f"- {s.dataset_id}: {s.name}. {s.description[:180]} "
+                f"[frekans: {s.frequency.value}, kapsam: {s.coverage.start}→{s.coverage.end}]"
+            )
+        lines.append("\nSorgu yazmadan önce lakehouse_describe ile kolonları incele.")
+        return ToolResult(content="\n".join(lines))
+
+
+class DescribeParams(BaseModel):
+    dataset_id: str = Field(description="lakehouse_search'ten dönen tablo kimliği")
+
+
+class LakehouseDescribeTool(Tool):
+    name = "lakehouse_describe"
+    description = (
+        "Bir tablonun kolonlarını, birimlerini, kümülatif olup olmadığını ve örnek satırlarını "
+        "gösterir. SQL yazmadan ÖNCE mutlaka çağır: kolon adlarını ve birimleri buradan öğren."
+    )
+    Params = DescribeParams
+
+    def __init__(self, lakehouse: LakehouseClient) -> None:
+        self.lakehouse = lakehouse
+
+    def run(self, params: DescribeParams) -> ToolResult:
+        try:
+            spec = self.lakehouse.get_dataset(params.dataset_id)
+            sample = self.lakehouse.preview(params.dataset_id, n=5)
+        except LakehouseError as exc:
+            return ToolResult.error(str(exc))
+
+        content = spec.to_prompt_card()
+        content += "\n\nÖrnek satırlar:\n" + sample.data.to_string(index=False)
+        return ToolResult(content=content)
+
+
+class QueryParams(BaseModel):
+    sql: str = Field(
+        description="Çalıştırılacak DuckDB SQL sorgusu. Sadece SELECT/WITH. "
+        "Kolon ve tablo adları lakehouse_describe çıktısıyla birebir aynı olmalı."
+    )
+    purpose: str = Field(
+        description="Bu sorgunun neyi hesapladığını anlatan tek cümlelik Türkçe açıklama. "
+        "Kullanıcıya gösterilecek ve analiz geçmişine kaydedilecek."
+    )
+    as_active_table: bool = Field(
+        default=True,
+        description="Bu sorgu kullanıcının sorusunu cevaplayan SONUÇ mu? Öyleyse true — "
+        "tek satırlık bir cevap olsa bile true. Sadece kolon adı doğrulama gibi ara "
+        "kontroller için false kullan. Emin değilsen true.",
+    )
+
+
+class LakehouseQueryTool(Tool):
+    name = "lakehouse_query"
+    description = (
+        "Veri havuzunda SQL çalıştırır ve sonucu döndürür. Toplama, ortalama, yüzde değişim "
+        "gibi TÜM hesapları bu araçla yaptır, kendin hesaplama. Sonuç aktif analiz tablosu "
+        "olarak kaydedilir."
+    )
+    Params = QueryParams
+
+    def __init__(self, lakehouse: LakehouseClient, workspace: AnalysisWorkspace) -> None:
+        self.lakehouse = lakehouse
+        self.workspace = workspace
+
+    def run(self, params: QueryParams) -> ToolResult:
+        try:
+            result = self.lakehouse.execute_sql(params.sql)
+        except LakehouseError as exc:
+            # Hata modele geri döner; harness'ın onarım döngüsü devreye girer.
+            return ToolResult.error(str(exc))
+
+        if result.is_empty:
+            return ToolResult(
+                content="Sorgu çalıştı ancak hiç satır dönmedi. Filtreleri veya dönem "
+                "aralığını kontrol et; istenen dönem tablonun kapsamı dışında olabilir.",
+                ok=True,
+                provenance=result.provenance,
+            )
+
+        if params.as_active_table:
+            self.workspace.set_table(
+                result.data, description=params.purpose, provenance=result.provenance
+            )
+            self.workspace.title = params.purpose
+
+        # Modele TAM tablo değil, özet gider: context window'u koruyoruz.
+        df = result.data
+        preview_rows = min(10, len(df))
+        content = (
+            f"Sorgu başarılı: {len(df)} satır, {len(df.columns)} sütun.\n"
+            f"Sütunlar: {', '.join(df.columns)}\n"
+            f"İlk {preview_rows} satır:\n{df.head(preview_rows).to_string(index=False)}"
+        )
+        if len(df) > preview_rows:
+            content += f"\n... ({len(df) - preview_rows} satır daha; tamamı analiz tablosunda)"
+        units = self._units_for(df.columns, result.provenance.dataset_ids)
+        if units:
+            content += "\nBirimler: " + ", ".join(units)
+        content += f"\nKaynak: {result.provenance.summary()}"
+        return ToolResult(content=content, data=df, provenance=result.provenance)
+
+    def _units_for(self, columns: list[str], dataset_ids: list[str]) -> list[str]:
+        """Sonuç kolonlarının birimlerini katalogdan çözer.
+
+        Model birim çevirisi yapmasın diye değeri DEĞİL, etiketi veriyoruz:
+        "toplam = milyon TL". İlk ölçümde model 523.455'i hem 'milyon TL' hem
+        '523.455 milyon' diye yazmıştı; belirsizliğin kaynağı buydu.
+        """
+        out: list[str] = []
+        for ds_id in dataset_ids:
+            try:
+                spec = self.lakehouse.get_dataset(ds_id)
+            except LakehouseError:
+                continue
+            for col in columns:
+                cs = spec.column(col)
+                if cs and cs.unit:
+                    out.append(f"{col} = {cs.unit}")
+        return out
+
+
+class DistinctValuesParams(BaseModel):
+    dataset_id: str = Field(description="Tablo kimliği")
+    column: str = Field(description="Değerleri listelenecek kırılım kolonu, ör. 'kalem'")
+    contains: str | None = Field(
+        default=None,
+        description="Sadece bu metni içeren değerleri getir (büyük/küçük harf duyarsız). "
+        "Ör. 'konut'. Boş bırakılırsa tüm değerler listelenir.",
+    )
+    limit: int = Field(default=50, description="En fazla kaç değer döndürülsün")
+
+
+class LakehouseDistinctValuesTool(Tool):
+    """Modelin en sık yaptığı hatayı kapatan araç.
+
+    İlk ölçümde model 'Tüketici Kredileri - Konut' kaleminin adını TAHMİN etti,
+    iki sorgu boşa gitti, sonra `LIKE '%Konut%'` ile üç ayrı kalemi birden
+    çekip mükerrer topladı. Filtre yazmadan önce gerçek değerleri görmek bu
+    sınıf hataların tamamını ortadan kaldırıyor.
+    """
+
+    name = "lakehouse_distinct_values"
+    description = (
+        "Bir kırılım kolonundaki GERÇEK değerleri listeler. Bir kalemi/kategoriyi filtrelemeden "
+        "ÖNCE mutlaka bunu çağır — değer adını asla tahmin etme. Alt toplam satırlarını da "
+        "işaretler, böylece mükerrer sayımdan kaçınırsın."
+    )
+    Params = DistinctValuesParams
+
+    def __init__(self, lakehouse: LakehouseClient) -> None:
+        self.lakehouse = lakehouse
+
+    def run(self, params: DistinctValuesParams) -> ToolResult:
+        try:
+            spec = self.lakehouse.get_dataset(params.dataset_id)
+        except LakehouseError as exc:
+            return ToolResult.error(str(exc))
+
+        if spec.column(params.column) is None:
+            return ToolResult.error(
+                f"'{params.column}' kolonu {params.dataset_id} tablosunda yok. "
+                f"Mevcut kolonlar: {', '.join(c.name for c in spec.columns)}"
+            )
+
+        col = params.column
+        # Alt toplam bayrağı varsa birlikte göster: mükerrer sayımı önleyen sinyal.
+        has_flag = spec.column("is_alt_toplam") is not None
+        select = f"{col}, is_alt_toplam" if has_flag else col
+        where = ""
+        if params.contains:
+            safe = params.contains.replace("'", "''")
+            where = f"WHERE {col} ILIKE '%{safe}%'"
+
+        sql = (
+            f"SELECT DISTINCT {select} FROM {params.dataset_id} {where} "
+            f"ORDER BY 1 LIMIT {int(params.limit)}"
+        )
+        try:
+            result = self.lakehouse.execute_sql(sql)
+        except LakehouseError as exc:
+            return ToolResult.error(str(exc))
+
+        if result.is_empty:
+            hint = f" ('{params.contains}' içeren değer yok)" if params.contains else ""
+            return ToolResult(
+                content=f"'{col}' kolonunda değer bulunamadı{hint}. "
+                f"Daha genel bir arama terimi dene veya contains parametresini boş bırak.",
+                ok=True,
+            )
+
+        lines = [f"'{col}' kolonundaki değerler ({len(result.data)} adet):"]
+        for row in result.data.itertuples(index=False):
+            value = getattr(row, col, row[0])
+            if has_flag and bool(row[1]):
+                lines.append(f"  - {value}   ⚠ ALT TOPLAM (alt kalemlerle birlikte toplama)")
+            else:
+                lines.append(f"  - {value}")
+        lines.append(
+            "\nDİKKAT: Bu değerlerden SADECE BİRİNİ seç ve birebir yaz. "
+            "Kullanıcı açıkça 'hepsi' / 'karşılaştır' demedikçe birden fazlasını IN veya LIKE "
+            "ile birlikte alma — aynı döneme birden çok satır düşer ve toplamlar bozulur.\n"
+            "Benzer isimli kalemler farklı şeyleri ölçebilir: 'Takipteki ...' takipteki "
+            "alacaktır, '... (Dövize Endeksli)' ayrı bir üründür. Kullanıcı bunları özellikle "
+            "istemediyse ana kalemi seç."
+        )
+        return ToolResult(content="\n".join(lines), data=result.data)
