@@ -1,0 +1,88 @@
+{
+  "totalCount": 5,
+  "items": [
+    {
+      "Tarih": "01-01-2021",
+      "YEARWEEK": "2021-1",
+      "TP_KTF12": "18.61",
+      "UNIXTIME": {
+        "$numberLong": "1609455600"
+      }
+    },
+    {
+      "Tarih": "01-08-2021",
+      "YEARWEEK": "2021-2",
+      "TP_KTF12": "18.61",
+      "UNIXTIME": {
+        "$numberLong": "1610060400"
+      }
+    },
+    {
+      "Tarih": "01-15-2021",
+      "YEARWEEK": "2021-3",
+      "TP_KTF12": "18.40",
+      "UNIXTIME": {
+        "$numberLong": "1610665200"
+      }
+    },
+    {
+      "Tarih": "01-22-2021",
+      "YEARWEEK": "2021-4",
+      "TP_KTF12": "18.19",
+      "UNIXTIME": {
+        "$numberLong": "1611270000"
+      }
+    },
+    {
+      "Tarih": "07-03-2026",
+      "YEARWEEK": "2026-27",
+      "TP_KTF12": "41.45",
+      "UNIXTIME": {
+        "$numberLong": "1783026000"
+      }
+    }
+  ],
+  "transposedItems": [
+    {
+      "serieCode": "TP_KTF12",
+      "serieName": "Housing Loans (TRY) (Flow, %)",
+      "01-01-2021": "18.61",
+      "01-08-2021": "18.61",
+      "01-15-2021": "18.40",
+      "01-22-2021": "18.19",
+      "07-03-2026": "41.45"
+    }
+  ],
+  "transposedColumns": [
+    {
+      "key": "serieName",
+      "title": ""
+    },
+    {
+      "key": "07-03-2026",
+      "title": "07-03-2026"
+    },
+    {
+      "key": "01-22-2021",
+      "title": "01-22-2021"
+    },
+    {
+      "key": "01-15-2021",
+      "title": "01-15-2021"
+    },
+    {
+      "key": "01-08-2021",
+      "title": "01-08-2021"
+    },
+    {
+      "key": "01-01-2021",
+      "title": "01-01-2021"
+    }
+  ],
+  "seriesNames": {
+    "TP_KTF12": "Housing Loans (TRY) (Flow, %)"
+  },
+  "frequencyConversion": {
+    "TP.KTF12": true
+  }
+}

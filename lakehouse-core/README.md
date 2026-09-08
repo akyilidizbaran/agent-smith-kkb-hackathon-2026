@@ -1,5 +1,8 @@
 # kkb-agentic-analytics
 
+> Source Access branch'inde yapılan EVDS ve BDDK çalışmalarının toplantı özeti için
+> [`SOURCE_ACCESS_TOPLANTI_OZETI.md`](SOURCE_ACCESS_TOPLANTI_OZETI.md) dosyasına bakın.
+
 Python 3.12 tabanli, local-first ve generic bir data lakehouse temelidir.
 Phase 0.5 ortak contract'lari; dis kaynak erisimi, immutable RAW artifact saklama ve
 offline parser akisini tanimlar. Gercek kaynak connector'lari, Silver/Gold donusumleri
