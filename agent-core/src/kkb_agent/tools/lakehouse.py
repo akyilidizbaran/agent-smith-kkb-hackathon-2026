@@ -11,6 +11,8 @@ Bu sıra, modelin var olmayan kolon adı uydurmasını büyük ölçüde engelle
 
 from __future__ import annotations
 
+import re
+
 from pydantic import BaseModel, Field
 
 from ..contracts.lakehouse import LakehouseClient, LakehouseError
@@ -115,9 +117,30 @@ class LakehouseQueryTool(Tool):
             return ToolResult.error(str(exc))
 
         if result.is_empty:
+            # Boş sonucun iki farklı sebebi var ve modele söylenecek şey taban tabana zıt:
+            # (a) filtre yanlış  -> düzelt ve tekrar dene
+            # (b) dönem kapsam dışı -> TEKRAR DENEME, kullanıcıya verinin olmadığını söyle
+            # Ayrımı yapmazsak model (b) durumunda sonsuza kadar denemeye devam ediyor;
+            # ölçümde her seferinde 12 adım harcayıp adım limitini yakıyordu.
+            out_of_range = self._out_of_coverage(params.sql)
+            if out_of_range:
+                return ToolResult(
+                    content=(
+                        "SONUÇ: Bu veri kaynakta bulunmuyor. Bu bir hata değildir, "
+                        "sorgun doğruydu; istenen dönem veri setinde yok.\n"
+                        f"{out_of_range}\n"
+                        "ŞİMDİ YAPACAĞIN: Araç çağırmayı bırak ve kullanıcıya tek "
+                        "paragrafta şunu söyle: istediği dönemin verisi mevcut değil ve "
+                        "elde hangi tarih aralığının bulunduğu. Sayı tahmin etme, başka "
+                        "sorgu deneme, SQL veya teknik ayrıntı paylaşma."
+                    ),
+                    ok=True,
+                    provenance=result.provenance,
+                )
             return ToolResult(
-                content="Sorgu çalıştı ancak hiç satır dönmedi. Filtreleri veya dönem "
-                "aralığını kontrol et; istenen dönem tablonun kapsamı dışında olabilir.",
+                content="Sorgu çalıştı ancak hiç satır dönmedi. Dönem aralığı kapsam içinde, "
+                "yani sorun büyük olasılıkla filtre değerinde. Kalem/kategori adını "
+                "lakehouse_distinct_values ile doğrula.",
                 ok=True,
                 provenance=result.provenance,
             )
@@ -143,6 +166,29 @@ class LakehouseQueryTool(Tool):
             content += "\nBirimler: " + ", ".join(units)
         content += f"\nKaynak: {result.provenance.summary()}"
         return ToolResult(content=content, data=df, provenance=result.provenance)
+
+    def _out_of_coverage(self, sql: str) -> str | None:
+        """Sorgudaki yıllar katalog kapsamının dışında mı?
+
+        Basit ama etkili: SQL içindeki dört haneli yılları toplayıp kataloğun
+        kapsadığı aralıkla karşılaştırıyoruz. Amaç kesin SQL analizi değil,
+        modele "bu veri yok" diyebilmek için yeterli sinyali üretmek.
+        """
+        years = {int(y) for y in re.findall(r"\b(19\d{2}|20\d{2})\b", sql)}
+        if not years:
+            return None
+        for spec in self.lakehouse.list_datasets():
+            if spec.dataset_id not in sql:
+                continue
+            lo, hi = spec.coverage.start.year, spec.coverage.end.year
+            outside = sorted(y for y in years if y < lo or y > hi)
+            if outside and not any(lo <= y <= hi for y in years):
+                return (
+                    f"Sorgudaki {', '.join(map(str, outside))} yılı/yılları "
+                    f"{spec.dataset_id} tablosunun kapsamı dışında "
+                    f"(mevcut aralık: {spec.coverage.start} → {spec.coverage.end})."
+                )
+        return None
 
     def _units_for(self, columns: list[str], dataset_ids: list[str]) -> list[str]:
         """Sonuç kolonlarının birimlerini katalogdan çözer.

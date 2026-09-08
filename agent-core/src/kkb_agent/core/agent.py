@@ -72,6 +72,9 @@ tek satırlık sonuçlar da analiz tablosudur.
 alt toplam) kullanıcı istemedikçe aynı sorguya katma; aynı döneme birden çok satır düşerse \
 tablo bozulur.
 - Kullanıcıya Türkçe, net ve kısa cevap ver. Ara adımları anlatma; sonucu ve gerekçesini anlat.
+- Muhatabın bir ekonomi analisti, geliştirici DEĞİL. Nihai cevapta SQL, kolon adı, araç adı, \
+hata mesajı veya "sorgunuzu kontrol edin" türü teknik yönlendirme YAZMA. Veri yoksa bunu \
+sade bir cümleyle söyle ve elde hangi dönemin bulunduğunu belirt.
 
 Bir araç hata döndürürse hatayı oku, çağrını düzelt ve tekrar dene. \
 Yeterli bilgiye ulaştığında araç çağırmayı bırak ve nihai cevabını yaz."""
@@ -127,6 +130,18 @@ class AgentAnswer:
 
 
 class AnalyticsAgent:
+    # Yalnız bu araçlar "kullanıcının sorusunu cevaplayan veri" üretir.
+    # Katalog araçları (search/describe/distinct_values) da DataFrame döndürür
+    # ama bunlar keşif adımıdır; cevabın dayanağı olamaz.
+    DATA_PRODUCING_TOOLS = frozenset(
+        {
+            "lakehouse_query",
+            "workspace_add_column",
+            "workspace_compute_column",
+            "workspace_show",
+        }
+    )
+
     def __init__(
         self,
         llm: LLMClient,
@@ -154,6 +169,8 @@ class AnalyticsAgent:
         steps: list[AgentStep] = []
         native = self.llm.supports_native_tools()
         tools = self.registry.schemas() if native else None
+        produced_data = False   # veri getiren bir araç başarıyla çalıştı mı?
+        nudged = False          # "önce veriyi çek" uyarısı bir kez verilir
 
         for i in range(1, self.max_steps + 1):
             started = time.perf_counter()
@@ -163,6 +180,31 @@ class AnalyticsAgent:
 
             # --- Araç çağrısı yoksa: nihai cevap ---
             if not calls:
+                # Model bazen kataloğu okuyup veriyi hiç çekmeden cevap yazmaya
+                # kalkıyor; ölçümde G5 her denemede 3 adımda burada duruyordu.
+                # Cevabı reddetmiyoruz, bir kez geri gönderip veriyi çektiriyoruz.
+                if not produced_data and not nudged:
+                    nudged = True
+                    steps.append(
+                        AgentStep(
+                            index=i,
+                            thought="veri çekilmeden cevap denendi — geri gönderildi",
+                            ok=False,
+                            duration_ms=(time.perf_counter() - started) * 1000,
+                        )
+                    )
+                    messages.append(ChatMessage(role="assistant", content=response.content))
+                    messages.append(
+                        ChatMessage(
+                            role="user",
+                            content="Henüz hiçbir veri sorgusu çalıştırmadın; yalnızca "
+                            "katalogu inceledin. Katalog bilgisi cevap DEĞİLDİR. "
+                            "Kullanıcının sorusunu cevaplayan sayıları lakehouse_query ile "
+                            "çek, sonra cevabını yaz.",
+                        )
+                    )
+                    continue
+
                 answer_text = self._strip_reasoning(response.content)
                 steps.append(
                     AgentStep(
@@ -197,6 +239,8 @@ class AnalyticsAgent:
                         duration_ms=elapsed,
                     )
                 )
+                if result.ok and call.name in self.DATA_PRODUCING_TOOLS:
+                    produced_data = True
                 log.info("adım %d: %s -> %s", i, call.name, "ok" if result.ok else "HATA")
                 messages.append(self._result_message(call, result, native=native))
 

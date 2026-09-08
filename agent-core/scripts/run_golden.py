@@ -1,9 +1,15 @@
 """Golden set koşucusu.
 
 Kullanım:
-    python scripts/run_golden.py            # tümü
-    python scripts/run_golden.py G2 G4      # seçili vakalar
+    python scripts/run_golden.py                  # tümü, tek geçiş
+    python scripts/run_golden.py G2 G4            # seçili vakalar
+    python scripts/run_golden.py --repeat 5       # KARARLILIK ölçümü
     python scripts/run_golden.py --json out.json
+
+Neden --repeat: LLM tabanlı bir sistemde tek koşu bir ŞANS örneğidir. Aynı vaka
+bir koşuda geçip diğerinde kalabiliyor; "düzeldi" demek için geçme ORANINA
+bakmak gerekir. Demo günü jüri önünde tek deneme hakkımız olacak, dolayısıyla
+%60 geçen bir vaka geçmiş sayılmaz.
 
 Çıktı: vaka bazında geçti/kaldı + neden, ve toplu metrikler (süre, adım sayısı,
 araç kullanımı, hata oranı). Her değişiklikten sonra koşulup önceki sonuçla
@@ -24,6 +30,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tests.golden.cases import CASES, GoldenCase  # noqa: E402
 
 from kkb_agent.cli import build_agent  # noqa: E402
+
+
+@dataclass
+class StabilityReport:
+    """Bir vakanın N tekrardaki davranışı."""
+
+    id: str
+    runs: int
+    passed: int
+    durations: list[float] = field(default_factory=list)
+    step_counts: list[int] = field(default_factory=list)
+    failure_reasons: dict[str, int] = field(default_factory=dict)
+    tool_paths: set[str] = field(default_factory=set)
+
+    @property
+    def pass_rate(self) -> float:
+        return self.passed / self.runs if self.runs else 0.0
+
+    @property
+    def verdict(self) -> str:
+        r = self.pass_rate
+        if r == 1.0:
+            return "KARARLI"
+        if r == 0.0:
+            return "BAŞARISIZ"
+        return "KARARSIZ"
 
 
 @dataclass
@@ -97,8 +129,65 @@ def run_case(case: GoldenCase) -> CaseOutcome:
     )
 
 
+def run_stability(cases: list[GoldenCase], repeat: int) -> list[StabilityReport]:
+    """Her vakayı N kez koşup geçme oranını ölçer."""
+    reports: list[StabilityReport] = []
+    for case in cases:
+        rep = StabilityReport(id=case.id, runs=repeat, passed=0)
+        print(f"\n▶ {case.id} — {repeat} tekrar")
+        for i in range(1, repeat + 1):
+            try:
+                o = run_case(case)
+            except Exception as exc:
+                o = CaseOutcome(
+                    id=case.id, passed=False, duration_s=0.0, steps=0,
+                    failures=[f"çalıştırma hatası: {type(exc).__name__}"],
+                )
+            rep.durations.append(o.duration_s)
+            rep.step_counts.append(o.steps)
+            rep.tool_paths.add(" → ".join(o.tools_used) or "(araç yok)")
+            if o.passed:
+                rep.passed += 1
+            for f in o.failures:
+                # Sayısal ayrıntıyı kırp ki aynı hata tek satırda toplansın
+                key = f.split(":")[0].strip()
+                rep.failure_reasons[key] = rep.failure_reasons.get(key, 0) + 1
+            print(f"   {i}/{repeat} {'✓' if o.passed else '✗'} {o.duration_s:.0f}s {o.steps} adım")
+        reports.append(rep)
+    return reports
+
+
+def print_stability(reports: list[StabilityReport]) -> None:
+    print("\n" + "=" * 72)
+    print("KARARLILIK RAPORU")
+    print("=" * 72)
+    for r in reports:
+        avg = sum(r.durations) / max(len(r.durations), 1)
+        print(
+            f"\n{r.id:26} {r.passed}/{r.runs} ({r.pass_rate:.0%})  {r.verdict}"
+            f"  | ort. {avg:.0f}s | adımlar: {r.step_counts}"
+        )
+        for reason, n in sorted(r.failure_reasons.items(), key=lambda x: -x[1]):
+            print(f"     ✗ {n}x {reason}")
+        if len(r.tool_paths) > 1:
+            print(f"     ⚠ {len(r.tool_paths)} FARKLI araç yolu izlendi:")
+            for path in sorted(r.tool_paths):
+                print(f"        {path}")
+
+    stable = sum(1 for r in reports if r.verdict == "KARARLI")
+    flaky = sum(1 for r in reports if r.verdict == "KARARSIZ")
+    broken = sum(1 for r in reports if r.verdict == "BAŞARISIZ")
+    print("\n" + "=" * 72)
+    print(f"KARARLI: {stable} | KARARSIZ: {flaky} | BAŞARISIZ: {broken}")
+
+
 def main() -> None:
     argv = sys.argv[1:]
+    repeat = 1
+    if "--repeat" in argv:
+        i = argv.index("--repeat")
+        repeat = int(argv[i + 1])
+        del argv[i : i + 2]
     json_out = None
     if "--json" in argv:
         i = argv.index("--json")
@@ -107,6 +196,23 @@ def main() -> None:
     args = [a for a in argv if not a.startswith("--")]
 
     selected = [c for c in CASES if not args or any(a in c.id for a in args)]
+
+    if repeat > 1:
+        print(f"Kararlılık ölçümü: {len(selected)} vaka × {repeat} tekrar\n" + "=" * 72)
+        reports = run_stability(selected, repeat)
+        print_stability(reports)
+        if json_out:
+            json_out.write_text(
+                json.dumps(
+                    [{**asdict(r), "tool_paths": sorted(r.tool_paths),
+                      "pass_rate": r.pass_rate, "verdict": r.verdict} for r in reports],
+                    ensure_ascii=False, indent=2,
+                ),
+                encoding="utf-8",
+            )
+            print(f"Ayrıntılı sonuç: {json_out}")
+        return
+
     print(f"Golden set: {len(selected)} vaka\n" + "=" * 72)
 
     outcomes: list[CaseOutcome] = []
