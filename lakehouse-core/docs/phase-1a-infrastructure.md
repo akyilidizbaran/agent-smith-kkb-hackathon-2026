@@ -1,344 +1,193 @@
 # Phase 1A — Infrastructure Foundation
 
-**Tarih:** 8 Eylül 2026
-**Branch:** `feature/infrastructure`
-**Durum:** Tamamlandı ve bağımsız güvenlik audit'inden geçirildi.
+Phase 1A, source ingestion ile analitik modelleme arasındaki infrastructure
+sınırını oluşturur. Source Access tarafının ürettiği `ParsedBatch` çıktıları bu
+katmanda immutable Bronze representation'lara dönüştürülür, provenance'ı
+korunarak kaydedilir ve DuckDB üzerinden kontrollü biçimde sorgulanabilir hale
+gelir. Faz sonunda elimizde gerçek veriye henüz bağlı olmayan, ancak bağlanmaya
+hazır, tekrar üretilebilir ve güvenlik sınırları çizilmiş bir lakehouse temeli
+var.
 
-Bu doküman, Phase 0/0.5 ortak contract'ları (common base) üzerine kurulan
-Infrastructure track'inin ne yaptığını, hangi sınırları koruduğunu ve neyi
-bilinçli olarak sonraki fazlara bıraktığını özetler. Kod okumayan bir ekip
-üyesinin ana resmi anlayabilmesi, kod okuyan birinin ise teknik detayı
-kaybetmemesi hedeflenmiştir.
+## 1. Scope and Architecture
 
----
-
-## 1. Amaç ve kapsam
-
-Infrastructure track'inin görevi, gerçek veri kaynaklarından bağımsız olarak
-çalışan, tekrar üretilebilir ve güvenli bir **lakehouse temeli** kurmaktır. Bu
-temel tek bir dikey dilimi uçtan uca ayakta tutar:
+Katman, Phase 0/0.5'te tanımlanan ortak contract'ların (common base) üzerine
+oturur ve tek bir dikey dilimi uçtan uca ayakta tutar:
 
 ```
-ParsedBatch → Bronze Parquet → DuckDB → Metadata / provenance → Safe SQL
+ParsedBatch
+    ↓
+Bronze Parquet
+    ↓
+DuckDB
+    ↓
+Metadata / Provenance
+    ↓
+Safe Query Execution
 ```
 
-Bu fazın **tam pipeline olmadığı** özellikle vurgulanmalıdır:
+Gerçek kaynak erişimi (BDDK / EVDS connector ve parser'ları) Source Access
+track'inde yürür; Silver/Gold modelleri ve semantic dönüşümler sonraki fazlara
+aittir. Bu doküman yalnızca yukarıdaki infrastructure hattını kapsar.
 
-- Gerçek **BDDK / EVDS** source access (connector/parser) ayrı bir track'tedir
-  (Source Access) ve bu faza dahil değildir.
-- **Silver / Gold** business semantics (fact tabloları, oran/stok/akış mantığı,
-  kümülatif dönüşümler, Gold view'ları) bu fazda **yapılmamıştır**.
-- Agent'a açılan Lakehouse Tool katmanı bu fazda yoktur.
+## 2. Storage and Database Layer
 
-Kısacası Phase 1A, "gerçek veriyi bağlamaya hazır, güvenli iskelet"tir.
+Depolama iki parçadan oluşur. Bronze verisi diskte Parquet olarak durur; DuckDB
+ise bu veriyi ve metadata'yı sorgulayan motordur. Parquet fiziksel analitik
+depolama formatı, DuckDB ise sorgu ve metadata motorudur.
 
----
+DuckDB embedded bir analitik engine olarak kullanılır. Database dosyası
+varsayılan olarak `data/lakehouse.duckdb`'dir ve çağıran taraf isterse farklı
+bir path verebilir. Şema ve tablo kurulumu `sql/bootstrap/` altındaki SQL
+dosyalarından yapılır; tüm ifadeler `IF NOT EXISTS` ile yazıldığından bootstrap
+idempotenttir ve tekrar çalıştırıldığında mevcut veriyi bozmaz. Kurulan şemalar
+`meta`, `bronze`, `silver` ve `gold`'dur; `silver` ve `gold` bu fazda yalnızca
+ileride kullanılmak üzere açılmış boş namespace'lerdir.
 
-## 2. DuckDB altyapısı
-
-DuckDB, projeye **hazır bir SQL/analitik veritabanı motoru** olarak entegre
-edilmiştir; yani DuckDB'yi biz geliştirmedik, onu motor olarak kullanıp
-projeye ait database ve bootstrap yapısını kurduk.
-
-| Öğe | Değer |
-|---|---|
-| Database dosyası | `data/lakehouse.duckdb` (varsayılan) |
-| DB path | Configurable — çağıran taraf açık path verebilir |
-| Bootstrap | Idempotent (tekrar çalıştırılabilir, yan etkisiz) |
-| Bootstrap SQL'leri | `sql/bootstrap/` altında |
-
-Bootstrap iki adımdan oluşur ve `sql/bootstrap/` içindeki dosyalar sıralı
-çalıştırılır:
-
-- `001_schemas.sql` → şemaları oluşturur: `meta`, `bronze`, `silver`, `gold`
-- `002_meta_tables.sql` → `meta` altındaki metadata tablolarını oluşturur
-
-Şemalar `CREATE SCHEMA IF NOT EXISTS`, tablolar `CREATE TABLE IF NOT EXISTS`
-ile tanımlandığı için bootstrap birden çok kez çağrılsa da veri bozulmaz.
-
----
-
-## 3. Metadata foundation
-
-`meta` şeması altında dört tablo tanımlanmıştır:
-
-| Tablo | Rol |
-|---|---|
-| `meta.source` | Kaynak kaydı (`source_id` PK, açıklama, `created_at`) |
-| `meta.artifact` | İmmutable RAW artifact metadata'sı |
-| `meta.run` | İşlem/çalıştırma kaydı (foundation) |
-| `meta.dataset_version` | Dataset vintage/versiyon kaydı (foundation) |
-
-### `meta.artifact` davranışı
-
-`ArtifactRepository.register(...)` bir artifact'ı `artifact_sha256` kimliğiyle
-kaydeder ve şu garantileri verir:
-
-- **Identity = `artifact_sha256`** (primary key). Aynı içerik için ikinci bir
-  satır oluşmaz.
-- Aynı SHA tekrar geldiğinde immutable alanlar (`source_id`, `dataset_id`,
-  `locator`, `media_type`, `byte_size`, `http_status`, `raw_path`) karşılaştırılır;
-  **farklıysa hata** verilir ("already exists with different immutable metadata").
-- `first_seen_at` ilk kayıtta yazılır ve **korunur**; tekrar görülmede yalnızca
-  `last_seen_at` güncellenir.
-- `fetched_at` (artifact'ın indirilme zamanı) ile `seen_at` (kayıt/görülme zamanı)
-  ayrı kavramlardır ve karıştırılmaz.
-- Tüm timestamp'ler timezone-aware UTC'ye normalize edilir.
-
-### Bilinçli erteleme
-
-`meta.run` ve `meta.dataset_version` bu fazda yalnızca **şema düzeyinde
-foundation**tır; onlara yazan lifecycle kodu henüz yoktur. Özellikle
-`dataset_version.is_current` lifecycle policy'si **bilinçli olarak** sonraki
-faza bırakılmıştır.
-
----
-
-## 4. Bronze Parquet Storage
-
-Bronze katmanı, `ParsedBatch` içeriğini kaynağa özel hiçbir dönüşüm yapmadan,
-**değişmez (immutable)** ve **deterministik** biçimde Parquet olarak saklar.
-Depolama motoru **PyArrow**tur.
-
-### Path formatı (koddan doğrulanmıştır)
+Bronze tarafında her `ParsedBatch`, kaynağa özgü hiçbir dönüşüm uygulanmadan
+PyArrow ile Parquet'e yazılır. Dosya yolu, temsilin kimliğinden deterministik
+olarak türetilir:
 
 ```
 data/bronze/
   source_id=<source>/
   dataset_id=<dataset>/
-  schema_version_sha256=<schema_version'ın sha256'sı>/
+  schema_version_sha256=<schema-key>/
   artifact_sha256=<sha>.parquet
 ```
 
-### Garantiler
+`schema_version` path'e doğrudan yazılmaz; SHA-256'ya indirgenerek dizin adına
+konur, dolayısıyla schema versiyonları birbirinden izole edilir ve serbest metin
+bir path segment'i üretemez. `source_id`, `dataset_id` ve `artifact_sha256`
+zaten `ParsedBatch` seviyesinde slug/hex olarak doğrulandığı için yol
+enjeksiyonu mümkün değildir.
 
-- **Deterministik identity:** Aynı `source_id` + `dataset_id` +
-  `artifact_sha256` + `schema_version` → her zaman aynı path.
-- **Atomic write:** Önce geçici dosyaya yazılır, sonra `os.replace` ile
-  yerine taşınır (yarım dosya kalmaz).
-- **Idempotent retry:** Aynı identity + aynı içerik tekrar yazılırsa aynı
-  path döner, dosya yeniden yazılmaz.
-- **Immutability:** Aynı identity fakat **farklı içerik** yazılmak istenirse
-  `ParquetConflictError` fırlatılır — `overwrite=True` verilse bile mevcut
-  Bronze **sessizce ezilmez**.
-- **Schema izolasyonu:** `schema_version` değişirse `schema_version_sha256`
-  klasörü değişir; farklı bir representation olur, eskisiyle çakışmaz.
-- **Path traversal koruması:** `schema_version` doğrudan path'e yazılmaz,
-  önce SHA-256'ya hash'lenir; `source_id` / `dataset_id` / `artifact_sha256`
-  ise `ParsedBatch` seviyesinde slug/hex olarak valide edilir. Bu yüzden
-  `../` gibi bir değer path üretemez.
-- **Provenance:** `source_id`, `dataset_id`, `artifact_sha256`,
-  `schema_version` Parquet dosyasının **schema metadata'sına** (`lakehouse.*`
-  anahtarları) gömülür ve `read_identity(...)` ile kayıpsız geri okunabilir.
+Yazma önce geçici bir dosyaya yapılır, ardından `os.replace` ile hedefe taşınır;
+böylece yarım kalmış bir dosya asla yerine geçmez. Aynı kimlik ve aynı içerik
+tekrar yazılmak istendiğinde mevcut dosya yeniden üretilmez, var olan yol geri
+döner. Aynı kimliğe sahip fakat farklı bir içerik gelirse `ParquetConflictError`
+yükseltilir; `overwrite=True` verilse dahi mevcut Bronze temsili sessizce
+değiştirilmez. Bu davranış Bronze'un değişmezliğini (immutability) garanti eder.
 
-### Parquet ↔ DuckDB ayrımı
+## 3. Metadata and Provenance
 
-Kısa ayrım: **Parquet** buradaki *analitik depolama formatı*dır (diskteki
-değişmez veri); **DuckDB** ise *sorgu motoru*dur. Trusted tarafta
-`register_local_parquet(...)`, doğrulanmış bir Bronze dosyasını PyArrow ile
-okuyup DuckDB'ye bir relation olarak tanıtır — bunu yaparken DuckDB'nin
-dosya-sistemi SQL fonksiyonlarını (ör. `read_parquet`) açmaya gerek kalmaz.
+`meta` şeması dört tablo içerir: `source`, `artifact`, `run` ve
+`dataset_version`. Bu fazın ağırlık merkezi `meta.artifact`'tir; `run` ve
+`dataset_version` şimdilik yalnızca şema düzeyinde hazırdır ve onları besleyen
+lifecycle mantığı sonraki fazlara bırakılmıştır (özellikle
+`dataset_version.is_current`).
 
----
+Bir artifact `artifact_sha256` üzerinden kaydedilir ve bu değer kimliktir. Aynı
+içerik ikinci kez geldiğinde yeni satır açılmaz; kayıttaki değişmez alanlar
+(`source_id`, `dataset_id`, `locator`, `media_type`, `byte_size`, `http_status`,
+`raw_path`) yeni gelenle karşılaştırılır ve bir uyuşmazlık varsa işlem hata ile
+durur. Bu, aynı SHA'nın farklı bir kaynak/konum iddiasıyla yeniden
+yazılamayacağı anlamına gelir.
 
-## 5. Trusted / Untrusted DuckDB bağlantıları
+Zaman damgalarında iki kavram ayrı tutulur: `fetched_at` artifact'ın indirildiği
+an, `first_seen_at`/`last_seen_at` ise kaydın ilk ve son görülme anıdır. İlk
+kayıtta `first_seen_at` yazılır ve bir daha değişmez; sonraki her görülmede
+sadece `last_seen_at` güncellenir. Tüm operasyonel zamanlar timezone-aware
+UTC'ye normalize edilir.
 
-İki ayrı güven profili vardır. Ayrım gereklidir çünkü **iç altyapı işlemleri**
-ile **agent tarafından üretilen SQL** aynı yetkiye sahip olmamalıdır: agent
-SQL'i asla yazma/konfigürasyon/dış erişim yapamamalı, bir hata durumunda tek
-savunma katmanına düşülmemelidir.
+Provenance yalnızca veritabanında tutulmaz. Bronze Parquet dosyalarının schema
+metadata'sına `source_id`, `dataset_id`, `artifact_sha256` ve `schema_version`
+gömülür, dolayısıyla bir dosyanın kökeni veritabanından bağımsız olarak dosyanın
+kendisinden de geri okunabilir.
 
-| | Trusted (`connect_trusted`) | Untrusted (`connect_untrusted`) |
-|---|---|---|
-| Kullanım | Bootstrap, metadata, kontrollü storage | Agent-generated SQL |
-| Erişim | Yazılabilir (internal) | **Read-only** |
-| `enable_external_access` | false | false |
-| `autoload/autoinstall_known_extensions` | false | false |
-| `allow_community_extensions` | (varsayılan) | **false** |
-| `allow_unsigned_extensions` | (varsayılan) | **false** |
-| `lock_configuration` | uygulanmaz | **true (en son adım)** |
+## 4. Query Security
 
-Tüm ayar isimleri runtime'da DuckDB'nin `duckdb_settings()` kataloğuna karşı
-doğrulanır; desteklenmeyen bir ayar uydurulup gönderilmez. Untrusted tarafta
-`lock_configuration=true` **en son** uygulanır; böylece bağlantı açıldıktan
-sonra hiçbir `SET` ile güvenlik ayarları geri gevşetilemez.
+Güven modeli iki bağlantı profiline dayanır. İç altyapı işlemleri (bootstrap,
+metadata, kontrollü Bronze kaydı) yazılabilen bir trusted bağlantı üzerinden
+yürür. Agent tarafından üretilen SQL ise yalnızca sertleştirilmiş bir untrusted
+bağlantıda çalışır: read-only açılır, external access kapalıdır, extension
+autoload/autoinstall devre dışıdır, community ve unsigned extension'lara izin
+verilmez ve bağlantı açıldıktan sonra konfigürasyon kilitlenir. Kilit en son
+uygulandığı için, oturum içinde hiçbir `SET` bu ayarları geri gevşetemez.
+Uygulanan ayarların tümü DuckDB'nin runtime setting kataloğuna karşı doğrulanır.
 
----
+Bağlantı katmanının üstünde SQL Guard yer alır. Guard yalnızca tek bir okuma
+sorgusuna izin verir; girdi `SELECT` veya `WITH ... SELECT` ile başlamalı ve tek
+statement olmalıdır. Yorumlar ve fazladan boşluklar ayıklanır, birden çok
+statement reddedilir. Mutation ve konfigürasyon ifadeleri (`INSERT`, `UPDATE`,
+`DELETE`, `DROP`, `ATTACH`, `COPY`, `INSTALL`, `PRAGMA` ve benzerleri) ile dış
+kaynak okuyan tablo fonksiyonları (`read_csv`, `read_parquet`, `glob`,
+`query_table`, `query` ve benzerleri) engellenir; `FROM`/`JOIN` ardına doğrudan
+dosya yolu yazılması da kabul edilmez.
 
-## 6. SQL Guard ve QueryExecutor
+Sorguları çalıştıran `QueryExecutor`, kendisine verilen bağlantının gerçekten
+sertleştirilmiş untrusted profile uyduğunu (`access_mode` read-only, external
+access kapalı, konfigürasyon kilitli) doğrular; trusted/yazılabilir bir bağlantı
+verilirse hata yükseltir. Çalıştırma satır sınırlıdır: `max_rows` kadar satır
+tutulur, bir fazlası çekilerek truncation tespit edilir ve sonuç `columns`,
+`rows`, `row_count`, `truncated`, `executed_sql` alanlarıyla yapılandırılmış
+biçimde döner.
 
-### SQL Guard
+## 5. Independent Security Review
 
-Agent SQL'i, DuckDB'ye ulaşmadan önce sözcüksel (lexical) bir allowlist'ten
-geçer. Guard yalnızca **tek bir** üst düzey okuma sorgusuna izin verir:
+İlk implementasyon, onu yazmayan ikinci bir agent tarafından bağımsız bir code
+review'den geçirildi. İncelemede, DuckDB'nin `query('<sql>')` table
+fonksiyonunun guard'ın deny list'inde bulunmadığı tespit edildi; `query_table`
+engelliyken `query` engellenmiyordu ve bu, dış fonksiyon denetiminin string
+içine gizlenmiş bir sorguyla atlatılmasına açık kapı bırakıyordu. Bulgu push
+blocker kabul edilip `query` deny list'e eklenerek kapatıldı.
 
-- İzin verilen: `SELECT ...` ve `WITH ... SELECT ...`
-- Comment ve fazladan boşluklar temizlenir; birden çok statement (çoklu `;`)
-  reddedilir.
+İnceleme sonrasında birkaç savunma katmanı daha eklendi: untrusted bağlantıda
+`allow_community_extensions` ve `allow_unsigned_extensions` kapatıldı,
+`lock_configuration` en son adım olarak uygulandı ve `QueryExecutor`'ın
+trusted bağlantıyı reddetmesi kod seviyesinde zorunlu kılındı.
 
-Reddedilen yazma/konfigürasyon anahtar kelimeleri (örnekler):
+## 6. Validation
 
-```
-INSERT  UPDATE  DELETE  DROP  CREATE  ALTER  ATTACH  DETACH
-COPY  INSTALL  LOAD  EXPORT  IMPORT  PRAGMA  CALL  SET  RESET
-USE  MERGE  TRUNCATE  GRANT  REVOKE  VACUUM
-```
-
-Reddedilen dinamik / dış erişim fonksiyonları:
-
-```
-read_csv  read_csv_auto  read_parquet  parquet_scan  read_json
-read_json_auto  read_ndjson  read_text  read_blob  glob  httpfs
-csv_scan  arrow_scan  delta_scan  iceberg_scan  sqlite_scan
-postgres_scan  mysql_scan  query_table  query
-```
-
-`FROM`/`JOIN` sonrasına doğrudan dosya yolu (string) yazılması ve
-tırnaklı tanımlayıcı içine gizlenen dış fonksiyon adları da reddedilir.
-
-### QueryExecutor
-
-`QueryExecutor` yalnız **hardened untrusted** bağlantı kabul eder; trusted /
-writable bir bağlantı verilirse `TrustedConnectionError` fırlatır. Bu kontrol
-yalnız gerçek DuckDB ayarlarıyla yapılır (`access_mode == read_only`,
-`enable_external_access == false`, `lock_configuration == true`).
-
-Çalıştırma davranışı:
-
-- `max_rows` pozitif tam sayı olmalıdır.
-- `max_rows + 1` çekilerek **truncation** doğru tespit edilir.
-- Sonuç zarfı: `columns`, `rows`, `row_count`, `truncated`, `executed_sql`.
-
----
-
-## 7. Bağımsız security audit ve hardening
-
-İlk implementasyon, bağımsız (implementasyonu yazmayan) ikinci bir audit'ten
-geçirildi. Audit sırasında bir **push blocker** tespit edildi:
-
-- DuckDB'nin `query('<sql>')` table fonksiyonu SQL Guard'da engellenmiyordu;
-  `query_table` engelliyken `query` denylist'te değildi. Bu, guard'ın dış
-  fonksiyon denetimini string içine gizlenmiş SQL ile atlatma imkânı veriyordu.
-
-Bu bulgu blocker olarak ele alındı ve `query` denylist'e eklenerek düzeltildi.
-Audit sonrası ek olarak defense-in-depth sertleştirmeleri uygulandı:
-
-- `allow_community_extensions=false`
-- `allow_unsigned_extensions=false`
-- `lock_configuration=true` (en son adım)
-- `QueryExecutor` trust boundary'sinin **kod seviyesinde** zorunlu kılınması
-  (trusted bağlantı reddi).
-
----
-
-## 8. Offline vertical slice
-
-Aşağıdaki zincir uçtan uca, **gerçek internete çıkmadan** çalışır:
+Doğrulama, gerçek internete çıkmayan bir offline vertical slice ile yapılır.
+Sahte RAW baytları önce içerik-adresli olarak saklanır ve bir `FetchedAsset`
+üretir; bundan bir `ParsedBatch` oluşur, Bronze Parquet'e yazılır, artifact
+metadata'sı DuckDB'ye kaydedilir ve son olarak veri untrusted bağlantı üzerinden
+güvenli bir `SELECT` ile geri okunur:
 
 ```
-Fake RAW bytes → FetchedAsset → ParsedBatch → Bronze Parquet
-  → provenance identity → DuckDB bootstrap → artifact registration
-  → safe SELECT (bounded)
+Fake RAW → FetchedAsset → ParsedBatch → Bronze Parquet
+  → artifact metadata → DuckDB → safe SELECT
 ```
 
-Testlerde doğrulananlar:
+Bu zincir; Parquet round-trip ve tip korunumunu, provenance'ın geri
+okunabilirliğini, aynı içeriğin tek fiziksel kayda inmesini (deduplication),
+sorgu satır sınırını ve yazma/DDL ile dış dosya erişimi gibi güvensiz SQL'in
+reddini birlikte doğrular.
 
-- Parquet round-trip ve **tip korunumu** (ör. tarih, float, string)
-- **Provenance** korunumu (Parquet metadata'sından geri okuma)
-- Artifact **deduplication** (aynı içerik tek fiziksel kayıt)
-- Bounded **safe SELECT** (satır limiti + truncation)
-- **Unsafe SQL** reddi (yazma/DDL, `query()`, harici okuma fonksiyonları)
-- Runtime **external file access** reddi (`enable_external_access=false`)
-
----
-
-## 9. Test ve doğrulama
-
-Ortam, kilitli (`--frozen`) bağımlılıklarla birebir yeniden kurulup çalıştırıldı
-(Python 3.12, DuckDB 1.5.5, PyArrow 25.0.1, pandas 3.0.5).
-
-| Komut | Sonuç |
+| Check | Result |
 |---|---|
 | `uv sync --frozen` | PASS |
-| `uv lock --check` | PASS (tutarlı) |
-| `make test` | **81 passed** |
-| `make build` | PASS (base dizinler hazır) |
+| `uv lock --check` | PASS |
+| `make test` | 81 passed |
+| `make build` | PASS |
 | `make demo-check` | 2 passed |
 
-Test dağılımı: security 50, contracts 18, db 3, parquet 4, artifacts 1,
-connectors 2, shared base 2, integration (vertical slice) 1.
+## 7. Current State and Next Step
 
----
+Phase 1A sonunda infrastructure hattı çalışır durumda: DuckDB bootstrap ve
+metadata temeli, immutable Bronze Parquet depolama, artifact ve provenance
+takibi, trusted/untrusted sorgu sınırı, sertleştirilmiş SQL çalıştırma ve bunları
+uçtan uca doğrulayan offline testler yerinde.
 
-## 10. Shared contract uyumluluğu
+- DuckDB bootstrap and metadata foundation
+- immutable Bronze Parquet storage
+- artifact / provenance tracking
+- trusted / untrusted query boundary
+- hardened SQL execution
+- offline integration tests
 
-Phase 1A sırasında paylaşılan contract dosyalarında **breaking change
-yapılmamıştır** ve **yeni bağımlılık eklenmemiştir**:
+Sıradaki adım Phase 1B — Real Source Integration. Source Access tarafındaki hat
+(BDDK / EVDS → Connector → RAW → Parser → ParsedBatch) ile bu fazdaki hat
+(ParsedBatch → Bronze Parquet → metadata → DuckDB → safe query) birleştiğinde,
+projenin ilk gerçek source-backed lakehouse vertical slice'ı ortaya çıkacaktır.
 
-- `src/lakehouse/contracts/*`
-- `schemas/*`
-- `contracts/*`
-- `pyproject.toml`
-- `uv.lock`
+Bunun ötesinde Silver canonical model, frequency ve measure semantics, Gold
+view'ları, catalog/search ve agent'a açık Lakehouse Tool katmanı sonraki fazlara
+bırakılmıştır.
 
-Değişiklikler yalnızca `db/`, `storage/`, `catalog/`, `security/`, `query/`,
-`sql/bootstrap/` ve ilgili testler altında yapılmıştır.
-
----
-
-## 11. Phase 1A sonunda mevcut durum
-
-Aşağıdakilerin tümü gerçek kod ve testlerle doğrulanmıştır:
-
-- [x] DuckDB foundation (bootstrap, configurable path, idempotent)
-- [x] Bronze Parquet storage (immutable, deterministik, provenance)
-- [x] Metadata / artifact tracking (`meta.artifact` dedup + seen-at)
-- [x] Trusted / untrusted bağlantı ayrımı
-- [x] SQL Guard (read-only allowlist)
-- [x] QueryExecutor (bounded, trust-boundary enforced)
-- [x] Offline vertical slice
-- [x] Bağımsız security audit + hardening
-- [x] Testler (81 passed)
-
----
-
-## 12. Bilinçli olarak ertelenenler
-
-Bu fazın kapsamı dışında bırakılanlar (sonraki fazlara aittir):
-
-- Gerçek BDDK / EVDS connector ve parser
-- Silver `fact_observation` implementasyonu
-- Business semantics (stok / akış / oran / ratio mantığı)
-- Kümülatif / YTD dönüşümleri
-- Frequency alignment (frekans hizalama)
-- Gold view'ları
-- Tam catalog / search
-- Agent'a açık Lakehouse Tool katmanı
-- Dataset version lifecycle policy (`is_current`)
-- Lineage / revision / quality'nin tam implementasyonu
-
----
-
-## 13. Sonraki adım — Phase 1B: Real Source Integration
-
-Phase 1B, Source Access track'i ile bu altyapıyı birleştirir:
+## Repository Reference
 
 ```
-BDDK / EVDS → Connector → RAW → Parser → ParsedBatch
-                                            │
-                                            ▼
-        ParsedBatch → Bronze Parquet → metadata → DuckDB → safe query
+Branch: feature/infrastructure
+Implementation commit: 0cd88a7500c4fd10a2000d236c544a6d4de953ae
 ```
-
-Yani Elif'in Source Access tarafındaki `ParsedBatch` çıktısı, bu fazda kurulan
-Bronze/metadata/DuckDB/safe-query altyapısına bağlanacaktır. Bu, projenin
-**ilk gerçek uçtan uca (end-to-end) Lakehouse entegrasyonu** olacaktır.
-
----
-
-## 14. Git bilgisi
-
-| | |
-|---|---|
-| Branch | `feature/infrastructure` |
-| Phase 1A implementation commit | `0cd88a7500c4fd10a2000d236c544a6d4de953ae` |
