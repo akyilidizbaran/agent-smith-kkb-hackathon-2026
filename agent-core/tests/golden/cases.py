@@ -27,6 +27,8 @@ class GoldenCase:
     # Nihai cevap metninde geçmesi/geçmemesi gerekenler
     answer_must_contain: list[str] = field(default_factory=list)
     answer_must_not_contain: list[str] = field(default_factory=list)
+    # Doğru aracı seçti mi? Sonuç doğru olsa bile yanlış yoldan gelinmiş olabilir.
+    must_use_tools: list[str] = field(default_factory=list)
     expect_no_table: bool = False
     max_steps_used: int = 8
     follow_up: str | None = None  # çok turlu senaryolar için
@@ -101,6 +103,19 @@ CASES: list[GoldenCase] = [
         table_checks=[
             ("en az 12 satır", lambda df: len(df) >= 12),
             ("en az 2 sayısal kolon ya da kalem kırılımı", lambda df: len(df.columns) >= 3),
+        ],
+        max_steps_used=8,
+    ),
+    GoldenCase(
+        id="G7_tablo_uzerinde_hesap",
+        question="2025 yılında konut kredisi bakiyesini aylık olarak göster.",
+        follow_up="Tabloyu bozmadan, yeni bir sütun olarak aylık yüzde değişimi ekle.",
+        why="Örnek senaryonun 2. sorusunun ('tabloyu bozmadan enflasyondan arındır') "
+        "yapısal provası: mevcut sütundan türetilen hesap, tablo korunarak ekleniyor mu? "
+        "Enflasyon serisi EVDS'den gelince aynı akış oraya uygulanacak.",
+        table_checks=[
+            ("hâlâ 12 satır (tablo bozulmamış)", _rows(12)),
+            ("türetilmiş sütun eklenmiş", lambda df: len(df.columns) >= 3),
         ],
         max_steps_used=8,
     ),

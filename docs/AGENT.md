@@ -45,6 +45,19 @@ PYTHONPATH=src python -m kkb_agent.cli --trace "2025'te konut kredisi nasıl de�
 PYTHONPATH=src python -m kkb_agent.cli          # etkileşimli
 ```
 
+## Testler
+
+İki katmanlı doğrulama:
+
+```bash
+PYTHONPATH=src python -m pytest tests/ -q      # araç birim testleri, saniyeler
+PYTHONPATH=src python scripts/run_golden.py    # uçtan uca davranış, dakikalar
+```
+
+Birim testleri deterministiktir ve bir aracın bozulduğunu golden set'i beklemeden söyler.
+Golden set ise gerçek modelle uçtan uca davranışı ölçer; stokastiktir, tek koşuya
+bakılarak "düzeldi" denmemelidir.
+
 ## Golden set — ilerlemenin objektif ölçüsü
 
 ```bash
@@ -73,6 +86,7 @@ LLM_MODEL=<model adı>
 | `agent-core/src/kkb_agent/contracts/` | Veri katmanıyla sözleşme (Protocol + semantic catalog) |
 | `agent-core/src/kkb_agent/core/` | Harness, workspace, araç soyutlaması, kayıt defteri |
 | `agent-core/src/kkb_agent/tools/` | Araçlar — her yetenek bağımsız bir modül |
+| `agent-core/tests/` | Araç birim testleri |
 | `agent-core/src/kkb_agent/adapters/` | Lakehouse uygulamaları (şimdilik DuckDB) |
 | `agent-core/src/kkb_agent/llm/` | Sağlayıcıdan bağımsız LLM katmanı |
 | `agent-core/tests/golden/` | Golden set vakaları |

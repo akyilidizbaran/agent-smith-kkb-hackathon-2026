@@ -18,6 +18,11 @@ from .core.agent import AnalyticsAgent
 from .core.registry import ToolRegistry
 from .core.workspace import AnalysisWorkspace
 from .llm.openai_compat import OpenAICompatClient
+from .tools.workspace import (
+    WorkspaceAddColumnTool,
+    WorkspaceComputeColumnTool,
+    WorkspaceShowTool,
+)
 from .tools.lakehouse import (
     LakehouseDescribeTool,
     LakehouseDistinctValuesTool,
@@ -39,6 +44,9 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
             LakehouseDescribeTool(lakehouse),
             LakehouseDistinctValuesTool(lakehouse),
             LakehouseQueryTool(lakehouse, workspace),
+            WorkspaceAddColumnTool(lakehouse, workspace),
+            WorkspaceComputeColumnTool(workspace),
+            WorkspaceShowTool(workspace),
         ]
     )
 

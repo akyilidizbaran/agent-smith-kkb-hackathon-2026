@@ -69,6 +69,10 @@ def run_case(case: GoldenCase) -> CaseOutcome:
                 except Exception as exc:
                     failures.append(f"tablo kontrolü hata verdi ({label}): {exc}")
 
+    for needed in case.must_use_tools:
+        if needed not in tools:
+            failures.append(f"'{needed}' aracı hiç kullanılmadı (kullanılanlar: {', '.join(tools)})")
+
     low = answer.text.lower()
     for needle in case.answer_must_contain:
         if needle.lower() not in low:
