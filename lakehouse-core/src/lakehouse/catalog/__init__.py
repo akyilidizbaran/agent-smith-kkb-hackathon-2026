@@ -1,1 +1,5 @@
-"""Reserved package for future metadata catalog code."""
+"""Metadata catalog helpers."""
+
+from .artifacts import ArtifactRepository
+
+__all__ = ["ArtifactRepository"]
