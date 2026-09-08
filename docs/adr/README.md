@@ -36,7 +36,9 @@ sıfırdan başlatmamak için kayıt tutulur.
 | [0009](0009-deger-kesfi-zorunlulugu.md) | Filtre yazmadan önce gerçek değerleri görme | Kabul edildi |
 | [0010](0010-kapsam-kontrolu-ve-cevap-guardi.md) | Kapsam kontrolü ve veri olmadan cevap engeli | Kabul edildi |
 | [0011](0011-prompt-kurali-eklemenin-siniri.md) | Prompt'a kural ekleyerek davranış düzeltme | **Reddedildi** |
-| [0012](0012-domainprofile-persona-tahmini.md) | Domain profilinin modelle tahmin edilmesi | **Reddedildi** |
+| [0012](0012-domainprofile-persona-tahmini.md) | Domain profili: şablon kabul, modelle tahmin reddedildi | Uygulandı |
 | [0013](0013-baglam-on-yukleme.md) | Schema linking'i LLM turundan çıkarma | Planlandı |
 | [0014](0014-aday-budama-ve-recall-onceligi.md) | Aday budamada recall önceliği | Planlandı |
 | [0015](0015-embedding-reranker-erteleme.md) | Embedding/reranker yatırımının ertelenmesi | Ertelendi |
+| [0016](0016-add-column-yapisal-parametreler.md) | workspace_add_column serbest SQL almaz | Kabul edildi |
+| [0017](0017-donem-filtresi-zorunlulugu.md) | Soruda geçen dönem sorguda yoksa ret | Kabul edildi |

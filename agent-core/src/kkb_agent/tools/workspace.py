@@ -34,27 +34,51 @@ _UNSAFE = re.compile(
 
 
 class AddColumnParams(BaseModel):
-    sql: str = Field(
-        description="Yeni sütunun verisini getiren sorgu. TAM İKİ kolon döndürmeli: "
-        "önce eşleştirme anahtarı (genelde dönem), sonra değer. "
-        "Örn: SELECT donem, toplam FROM bddk_aylik_krediler WHERE kalem = '...'"
+    dataset_id: str = Field(description="Verinin çekileceği tablo")
+    key_column: str = Field(
+        description="Kaynak tablodaki eşleştirme kolonu, ör. '{example_time_column}'"
     )
-    column_name: str = Field(description="Tabloya eklenecek sütunun adı, ör. 'tasit_kredisi'")
+    value_column: str = Field(
+        description="Çekilecek ÖLÇÜM kolonu. Tabloda GERÇEKTEN VAR OLAN bir kolon adı "
+        "olmalı, ör. '{example_measure}'. Yeni sütuna vermek istediğin adı buraya yazma."
+    )
+    column_name: str = Field(description="Analiz tablosuna eklenecek yeni sütunun adı")
     join_on: str = Field(
-        description="Mevcut analiz tablosundaki eşleştirme kolonu, ör. 'donem'. "
-        "Sorgunun ilk kolonu ile bu kolon eşleştirilir."
+        description="Analiz tablosundaki eşleştirme kolonu, ör. '{example_time_column}'"
     )
     purpose: str = Field(description="Bu sütunun ne olduğunu anlatan tek cümlelik Türkçe açıklama")
+    filter_column: str | None = Field(
+        default=None,
+        description="İsteğe bağlı kategori filtresi kolonu, ör. '{example_category_column}'",
+    )
+    filter_value: str | None = Field(
+        default=None,
+        description="filter_column'un alacağı BİREBİR değer. Önce "
+        "lakehouse_distinct_values ile gerçek değeri doğrula.",
+    )
 
 
 class WorkspaceAddColumnTool(Tool):
-    """Mevcut tabloyu bozmadan yeni sütun ekler."""
+    """Mevcut tabloyu bozmadan yeni sütun ekler.
+
+    Bu araç bilerek SQL ALMIYOR. Ölçülmüş sebep: serbest SQL alan sürümünde
+    model, eklemek istediği yeni sütunun adını SELECT listesine var olan bir
+    kolon gibi yazdı ("SELECT donem, tasit_kredisi FROM ..."), hata aldı,
+    hatadan çıkamadı ve sonunda lakehouse_query'ye kaçıp analiz tablosunu
+    yeniden kurdu — yani "tabloyu bozmadan" garantisi çöktü.
+
+    Yapılandırılmış parametrelerde bu hata mümkün değil: kolon adları katalogla
+    doğrulanır, SQL'i harness üretir. Semantic layer literatüründeki gözlemin
+    küçük ölçekli uygulaması — deterministik sorgu üretimi, modelin sessizce
+    yanlış sorgu kurmasını imkânsız kılar.
+    """
 
     name = "workspace_add_column"
     description = (
-        "Mevcut analiz tablosunu BOZMADAN yeni bir sütun ekler. Kullanıcı 'tabloyu bozmadan', "
-        "'bu tabloya', 'yeni sütun olarak ekle' dediğinde BU aracı kullan — lakehouse_query ile "
-        "yeni tablo kurma, çünkü kullanıcının baktığı tablo kaybolur. Satır sayısı değişmez."
+        "Mevcut analiz tablosunu BOZMADAN, veri havuzundan çektiği bir ölçümü yeni sütun "
+        "olarak ekler. Kullanıcı 'tabloyu bozmadan', 'bu tabloya', 'yeni sütun olarak ekle' "
+        "dediğinde BU aracı kullan — lakehouse_query ile yeni tablo kurma, kullanıcının "
+        "baktığı tablo kaybolur. Satır sayısı değişmez."
     )
     Params = AddColumnParams
 
@@ -76,24 +100,52 @@ class WorkspaceAddColumnTool(Tool):
                 f"Mevcut kolonlar: {', '.join(table.columns)}"
             )
         if params.column_name in table.columns:
-            return ToolResult.error(
-                f"'{params.column_name}' zaten tabloda var. Farklı bir ad seç."
-            )
+            return ToolResult.error(f"'{params.column_name}' zaten tabloda var. Farklı bir ad seç.")
+
+        # Kolon adları katalogla doğrulanır: model var olmayan bir kolon uyduramaz.
+        try:
+            spec = self.lakehouse.get_dataset(params.dataset_id)
+        except LakehouseError as exc:
+            return ToolResult.error(str(exc))
+
+        gecerli = {c.name for c in spec.columns}
+        for alan, deger in (
+            ("key_column", params.key_column),
+            ("value_column", params.value_column),
+            ("filter_column", params.filter_column),
+        ):
+            if deger and deger not in gecerli:
+                ipucu = ""
+                if deger == params.column_name:
+                    ipucu = (
+                        f" '{deger}' senin eklemek istediğin YENİ sütunun adı; kaynak tabloda "
+                        f"böyle bir kolon yok. value_column'a var olan bir ölçüm kolonu yaz."
+                    )
+                return ToolResult.error(
+                    f"{alan}='{deger}' {params.dataset_id} tablosunda yok.{ipucu} "
+                    f"Mevcut kolonlar: {', '.join(sorted(gecerli))}"
+                )
+
+        # SQL'i harness üretir, model değil.
+        where = ""
+        if params.filter_column and params.filter_value is not None:
+            kacisli = params.filter_value.replace("'", "''")
+            where = f" WHERE {params.filter_column} = '{kacisli}'"
+        sql = (
+            f"SELECT {params.key_column}, {params.value_column} "
+            f"FROM {params.dataset_id}{where}"
+        )
 
         try:
-            result = self.lakehouse.execute_sql(params.sql)
+            result = self.lakehouse.execute_sql(sql)
         except LakehouseError as exc:
             return ToolResult.error(str(exc))
 
         df = result.data
         if df.empty:
             return ToolResult.error(
-                "Sorgu hiç satır döndürmedi; eklenecek veri yok. Filtreleri kontrol et."
-            )
-        if len(df.columns) != 2:
-            return ToolResult.error(
-                f"Sorgu {len(df.columns)} kolon döndürdü, tam 2 olmalı "
-                f"(eşleştirme anahtarı + değer). Dönen kolonlar: {', '.join(df.columns)}"
+                f"Sorgu hiç satır döndürmedi. filter_value='{params.filter_value}' "
+                f"değerini lakehouse_distinct_values ile doğrula."
             )
 
         key_col, value_col = df.columns[0], df.columns[1]
@@ -106,8 +158,8 @@ class WorkspaceAddColumnTool(Tool):
         matched = int(aligned.notna().sum())
         if matched == 0:
             return ToolResult.error(
-                f"Eşleşen satır bulunamadı: sorgunun '{key_col}' değerleri ile tablodaki "
-                f"'{params.join_on}' değerleri örtüşmüyor. Dönem aralığını kontrol et."
+                f"Eşleşen satır bulunamadı: kaynak '{key_col}' değerleri ile tablodaki "
+                f"'{params.join_on}' değerleri örtüşmüyor."
             )
 
         self.workspace.add_column(
@@ -149,8 +201,9 @@ class WorkspaceAddColumnTool(Tool):
 class ComputeColumnParams(BaseModel):
     expression: str = Field(
         description="Mevcut sütunlardan yeni sütun türeten SQL ifadesi. Sadece ifade yaz, "
-        "SELECT yazma. Örn: 'konut_kredisi / (tufe / 100)' veya "
-        "'100.0 * (toplam - LAG(toplam) OVER (ORDER BY donem)) / LAG(toplam) OVER (ORDER BY donem)'"
+        "SELECT yazma. İki sütunu oranlama: 'a_sutunu / b_sutunu * 100'. "
+        "Dönemsel değişim: '{example_measure} - LAG({example_measure}) "
+        "OVER (ORDER BY {example_time_column})'"
     )
     column_name: str = Field(description="Yeni sütunun adı")
     purpose: str = Field(description="Bu hesabın ne yaptığını anlatan tek cümlelik Türkçe açıklama")
@@ -166,9 +219,9 @@ class WorkspaceComputeColumnTool(Tool):
 
     name = "workspace_compute_column"
     description = (
-        "Mevcut analiz tablosundaki sütunlardan yeni bir sütun HESAPLAR ve tabloya ekler "
-        "(enflasyondan arındırma, yüzde değişim, oran vb.). Tablo bozulmaz, satır sayısı "
-        "değişmez. Hesabı sen yapma, formülü bu araca yazdır."
+        "Mevcut analiz tablosundaki sütunlardan yeni bir sütun HESAPLAR ve tabloya ekler: "
+        "yüzde değişim, oran, bir seriyi başka bir seriye bölerek normalleştirme. Tablo "
+        "bozulmaz, satır sayısı değişmez. Hesabı sen yapma, formülü bu araca yazdır."
     )
     Params = ComputeColumnParams
 

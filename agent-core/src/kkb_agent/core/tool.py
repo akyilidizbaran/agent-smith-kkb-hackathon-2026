@@ -17,6 +17,7 @@ import pandas as pd
 from pydantic import BaseModel
 
 from ..contracts.lakehouse import QueryProvenance
+from ..domain import DomainProfile
 
 
 @dataclass
@@ -52,22 +53,43 @@ class Tool(ABC):
         """Aracın işini yapar. Doğrulanmış parametrelerle çağrılır."""
 
     # ---- harness tarafından kullanılır ----
-    def openai_schema(self) -> dict[str, Any]:
+    def openai_schema(self, profile: DomainProfile | None = None) -> dict[str, Any]:
         """Pydantic modelinden OpenAI function-calling şeması üretir.
 
         Elle JSON şema yazmıyoruz: parametre modeli değiştiğinde şema
         kendiliğinden güncellenir, tutarsızlık riski kalmaz.
+
+        Açıklamalardaki `{example_table}` gibi yer tutucular alan profiliyle
+        doldurulur. Bu şemalar her turda prompt'a giriyor; içlerine gömülü bir
+        alan örneği motoru o alana bağlar (ADR-0012).
         """
         schema = self.Params.model_json_schema()
         schema.pop("title", None)
+        if profile is not None:
+            schema = self._render_schema(schema, profile)
         return {
             "type": "function",
             "function": {
                 "name": self.name,
-                "description": self.description,
+                "description": (
+                    profile.render(self.description) if profile else self.description
+                ),
                 "parameters": schema,
             },
         }
+
+    @staticmethod
+    def _render_schema(node: Any, profile: DomainProfile) -> Any:
+        """JSON şemasındaki tüm `description` alanlarını profil ile doldurur."""
+        if isinstance(node, dict):
+            return {
+                k: (profile.render(v) if k == "description" and isinstance(v, str)
+                    else Tool._render_schema(v, profile))
+                for k, v in node.items()
+            }
+        if isinstance(node, list):
+            return [Tool._render_schema(v, profile) for v in node]
+        return node
 
     def validate_and_run(self, raw_args: dict[str, Any]) -> ToolResult:
         """Ham LLM argümanlarını doğrular, sonra çalıştırır.

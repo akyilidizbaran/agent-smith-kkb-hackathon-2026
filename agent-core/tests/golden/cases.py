@@ -102,7 +102,13 @@ CASES: list[GoldenCase] = [
         why="İki kalemi aynı tabloda hizalayabiliyor mu? Örnek senaryonun temel yapısı bu.",
         table_checks=[
             ("en az 12 satır", lambda df: len(df) >= 12),
-            ("en az 2 sayısal kolon ya da kalem kırılımı", lambda df: len(df.columns) >= 3),
+            # İki kalem ya geniş formatta iki ölçüm sütunu, ya uzun formatta
+            # iki katı satır olarak gelir. Eski "≥3 sütun" koşulu tek kalemde
+            # de sağlanıyordu ve vakayı yanlışlıkla geçiriyordu.
+            (
+                "iki kalem gerçekten gelmiş",
+                lambda df: len(df.select_dtypes("number").columns) >= 2 or len(df) >= 24,
+            ),
         ],
         max_steps_used=8,
     ),
@@ -113,10 +119,8 @@ CASES: list[GoldenCase] = [
         why="Örnek senaryonun 2. sorusunun ('tabloyu bozmadan enflasyondan arındır') "
         "yapısal provası: mevcut sütundan türetilen hesap, tablo korunarak ekleniyor mu? "
         "Enflasyon serisi EVDS'den gelince aynı akış oraya uygulanacak.",
-        table_checks=[
-            ("hâlâ 12 satır (tablo bozulmamış)", _rows(12)),
-            ("türetilmiş sütun eklenmiş", lambda df: len(df.columns) >= 3),
-        ],
+        table_checks=[("hâlâ 12 satır (tablo bozulmamış)", _rows(12))],
+        must_use_tools=["workspace_compute_column"],
         max_steps_used=8,
     ),
     GoldenCase(
@@ -125,10 +129,11 @@ CASES: list[GoldenCase] = [
         follow_up="Bu tabloyu hiç bozmadan, yeni bir sütun olarak taşıt kredisi bakiyesini ekle.",
         why="Örnek senaryonun 3. sorusunun birebir provası. Workspace'in yaşayıp "
         "yaşamadığını ölçer: ikinci soruda tablo yeniden kurulmamalı, SÜTUN eklenmeli.",
-        table_checks=[
-            ("hâlâ 12 satır (tablo bozulmamış)", _rows(12)),
-            ("sütun sayısı artmış", lambda df: len(df.columns) >= 3),
-        ],
-        max_steps_used=8,
+        # Eski "sütun sayısı >= 3" koşulu, tablo zaten 4 sütunlu olduğu için
+        # sütun HİÇ eklenmese bile sağlanıyordu; vaka yanlışlıkla geçiyordu.
+        # Doğru kanıt: sütunu ekleyen aracın gerçekten çalışmış olması.
+        table_checks=[("hâlâ 12 satır (tablo bozulmamış)", _rows(12))],
+        must_use_tools=["workspace_add_column"],
+        max_steps_used=10,
     ),
 ]

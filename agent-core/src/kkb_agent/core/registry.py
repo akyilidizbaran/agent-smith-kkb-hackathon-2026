@@ -8,12 +8,18 @@ from __future__ import annotations
 
 from typing import Any, Iterator
 
+from ..domain import DomainProfile
 from .tool import Tool, ToolResult
 
 
 class ToolRegistry:
-    def __init__(self) -> None:
+    def __init__(self, profile: DomainProfile | None = None) -> None:
         self._tools: dict[str, Tool] = {}
+        # Araç açıklamaları modele gönderilmeden önce bu profille doldurulur.
+        self.profile = profile or DomainProfile.generic()
+        # Cevaplanmakta olan soru. Bazı araçlar sonucu soruyla karşılaştırıp
+        # eksik kalan bir kısıtı fark edebilir (ör. atlanan dönem filtresi).
+        self.active_question: str = ""
 
     def register(self, tool: Tool) -> None:
         if tool.name in self._tools:
@@ -31,11 +37,13 @@ class ToolRegistry:
         return list(self._tools)
 
     def schemas(self) -> list[dict[str, Any]]:
-        return [t.openai_schema() for t in self._tools.values()]
+        return [t.openai_schema(self.profile) for t in self._tools.values()]
 
     def describe(self) -> str:
         """Native tool-calling desteklemeyen modeller için metin katalog."""
-        return "\n".join(f"- {t.name}: {t.description}" for t in self._tools.values())
+        return "\n".join(
+            f"- {t.name}: {self.profile.render(t.description)}" for t in self._tools.values()
+        )
 
     def execute(self, name: str, args: dict[str, Any]) -> ToolResult:
         tool = self.get(name)

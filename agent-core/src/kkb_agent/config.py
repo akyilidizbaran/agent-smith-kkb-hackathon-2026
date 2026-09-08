@@ -26,6 +26,8 @@ class Settings:
     lakehouse_path: Path
     evds_api_key: str | None
     disable_thinking: bool
+    domain_description: str | None
+    domain_audience: str | None
 
     @property
     def provider_label(self) -> str:
@@ -43,4 +45,6 @@ def load_settings() -> Settings:
         lakehouse_path=PROJECT_ROOT / os.getenv("LAKEHOUSE_PATH", "data/lakehouse.duckdb"),
         evds_api_key=os.getenv("EVDS_API_KEY") or None,
         disable_thinking=os.getenv("LLM_DISABLE_THINKING", "true").lower() == "true",
+        domain_description=os.getenv("DOMAIN_DESCRIPTION") or None,
+        domain_audience=os.getenv("DOMAIN_AUDIENCE") or None,
     )

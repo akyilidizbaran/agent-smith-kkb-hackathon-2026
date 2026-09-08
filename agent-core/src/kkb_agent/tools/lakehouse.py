@@ -22,7 +22,7 @@ from ..core.workspace import AnalysisWorkspace
 
 class SearchParams(BaseModel):
     query: str = Field(
-        description="Aranan konuyu anlatan Türkçe ifade, ör. 'konut kredisi aylık bakiye'"
+        description="Aranan konuyu anlatan kısa Türkçe ifade, ör. 'aylık {example_entity}'"
     )
 
 
@@ -105,11 +105,29 @@ class LakehouseQueryTool(Tool):
     )
     Params = QueryParams
 
-    def __init__(self, lakehouse: LakehouseClient, workspace: AnalysisWorkspace) -> None:
+    def __init__(
+        self,
+        lakehouse: LakehouseClient,
+        workspace: AnalysisWorkspace,
+        registry: object | None = None,
+    ) -> None:
         self.lakehouse = lakehouse
         self.workspace = workspace
+        # Sorulan soruya erişim: atlanan dönem kısıtını yakalamak için.
+        self._registry = registry
 
     def run(self, params: QueryParams) -> ToolResult:
+        # Sorgu çalışmadan önce reddet: uyarı olarak eklendiğinde model onu
+        # okuyup yine de cevaba geçiyordu (ölçüldü: 0/2). Kapsam kontrolünde
+        # işe yarayan kalıp bu — modele seçenek bırakmamak (ADR-0010).
+        eksik_donem = self._atlanmis_donem_filtresi(params.sql)
+        if eksik_donem:
+            return ToolResult.error(
+                f"Sorguda dönem filtresi yok. Kullanıcı {eksik_donem} dönemini sordu ama "
+                f"sorgun tablonun tamamını getiriyor.\n"
+                f"YAPACAĞIN: sorguya dönem kısıtını ekleyip tekrar çalıştır, ör. "
+                f"WHERE EXTRACT(year FROM <dönem_kolonu>) = {eksik_donem.split(',')[0].strip()}"
+            )
         try:
             result = self.lakehouse.execute_sql(params.sql)
         except LakehouseError as exc:
@@ -167,6 +185,22 @@ class LakehouseQueryTool(Tool):
         content += f"\nKaynak: {result.provenance.summary()}"
         return ToolResult(content=content, data=df, provenance=result.provenance)
 
+    def _atlanmis_donem_filtresi(self, sql: str) -> str | None:
+        """Soruda bir yıl geçiyor ama sorguda geçmiyorsa bunu bildirir.
+
+        Ölçülmüş hata modu: "2025 yılında ... aylık göster" sorusuna model dönem
+        filtresiz sorgu üretip 66 satır (tüm kapsam) döndürdü. Aynı kök neden üç
+        golden vakasını birden düşürdü — kapsam dışı vakası dahil, çünkü sorguda
+        yıl geçmeyince kapsam kontrolü de tetiklenmiyor.
+        """
+        soru = getattr(self._registry, "active_question", "") or ""
+        sorulan = set(re.findall(r"\b(19\d{2}|20\d{2})\b", soru))
+        if not sorulan:
+            return None
+        sorguda = set(re.findall(r"\b(19\d{2}|20\d{2})\b", sql))
+        eksik = sorted(sorulan - sorguda)
+        return ", ".join(eksik) if eksik else None
+
     def _out_of_coverage(self, sql: str) -> str | None:
         """Sorgudaki yıllar katalog kapsamının dışında mı?
 
@@ -212,11 +246,13 @@ class LakehouseQueryTool(Tool):
 
 class DistinctValuesParams(BaseModel):
     dataset_id: str = Field(description="Tablo kimliği")
-    column: str = Field(description="Değerleri listelenecek kırılım kolonu, ör. 'kalem'")
+    column: str = Field(
+        description="Değerleri listelenecek kırılım kolonu, ör. '{example_category_column}'"
+    )
     contains: str | None = Field(
         default=None,
         description="Sadece bu metni içeren değerleri getir (büyük/küçük harf duyarsız). "
-        "Ör. 'konut'. Boş bırakılırsa tüm değerler listelenir.",
+        "Ör. '{example_entity}'. Boş bırakılırsa tüm değerler listelenir.",
     )
     limit: int = Field(default=50, description="En fazla kaç değer döndürülsün")
 

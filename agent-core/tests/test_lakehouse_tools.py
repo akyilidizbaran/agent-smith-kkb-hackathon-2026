@@ -106,6 +106,38 @@ def test_kismi_kapsam_disi_engellemez(empty_tool: LakehouseQueryTool) -> None:
     assert "bulunmuyor" not in res.content.lower()
 
 
+def test_atlanan_donem_filtresi_bildirilir() -> None:
+    """Soruda yıl geçip sorguda geçmiyorsa model uyarılmalı.
+
+    Ölçülmüş hata modu: "2025 yılında ... aylık göster" sorusuna model dönem
+    filtresiz sorgu üretti, tüm kapsam döndü ve üç golden vakası birden düştü.
+    """
+
+    class SahteRegistry:
+        active_question = "2025 yılında konut kredisini aylık göster"
+
+    df = pd.DataFrame({"donem": pd.to_datetime(["2021-01-01"] * 3), "deger": [1.0, 2.0, 3.0]})
+    tool = LakehouseQueryTool(StubLakehouse(df), AnalysisWorkspace(), SahteRegistry())
+    res = tool.validate_and_run(
+        {"sql": "SELECT donem, deger FROM test_tablo", "purpose": "filtresiz"}
+    )
+    assert not res.ok, "uyarı yetmiyordu; sorgu reddedilmeli"
+    assert "2025" in res.content and "dönem filtresi yok" in res.content
+
+
+def test_donem_filtresi_varsa_uyarmaz() -> None:
+    class SahteRegistry:
+        active_question = "2025 yılında konut kredisini aylık göster"
+
+    df = pd.DataFrame({"donem": pd.to_datetime(["2025-01-01"]), "deger": [1.0]})
+    tool = LakehouseQueryTool(StubLakehouse(df), AnalysisWorkspace(), SahteRegistry())
+    res = tool.validate_and_run(
+        {"sql": "SELECT donem, deger FROM test_tablo WHERE donem >= '2025-01-01'",
+         "purpose": "filtreli"}
+    )
+    assert res.ok and "dönem filtresi yok" not in res.content
+
+
 def test_sonucta_birimler_bildirilir() -> None:
     """Model birim çevirisi yapmasın diye birim etiketi sonuca eklenir."""
     df = pd.DataFrame({"donem": pd.to_datetime(["2025-01-01"]), "deger": [42.0]})

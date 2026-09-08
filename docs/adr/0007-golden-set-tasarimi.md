@@ -27,7 +27,20 @@ Vakaların bir kısmı doğrudan yarışmanın örnek senaryosundan (G6, G7, G4)
 kısmı ilk ölçümde **fiilen gözlemlenen** hatalardan türedi (G2 mükerrer sayım,
 G3 modelin kendi aritmetiği).
 
-**Bilinen zayıflıklar:** G5'in `len(df.columns) >= 3` koşulu, uzun formatta tek
-kalem gelse bile sağlanır — iki kalemin gerçekten geldiğini denetlemiyor.
-G1'deki metin kontrolü (`answer_must_not_contain`) kırılgan. Golden set'in
-kapsamı da dar: hepsi tek veri kaynağı ve kredi kalemleri üzerinden.
+## Düzeltme (2026-09-09): yanlışlıkla geçen kontroller
+
+İki vakanın kontrolü, ölçülen davranış gerçekleşmese bile sağlanıyordu:
+
+- **G5** `len(df.columns) >= 3` — uzun formatta TEK kalem gelse de sağlanıyordu.
+  Yerine: iki ölçüm sütunu **veya** iki katı satır aranıyor.
+- **G6** `len(df.columns) >= 3` — analiz tablosu zaten 4 sütunlu
+  (`donem, tp, yp, toplam`) olduğundan sütun **hiç eklenmese bile** geçiyordu.
+  Nitekim bir koşuda sütun eklenmediği halde vaka geçmiş görünmüştü. Yerine:
+  `must_use_tools=["workspace_add_column"]` — davranışın kendisi kanıt.
+
+Ders: bir kontrolün "geçmesi" yetmez; **geçmediği bir durum var mı** diye
+sorulmalı. Her zaman geçen bir kontrol, kontrol değildir.
+
+**Bilinen zayıflıklar:** G1'deki metin kontrolü (`answer_must_not_contain`)
+kırılgan. Golden set'in kapsamı dar: hepsi tek veri kaynağı ve kredi kalemleri
+üzerinden.

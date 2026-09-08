@@ -23,10 +23,28 @@ from kkb_agent.tools.workspace import (  # noqa: E402
 
 
 class FakeLakehouse:
-    """execute_sql çağrısını sabit bir sonuca bağlar."""
+    """Sabit bir sonuç ve iki kolonlu bir katalog kaydı sunar."""
 
     def __init__(self, df: pd.DataFrame) -> None:
         self._df = df
+
+    def get_dataset(self, dataset_id: str):
+        from datetime import date
+
+        from kkb_agent.contracts.catalog import (
+            ColumnRole, ColumnSpec, Coverage, DatasetSpec, Frequency,
+        )
+
+        return DatasetSpec(
+            dataset_id=dataset_id, name="t", description="t", source="TEST",
+            frequency=Frequency.MONTHLY, time_column="donem", grain=["donem"],
+            columns=[
+                ColumnSpec(name="donem", role=ColumnRole.TIME, dtype="DATE", description="d"),
+                ColumnSpec(name="deger", role=ColumnRole.MEASURE, dtype="DOUBLE", description="v"),
+                ColumnSpec(name="kalem", role=ColumnRole.DIMENSION, dtype="VARCHAR", description="k"),
+            ],
+            coverage=Coverage(start=date(2021, 1, 1), end=date(2026, 6, 1)),
+        )
 
     def execute_sql(self, sql: str, *, max_rows: int = 10_000):
         from kkb_agent.contracts.lakehouse import QueryProvenance, QueryResult
@@ -63,8 +81,8 @@ def test_add_column_tabloyu_bozmaz(workspace: AnalysisWorkspace) -> None:
     )
     tool = WorkspaceAddColumnTool(lake, workspace)
     res = tool.validate_and_run(
-        {"sql": "SELECT donem, deger FROM x", "column_name": "tasit",
-         "join_on": "donem", "purpose": "taşıt kredisi"}
+        {"dataset_id": "x", "key_column": "donem", "value_column": "deger",
+         "column_name": "tasit", "join_on": "donem", "purpose": "ikinci seri"}
     )
     assert res.ok, res.content
     table = workspace.table
@@ -79,21 +97,42 @@ def test_add_column_anahtar_ortusmezse_hata_verir(workspace: AnalysisWorkspace) 
     )
     tool = WorkspaceAddColumnTool(lake, workspace)
     res = tool.validate_and_run(
-        {"sql": "SELECT donem, deger FROM x", "column_name": "eski",
-         "join_on": "donem", "purpose": "kapsam dışı"}
+        {"dataset_id": "x", "key_column": "donem", "value_column": "deger",
+         "column_name": "eski", "join_on": "donem", "purpose": "kapsam dışı"}
     )
     assert not res.ok
     assert "eşleş" in res.content.lower()
     assert "eski" not in workspace.columns(), "başarısız ekleme tabloyu kirletmemeli"
 
 
-def test_add_column_iki_kolon_sarti(workspace: AnalysisWorkspace) -> None:
-    lake = FakeLakehouse(pd.DataFrame({"a": [1], "b": [2], "c": [3]}))
+def test_olmayan_kolon_katalogla_yakalanir(workspace: AnalysisWorkspace) -> None:
+    """Model var olmayan bir kolon adı veremez — katalog doğrulaması engeller."""
+    lake = FakeLakehouse(pd.DataFrame({"donem": [], "deger": []}))
     tool = WorkspaceAddColumnTool(lake, workspace)
     res = tool.validate_and_run(
-        {"sql": "SELECT a,b,c FROM x", "column_name": "x", "join_on": "donem", "purpose": "y"}
+        {"dataset_id": "x", "key_column": "donem", "value_column": "olmayan_kolon",
+         "column_name": "yeni", "join_on": "donem", "purpose": "y"}
     )
-    assert not res.ok and "2" in res.content
+    assert not res.ok
+    assert "olmayan_kolon" in res.content and "Mevcut kolonlar" in res.content
+
+
+def test_yeni_sutun_adini_kaynak_kolonu_sanma_hatasi(workspace: AnalysisWorkspace) -> None:
+    """Model yeni sütunun adını value_column'a yazarsa, hata bunu açıkça söylemeli.
+
+    Ölçülmüş hata modu (G6): serbest SQL alan sürümde model "SELECT donem,
+    tasit_kredisi FROM ..." yazdı, ham motor hatasından çıkamadı ve sonunda
+    analiz tablosunu yeniden kurdu.
+    """
+    lake = FakeLakehouse(pd.DataFrame({"donem": [], "deger": []}))
+    tool = WorkspaceAddColumnTool(lake, workspace)
+    res = tool.validate_and_run(
+        {"dataset_id": "x", "key_column": "donem", "value_column": "tasit_kredisi",
+         "column_name": "tasit_kredisi", "join_on": "donem", "purpose": "test"}
+    )
+    assert not res.ok
+    assert "YENİ sütunun adı" in res.content
+    assert "tasit_kredisi" not in workspace.columns()
 
 
 def test_compute_column_hesabi_motorda_yapar(workspace: AnalysisWorkspace) -> None:

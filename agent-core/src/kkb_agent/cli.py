@@ -17,6 +17,7 @@ from .config import load_settings
 from .core.agent import AnalyticsAgent
 from .core.registry import ToolRegistry
 from .core.workspace import AnalysisWorkspace
+from .domain import DomainProfile
 from .llm.openai_compat import OpenAICompatClient
 from .tools.workspace import (
     WorkspaceAddColumnTool,
@@ -37,13 +38,21 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
     lakehouse = DuckDBLakehouse(settings.lakehouse_path)
     workspace = AnalysisWorkspace()
 
-    registry = ToolRegistry()
+    # Alan profili katalogdan deterministik olarak türetilir; üslup tercihleri
+    # (.env'deki DOMAIN_DESCRIPTION / DOMAIN_AUDIENCE) varsa onlar geçerlidir.
+    profile = DomainProfile.from_catalog(
+        lakehouse.list_datasets(),
+        domain=settings.domain_description,
+        audience=settings.domain_audience,
+    )
+
+    registry = ToolRegistry(profile)
     registry.register_all(
         [
             LakehouseSearchTool(lakehouse),
             LakehouseDescribeTool(lakehouse),
             LakehouseDistinctValuesTool(lakehouse),
-            LakehouseQueryTool(lakehouse, workspace),
+            LakehouseQueryTool(lakehouse, workspace, registry),
             WorkspaceAddColumnTool(lakehouse, workspace),
             WorkspaceComputeColumnTool(workspace),
             WorkspaceShowTool(workspace),
@@ -58,10 +67,12 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
     )
     print(
         f"[motor] sağlayıcı={settings.provider_label} model={settings.llm_model} "
-        f"araçlar={', '.join(registry.names())}",
+        f"alan={profile.domain!r} araçlar={len(registry)}",
         file=sys.stderr,
     )
-    return AnalyticsAgent(llm, registry, workspace=workspace, max_steps=max_steps)
+    return AnalyticsAgent(
+        llm, registry, workspace=workspace, max_steps=max_steps, profile=profile
+    )
 
 
 def main() -> None:

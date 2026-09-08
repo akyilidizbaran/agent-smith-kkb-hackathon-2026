@@ -22,6 +22,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..domain import DomainProfile
 from ..llm.base import ChatMessage, LLMClient, ToolCall
 from .registry import ToolRegistry
 from .tool import ToolResult
@@ -29,7 +30,7 @@ from .workspace import AnalysisWorkspace
 
 log = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """Sen Türkiye ekonomisi ve bankacılık verileri üzerinde çalışan bir veri analisti ajansın.
+SYSTEM_PROMPT = """Sen {domain} üzerinde çalışan bir veri analisti ajansın.
 
 GÖREVİN: Kullanıcının doğal dildeki sorusunu anla, doğru veri kaynağını ve aracı seç, \
 analizi adım adım yürüt ve sonucu kanıtıyla birlikte sun.
@@ -47,7 +48,8 @@ Sen bir hesap makinesi DEĞİLSİN. Toplama, çıkarma, ortalama, yüzde değiş
 fark — bunların HEPSİNİ SQL içinde yaptır. Araçtan dönen sayıları asla kendin işleme; \
 olduğu gibi aktar. Bir değişim veya oran gerekiyorsa bunu hesaplayan YENİ bir sorgu yaz.
 Örnek: aylık değişim için LAG kullan:
-  SELECT donem, toplam, toplam - LAG(toplam) OVER (ORDER BY donem) AS aylik_degisim FROM ...
+  SELECT {example_time_column}, {example_measure}, {example_measure} - \
+LAG({example_measure}) OVER (ORDER BY {example_time_column}) AS degisim FROM ...
 
 BİRİM KURALI:
 Sorgu sonucunda birimler ayrıca bildirilir. Cevabında sayıyı YAZDIĞIN birimle birlikte ver \
@@ -62,7 +64,7 @@ Aktif bir analiz tablosu varsa ve kullanıcı "tabloyu bozmadan", "bu tabloya", 
 olarak ekle", "buna ... da ekle" diyorsa lakehouse_query KULLANMA — yeni tablo kurarsan \
 kullanıcının baktığı tablo kaybolur. Bunun yerine:
   - Başka bir veriyi sütun olarak eklemek için: workspace_add_column
-  - Mevcut sütunlardan hesap türetmek için (enflasyondan arındırma, yüzde değişim, oran): \
+  - Mevcut sütunlardan hesap türetmek için (yüzde değişim, oran, normalleştirme): \
 workspace_compute_column
   - Tablonun son halini görmek için: workspace_show
 - Alt toplam satırlarını (is_alt_toplam = TRUE) alt kalemlerle birlikte toplama; mükerrer sayım olur.
@@ -72,7 +74,7 @@ tek satırlık sonuçlar da analiz tablosudur.
 alt toplam) kullanıcı istemedikçe aynı sorguya katma; aynı döneme birden çok satır düşerse \
 tablo bozulur.
 - Kullanıcıya Türkçe, net ve kısa cevap ver. Ara adımları anlatma; sonucu ve gerekçesini anlat.
-- Muhatabın bir ekonomi analisti, geliştirici DEĞİL. Nihai cevapta SQL, kolon adı, araç adı, \
+- Muhatabın bir {audience}, geliştirici DEĞİL. Nihai cevapta SQL, kolon adı, araç adı, \
 hata mesajı veya "sorgunuzu kontrol edin" türü teknik yönlendirme YAZMA. Veri yoksa bunu \
 sade bir cümleyle söyle ve elde hangi dönemin bulunduğunu belirt.
 
@@ -150,12 +152,16 @@ class AnalyticsAgent:
         workspace: AnalysisWorkspace | None = None,
         max_steps: int = 10,
         system_prompt: str = SYSTEM_PROMPT,
+        profile: DomainProfile | None = None,
     ) -> None:
         self.llm = llm
         self.registry = registry
         self.workspace = workspace or AnalysisWorkspace()
         self.max_steps = max_steps
-        self._system_prompt = system_prompt
+        # Alan bilgisi prompt'a koddan değil profilden girer (ADR-0012).
+        # Profil verilmezse registry'ninki, o da yoksa nötr varsayılan kullanılır.
+        self.profile = profile or registry.profile
+        self._system_prompt = self.profile.render(system_prompt)
         self._history: list[ChatMessage] = []  # turlar arası konuşma hafızası
 
     def reset(self) -> None:
@@ -165,6 +171,7 @@ class AnalyticsAgent:
     # ------------------------------------------------------------------
     def ask(self, question: str) -> AgentAnswer:
         """Bir soruyu uçtan uca cevaplar."""
+        self.registry.active_question = question
         messages = self._build_messages(question)
         steps: list[AgentStep] = []
         native = self.llm.supports_native_tools()
