@@ -81,6 +81,7 @@ cevaplanabilir.
 | `agent-core/tests/golden/` | Golden set: ilerlemenin objektif ölçüsü |
 | `agent-core/scripts/` | Geliştirme seed'i, golden koşucusu |
 | `lakehouse-core/` | Data Lakehouse — ingestion, Bronze/Silver/Gold, semantic catalog |
+| `docs/adr/` | **Mimari karar kayıtları** — her kararın gerekçesi ve ölçümü |
 | `docs/` | Sözleşme dokümanları, açılış toplantısı slaytları |
 
 ## Hızlı başlangıç
@@ -122,6 +123,13 @@ Endpoint ayrıntıları ve doğrulanmış tablo haritası:
 |---|---|
 | `feature/agent-engine` | Agentic analytics motoru, araçlar, golden set |
 | `feature/lakehouse` | Ingestion, Bronze/Silver/Gold, semantic catalog |
+
+## Kararlar nasıl kayda geçiyor
+
+Her mimari karar, gerekçesi ve varsa ölçümüyle birlikte
+[`docs/adr/`](docs/adr/) altına yazılır. Reddedilen kararlar da kayıtta durur:
+bir şeyi deneyip ölçerek vazgeçmiş olmak, hiç dememekten farklıdır ve aynı fikir
+tekrar gündeme geldiğinde tartışma sıfırdan başlamaz.
 
 ## Takvim
 

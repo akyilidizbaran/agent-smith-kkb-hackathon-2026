@@ -25,6 +25,8 @@ ham veri görmez (şema + örnek satır görür), hatasını sessizce yutmaz (ha
 geri verilir, düzeltir). Böylece 8B'lik bir modelle çalışan sistem, demo gününde
 daha güçlü modelle daha da iyi çalışır.
 
+Tasarım kararlarının gerekçeleri: [`docs/adr/`](adr/)
+
 ## Kurulum
 
 Tüm komutlar `agent-core/` dizininden çalıştırılır.
