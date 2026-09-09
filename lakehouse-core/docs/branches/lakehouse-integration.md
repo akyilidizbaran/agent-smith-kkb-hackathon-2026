@@ -15,6 +15,9 @@
 - EVDS Connector + Parser
 - BDDK Aylık Connector + Parser
 - BDDK Haftalık Connector + Parser
+- BDDK Haftalık pozisyonel chart-id sapma koruması
+- BDDK TLS hata sınıflaması
+- İkinci EVDS serisi (`TP.KFE.TR`) için genel connector/parser E2E kanıtı
 - RAW → Parser → Bronze integration akışı
 - `meta.series` semantic metadata catalog
 
@@ -28,9 +31,9 @@ Silver → Gold                                 sıradaki aşama
 Gold + izinli Meta → Agent                    sonraki aşama
 ```
 
-`8ab6df2` commit'inde:
+Source Access hardening birleşmesi sonrasında:
 
-- 322 test geçmektedir.
+- 357 test geçmektedir.
 - Build başarılıdır.
 - Offline demo-check başarılıdır.
 - Catalog dört başlangıç serisini içermektedir.

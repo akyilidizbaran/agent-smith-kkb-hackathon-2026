@@ -60,3 +60,5 @@ CA bundle sağlamak Infrastructure sorumluluğudur; `verify=False` kabul edilmez
 - `dataset_version` / revision yaşam döngüsünü tasarlamak
 - Haftalık tatil günleri, birim ve frekans dönüşümlerini Silver'da uygulamak
 - EVDS anahtarı geldiğinde resmî endpoint'e dar canlı smoke test yapmak
+
+Bu çalışma `feature/lakehouse-integration` dalına alınmıştır.
