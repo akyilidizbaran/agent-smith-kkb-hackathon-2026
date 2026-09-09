@@ -19,8 +19,15 @@ hem Kloudeks'e bağlanıyor. Sağlayıcı değişimi yalnızca `.env` değişikl
 - Geliştirmeyi kasıtlı olarak zayıf modelle yapıyoruz: *"zayıf modelde çalışan
   sistem güçlü modelde daha da iyi çalışır."*
 
-## Açık riskler
-Demo öncesi ölçülmesi gereken iki bilinmeyen:
-1. `reasoning_effort` Kloudeks'te destekleniyor mu (bkz. ADR-0005)?
-2. Native tool-calling var mı? Yoksa harness'ın JSON fallback modu devreye
-   girmeli — kod yazılı ama gerçek koşulda hiç denenmedi.
+## Ölçüm — MIA/Kloudeks, 2026-09-10
+İki bilinmeyen de kapandı, kod değişikliği olmadan:
+- `reasoning_effort=none`: **çalışıyor** (51 token/1,0 s → 4 token/0,1 s)
+- Native tool-calling: **çalışıyor** (`topla(a=7,b=5)` doğru döndü)
+- Embedding: 4096 boyut, 0,2 s. Rate-limit header'ı yok; kota mentörde.
+
+Tek uyumsuzluk: vLLM ikinci bir `system` mesajını reddediyor
+("System message must be at the beginning"). Workspace durumu artık ilk
+system mesajının içine ekleniyor; Ollama tolere ettiği için fark edilmemişti.
+
+Golden set MIA'da: **7/7, her vaka 3/3 kararlı, 4–12 s** (yerelde 12 dakika,
+%100 → aynı kodla 30 saniye). Sağlayıcı soyutlaması amacına ulaştı.

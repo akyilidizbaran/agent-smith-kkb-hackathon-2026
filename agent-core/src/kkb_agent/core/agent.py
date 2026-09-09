@@ -271,17 +271,14 @@ class AnalyticsAgent:
         if not self.llm.supports_native_tools():
             system += "\n" + JSON_PROTOCOL_PROMPT + self.registry.describe()
 
+        # Aktif tablo varsa modele durumu hatırlat: "tabloyu bozmadan" akışının anahtarı.
+        # TEK system mesajı, en başta: MIA/vLLM ikinci bir system mesajını reddediyor
+        # ("System message must be at the beginning"); Ollama tolere ediyordu.
+        if self.workspace.has_table:
+            system += "\n\nMEVCUT ANALİZ DURUMU:\n" + self.workspace.describe_for_llm()
+
         msgs = [ChatMessage(role="system", content=system)]
         msgs += self._history[-8:]  # son turlar — bağlamı korur, pencereyi şişirmez
-
-        # Aktif tablo varsa modele durumu hatırlat: "tabloyu bozmadan" akışının anahtarı.
-        if self.workspace.has_table:
-            msgs.append(
-                ChatMessage(
-                    role="system",
-                    content="MEVCUT ANALİZ DURUMU:\n" + self.workspace.describe_for_llm(),
-                )
-            )
         msgs.append(ChatMessage(role="user", content=question))
         return msgs
 
