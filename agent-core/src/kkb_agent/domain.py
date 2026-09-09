@@ -35,8 +35,12 @@ _PLACEHOLDER = re.compile(r"\{(\w+)\}")
 _AYIRICI = re.compile(r"\s*[-–—:/|]\s*")
 
 
-def _kisa_terim(deger: str, max_uzunluk: int = 24) -> str:
-    """Kanonik bir değerden, arama örneği olarak kullanılabilecek kısa terim üretir."""
+def kisa_terim(deger: str, max_uzunluk: int = 24) -> str:
+    """Kanonik bir değerden, arama örneği olarak kullanılabilecek kısa terim üretir.
+
+    İki yerde kullanılıyor: profil örnekleri ve `lakehouse_distinct_values`'ın
+    daraltma önerisi. Tek kaynakta tutuluyor ki ikisi ayrışmasın.
+    """
     parcalar = [p.strip() for p in _AYIRICI.split(deger) if p.strip()]
     aday = parcalar[-1] if parcalar else deger.strip()
     # Parantezli ekleri at: "Konut (Dövize Endeksli)" -> "Konut"
@@ -129,7 +133,7 @@ class DomainProfile:
         entity = cls.example_entity
         for dim in dimensions:
             if dim.example_values:
-                entity = _kisa_terim(dim.example_values[0])
+                entity = kisa_terim(dim.example_values[0])
                 break
         else:
             if spec.tags:

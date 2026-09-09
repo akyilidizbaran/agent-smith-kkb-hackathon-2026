@@ -131,14 +131,14 @@ def test_ornek_varlik_kisa_arama_terimi_olur() -> None:
     verildiğinde model bunu `contains` filtresine birebir yazdı ve golden set
     5/7'den 1/7'ye düştü. Örneğin gerçek olması yetmez, iyi olması gerekir.
     """
-    from kkb_agent.domain import _kisa_terim
+    from kkb_agent.domain import kisa_terim
 
-    assert _kisa_terim("Tüketici Kredileri - Konut") == "Konut"
-    assert _kisa_terim("Tüketici Kredileri - Konut (Dövize Endeksli)") == "Konut"
-    assert _kisa_terim("Kardiyoloji") == "Kardiyoloji"
-    assert _kisa_terim("Bireysel Kredi Kartları") == "Bireysel Kredi Kartları"
+    assert kisa_terim("Tüketici Kredileri - Konut") == "Konut"
+    assert kisa_terim("Tüketici Kredileri - Konut (Dövize Endeksli)") == "Konut"
+    assert kisa_terim("Kardiyoloji") == "Kardiyoloji"
+    assert kisa_terim("Bireysel Kredi Kartları") == "Bireysel Kredi Kartları"
     # Ayırıcı yoksa ve uzunsa kırpılır ama boş kalmaz
-    assert _kisa_terim("x" * 60)
+    assert kisa_terim("x" * 60)
 
 
 def test_ornekler_makul_uzunlukta() -> None:

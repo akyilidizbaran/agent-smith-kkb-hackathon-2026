@@ -72,7 +72,7 @@ CASES: list[GoldenCase] = [
         "LIKE '%Konut%' ile üç ayrı kalem mükerrer toplandı. 12 ay = 12 satır olmalı.",
         table_checks=[
             ("tam 12 satır (mükerrer sayım yok)", _rows(12)),
-            ("dönem ve tutar kolonları var", _has_cols("donem")),
+            ("dönem kolonu var", _has_cols("donem")),
         ],
         max_steps_used=8,
     ),

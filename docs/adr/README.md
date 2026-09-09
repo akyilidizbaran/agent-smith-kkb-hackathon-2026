@@ -42,3 +42,5 @@ sıfırdan başlatmamak için kayıt tutulur.
 | [0015](0015-embedding-reranker-erteleme.md) | Embedding/reranker yatırımının ertelenmesi | Ertelendi |
 | [0016](0016-add-column-yapisal-parametreler.md) | workspace_add_column serbest SQL almaz | Kabul edildi |
 | [0017](0017-donem-filtresi-zorunlulugu.md) | Soruda geçen dönem sorguda yoksa ret | Kabul edildi |
+| [0018](0018-donem-anahtari-uyumu.md) | Dönem anahtarı dönem sonu; kolon adı korundu | Kabul edildi |
+| [0019](0019-arac-ciktisi-boyut-siniri.md) | Araç çıktısı modelin taşıyabileceği boyutta | Kabul edildi |

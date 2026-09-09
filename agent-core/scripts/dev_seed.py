@@ -11,6 +11,7 @@ Aynı zamanda veri ekibine iki şeyi somut olarak gösterir:
 
 from __future__ import annotations
 
+import calendar
 import json
 import sys
 from datetime import date
@@ -60,13 +61,17 @@ def fetch_month(client: httpx.Client, tablo_no: int, yil: int, ay: int) -> list[
     if not payload.get("success"):
         return []
 
+    # Kanonik dönem anahtarı: dönem SONU. Veri ekibinin fact_observation
+    # şemasındaki kural bu (date_key = period end) ve uyumsuzluk sessiz bir
+    # hatadır: join eşleşmez, sütun boş gelir, hiçbir hata mesajı çıkmaz.
+    son_gun = calendar.monthrange(yil, ay)[1]
     out = []
     for row in payload["Json"]["data"].get("rows", []):
         cell = row["cell"]
         # cell = [taraf, sıra, kalem_adı, font, TP, YP, Toplam]
         out.append(
             {
-                "donem": date(yil, ay, 1),
+                "donem": date(yil, ay, son_gun),
                 "tablo_no": tablo_no,
                 "kalem_sira": cell[1],
                 "kalem": cell[2],
@@ -151,7 +156,8 @@ def main() -> None:
         columns=[
             ColumnSpec(
                 name="donem", role=ColumnRole.TIME, dtype="DATE",
-                description="Verinin ait olduğu ay (ayın ilk günü ile temsil edilir)",
+                description="Verinin ait olduğu ay, dönem SONU günüyle temsil edilir "
+                "(Ocak 2025 -> 2025-01-31)",
                 aliases=["ay", "dönem", "tarih"],
             ),
             ColumnSpec(

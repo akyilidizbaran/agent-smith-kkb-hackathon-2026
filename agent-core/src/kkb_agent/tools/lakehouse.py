@@ -16,6 +16,7 @@ import re
 from pydantic import BaseModel, Field
 
 from ..contracts.lakehouse import LakehouseClient, LakehouseError
+from ..domain import kisa_terim
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
 
@@ -254,7 +255,7 @@ class DistinctValuesParams(BaseModel):
         description="Sadece bu metni içeren değerleri getir (büyük/küçük harf duyarsız). "
         "Ör. '{example_entity}'. Boş bırakılırsa tüm değerler listelenir.",
     )
-    limit: int = Field(default=50, description="En fazla kaç değer döndürülsün")
+    limit: int = Field(default=20, description="En fazla kaç değer döndürülsün")
 
 
 class LakehouseDistinctValuesTool(Tool):
@@ -315,6 +316,26 @@ class LakehouseDistinctValuesTool(Tool):
                 ok=True,
             )
 
+        # Filtresiz çağrı çok fazla değer döndürdüğünde model boğuluyor: ölçümde
+        # 50 kalemlik liste sonrası model sorgu yazmadan cevaba geçti (0/7).
+        # Tam listeyi basmak yerine daraltmaya yönlendiriyoruz.
+        toplam = self._toplam_deger_sayisi(params.dataset_id, col)
+        if params.contains is None and toplam > 15:
+            ornekler = "\n".join(
+                f"  - {getattr(r, col, r[0])}" for r in result.data.head(8).itertuples(index=False)
+            )
+            return ToolResult(
+                content=(
+                    f"'{col}' kolonunda {toplam} farklı değer var — hepsini listelemek yerine "
+                    f"aradığın kalemi daralt.\n"
+                    f"YAPACAĞIN: bu aracı contains parametresiyle tekrar çağır, ör. "
+                    f"contains='{self._ornek_terim(result.data, col)}'\n\n"
+                    f"İlk 8 değer (yalnızca fikir vermesi için, tam liste değil):\n{ornekler}"
+                ),
+                ok=True,
+                data=result.data,
+            )
+
         lines = [f"'{col}' kolonundaki değerler ({len(result.data)} adet):"]
         for row in result.data.itertuples(index=False):
             value = getattr(row, col, row[0])
@@ -331,3 +352,20 @@ class LakehouseDistinctValuesTool(Tool):
             "istemediyse ana kalemi seç."
         )
         return ToolResult(content="\n".join(lines), data=result.data)
+
+    def _toplam_deger_sayisi(self, dataset_id: str, column: str) -> int:
+        """Kolondaki toplam distinct değer sayısı — limit uygulanmadan önceki hâli."""
+        try:
+            r = self.lakehouse.execute_sql(
+                f"SELECT COUNT(DISTINCT {column}) AS n FROM {dataset_id}"
+            )
+            return int(r.data.iloc[0, 0]) if not r.is_empty else 0
+        except LakehouseError:
+            return 0
+
+    @staticmethod
+    def _ornek_terim(df, column: str) -> str:
+        """Daraltma önerisi için, dönen değerlerden kısa bir arama terimi seçer."""
+        if df.empty:
+            return "..."
+        return kisa_terim(df.iloc[0][column] if column in df.columns else df.iloc[0, 0])
