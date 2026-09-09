@@ -26,6 +26,10 @@ Source behaviour this parser preserves instead of "fixing":
 - ``colModels[...].formatoptions.defaultValue`` is ``"0"``. That is a *display* default in the
   BDDK grid, so a genuinely absent value can be shown as zero in the UI. This parser never
   substitutes a value, and records the presence of that display default as a warning.
+- **Subtotal rows are not marked on this endpoint.** The simple-report endpoint exposes a
+  ``BasitFont`` display-style field, but the advanced time-series endpoint used here does not.
+  No speculative, always-NULL style columns and no derived ``is_subtotal`` are added to this
+  V1 Bronze schema.
 - HTTP 200 does not mean success: the body may be ``{"success": false, "error": "..."}``.
 """
 
@@ -46,6 +50,7 @@ BDDK_MONTHLY_SCHEMA_VERSION = "bddk_monthly_observations.v1"
 """Schema version of the long-format frame produced by this parser."""
 
 _STRUCTURAL_COLUMNS = frozenset({"BankaAdi", "Yil", "Ay", "Sira", "BasitFont", "parent"})
+
 _UNIT_RE = re.compile(r"\(([^()]*)\)\s*(?:-[^-]*)?$")
 
 COLUMNS = [

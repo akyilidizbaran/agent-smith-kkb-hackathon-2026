@@ -30,6 +30,11 @@ Source behaviour this parser preserves instead of "fixing":
 
 ``series_id`` is built **only** from the stable ``requested_kalem_id`` recorded by the
 connector. The positional chart id is carried as data but is never an identity fallback.
+
+Because the endpoint is addressed positionally, the parsed title is also checked against the
+``expected_measure_label`` / ``expected_currency`` / ``expected_column`` the connector
+recorded. A reordered bulletin returns HTTP 200 with a plausible payload for the *wrong*
+series; that mismatch is a ``SCHEMA_MISMATCH``, not data.
 """
 
 from __future__ import annotations
@@ -73,6 +78,15 @@ COLUMNS = [
 ]
 
 
+def _normalize(value: str | None) -> str | None:
+    """Collapse internal whitespace and trim. Nothing else — no case folding, no fuzziness."""
+
+    if value is None:
+        return None
+    collapsed = " ".join(str(value).split())
+    return collapsed or None
+
+
 def split_title(title: str) -> tuple[str | None, str | None, str | None]:
     """Split ``a) Konut (TRY) [Toplam]`` into label, currency and column.
 
@@ -99,8 +113,6 @@ class BddkWeeklyParser:
         """Read only ``asset.raw_path`` and pair the parallel arrays into one row per week."""
 
         document = self._load(asset)
-        warnings: list[str] = []
-
         title = document.get("Baslik")
         title_text = "" if title is None else str(title)
         dates = self._array(asset, document, "XEkseni")
@@ -119,11 +131,7 @@ class BddkWeeklyParser:
             )
 
         measure_label, currency_label, column_label = split_title(title_text)
-        if measure_label is None:
-            warnings.append(
-                f"BDDK weekly title {title_text!r} does not match the observed "
-                "'<label> (<currency>) [<column>]' shape; label, currency and column are null"
-            )
+        self._verify_identity(asset, measure_label, currency_label, column_label)
         series_id = self._series_id(asset)
         chart_id = asset.metadata.get("requested_chart_id")
         kalem_id = asset.metadata.get("requested_kalem_id")
@@ -161,7 +169,7 @@ class BddkWeeklyParser:
             artifact_sha256=asset.artifact_sha256,
             schema_version=self._schema_version,
             dataframe=dataframe,
-            warnings=warnings,
+            warnings=[],
         )
 
     # ----------------------------------------------------------------- helpers
@@ -230,6 +238,57 @@ class BddkWeeklyParser:
             f"BDDK weekly series {title.strip()!r} returned no observations for the "
             "requested range",
         )
+
+    def _verify_identity(
+        self,
+        asset: FetchedAsset,
+        measure_label: str | None,
+        currency_label: str | None,
+        column_label: str | None,
+    ) -> None:
+        """Refuse a response whose title is not the series the caller asked for.
+
+        The weekly endpoint is addressed by a **positional** chart id (``1.0.4``). If BDDK
+        reorders the bulletin, that address can start returning a different line and the HTTP
+        exchange gives no sign of it: status 200, same shape, plausible numbers, wrong series.
+        The only in-band signal is ``Baslik``, so the connector records what the caller
+        expected and this compares the two.
+
+        The comparison is deterministic: exact string equality after collapsing internal
+        whitespace and trimming. No case folding, no fuzzy or model-based matching — a
+        near-match here would defeat the check it is meant to perform.
+        """
+
+        expected = {
+            "measure label": (
+                asset.metadata.get("expected_measure_label"), measure_label
+            ),
+            "currency": (asset.metadata.get("expected_currency"), currency_label),
+            "column": (asset.metadata.get("expected_column"), column_label),
+        }
+        missing = [name for name, (want, _) in expected.items() if not _normalize(want)]
+        if missing:
+            raise self._error(
+                asset,
+                "SCHEMA_MISMATCH",
+                (
+                    "BDDK weekly artifact metadata carries no "
+                    f"{', '.join(sorted(missing))} expectation; the positional chart id "
+                    "cannot be verified and the response must not be trusted"
+                ),
+            )
+
+        for name, (want, got) in expected.items():
+            if _normalize(want) != _normalize(got):
+                raise self._error(
+                    asset,
+                    "SCHEMA_MISMATCH",
+                    (
+                        f"BDDK weekly {name} mismatch: expected {_normalize(want)!r} but the "
+                        f"response title says {_normalize(got)!r}. The chart id is positional, "
+                        "so this is how a reordered bulletin returns a different series."
+                    ),
+                )
 
     def _series_id(self, asset: FetchedAsset) -> str:
         """Build the series id from the stable native item id, or fail.

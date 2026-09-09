@@ -25,6 +25,9 @@ rather than copied:
 - ``id`` is a **positional chart address** (``1.0.4``), not the stable item id. The stable
   native item id is the ``Kalem-<id>`` value from the item tree (``5690`` for
   Krediler → Tüketici Kredileri → a) Konut).
+- Because ``id`` is positional, the caller must also state ``expected_measure_label``,
+  ``expected_currency`` and ``expected_column``. They never go on the wire; the parser
+  compares them with the title the response came back with and refuses a mismatch.
 
 ``kalem_id`` is therefore a **mandatory** ``FetchSpec`` parameter even though it is **never
 sent on the wire**. It is the only stable identity of the concept: ``id=1.0.4`` is positional
@@ -41,6 +44,13 @@ The advanced report at ``POST /BultenHaftalik/tr/Gelismis/GelismisRaporGetir`` r
 numbers inside a ~490 KB HTML page and needs an antiforgery token plus a session cookie. It is
 the documented fallback transport and is recorded in metadata, not implemented here. See
 ``docs/sources/bddk_weekly.md``.
+
+TLS: ``www.bddk.org.tr`` serves only its leaf certificate and omits the
+``GlobalSign RSA OV SSL CA 2018`` intermediate, so a correctly-configured client fails
+verification. This connector never weakens TLS. It accepts an injected
+``requests.Session``, so a deployment can pass one whose ``verify`` points at a CA
+bundle containing that intermediate **with verification still on**. A verification
+failure is reported as ``SOURCE_UNAVAILABLE`` with ``retryable=False``.
 """
 
 from __future__ import annotations
@@ -86,8 +96,21 @@ def format_weekly_date(value: date) -> str:
 _REQUIRED_WIRE_PARAMETERS = ("id", "parabirimi", "sutun", "tarafKodu")
 """Fields the endpoint itself takes. Each is single-valued."""
 
-_REQUIRED_IDENTITY_PARAMETERS = ("kalem_id",)
-"""Verified source identity that is required but deliberately never sent on the wire."""
+_REQUIRED_IDENTITY_PARAMETERS = (
+    "kalem_id",
+    "expected_measure_label",
+    "expected_currency",
+    "expected_column",
+)
+"""Verified source identity: required, validated, and deliberately never sent on the wire.
+
+``id`` is a **positional** chart address. If BDDK reorders the bulletin, the same ``id`` can
+start returning a different line, and nothing in the HTTP exchange would say so. These fields
+carry what the caller believes the series is, so the parser can compare them against the
+title the response actually came back with and refuse a silent swap. They are mandatory in
+this narrow V1 connector: a request that cannot state what it expects cannot be checked, and
+an unchecked positional address is exactly the failure being guarded against.
+"""
 
 _RETRYABLE_STATUS = frozenset({408, 429})
 
@@ -251,6 +274,23 @@ class BddkWeeklyConnector(BaseConnector):
                     },
                     timeout=spec.timeout,
                 )
+            except requests.exceptions.SSLError as exc:
+                # Caught before RequestException: an SSL failure is not transient. BDDK's
+                # server sends only its leaf certificate and omits the intermediate, so a
+                # correctly-configured client fails verification every time. Retrying cannot
+                # help, and the fix is deployment trust material, not a connector setting.
+                # The message is deliberately free of headers and request bodies.
+                raise self._error(
+                    spec,
+                    "SOURCE_UNAVAILABLE",
+                    (
+                        "BDDK weekly TLS certificate verification failed. Retrying with the "
+                        "same trust configuration will not help. Verify the server certificate "
+                        "chain and supply a requests.Session with an appropriate CA bundle, "
+                        "with verification left ON. Never disable verification."
+                    ),
+                    retryable=False,
+                ) from exc
             except requests.Timeout as exc:
                 last_error = self._error(
                     spec,
@@ -304,13 +344,21 @@ class BddkWeeklyConnector(BaseConnector):
 
         fields = dict(form)
         # Guaranteed present, single and non-empty by ``_build_form``.
-        kalem_id = self._single_value(spec, dict(spec.parameters), "kalem_id")
+        parameters = dict(spec.parameters)
+        identity = {
+            name: self._single_value(spec, parameters, name)
+            for name in _REQUIRED_IDENTITY_PARAMETERS
+        }
+        kalem_id = identity["kalem_id"]
         return {
             "request_form": [list(pair) for pair in form],
             "requested_start_date": fields.get("baslangicTarihi"),
             "requested_end_date": fields.get("bitisTarihi"),
             "requested_chart_id": fields.get("id"),
             "requested_kalem_id": kalem_id,
+            "expected_measure_label": identity["expected_measure_label"],
+            "expected_currency": identity["expected_currency"],
+            "expected_column": identity["expected_column"],
             "requested_currency": fields.get("parabirimi"),
             "requested_column": fields.get("sutun"),
             "requested_taraf": fields.get("tarafKodu"),

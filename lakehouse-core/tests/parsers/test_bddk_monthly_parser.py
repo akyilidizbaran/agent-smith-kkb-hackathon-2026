@@ -245,3 +245,63 @@ def test_series_id_falls_back_to_the_label_with_a_warning() -> None:
     assert set(parsed.dataframe["series_id"]) == {
         "bddk_monthly:T_ketici_Kredileri_T_ketici_Kredileri_Konut_milyon_TL_Toplam"
     }
+
+
+# ------------------------------------- source style facts (no is_subtotal here)
+
+
+SIMPLE_REPORT = Path(
+    "tests/fixtures/raw/bddk_monthly/bddk_monthly_simple_report_basitfont.json"
+)
+
+
+def test_advanced_report_has_no_style_columns_and_v1_does_not_invent_them() -> None:
+    """Verified against the live endpoint: the advanced report declares no BasitFont/parent."""
+
+    document = json.loads(REPORT.read_text(encoding="utf-8"))
+    names = [model["name"] for model in document["Json"]["colModels"]]
+    assert "BasitFont" not in names
+    assert "parent" not in names
+
+    frame = BddkMonthlyParser().parse(_asset(REPORT)).dataframe
+
+    assert "source_font" not in frame.columns
+    assert "source_parent" not in frame.columns
+    assert "source_is_bold" not in frame.columns
+
+
+def test_no_is_subtotal_column_is_produced() -> None:
+    """Deriving a financial subtotal flag is Silver's call, not the parser's."""
+
+    frame = BddkMonthlyParser().parse(_asset(REPORT)).dataframe
+
+    assert "is_subtotal" not in frame.columns
+
+
+def test_cell_index_three_is_a_value_not_a_style_token() -> None:
+    """Guards against a positional `cell[3] == "bold"` reading of the advanced report."""
+
+    document = json.loads(REPORT.read_text(encoding="utf-8"))
+    for row in document["Json"]["data"]["rows"]:
+        assert isinstance(row["cell"][3], (int, float))
+        assert row["cell"][3] != "bold"
+
+
+def test_committed_simple_report_capture_carries_the_real_bold_signal() -> None:
+    """Evidence fixture: the signal exists, on an endpoint this connector does not use."""
+
+    document = json.loads(SIMPLE_REPORT.read_text(encoding="utf-8"))
+    payload = document["Json"]
+    names = [model["name"] for model in payload["colModels"]]
+
+    assert document["success"] is True
+    assert names == ["BankaAdi", "BasitSira", "Ad", "BasitFont", "Tp", "Yp", "Toplam"]
+    font_index = names.index("BasitFont")
+    label_index = names.index("Ad")
+    rows = payload["data"]["rows"]
+
+    marked = {
+        row["cell"][label_index]: row["cell"][font_index] for row in rows
+    }
+    assert marked["Tüketici Kredileri (2+3+4)"] == "bold"
+    assert marked["Tüketici Kredileri - Konut"] == ""

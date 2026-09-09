@@ -79,6 +79,9 @@ def _spec() -> FetchSpec:
         parameters={
             "id": "1.0.4",
             "kalem_id": "5690",
+            "expected_measure_label": "a) Konut",
+            "expected_currency": "TRY",
+            "expected_column": "Toplam",
             "parabirimi": "TRY",
             "sutun": "3",
             "tarafKodu": "10001",

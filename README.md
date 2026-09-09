@@ -16,6 +16,7 @@ katmanına güvenli bir SQL yüzeyi sunmaktır.
 | `feature/lakehouse-source-access` | EVDS ve BDDK Aylık verisini güvenli biçimde RAW/Bronze sınırına getirmek | Tamamlandı ve integration'a alındı | [Source Access](lakehouse-core/docs/branches/lakehouse-source-access.md) |
 | `feature/source-access-bddk-weekly` | BDDK Haftalık için doğrulanmış connector/parser akışı oluşturmak | Tamamlandı ve integration'a alındı | [BDDK Haftalık](lakehouse-core/docs/branches/source-access-bddk-weekly.md) |
 | `feature/lakehouse-metadata-catalog` | Serilerin anlamını, birimini ve toplama kurallarını `meta.series` içinde tutmak | Tamamlandı ve integration'a alındı | [Metadata Catalog](lakehouse-core/docs/branches/lakehouse-metadata-catalog.md) |
+| `feature/source-access-hardening` | Kaynak kimliği, TLS hata sınıflaması ve ikinci EVDS serisiyle Source Access'i sağlamlaştırmak | Tamamlandı; integration kabulünden geçiyor | [Source Access Hardening](lakehouse-core/docs/branches/source-access-hardening.md) |
 | `feature/lakehouse-integration` | Altyapı, kaynak erişimi ve semantic catalog çalışmalarını birlikte doğrulamak | Güncel ortak çalışma dalı | [Integration](lakehouse-core/docs/branches/lakehouse-integration.md) |
 
 ## Güncel akış
