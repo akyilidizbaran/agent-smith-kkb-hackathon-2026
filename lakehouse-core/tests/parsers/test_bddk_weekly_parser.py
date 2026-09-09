@@ -31,6 +31,9 @@ LOCATOR = "https://www.bddk.org.tr/BultenHaftalik/tr/Gelismis/KiyaslamaJsonGetir
 BASE_METADATA: dict[str, Any] = {
     "requested_chart_id": "1.0.4",
     "requested_kalem_id": "5690",
+    "expected_measure_label": "a) Konut",
+    "expected_currency": "TRY",
+    "expected_column": "Toplam",
     "requested_currency": "TRY",
     "requested_column": "3",
     "requested_taraf": "10001",
@@ -205,18 +208,128 @@ def test_split_title_returns_none_for_an_unrecognised_shape() -> None:
     assert split_title("no parentheses here") == (None, None, None)
 
 
-def test_unrecognised_title_warns_instead_of_guessing(tmp_path: Path) -> None:
-    """Synthetic payload: no live capture shows a title outside the observed shape."""
+def test_unrecognised_title_cannot_be_verified_and_is_rejected(tmp_path: Path) -> None:
+    """Synthetic payload: a title we cannot parse is a title we cannot verify.
+
+    The chart id is positional, so the title is the only in-band evidence of *which* series
+    came back. If it does not parse, identity is unverifiable and the response must not
+    become data.
+    """
 
     path = _write(
         tmp_path,
         '{"Baslik":"totally different","XEkseni":["2.01.2026"],"YEkseni":[1.0]}',
     )
-    batch = BddkWeeklyParser().parse(_asset(path))
 
-    assert set(batch.dataframe["measure_label"]) == {None}
-    assert set(batch.dataframe["currency_label"]) == {None}
-    assert any("does not match the observed" in w for w in batch.warnings)
+    with pytest.raises(LakehouseError) as excinfo:
+        BddkWeeklyParser().parse(_asset(path))
+
+    assert excinfo.value.payload.error_code == "SCHEMA_MISMATCH"
+    assert excinfo.value.payload.retryable is False
+
+
+# ------------------------------------------------- chart-id drift verification
+
+
+def _payload(title: str) -> str:
+    return (
+        f'{{"Baslik":"{title}","XEkseni":["2.01.2026","9.01.2026"],'
+        '"YEkseni":[679216.118,682408.729]}'
+    )
+
+
+def test_matching_title_passes_identity_verification() -> None:
+    """The committed fixture is the series the catalog expects, so it must still parse."""
+
+    batch = BddkWeeklyParser().parse(_asset(HOUSING))
+
+    assert len(batch.dataframe) == 5
+    assert set(batch.dataframe["measure_label"]) == {"a) Konut"}
+    assert set(batch.dataframe["currency_label"]) == {"TRY"}
+    assert set(batch.dataframe["column_label"]) == {"Toplam"}
+
+
+def test_measure_label_drift_is_rejected(tmp_path: Path) -> None:
+    """A reordered bulletin returning a different line: HTTP 200, plausible, wrong series."""
+
+    path = _write(tmp_path, _payload("b) Taşıt (TRY) [Toplam]"))
+
+    with pytest.raises(LakehouseError) as excinfo:
+        BddkWeeklyParser().parse(_asset(path))
+
+    payload = excinfo.value.payload
+    assert payload.error_code == "SCHEMA_MISMATCH"
+    assert payload.retryable is False
+    assert "measure label mismatch" in payload.message
+    assert "a) Konut" in payload.message
+    assert "b) Taşıt" in payload.message
+
+
+def test_currency_drift_is_rejected(tmp_path: Path) -> None:
+    path = _write(tmp_path, _payload("a) Konut (USD) [Toplam]"))
+
+    with pytest.raises(LakehouseError) as excinfo:
+        BddkWeeklyParser().parse(_asset(path))
+
+    assert excinfo.value.payload.error_code == "SCHEMA_MISMATCH"
+    assert "currency mismatch" in excinfo.value.payload.message
+
+
+def test_column_drift_is_rejected(tmp_path: Path) -> None:
+    path = _write(tmp_path, _payload("a) Konut (TRY) [TP]"))
+
+    with pytest.raises(LakehouseError) as excinfo:
+        BddkWeeklyParser().parse(_asset(path))
+
+    assert excinfo.value.payload.error_code == "SCHEMA_MISMATCH"
+    assert "column mismatch" in excinfo.value.payload.message
+
+
+@pytest.mark.parametrize(
+    "missing",
+    ["expected_measure_label", "expected_currency", "expected_column"],
+)
+def test_missing_expectation_is_rejected_rather_than_skipped(missing: str) -> None:
+    """An unverifiable positional address must fail, not fall back to trusting the response."""
+
+    with pytest.raises(LakehouseError) as excinfo:
+        BddkWeeklyParser().parse(_asset(HOUSING, **{missing: _ABSENT}))
+
+    payload = excinfo.value.payload
+    assert payload.error_code == "SCHEMA_MISMATCH"
+    assert payload.retryable is False
+    assert "cannot be verified" in payload.message
+
+
+@pytest.mark.parametrize("blank", [None, "", "   "])
+def test_blank_expectation_is_rejected(blank: object) -> None:
+    with pytest.raises(LakehouseError) as excinfo:
+        BddkWeeklyParser().parse(_asset(HOUSING, expected_currency=blank))
+
+    assert excinfo.value.payload.error_code == "SCHEMA_MISMATCH"
+    assert "cannot be verified" in excinfo.value.payload.message
+
+
+def test_only_whitespace_is_normalized_never_case_or_shape(tmp_path: Path) -> None:
+    """Safe whitespace collapsing is allowed; case folding and fuzzy matching are not."""
+
+    tolerated = _write(tmp_path, _payload("a)   Konut  (TRY)  [Toplam]"))
+    batch = BddkWeeklyParser().parse(_asset(tolerated))
+    assert len(batch.dataframe) == 2
+
+    for wrong_case in ("a) konut (TRY) [Toplam]", "a) Konut (try) [Toplam]",
+                       "a) Konut (TRY) [toplam]"):
+        path = _write(tmp_path, _payload(wrong_case))
+        with pytest.raises(LakehouseError) as excinfo:
+            BddkWeeklyParser().parse(_asset(path))
+        assert excinfo.value.payload.error_code == "SCHEMA_MISMATCH"
+
+
+def test_positional_chart_id_is_never_the_series_id_even_when_verified() -> None:
+    batch = BddkWeeklyParser().parse(_asset(HOUSING))
+
+    assert set(batch.dataframe["series_id"]) == {"bddk_weekly:5690_3"}
+    assert not any("1.0.4" in str(v) for v in batch.dataframe["series_id"])
 
 
 def test_null_values_are_preserved_and_never_coerced_to_zero(tmp_path: Path) -> None:

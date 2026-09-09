@@ -25,6 +25,7 @@ Column models, group headers and every kept value are exactly as BDDK returned t
 | File | What it is |
 |---|---|
 | `bddk_monthly_housing_loans.json` | Successful advanced report for item `1534` (`Tüketici Kredileri - Konut`), `taraf=10001` (Sektör), `paraBirimi=TL`. |
+| `bddk_monthly_simple_report_basitfont.json` | **Evidence only — a different endpoint.** `POST /BultenAylik/tr/Home/BasitRaporGetir`, `tabloNo=4&yil=2026&ay=6&paraBirimi=TL&taraf=10001`, captured 2026-09-09. Trimmed from 41 rows to 6; nothing else changed. It proves that `BasitFont` marks these source display rows as bold on an endpoint the connector does **not** use; it is not treated as a universal subtotal rule. No parser consumes it. |
 | `bddk_monthly_application_error.json` | Verbatim body returned when several `kalemSutun` values for the same concept are requested together. **HTTP status was 200.** The connector now rejects that combination before sending a request, so this fixture guards the parser's second line of defence. |
 
 ## Verified request codes

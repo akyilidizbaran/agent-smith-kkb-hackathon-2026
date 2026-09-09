@@ -225,3 +225,53 @@ classification decision, so it was left unchanged here rather than altered unila
 - Any other weekly item, party, currency or column.
 - Any Bronze/Silver/Gold semantics: no `date_key`, no Friday anchoring, no frequency
   alignment, no `measure_type`, no unit conversion.
+
+## Chart-id drift guard
+
+`id=1.0.4` is a **positional** chart address. If BDDK reorders the bulletin, the same `id` can
+return a different line and the HTTP exchange gives no sign of it: status 200, same envelope,
+plausible numbers, wrong series. The only in-band evidence of *which* series came back is
+`Baslik`.
+
+The `FetchSpec` therefore carries three expectations alongside `kalem_id`:
+
+| Parameter | Value for this series |
+|---|---|
+| `expected_measure_label` | `a) Konut` |
+| `expected_currency` | `TRY` |
+| `expected_column` | `Toplam` |
+
+They are **never sent on the wire** — the endpoint has no such fields — and are recorded in
+artifact metadata. After parsing `Baslik`, the parser compares each against what the response
+actually said.
+
+- The comparison is **deterministic**: exact equality after collapsing internal whitespace and
+  trimming. No case folding, no fuzzy or model-based matching — a near-match would defeat the
+  check.
+- Any mismatch is `SCHEMA_MISMATCH` with `retryable=False`.
+- A title that does not parse into the observed `<label> (<currency>) [<column>]` shape is
+  also rejected: unparseable means unverifiable.
+- All three expectations are **mandatory** in this narrow V1 connector. A request that cannot
+  state what it expects cannot be checked, and an unchecked positional address is precisely
+  the failure being guarded against. A missing or blank expectation is `SCHEMA_MISMATCH`.
+- `1.0.4` is never a `series_id` source under any circumstance; `series_id` comes only from
+  the stable `kalem_id`.
+
+## Revision behaviour (source fact only)
+
+BDDK's own weekly-bulletin explanation states that **previously published weekly values can be
+updated in later releases**. We have not found an equivalent monthly guarantee, so monthly
+figures are treated as potentially revisable until BDDK confirms otherwise; this is a
+defensive policy, not a claimed monthly source fact.
+
+What this means for Source Access, and where the line is:
+
+- The RAW artifact is content-addressed by SHA-256, so a restated figure necessarily produces
+  **different bytes and therefore a different artifact**. Detecting a revision is a matter of
+  comparing artifact hashes for the same logical request — `meta.artifact_request` already
+  records the request fingerprint that makes that comparison possible.
+- **Nothing here implements it.** `meta.dataset_version` lifecycle, vintage selection, a
+  revision table, and any Silver/Gold restatement logic are shared/infrastructure concerns and
+  are deliberately absent from this track.
+- No revision has been *observed* in this project yet; the statement above is the source's,
+  not a measurement of ours.

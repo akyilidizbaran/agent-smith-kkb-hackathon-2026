@@ -22,6 +22,8 @@ from src.lakehouse.storage.raw import RawStorage
 
 
 FIXTURE = Path("tests/fixtures/raw/bddk_weekly/bddk_weekly_housing_loans.json")
+CONNECTOR_SOURCE = "src/lakehouse/connectors/bddk_weekly.py"
+
 REQUESTED_AT = datetime(2026, 9, 9, 21, 30, tzinfo=timezone.utc)
 DOWNLOADED_AT = datetime(2026, 9, 10, 6, 15, 42, tzinfo=timezone.utc)
 
@@ -70,6 +72,9 @@ def _spec(**overrides: object) -> FetchSpec:
         "parameters": {
             "id": "1.0.4",
             "kalem_id": "5690",
+            "expected_measure_label": "a) Konut",
+            "expected_currency": "TRY",
+            "expected_column": "Toplam",
             "parabirimi": "TRY",
             "sutun": "3",
             "tarafKodu": "10001",
@@ -143,7 +148,9 @@ def test_no_cookie_or_antiforgery_token_is_sent(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "missing", ["id", "kalem_id", "parabirimi", "sutun", "tarafKodu"]
+    "missing",
+    ["id", "kalem_id", "expected_measure_label", "expected_currency",
+     "expected_column", "parabirimi", "sutun", "tarafKodu"],
 )
 def test_missing_required_parameter_fails_before_any_request(
     tmp_path: Path, missing: str
@@ -152,6 +159,9 @@ def test_missing_required_parameter_fails_before_any_request(
     parameters = {
         "id": "1.0.4",
         "kalem_id": "5690",
+        "expected_measure_label": "a) Konut",
+        "expected_currency": "TRY",
+        "expected_column": "Toplam",
         "parabirimi": "TRY",
         "sutun": "3",
         "tarafKodu": "10001",
@@ -169,7 +179,17 @@ def test_missing_required_parameter_fails_before_any_request(
 
 
 @pytest.mark.parametrize(
-    "field", ["id", "kalem_id", "parabirimi", "sutun", "tarafKodu"]
+    "field",
+    [
+        "id",
+        "kalem_id",
+        "expected_measure_label",
+        "expected_currency",
+        "expected_column",
+        "parabirimi",
+        "sutun",
+        "tarafKodu",
+    ],
 )
 def test_repeated_single_valued_field_is_rejected_before_any_request(
     tmp_path: Path, field: str
@@ -180,6 +200,9 @@ def test_repeated_single_valued_field_is_rejected_before_any_request(
     parameters: dict[str, object] = {
         "id": "1.0.4",
         "kalem_id": "5690",
+        "expected_measure_label": "a) Konut",
+        "expected_currency": "TRY",
+        "expected_column": "Toplam",
         "parabirimi": "TRY",
         "sutun": "3",
         "tarafKodu": "10001",
@@ -247,6 +270,9 @@ def test_connector_stores_bytes_without_parsing_them(tmp_path: Path) -> None:
         "requested_end_date",
         "requested_chart_id",
         "requested_kalem_id",
+        "expected_measure_label",
+        "expected_currency",
+        "expected_column",
         "requested_currency",
         "requested_column",
         "requested_taraf",
@@ -422,6 +448,9 @@ def test_blank_kalem_id_fails_before_any_request(tmp_path: Path, blank: object) 
             _spec(
                 parameters={
                     "id": "1.0.4",
+                    "expected_measure_label": "a) Konut",
+                    "expected_currency": "TRY",
+                    "expected_column": "Toplam",
                     "kalem_id": blank,
                     "parabirimi": "TRY",
                     "sutun": "3",
@@ -446,6 +475,9 @@ def test_multiple_kalem_ids_fail_before_any_request(tmp_path: Path) -> None:
             _spec(
                 parameters={
                     "id": "1.0.4",
+                    "expected_measure_label": "a) Konut",
+                    "expected_currency": "TRY",
+                    "expected_column": "Toplam",
                     "kalem_id": ["5690", "5867"],
                     "parabirimi": "TRY",
                     "sutun": "3",
@@ -463,17 +495,25 @@ def test_multiple_kalem_ids_fail_before_any_request(tmp_path: Path) -> None:
     assert not list((tmp_path / "data/raw").rglob("*"))
 
 
-def test_kalem_id_is_never_sent_on_the_wire(tmp_path: Path) -> None:
-    """The endpoint has no such field; it is identity metadata only."""
+def test_identity_expectations_are_never_sent_on_the_wire(tmp_path: Path) -> None:
+    """The endpoint has no such fields; they are identity metadata only."""
 
     connector, session = _connector(tmp_path, [_ok_response()])
 
     asset = connector.fetch(_spec())[0]
 
     sent_fields = [name for name, _ in session.calls[0]["data"]]  # type: ignore[union-attr]
-    assert "kalem_id" not in sent_fields
+    assert {
+        "kalem_id",
+        "expected_measure_label",
+        "expected_currency",
+        "expected_column",
+    }.isdisjoint(sent_fields)
     assert "5690" not in [value for _, value in session.calls[0]["data"]]  # type: ignore[union-attr]
     assert asset.metadata["requested_kalem_id"] == "5690"
+    assert asset.metadata["expected_measure_label"] == "a) Konut"
+    assert asset.metadata["expected_currency"] == "TRY"
+    assert asset.metadata["expected_column"] == "Toplam"
 
 
 def test_kalem_id_is_recorded_stripped_and_single(tmp_path: Path) -> None:
@@ -483,6 +523,9 @@ def test_kalem_id_is_recorded_stripped_and_single(tmp_path: Path) -> None:
         _spec(
             parameters={
                 "id": "1.0.4",
+                "expected_measure_label": "a) Konut",
+                "expected_currency": "TRY",
+                "expected_column": "Toplam",
                 "kalem_id": "  5690  ",
                 "parabirimi": "TRY",
                 "sutun": "3",
@@ -492,3 +535,82 @@ def test_kalem_id_is_recorded_stripped_and_single(tmp_path: Path) -> None:
     )[0]
 
     assert asset.metadata["requested_kalem_id"] == "5690"
+
+
+# ------------------------------------------------------------ TLS classification
+
+
+def test_tls_verification_failure_is_not_retryable(tmp_path: Path) -> None:
+    """BDDK omits its intermediate certificate. That is source-side and permanent."""
+
+    error = requests.exceptions.SSLError(
+        "HTTPSConnectionPool(host='www.bddk.org.tr', port=443): "
+        "certificate verify failed: unable to get local issuer certificate"
+    )
+    connector, session = _connector(tmp_path, [error] * 3, max_attempts=3)
+
+    with pytest.raises(LakehouseError) as excinfo:
+        connector.fetch(_spec())
+
+    payload = excinfo.value.payload
+    assert payload.error_code == "SOURCE_UNAVAILABLE"
+    assert payload.retryable is False
+    assert "TLS certificate verification failed" in payload.message
+    # a permanent failure must not be retried
+    assert len(session.calls) == 1
+    assert not list((tmp_path / "data/raw").rglob("*"))
+
+
+def test_tls_error_is_classified_before_the_generic_request_exception(
+    tmp_path: Path,
+) -> None:
+    """SSLError subclasses RequestException; order decides retryable vs not."""
+
+    assert issubclass(requests.exceptions.SSLError, requests.RequestException)
+
+    tls_connector, _ = _connector(
+        tmp_path, [requests.exceptions.SSLError("verify failed")], max_attempts=2
+    )
+    with pytest.raises(LakehouseError) as tls:
+        tls_connector.fetch(_spec())
+
+    generic_connector, _ = _connector(
+        tmp_path, [requests.ConnectionError("down")] * 2, max_attempts=2
+    )
+    with pytest.raises(LakehouseError) as generic:
+        generic_connector.fetch(_spec())
+
+    assert tls.value.payload.retryable is False
+    assert generic.value.payload.retryable is True
+    assert tls.value.payload.error_code == generic.value.payload.error_code
+
+
+def test_tls_error_message_carries_no_headers_or_secrets(tmp_path: Path) -> None:
+    connector, _ = _connector(
+        tmp_path,
+        [requests.exceptions.SSLError("certificate verify failed")],
+        max_attempts=1,
+    )
+
+    with pytest.raises(LakehouseError) as excinfo:
+        connector.fetch(_spec())
+
+    message = excinfo.value.payload.message
+    assert "Cookie" not in message
+    assert "X-Requested-With" not in message
+    assert "__RequestVerificationToken" not in message
+    assert "verify=False" not in message
+    # it must point at the safe remedy, not a workaround
+    assert "verification left ON" in message or "verification still on" in message.lower()
+
+
+def test_connector_never_disables_tls_verification() -> None:
+    """A regression guard: nothing in this module may weaken TLS."""
+
+    source = Path(CONNECTOR_SOURCE).read_text(encoding="utf-8")
+
+    assert "verify=False" not in source
+    assert "verify = False" not in source
+    assert "InsecureRequestWarning" not in source
+    assert "disable_warnings" not in source
+    assert "_create_unverified_context" not in source

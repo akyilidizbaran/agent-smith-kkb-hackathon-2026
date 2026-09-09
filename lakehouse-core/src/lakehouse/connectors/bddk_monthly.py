@@ -18,6 +18,13 @@ uses. Verified live on 2026-09-08 against ``https://www.bddk.org.tr``:
 The official Excel export at ``POST /BultenAylik/tr/Home/GelismisExceleAktar`` takes the same
 form fields and is the documented fallback transport if this JSON endpoint changes. It is not
 implemented here; see ``docs/sources/bddk_monthly.md``.
+
+TLS: ``www.bddk.org.tr`` serves only its leaf certificate and omits the
+``GlobalSign RSA OV SSL CA 2018`` intermediate, so a correctly-configured client fails
+verification. This connector never weakens TLS. It accepts an injected
+``requests.Session``, so a deployment can pass one whose ``verify`` points at a CA
+bundle containing that intermediate **with verification still on**. A verification
+failure is reported as ``SOURCE_UNAVAILABLE`` with ``retryable=False``.
 """
 
 from __future__ import annotations
@@ -234,6 +241,23 @@ class BddkMonthlyConnector(BaseConnector):
                     },
                     timeout=spec.timeout,
                 )
+            except requests.exceptions.SSLError as exc:
+                # Caught before RequestException: an SSL failure is not transient. BDDK's
+                # server sends only its leaf certificate and omits the intermediate, so a
+                # correctly-configured client fails verification every time. Retrying cannot
+                # help, and the fix is deployment trust material, not a connector setting.
+                # The message is deliberately free of headers and request bodies.
+                raise self._error(
+                    spec,
+                    "SOURCE_UNAVAILABLE",
+                    (
+                        "BDDK monthly TLS certificate verification failed. Retrying with the "
+                        "same trust configuration will not help. Verify the server certificate "
+                        "chain and supply a requests.Session with an appropriate CA bundle, "
+                        "with verification left ON. Never disable verification."
+                    ),
+                    retryable=False,
+                ) from exc
             except requests.Timeout as exc:
                 last_error = self._error(
                     spec,

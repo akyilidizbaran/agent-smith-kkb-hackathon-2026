@@ -106,3 +106,91 @@ Golden values from the live 66-row response, in `milyon TL`: **2021-01 = 276785*
 - The Excel export fallback. Its path is recorded in artifact metadata as
   `excel_fallback_path` so a later track can switch transport without changing the contract.
 - Any Bronze/Silver/Gold materialization, date construction, or unit conversion.
+
+## Subtotal / bold signal: where it is and where it is not
+
+**Captured from the live endpoint on 2026-09-09 with one request.**
+
+| Endpoint | Declares `BasitFont`? | `parent`? |
+|---|---|---|
+| `POST /BultenAylik/tr/Home/GelismisRaporGetir` — **what this connector uses** | ❌ no | ❌ no |
+| `POST /BultenAylik/tr/Home/BasitRaporGetir` — simple report, not used here | ✅ yes | ❌ no |
+
+The advanced report declares exactly `BankaAdi, Yil, Ay, <measure>, Sira`. In its rows
+`cell[3]` is the **measure value** (`801438`), so a positional `cell[3] == "bold"` test would
+misread data as a style token.
+
+The simple report declares `BankaAdi, BasitSira, Ad, BasitFont, Tp, Yp, Toplam` and does carry
+the signal: `Tüketici Kredileri (2+3+4)` is marked `'bold'` while leaf rows such as
+`Tüketici Kredileri - Konut` carry `''`. That capture is committed as evidence at
+`tests/fixtures/raw/bddk_monthly/bddk_monthly_simple_report_basitfont.json` (6 rows, trimmed
+from 41, no secrets). Cross-check: its `Toplam` for Konut is `801438`, identical to the
+advanced report's 2026-06 value — the same data in a different envelope.
+
+`parent` was **not found on either endpoint** and remains **confirmation required**.
+
+What the parser does with this:
+
+- `BasitFont` and `parent` remain structural names, so they can never be mistaken for measure
+  columns if BDDK adds them to the advanced response.
+- V1 does **not** add `source_font`, `source_parent`, `source_is_bold` or `is_subtotal` to
+  Bronze. On the endpoint we actually ingest these would be permanently `NULL`, and changing
+  the output columns without changing `bddk_monthly_observations.v1` would violate the schema
+  contract.
+- If the team later adopts the simple-report transport, preserving its source style requires
+  an explicit parser/schema V2. Interpreting `bold` as a financial subtotal remains a Silver
+  decision; display styling alone is not a universal accounting rule.
+
+## TLS: incomplete certificate chain
+
+`www.bddk.org.tr` serves **only its leaf certificate** and omits the
+`GlobalSign RSA OV SSL CA 2018` intermediate, so `openssl s_client` reports
+`Verify return code: 21 (unable to verify the first certificate)`. Browsers and `curl` hide
+this by chasing the certificate's AIA extension; Python's `ssl` module does not, so a plain
+`requests` call fails with `CERTIFICATE_VERIFY_FAILED`.
+
+This is a **source-side misconfiguration**, not a local quirk and not a WAF block.
+
+The connector's behaviour:
+
+- `requests.exceptions.SSLError` is caught **before** the generic `RequestException`, because
+  `SSLError` is a subclass of it and would otherwise be classified as a transient error.
+- It is reported as `SOURCE_UNAVAILABLE` with **`retryable=False`** — retrying a trust failure
+  cannot succeed.
+- The message names the cause and points at the safe remedy. It contains no headers, cookies,
+  tokens or request bodies.
+- The connector **never** weakens TLS: no `verify=False`, no suppressed warnings, no
+  certificate downloaded at runtime, no unverified certificate committed to the repository.
+
+**The supported fix is an injected session with verification left on.** Both BDDK connectors
+accept a `requests.Session`, so a deployment can pass one whose CA bundle contains the missing
+intermediate:
+
+```python
+session = requests.Session()
+session.verify = "/path/to/ca-bundle.pem"   # certifi roots + the intermediate; verify stays ON
+connector = BddkMonthlyConnector(storage, session=session)
+```
+
+Assembling that bundle into the image or environment is an **Infrastructure** task, not a
+Source Access one. The intermediate is published at the `caIssuers` URI inside BDDK's own
+certificate.
+
+## Revision behaviour (source fact only)
+
+BDDK's own weekly-bulletin explanation states that **previously published weekly values can be
+updated in later releases**. We have not found an equivalent monthly guarantee, so monthly
+figures are treated as potentially revisable until BDDK confirms otherwise; this is a
+defensive policy, not a claimed monthly source fact.
+
+What this means for Source Access, and where the line is:
+
+- The RAW artifact is content-addressed by SHA-256, so a restated figure necessarily produces
+  **different bytes and therefore a different artifact**. Detecting a revision is a matter of
+  comparing artifact hashes for the same logical request — `meta.artifact_request` already
+  records the request fingerprint that makes that comparison possible.
+- **Nothing here implements it.** `meta.dataset_version` lifecycle, vintage selection, a
+  revision table, and any Silver/Gold restatement logic are shared/infrastructure concerns and
+  are deliberately absent from this track.
+- No revision has been *observed* in this project yet; the statement above is the source's,
+  not a measurement of ours.
