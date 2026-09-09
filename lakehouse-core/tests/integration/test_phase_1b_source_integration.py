@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+import json
 from pathlib import Path
 from typing import Any
 
@@ -96,6 +97,17 @@ def _assert_flow(
     assert first_result.artifact_inserted is True
     assert second_result.artifact_inserted is False
     assert trusted.execute("SELECT count(*) FROM meta.artifact").fetchone() == (1,)
+    persisted_metadata = trusted.execute(
+        """
+        SELECT locator, request_metadata_json
+        FROM meta.artifact_request
+        WHERE artifact_sha256 = ?
+        """,
+        [first_result.asset.artifact_sha256],
+    ).fetchone()
+    assert persisted_metadata is not None
+    assert persisted_metadata[0] == first_result.asset.locator
+    assert json.loads(persisted_metadata[1]) == first_result.asset.metadata
 
     parquet_storage.register_local_parquet(
         trusted, first_result.bronze_path, "bronze_fixture"

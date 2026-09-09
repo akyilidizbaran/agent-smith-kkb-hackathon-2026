@@ -49,9 +49,12 @@ LakehouseError/ErrorPayload sözleşmesiyle raporlanır.
 - source_id: evds
 - dataset_id: evds_housing_interest
 
-Entegrasyon testleri production connector ve parser sınıflarını kullanır.
-Yalnızca HTTP transport sınırı, kayıtlı fixture byte'larını döndüren deterministik
-bir test session'ı ile değiştirilmiştir. Bu testler canlı kaynak çağrısı değildir.
+Offline entegrasyon testlerinde production BDDK/EVDS connector ve parser
+sınıfları ile gerçek RawStorage, Bronze Parquet storage, ArtifactRepository,
+DuckDB ve QueryExecutor katmanları çalıştırılır. Dış bağımlılıklar, kayıtlı
+fixture byte'larını döndüren deterministik HTTP transport, test clock'u ve EVDS
+için test credential injection ile izole edilir. Bu testler canlı kaynak çağrısı
+değildir.
 
 EVDS documented keyed endpoint için credential destekli canlı smoke test henüz
 yapılmamıştır; fixture doğrulaması bu sınırlamayı ortadan kaldırmaz.
@@ -61,6 +64,20 @@ yapılmamıştır; fixture doğrulaması bu sınırlamayı ortadan kaldırmaz.
 RAW artifact'ın kimliği artifact_sha256 ile belirlenir ve meta.artifact içinde
 tekil olarak kaydedilir. Aynı fixture'ın tekrar çalıştırılması yeni artifact
 satırı oluşturmaz ve aynı Bronze identity'sini kullanır.
+
+Connector tarafından üretilen locator ve request metadata, credential-shaped
+alanlar çıkarıldıktan sonra request-level provenance olarak saklanır:
+
+FetchedAsset.metadata → secret sanitization → deterministic request metadata
+locator + metadata → request fingerprint → meta.artifact_request
+
+meta.artifact fiziksel/content provenance'ını, meta.artifact_request ise
+artifact'ın request-level provenance'ını tutar. Request provenance locator,
+sanitized deterministic metadata, request_fingerprint, first_seen_at ve
+last_seen_at alanlarını içerir. Aynı artifact farklı locator veya request
+metadata ile yeniden görülebilir; her güvenli request context kendi fingerprint'i
+ile saklanır. Bu yapı artifact SHA, RAW path ve Bronze path kimliklerini
+değiştirmez.
 
 Bronze Parquet, source_id, dataset_id, artifact_sha256 ve schema_version
 kimliklerini Parquet metadata'sında taşır. Böylece representation provenance'ı
@@ -83,7 +100,7 @@ veya yeni bir persistent registration mimarisi değildir.
 |---|---|
 | uv sync --frozen | başarılı |
 | uv lock --check | başarılı |
-| make test | 174 passed |
+| make test | 180 passed |
 | make build | başarılı |
 | make demo-check | 2 passed |
 
@@ -100,5 +117,7 @@ ve fact_observation bir sonraki fazın konusudur.
 ## Repository Reference
 
 - Branch: feature/lakehouse-integration
-- Base merge commit: 5e86b6537082648800fcc3a2805aa5b1bb06e63a
-- Bu çalışma için final implementation commit'i henüz oluşturulmamıştır.
+- Phase 1B integration implementation commit:
+  bc2f1060822dc8b72485720a26cd83725759c37b
+- QueryExecutor schema/table allowlist'i agent-facing production query surface
+  oluşturulmadan önce uygulanacaktır.
