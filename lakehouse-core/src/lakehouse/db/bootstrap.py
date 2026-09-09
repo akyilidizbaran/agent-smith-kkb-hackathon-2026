@@ -6,6 +6,7 @@ from pathlib import Path
 
 import duckdb
 
+from ..catalog.series import DEFAULT_CATALOG_ROOT, load_series_catalog
 from .connection import DEFAULT_DB_PATH, connect_trusted
 
 
@@ -22,12 +23,23 @@ def bootstrap_schema(connection: duckdb.DuckDBPyConnection) -> duckdb.DuckDBPyCo
 
 def bootstrap_database(
     db_path: str | Path = DEFAULT_DB_PATH,
+    *,
+    catalog_root: Path | None = DEFAULT_CATALOG_ROOT,
 ) -> duckdb.DuckDBPyConnection:
-    """Open and bootstrap a local DuckDB database, returning its connection."""
+    """Open and bootstrap a local DuckDB database, returning its connection.
+
+    After the schemas exist, the Git-versioned semantic series catalog is loaded into
+    ``meta.series``. The load is idempotent: unchanged records are skipped, so repeated
+    bootstraps neither duplicate rows nor churn ``updated_at``. Pass ``catalog_root=None``
+    to bootstrap the schema only.
+    """
 
     connection = connect_trusted(db_path)
     try:
-        return bootstrap_schema(connection)
+        bootstrap_schema(connection)
+        if catalog_root is not None:
+            load_series_catalog(connection, catalog_root)
+        return connection
     except Exception:
         connection.close()
         raise
