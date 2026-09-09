@@ -1,0 +1,581 @@
+# Agentic Analytics Engine — Mimari
+
+> **Durum:** 10 Eylül 2026 · Golden 7/7 · 22 birim testi · 19 ADR
+> Bu belge kodun *ne yaptığını* değil, *neden öyle yapıldığını* anlatır; her karar
+> `docs/adr/` altındaki kayda atıfla gelir. Kodla birebir örtüşmesi için modül, sınıf ve
+> metot adları gerçek adlarıyla verilmiştir.
+
+---
+
+## 0. Beş tasarım ilkesi
+
+Bütün mimari bu beş cümleden türer. Bir tasarım tartışmasında hangi seçeneğin doğru olduğu,
+bu ilkelerden hangisini koruduğuna bakılarak karara bağlanır.
+
+| # | İlke | Kodda karşılığı |
+|---|---|---|
+| 1 | **Harness güçlü, model az düşünür.** Model hesap yapmaz, ham veri görmez, kategori uydurmaz, hatasını yutmaz. | `Tool.validate_and_run`, `AnalysisWorkspace`, kapsam/dönem kontrolleri |
+| 2 | **Her şey bir araçtır — agent dahil.** Harness için atomik bir fonksiyon ile izole bir alt-agent aynı arayüze sahiptir. | `Tool` taban sınıfı, `SubAgentTool` (planlı) |
+| 3 | **Alan bilgisi koddan değil katalogdan gelir.** Motor hiçbir alan terimi içermez; profil katalogdan türer. | `DomainProfile.from_catalog`, `tests/test_domain_profile.py` |
+| 4 | **Yazma tek sahiplidir.** Analiz tablosunu yalnız ana agent değiştirir. | `AnalysisWorkspace` tek örnek, alt-agent'lar kendi workspace'ini kullanır |
+| 5 | **Ölçülmeyen değişiklik yapılmaz.** Her davranış değişikliği golden set + kararlılık ölçümünden geçer. | `scripts/run_golden.py --repeat`, ADR-0008, ADR-0011 |
+
+İlke 1'in kaynağı açılış toplantısındaki yönlendirmedir: *"harness yapısını daha güçlü
+yapın, LLM'e en az işi bırakın."* İlke 3 şartnamenin *"içi boşaltılıp bambaşka bir sağlık
+verisiyle çalışabilmeli"* maddesinden gelir.
+
+---
+
+## 1. Kuşbakışı
+
+```
+ kullanıcı (canlı jüri)
+    │  doğal dil soru
+    ▼
+┌──────────────────────────────────────────────────────────────────┐
+│ RETRIEVAL KATMANI  (planlı — ADR-0013)                LLM YOK    │
+│ BM25 + embedding → ilgili tablolar, aday kalemler, kapsam        │
+│ güven eşiği: ├─ yüksek → HIZLI YOL (bağlam enjekte, doğrudan SQL)│
+│              └─ düşük  → ReAct (araçlar açık)                    │
+└──────────────────────────────┬───────────────────────────────────┘
+                               ▼
+┌──────────────────────────────────────────────────────────────────┐
+│ AnalyticsAgent  (core/agent.py)          tek iş parçacığı        │
+│  · DomainProfile ile doldurulmuş system prompt                   │
+│  · ToolRegistry'den araç şemaları                                │
+│  · AnalysisWorkspace'in tek sahibi                               │
+│  · döngü: mesajları kur → LLM → çağrıları ayrıştır → çalıştır    │
+│           → guard'lar → tekrar / cevap                            │
+└──────────────────────────────┬───────────────────────────────────┘
+                               │ ToolRegistry (core/registry.py)
+    ┌──────────┬───────────────┼──────────────┬───────────────┬────────────┐
+    ▼          ▼               ▼              ▼               ▼            ▼
+ lakehouse  workspace      analytics       web            vision       ingest
+ (4 araç)   (3 araç)       (3, planlı)     (2, planlı)    (1, planlı)  (SubAgent,
+    │          │            LLM YOK          │               │          planlı)
+    ▼          ▼            pandas/          ▼               ▼            │
+┌────────┐ ┌──────────┐    statsmodels   arama API    Qwen3.8 vision      ▼
+│Lakehouse│ │Analysis  │                                            ┌──────────┐
+│Client   │ │Workspace │                                            │ iç agent │
+│(Protocol)│ │          │                                            │ fetch→OCR│
+└────┬────┘ └──────────┘                                            │ →parse   │
+     │                                                              │ →katalog │
+     ▼                                                              └────┬─────┘
+ DuckDBLakehouse (referans)  ◄──── veri ekibinin adaptörü ────────────────┘
+                                   (aynı Protocol, sıfır kod değişikliği)
+```
+
+Bağımlılık yönü tek taraflıdır ve içeriden dışarıya doğrudur:
+
+```
+contracts ◄── core ◄── tools ◄── cli
+    ▲           ▲
+    │           └── llm
+    └── adapters, domain
+```
+
+`contracts/` hiçbir şeye bağımlı değildir; `core/` yalnız `contracts/`, `llm/` ve
+`domain/`'e; `tools/` yalnız `core/` ve `contracts/`'a. Bir aracı silmek hiçbir şeyi kırmaz;
+`core/`'u değiştirmeden yeni araç eklenebilir.
+
+---
+
+## 2. Sözleşmeler — `contracts/`
+
+Jeneriklik burada başlar. Motor, veriyi **nasıl** saklandığını değil, **nasıl sorulacağını**
+bilir.
+
+### 2.1 `LakehouseClient` (Protocol)
+
+```python
+class LakehouseClient(Protocol):
+    def list_datasets(self) -> list[DatasetSpec]
+    def get_dataset(self, dataset_id: str) -> DatasetSpec
+    def search_datasets(self, query: str, limit: int = 5) -> list[DatasetSpec]
+    def execute_sql(self, sql: str, *, max_rows: int = 10_000) -> QueryResult
+    def preview(self, dataset_id: str, n: int = 5) -> QueryResult
+    def health(self) -> dict[str, Any]
+```
+
+**Neden `Protocol`, `ABC` değil:** Yapısal tipleme. Veri ekibi bizim paketimizi import
+etmeden, aynı imzalara sahip bir sınıf yazarak sözleşmeyi karşılar. İki ekip birbirinin
+koduna bağımlı olmadan paralel çalışır (ADR-0002).
+
+**`execute_sql` şartları:** Salt okunur. DDL/DML, çoklu ifade, dış dosya erişimi
+(`read_csv`, `read_parquet`, `glob`) reddedilir. Bu şart veri ekibinin adaptöründe
+sertleştirilmiş bağlantıyla (`access_mode=read_only`, `enable_external_access=false`,
+`lock_configuration=true`) desteklenir; SQL guard tek bariyer değildir.
+
+### 2.2 `DatasetSpec` / `ColumnSpec` — Semantic Catalog
+
+Ham şema (tablo + kolon adı) bir dil modeli için yetersizdir. Her veri seti kendini
+`DatasetSpec` ile tanıtır:
+
+```
+DatasetSpec
+  dataset_id, name, description          ← agent tablo seçimini description'dan yapar
+  source, source_url, source_detail      ← provenance
+  frequency, time_column, grain          ← hizalama ve join
+  columns: list[ColumnSpec]
+  coverage: Coverage(start, end)         ← kapsam dışı soruya "veri yok" diyebilmek için
+  tags, notes, last_refreshed
+
+ColumnSpec
+  name, role (TIME | DIMENSION | MEASURE | METADATA), dtype, description
+  semantic_type (stock | flow | rate | index | ratio | count)  ← frekans dönüşüm kuralı
+  cumulative (none | ytd | since_inception)                    ← BDDK'nın iki rejimi
+  unit, unit_multiplier                                        ← "bin TL" vs "milyon TL"
+  aliases: list[str]                                           ← "mortgage", "ev kredisi"
+  example_values
+```
+
+**Kritik dört alan ve neden:** `semantic_type` yanlışsa aylık→çeyreklik dönüşüm sessizce
+yanlış çıkar (stok toplanmaz, akım son değeriyle alınmaz). `cumulative` BDDK slaytındaki
+uyarının karşılığıdır. `unit_multiplier` varsayım değil ölçümdür: BDDK aynı bültende
+Tablo 3/4 "milyon TL", Tablo 5 "bin TL" yayınlar. `aliases` agent'ın kalem seçimindeki
+isabetini en çok etkileyen alandır (ADR-0003).
+
+`DatasetSpec.to_prompt_card()` kataloğu modele verilecek kompakt metne çevirir. Kataloğun
+tamamı asla prompt'a konmaz — ölçüldü: 1 tablo ≈ 1.500 token, 25 tabloda pencere dolar.
+
+### 2.3 `QueryResult` / `QueryProvenance`
+
+Her sorgu sonucu veriyle birlikte **nereden geldiğini** taşır: çalıştırılan SQL, kaynak
+tablo kimlikleri, kaynak kurum ve URL, satır sayısı, süre, uyarılar. Şartnamedeki
+*"Güven katmanı: Kaynak gösterimi – İzlenebilirlik – Doğruluk Kontrolü"* maddesinin kod
+karşılığı. Veri ekibinin `meta.artifact` (SHA-256, vintage) tablosuyla birleştiğinde
+"bu rakam hangi indirmeden geldi" sorusu ham dosyaya kadar izlenebilir olur.
+
+---
+
+## 3. Alan profili — `domain.py`
+
+**Problem:** Modele giden metinler (system prompt, araç şemalarının `description`
+alanları) finansa çakılıydı. Bunlar yorum değil, her turda prompt'a giren içerik.
+
+**Çözüm:** `DomainProfile` — yedi alan (`domain`, `audience`, `example_table`,
+`example_time_column`, `example_category_column`, `example_measure`, `example_entity`).
+Bütün metinler `{domain}`, `{example_measure}` gibi yer tutucularla yazılır;
+`ToolRegistry` şema üretirken `profile.render()` ile doldurur.
+
+**Profil nereden gelir:** `DomainProfile.from_catalog(datasets)` — **deterministik**.
+Kaynak adları alanı, en zengin tablonun kolon rolleri örnekleri verir. Yeni bir veri seti
+yüklendiğinde profil kendiliğinden ona uyar. Üslup tercihleri (`DOMAIN_DESCRIPTION`,
+`DOMAIN_AUDIENCE`) `.env`'den geçilebilir.
+
+**Neden modelle tahmin edilmiyor:** EMNLP 2024 Findings (4 model ailesi, 2.410 soru,
+162 rol) — system prompt'a persona eklemek performansı iyileştirmiyor ve "en iyi rolü
+seçme" rastgele seçmekten iyi değil. Ölçülebilir kazanç rolde değil, veri bağlamında
+(ADR-0012).
+
+**Ölçülmüş bir tuzak:** `example_entity` kanonik tam ad olarak türetildiğinde
+("Tüketici Kredileri - Konut") model bunu `contains` filtresine birebir yazdı, golden
+5/7'den 1/7'ye düştü. `kisa_terim()` bunu kısa arama terimine indirger ("Konut").
+Örneğin gerçek olması yetmez, iyi olması gerekir.
+
+**Kanıt:** `tests/test_domain_profile.py` aynı motoru bir sağlık kataloğuyla kurar;
+araç şemalarında `hastane_basvurulari`, `basvuru_sayisi`, `Kardiyoloji` görünür, hiçbir
+finans terimi görünmez. Ayrı bir test nötr profilde motorun tamamını tarar — kod
+tabanına yeniden alan terimi sızarsa yakalanır.
+
+---
+
+## 4. LLM katmanı — `llm/`
+
+`LLMClient` (Protocol): `chat(messages, tools, temperature, max_tokens) -> LLMResponse`
+ve `supports_native_tools() -> bool`.
+
+Tek uygulama: `OpenAICompatClient`. Ollama (geliştirme) ve MIA/Kloudeks (demo) aynı
+protokolü konuştuğu için kod değişmez, yalnız `.env` değişir:
+
+```
+LLM_BASE_URL=https://mia.csp.kloudeks.com/v1
+LLM_MODEL=kkbhackathon2026/Qwen3.8-27B
+```
+
+**`reasoning_effort: "none"`** varsayılan olarak gönderilir (`LLM_DISABLE_THINKING`).
+Ölçüm: "merhaba" yazdırmak için 162 token / 12,7 s → 4 token / 0,5 s. Araç seçimi gibi
+kısa kararlarda düşünce zinciri yalnız gecikme üretiyordu (ADR-0005). Planlı iyileştirme:
+nihai sentez turunda reasoning'i **açmak** — orada kalite hıza değer.
+
+**Native tool-calling yoksa:** harness JSON-protokol moduna düşer; system prompt'a araç
+kataloğu eklenir, model `{"tool": ..., "args": ...}` döndürür, `_parse_json_call`
+ayrıştırır. Kod yazılı, gerçek koşulda henüz denenmedi — MIA'da ilk ölçülecek şey.
+
+`ToolCall.from_openai` bozuk JSON'u yakalar ve `{"__raw__": ...}` olarak taşır;
+onarım döngüsü devreye girer.
+
+---
+
+## 5. Çekirdek — `core/`
+
+### 5.1 `Tool` — tek soyutlama
+
+```python
+class Tool(ABC):
+    name: str
+    description: str          # {placeholder} içerebilir
+    Params: type[BaseModel]   # Pydantic modeli
+    def run(self, params) -> ToolResult
+```
+
+Üç işi vardır:
+
+- **`openai_schema(profile)`** — Pydantic modelinden OpenAI function-calling şemasını
+  üretir, `description` alanlarını profille doldurur. Elle JSON şema yazılmaz; parametre
+  modeli değişince şema kendiliğinden güncellenir.
+- **`validate_and_run(raw_args)`** — LLM'in ürettiği argümanları Pydantic ile doğrular.
+  Doğrulama hatası **istisna değil, `ToolResult.error(...)`** olarak döner ve modele
+  okunabilir biçimde geri verilir. Harness'ın onarım döngüsü budur: model hatayı okur,
+  çağrıyı düzeltir.
+- **`ToolResult`** — `content` (modele giden KISA metin), `ok`, `data` (DataFrame,
+  workspace'e gider, modele gitmez), `provenance`, `artifacts`.
+
+**Neden `content` kısa olmalı:** Her turda konuşmanın tamamı yeniden gönderilir. Bir
+aracın döndürdüğü uzun metin, kalan her turda tekrar ödenir. Ölçüldü: 50 kalemlik
+`distinct_values` çıktısı sonrası model sorgu yazmadan cevaba geçti (ADR-0019).
+
+### 5.2 `ToolRegistry`
+
+Araçların kayıt defteri. `register`, `schemas(profile)`, `describe()` (JSON modu için),
+`execute(name, args)`. İki ek durum taşır: `profile` (şema render'ı için) ve
+`active_question` (bazı araçlar sonucu soruyla karşılaştırır — atlanan dönem filtresi).
+
+**Planlı:** `Tool.group` alanı ve `subset(groups)` — alt-agent'a daraltılmış kayıt
+defteri, ileride tool retrieval.
+
+### 5.3 `AnalysisWorkspace` — konuşma boyunca yaşayan tablo
+
+Örnek senaryo: *"tabloyu göster → tabloyu bozmadan enflasyondan arındır → bu tabloyu hiç
+bozmadan yeni sütun ekle."* Her soruda sıfırdan sorgu üreten agent burada başarısız olur.
+
+```
+set_table(df, description, provenance)      yeni analiz başlatır
+add_column(name, values, join_on, ...)      mevcut tabloyu BOZMADAN sütun ekler
+replace_column(name, values, keep_original_as)  dönüştürür, orijinali korur
+revert()                                    son işlemi geri alır
+column_provenance(col)                      "bu sütun nereden geldi?"
+describe_for_llm(max_rows=5)                modele giden özet — tablonun tamamı değil
+```
+
+Her işlem `WorkspaceStep` olarak geçmişe kaydedilir (`order, action, description,
+provenance, columns_added`). Snapshot'lar `revert` için tutulur (son 20).
+
+**Kasıtlı kısıt:** Modele açılan araçlar tabloyu **yeniden kuramaz**, yalnız üstüne
+ekleyebilir. "Tabloyu bozmadan" garantisi prompt'a değil, aracın imkânlarına yazılıdır
+(ADR-0006).
+
+### 5.4 `AnalyticsAgent` — harness döngüsü
+
+`ask(question)` adım adım:
+
+```
+ 1. registry.active_question = question
+ 2. _build_messages():
+      system prompt (profile.render) 
+      + son 8 tur geçmiş
+      + workspace varsa: describe_for_llm() → "MEVCUT ANALİZ DURUMU"
+      + user: soru
+ 3. for i in 1..max_steps:
+      response = llm.chat(messages, tools=registry.schemas())
+      calls = native ? response.tool_calls : _parse_json_call(content)
+
+      if not calls:                         ← model cevap vermek istiyor
+          if not produced_data and not nudged:
+              nudged = True
+              "Henüz veri çekmedin" → geri gönder, continue   ← CEVAP GUARD'I
+          return AgentAnswer(_strip_reasoning(content))
+
+      for call in calls:
+          result = registry.execute(call.name, call.arguments)
+          if result.ok and call.name in DATA_PRODUCING_TOOLS:
+              produced_data = True
+          messages.append(tool mesajı: result.content)     ← data DEĞİL, content
+          steps.append(AgentStep(...))                       ← izlenebilirlik
+
+ 4. max_steps aşıldı:
+      "Elindekiyle en iyi cevabı ver, neyi tamamlayamadığını söyle" → son tur
+```
+
+Dört guard, hepsi ölçülmüş bir hata moduna karşılık:
+
+| Guard | Hata modu | ADR |
+|---|---|---|
+| Cevap guard'ı (`produced_data`) | Model katalogu okuyup veri çekmeden cevap yazıyordu | 0010 |
+| `DATA_PRODUCING_TOOLS` araç adına göre | İlk sürüm DataFrame varlığına bakıyordu; `describe` de DataFrame döndürüyor, guard hiç tetiklenmedi | 0010 |
+| `max_steps` + son tur | Sessiz kesilme yerine "neyi tamamlayamadım" | — |
+| `_strip_reasoning` | Qwen3/DeepSeek `<think>` blokları kullanıcıya sızmasın | — |
+
+`AgentAnswer` cevap metni + `steps` (trace) + `workspace` + `hit_step_limit` taşır.
+Trace yalnız hata ayıklama için değil; demoda "bu sonuca nasıl vardın?" sorusunun cevabı.
+
+---
+
+## 6. Mevcut araçlar — `tools/`
+
+Her araç bağımsız bir sınıf; `cli.build_agent()` içinde `registry.register_all([...])`.
+Yeni yetenek = yeni sınıf + bir satır kayıt. Agent kodu değişmez.
+
+### Lakehouse ailesi — `tools/lakehouse.py`
+
+Şartname bunu tek "Lakehouse Tool" sayar; dört tek-amaçlı araca bölündü. Sebep ölçülmüş:
+dar parametreli araçlarda küçük modelin isabeti belirgin yüksek. System prompt sırayı
+dayatır: **search → describe → distinct_values → query**.
+
+| Araç | Ne yapar | Harness kuralı |
+|---|---|---|
+| `lakehouse_search(query)` | Katalogda tablo arar, kartları döndürür | — |
+| `lakehouse_describe(dataset_id)` | Kolonlar, birimler, kapsam + 5 örnek satır | SQL yazmadan önce zorunlu |
+| `lakehouse_distinct_values(dataset_id, column, contains?, limit=20)` | Kırılım kolonundaki gerçek değerler, alt toplamlar ⚠ işaretli | Filtresiz çağrıda >15 değer varsa tam liste değil, daraltma yönergesi (ADR-0019) |
+| `lakehouse_query(sql, purpose, as_active_table=True)` | SQL çalıştırır, sonucu workspace'e yazar | Aşağıda |
+
+`lakehouse_query`'nin üç kontrolü, üçü de yapısal abstention:
+
+1. **Dönem filtresi reddi** — soruda yıl geçiyor, SQL'de geçmiyorsa sorgu çalışmadan
+   reddedilir. Uyarı olarak denendi: 0/2. Ret: 2/2 kararlı (ADR-0017).
+2. **Kapsam kontrolü** — sorgu boş döndüyse ve sorgudaki yıllar katalog kapsamının
+   dışındaysa kesin dille "bu veri yok, tekrar deneme" (ADR-0010). Mesaj modele ne
+   *yapacağını* değil ne *söyleyeceğini* verir — ilk sürümde model uyarıyı "SQL hatası"
+   sanıp kullanıcıya hata ayıklama tavsiyesi yazmıştı.
+3. **Birim etiketi** — sonuca `Birimler: toplam = milyon TL` eklenir; model çeviri yapmaz.
+
+Modele dönen içerik: sütunlar + ilk 10 satır + birimler + kaynak özeti. 4.002 satırlık
+sonuç workspace'e gider, modele 10 satır.
+
+### Workspace ailesi — `tools/workspace.py`
+
+| Araç | Ne yapar |
+|---|---|
+| `workspace_add_column(dataset_id, key_column, value_column, column_name, join_on, filter_column?, filter_value?, purpose)` | Lakehouse'tan bir ölçümü çekip mevcut tabloya hizalar |
+| `workspace_compute_column(expression, column_name, purpose)` | Mevcut sütunlardan DuckDB ifadesiyle yeni sütun hesaplar |
+| `workspace_show(max_rows)` | Tablonun güncel hali + işlem geçmişi |
+
+**`add_column` neden SQL almıyor:** Serbest SQL alan sürümde model, eklemek istediği yeni
+sütunun adını SELECT listesine var olan kolon gibi yazdı, hatadan çıkamadı ve
+`lakehouse_query`'ye kaçıp tabloyu yeniden kurdu — aracın var oluş sebebi çöktü. Artık
+yapılandırılmış parametreler alır, kolon adları katalogla doğrulanır; model var olmayan
+kolon uyduramaz (ADR-0016). Semantic layer literatürünün küçük ölçekli uygulaması.
+
+`compute_column` ifadeyi `SELECT (<expr>) FROM analiz` olarak DuckDB'de çalıştırır;
+veri değiştiren/dosya okuyan ifadeler regex ile reddedilir; satır sayısını değiştiren
+ifade reddedilir.
+
+---
+
+## 7. Planlı araçlar
+
+### Analitik ailesi — `tools/analytics.py` (LLM YOK)
+
+Literatürün tutarlı bulgusu: tek LLM sayısal girdi üzerinde sınırlı kontrol sağlar.
+İstatistik tespit eder, LLM açıklar.
+
+| Araç | Yöntem | Döner |
+|---|---|---|
+| `anomaly_detect(column, method?)` | IQR / z-score / IsolationForest, workspace tablosu üzerinde | işaretli satırlar + `is_anomaly` sütunu |
+| `change_points(column)` | ruptures (PELT/Binseg) ensemble | kırılma dönemleri + güven |
+| `correlate(col_a, col_b, lag?)` | Pearson/Spearman + Granger | katsayı, p-değeri, yön uyarısı |
+
+Hepsi `AnalysisWorkspace.table` üzerinde çalışır; hangi veri olduğu umurlarında değil.
+Sentetik seriyle test edilir. LLM yalnız çıktıyı yorumlar ve `web_search` ile bağlar —
+transkriptteki *"o dönemde dünya piyasalarında ne olmuş"* akışı.
+
+### Web ailesi — `tools/web.py`
+
+`web_search(query)` → başlık + özet listesi (dış servis politikası mentörde).
+`web_url(url)` → sayfa metni / tablo. Paylaşılan durumu değiştirmez; ileride alt-agent
+adayı.
+
+### Görselleştirme — `tools/chart.py`
+
+`render_chart(kind, x, y[], title, highlight_periods?)` → Vega-Lite spec (frontend
+render eder) + PNG (yedek). Çizgi, çubuk, **çift eksen** (kredi + faiz), vurgulanmış
+dönemler (anomali çıktısı). Workspace tablosundan beslenir, kaynak notu otomatik eklenir.
+
+### Ingest alt-agent'ı — `tools/ingest.py` (`SubAgentTool`)
+
+Jürinin sınayacağı yetenek: *"şu URL'den veriyi al, belgele, analiz et."*
+
+```
+ingest_from_url(url, hint?)
+  iç agent (kendi registry'si: fetch, detect_format, ocr, parse_table,
+            profile_columns, propose_spec, register_dataset; kendi workspace'i)
+    1. fetch          → HTTP, zaman aşımı, hata → zarif mesaj
+    2. detect_format  → CSV / Excel / PDF / HTML / görsel
+    3. ocr            → PDF: sayfa→PNG→Unlimited-OCR (3 görsel/çağrı)
+    4. parse_table    → DataFrame
+    5. profile        → kolon rolleri (tarih tespiti, sayısal/kategorik), kapsam
+    6. propose_spec   → LLM önerisi: description, aliases, measure_type, unit
+                        → semantic_confidence = "derived"
+    7. register       → lakehouse'a geçici tablo + katalog kaydı
+    8. refresh        → ana agent katalogu yeniden görsün
+  döner: "gold.adhoc_<ad> hazır — 12 satır, aylık, kolonlar: …; belge: <DatasetSpec>"
+```
+
+Ana agent için sıradan bir araç: çağırır, kısa özet alır. OCR'ın sayfalarca çıktısı ana
+bağlama **hiç girmez**. Ürettiği `DatasetSpec` "yeni verinin belgesi" olarak kullanıcıya
+gösterilir.
+
+---
+
+## 8. Alt-agent deseni — `SubAgentTool`
+
+```python
+class SubAgentTool(Tool):
+    def __init__(self, llm, tools: list[Tool], profile, max_steps=8): ...
+    def run(self, params) -> ToolResult:
+        inner = AnalyticsAgent(self.llm, ToolRegistry(profile).register_all(tools),
+                               workspace=AnalysisWorkspace(), max_steps=...)
+        answer = inner.ask(self._compose_task(params))
+        return ToolResult(content=self._summarize(answer), data=..., artifacts=...)
+```
+
+Üç garanti: **bağlam izolasyonu** (iç agent'ın `_history`'si dışarı çıkmaz),
+**kendi workspace'i** (ana tabloya dokunmaz — İlke 4), **kısa dönüş** (`content` özet).
+
+Bu, literatürün "çalışan tek multi-agent biçimi" dediği desen: birden çok agent zekâ
+katar, yazma tek iş parçacığında kalır. Üstte bir orchestrator LLM turu **yok** — her
+soruya ekstra tur maliyeti ve bugünkü sorunlarımızın yönlendirme sorunu olmaması sebebiyle
+(ADR-0020, planlı).
+
+---
+
+## 9. Retrieval katmanı (planlı — ADR-0013, canlı jüri için öncelik)
+
+Adım profili (qwen3:8b, ölçülmüş): search 10,9 s + describe 2,1 s + distinct 6,0 s +
+distinct 3,6 s = **22,6 s** — hepsi arama, hiçbiri karar. Canlı jüride 107 s/soru
+kabul edilemez; hedef 30 s altı.
+
+```
+soru
+ ├─ BM25 (DuckDB FTS) + Qwen3-Embedding-8B → RRF birleştirme
+ │     → aday tablolar (top-5), aday kalemler, dönem çıkarımı, kapsam kontrolü
+ ├─ güven eşiği
+ │     yüksek (tek tablo, tek alt-toplam-olmayan kalem, net dönem):
+ │        → HIZLI YOL: şema kartı + kalem + WHERE şartı bağlama ENJEKTE
+ │          → LLM tek turda SQL → cevap                    (2 tur, ~25 s)
+ │     düşük:
+ │        → ReAct, araçlar açık                             (5–8 tur)
+ └─ araçlar kayıtlı kalır: model "aradığım burada yok" derse search'e dönebilir
+```
+
+Eşik bir `if`, LLM değil. Hızlı yola giren soru oranı ve oradaki doğruluk ölçülür.
+Reranker şu ölçekte gereksiz: aday listesi 3–5'e inince LLM zaten seçici (katalog 100+
+olursa yeniden değerlendirilir).
+
+Retrieval'ın önceden bulduğu dönem, `lakehouse_query`'de ret yerine **enjeksiyon**
+olur — bugün her sorguda harcanan ret→düzelt turu kalkar.
+
+---
+
+## 10. Adaptör — `adapters/duckdb_lakehouse.py`
+
+`LakehouseClient`'ın referans uygulaması. `catalog.json` + DuckDB (read_only).
+`search_datasets` anahtar kelime skorlaması (embedding gelince aynı imza, farklı iç).
+`execute_sql` yasak ifade regex'i + `read_only=True`; veri ekibinin sertleştirilmiş
+bağlantı doğrulaması (`_verify_untrusted_connection`) buraya alınacak.
+
+Veri ekibinin adaptörü hazır olduğunda `cli.build_agent()` içinde tek satır değişir:
+`DuckDBLakehouse(...)` → onların sınıfı. Agent kodu sıfır değişiklik.
+
+---
+
+## 11. Bir sorunun yolculuğu
+
+*"2025 yılında konut kredisi bakiyesini aylık olarak göster."* — bugünkü akış:
+
+```
+ 0. cli.build_agent()
+      DuckDBLakehouse → katalog → DomainProfile.from_catalog
+      → ToolRegistry(profile) → 7 araç → AnalyticsAgent
+ 1. ask(): active_question set; system prompt profile ile dolu; workspace boş
+ 2. LLM turu → lakehouse_search("konut kredisi")            2,3 s
+      → 1 kart: bddk_aylik_krediler
+ 3. LLM turu → lakehouse_describe("bddk_aylik_krediler")    2,4 s
+      → 8 kolon, birimler, kapsam 2021-01-31→2026-06-30, 5 örnek satır
+ 4. LLM turu → distinct_values(kalem, contains="Konut")     5,4 s
+      → 3 değer: Takipteki…, Tüketici Kredileri - Konut, …(Dövize Endeksli)
+        "SADECE BİRİNİ seç"
+ 5. LLM turu → lakehouse_query(sql)                          8,4 s
+      SQL'de 2025 var mı? ✓  → çalıştır → 12 satır
+      → workspace.set_table(df, provenance)
+      → modele: sütunlar, 10 satır, "Birimler: toplam = milyon TL", kaynak
+ 6. LLM turu → cevap (produced_data=True, guard geçer)     ~30 s
+      _strip_reasoning → AgentAnswer(text, steps=5, workspace)
+```
+
+Hızlı yol açıldığında 2–4 tek bir deterministik adıma iner.
+
+---
+
+## 12. Jeneriklik nasıl garanti ediliyor
+
+Şartname: *"Teknik seviyede bu platformu alıp içini boşaltıp bambaşka bir sağlık verisiyle
+de çalışabilir halde olması gerekiyor."*
+
+| Garanti | Mekanizma | Kanıt |
+|---|---|---|
+| Motorda alan terimi yok | Yer tutucular; `DomainProfile.render` | `test_modele_giden_metinlerde_alan_terimi_yok` — motoru tarar |
+| Profil katalogdan türer | `from_catalog`, deterministik | `test_saglik_katalogundan_profil_turer` |
+| Araç şemaları alana uyar | `ToolRegistry.schemas(profile)` | `test_arac_semalari_yeni_alana_uyar` — sağlık kataloğu |
+| Veri katmanı değiştirilebilir | `LakehouseClient` Protocol | Adaptör tek dosya |
+| Yeni veri kendini belgeler | `ingest_from_url` → `DatasetSpec` (planlı) | Jüri testi |
+
+**Yeni bir alana geçmek için ne değişir:**
+
+| Bileşen | Değişir mi |
+|---|---|
+| `core/`, `llm/`, `tools/` | **hayır** |
+| `contracts/` | hayır |
+| `domain.py` | hayır — profil katalogdan türer |
+| Adaptör | yeni kaynak için yeni `LakehouseClient` uygulaması |
+| Katalog | yeni `DatasetSpec` kayıtları (elle ya da `ingest` ile otomatik) |
+| Golden set | alana özgü yeni vakalar |
+
+---
+
+## 13. Modülerlik nasıl garanti ediliyor
+
+| Değişiklik | Dokunulan yer | Dokunulmayan |
+|---|---|---|
+| Yeni araç | `tools/x.py` + `register_all` listesine 1 satır | agent, registry, contracts |
+| Yeni LLM sağlayıcısı | `.env` | her şey |
+| Yeni lakehouse | `adapters/y.py` | agent, tools |
+| Yeni alan | katalog | kod |
+| Alt-agent | `SubAgentTool` alt sınıfı — yine bir araç | agent döngüsü |
+| Guard | `AnalyticsAgent.ask` içinde | araçlar |
+
+Bağımlılık yönü (§1) tek taraflı olduğu için bir katmandaki değişiklik altındakileri
+etkilemez. `Protocol` kullanımı, uygulamaların bizim paketimizi import etmesini
+gerektirmez.
+
+---
+
+## 14. Doğrulama
+
+| Katman | Ne | Süre | Ne söyler |
+|---|---|---|---|
+| Birim (22) | Araçların kendisi, LLM'siz | 0,4 s | "Bu araç bozuldu" |
+| Golden (7) | Uçtan uca, gerçek LLM; metni değil **tabloyu** denetler | ~12 dk | "Sistem bu soruyu çözüyor" |
+| Kararlılık | `--repeat N`, geçme oranı, araç yolu dağılımı | N × golden | "Şans değil" |
+| ADR (19) | Her karar, ölçümü ve reddedilenler | — | "Neden böyle" |
+
+Golden'ın ilkesi: LLM'in serbest metni güvenilmez, üretilen tablo deterministik.
+Halüsinasyon vakası (G4: 2015 sorulunca "veri 2021'de başlıyor") demoda en pahalı hatanın
+provası. Kontrollerin kendisi de denetlenir: iki vakada "her zaman geçen" koşul bulundu
+ve düzeltildi (ADR-0007).
+
+---
+
+## 15. Bilinen sınırlar
+
+- Canlı jüri için süre hâlâ yüksek (107 s/soru); retrieval katmanı ve filtre
+  enjeksiyonu bekliyor.
+- MIA üzerinde hiç ölçüm yok: `reasoning_effort`, native tool-calling, rate limit
+  bilinmiyor.
+- Türkçe performansı ölçülmedi; İngilizce system prompt A/B'si yapılmadı.
+- Görselleştirme yok.
+- Ad-hoc ingest ve otomatik katalog yok — jürinin sınayacağı yetenek.
+- Analitik araçlar (anomali, changepoint, causality) ve web araçları yok.
+- Gerçek Lakehouse'a bağlı değil; kendi seed'iyle çalışıyor. Veri ekibinden
+  `meta.series` bekleniyor.
+- Golden set kapsamı dar: tek kaynak, kredi kalemleri.

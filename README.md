@@ -81,6 +81,7 @@ cevaplanabilir.
 | `agent-core/tests/golden/` | Golden set: ilerlemenin objektif ölçüsü |
 | `agent-core/scripts/` | Geliştirme seed'i, golden koşucusu |
 | `lakehouse-core/` | Data Lakehouse — ingestion, Bronze/Silver/Gold, semantic catalog |
+| `docs/ARCHITECTURE.md` | **Mimari** — katmanlar, sözleşmeler, agent döngüsü, araçlar, jeneriklik garantileri |
 | `docs/adr/` | **Mimari karar kayıtları** — her kararın gerekçesi ve ölçümü |
 | `docs/` | Sözleşme dokümanları, açılış toplantısı slaytları |
 
