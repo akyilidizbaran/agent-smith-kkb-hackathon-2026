@@ -1,0 +1,20 @@
+[project]
+name = "kkb-agentic-analytics"
+version = "0.1.0"
+description = "Local-first generic data lakehouse foundation"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pandas",
+    "pyarrow",
+    "duckdb",
+    "requests",
+    "pyyaml",
+    "pytest",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

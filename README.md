@@ -22,6 +22,38 @@ Yarışmanın beklentisi iki katmanlı:
 
 Beklenen, yalnızca analiz yapan bir sistem değil; **uçtan uca akıl yürüten** bir sistem.
 
+## Repository Structure
+
+| Yol | İçerik |
+|---|---|
+| `lakehouse-core/` | Veri ingestion, immutable RAW, Bronze Parquet, metadata, provenance ve güvenli DuckDB sorgu temeli |
+| `docs/` | Agent tasarımı, lakehouse sözleşmeleri ve toplantı dokümanları |
+
+Agentic analytics motoru bu repo içinde ayrı bir çalışma dalında geliştirilmektedir.
+Lakehouse kodunun gözden geçirilmiş entegre tabanı `feature/lakehouse-integration`,
+main geçmişine alınmış hazırlık sürümü ise `feature/lakehouse-main-ready` dalındadır;
+kod her iki dalda da `lakehouse-core/` altında izlenebilir.
+
+## Lakehouse Status
+
+Güncel akış:
+
+```text
+Source → Connector → RAW → Parser → Bronze Parquet
+       → Metadata / Provenance → DuckDB → Safe Query
+```
+
+Şu anda BDDK Monthly, BDDK Weekly ve TCMB EVDS kaynak erişimleri ile mevcut core
+seri metadata catalog'u bulunmaktadır. Silver ve Gold katmanları henüz tamamlanmadı.
+
+## Current Phase
+
+Lakehouse base / Phase 1B integration seviyesi tamamlandı. Sıradaki faz, canonical
+Silver `fact_observation` modeli ve ardından Gold analytical view'larıdır.
+
+Kısa deferred listesi: BDDK deployment TLS ayarı, EVDS credential smoke validation
+ve agent-facing Gold/Meta query allowlist.
+
 ## Çözüm mimarisi
 
 ```
@@ -74,27 +106,23 @@ cevaplanabilir.
 
 | Yol | İçerik |
 |---|---|
-| `src/kkb_agent/` | Agentic analytics motoru — [teknik doküman](docs/AGENT.md) |
-| `src/kkb_agent/contracts/` | Veri katmanıyla sözleşme (Protocol + semantic catalog) |
-| `src/kkb_agent/core/` | Harness, analiz durumu, araç soyutlaması |
-| `src/kkb_agent/tools/` | Araçlar — her yetenek bağımsız modül |
-| `tests/golden/` | Golden set: ilerlemenin objektif ölçüsü |
-| `scripts/` | Geliştirme seed'i, golden koşucusu |
+| `lakehouse-core/` | Lakehouse kaynak erişimi ve veri platformu temeli |
+| `docs/AGENT.md` | Agentic analytics motoru için teknik tasarım dokümanı |
+| `docs/LAKEHOUSE_CONTRACT*.md` | Agent ile lakehouse arasındaki sözleşme taslakları |
 | `docs/` | Sözleşme dokümanları, açılış toplantısı slaytları |
 
-## Hızlı başlangıç
+## Lakehouse hızlı başlangıç
 
 ```bash
-uv venv && uv pip install duckdb httpx pandas pydantic openai python-dotenv
-cp .env.example .env          # değerleri doldurun — .env asla commit edilmez
-ollama pull qwen3:8b          # geliştirme modeli
-python scripts/dev_seed.py    # gerçek BDDK verisiyle geliştirme lakehouse'u
-
-PYTHONPATH=src python -m kkb_agent.cli --trace "2025'te konut kredisi nasıl değişti?"
-PYTHONPATH=src python scripts/run_golden.py
+cd lakehouse-core
+uv sync --frozen
+make test
+make build
+make demo-check
 ```
 
-Ayrıntı: [docs/AGENT.md](docs/AGENT.md)
+Lakehouse ayrıntıları: [lakehouse-core/README.md](lakehouse-core/README.md).
+Agent ayrıntıları: [docs/AGENT.md](docs/AGENT.md).
 
 ## Veri kaynakları
 
@@ -118,7 +146,9 @@ Endpoint ayrıntıları ve doğrulanmış tablo haritası:
 | Dal | Kapsam |
 |---|---|
 | `feature/agent-engine` | Agentic analytics motoru, araçlar, golden set |
-| `feature/lakehouse` | Ingestion, Bronze/Silver/Gold, semantic catalog |
+| `feature/lakehouse-integration` | Integrated lakehouse base, source access ve semantic catalog |
+| `feature/lakehouse-main-ready` | Main geçmişi üzerine alınmış lakehouse entegrasyon hazırlığı |
+| `feature/agent-engine` | Agentic analytics motoru, araçlar, golden set |
 
 ## Takvim
 

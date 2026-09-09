@@ -1,0 +1,38 @@
+# Semantic series catalog — BDDK Monthly Bulletin (Aylık Bülten)
+#
+# Human-authored, reviewed, and versioned in Git. Nothing here is inferred from data.
+# Every field must be traceable to docs/sources/bddk_monthly.md or to a committed fixture.
+# See docs/catalog-contract.md for the field contract and validation rules.
+
+catalog_schema_version: "1.0"
+source_id: bddk_monthly
+
+series:
+  - series_id: bddk_monthly:1534_Toplam
+    native_code: 1534?Toplam
+    dataset_id: bddk_monthly_housing_loans
+    name_tr: Tüketici Kredileri - Konut, Toplam (Sektör)
+    description: >-
+      BDDK Aylık Bülten, Tüketici Kredileri tablosu, "Tüketici Kredileri - Konut"
+      kalemi, Toplam sütunu, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir
+      (stok): dönemler toplanmaz, aylıktan daha düşük frekansa indirilirken
+      dönemin son değeri alınır. Kaynak kalem kimliği 1534, taraf 10001, para
+      birimi TL.
+    aliases:
+      - konut kredisi
+      - konut kredileri
+      - ev kredisi
+      - mortgage
+      - konut finansmanı
+      - konut kredisi bakiyesi
+      - konut kredisi tutarı
+      - konut kredisi stoku
+    tags: [kredi, konut, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active

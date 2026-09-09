@@ -1,0 +1,95 @@
+{
+  "totalCount": 6,
+  "items": [
+    {
+      "Tarih": "01-01-2026",
+      "TP_DK_USD_A_YTL": null,
+      "UNIXTIME": {
+        "$numberLong": "1767214800"
+      }
+    },
+    {
+      "Tarih": "01-02-2026",
+      "TP_DK_USD_A_YTL": "42.8457",
+      "UNIXTIME": {
+        "$numberLong": "1767301200"
+      }
+    },
+    {
+      "Tarih": "01-03-2026",
+      "TP_DK_USD_A_YTL": null,
+      "UNIXTIME": {
+        "$numberLong": "1767387600"
+      }
+    },
+    {
+      "Tarih": "01-04-2026",
+      "TP_DK_USD_A_YTL": null,
+      "UNIXTIME": {
+        "$numberLong": "1767474000"
+      }
+    },
+    {
+      "Tarih": "01-05-2026",
+      "TP_DK_USD_A_YTL": "42.8810",
+      "UNIXTIME": {
+        "$numberLong": "1767560400"
+      }
+    },
+    {
+      "Tarih": "01-06-2026",
+      "TP_DK_USD_A_YTL": "42.9648",
+      "UNIXTIME": {
+        "$numberLong": "1767646800"
+      }
+    }
+  ],
+  "transposedItems": [
+    {
+      "serieCode": "TP_DK_USD_A_YTL",
+      "serieName": "(USD)  US  Dollar  (Buying)",
+      "01-01-2026": null,
+      "01-02-2026": "42.8457",
+      "01-03-2026": null,
+      "01-04-2026": null,
+      "01-05-2026": "42.8810",
+      "01-06-2026": "42.9648"
+    }
+  ],
+  "transposedColumns": [
+    {
+      "key": "serieName",
+      "title": ""
+    },
+    {
+      "key": "01-06-2026",
+      "title": "01-06-2026"
+    },
+    {
+      "key": "01-05-2026",
+      "title": "01-05-2026"
+    },
+    {
+      "key": "01-04-2026",
+      "title": "01-04-2026"
+    },
+    {
+      "key": "01-03-2026",
+      "title": "01-03-2026"
+    },
+    {
+      "key": "01-02-2026",
+      "title": "01-02-2026"
+    },
+    {
+      "key": "01-01-2026",
+      "title": "01-01-2026"
+    }
+  ],
+  "seriesNames": {
+    "TP_DK_USD_A_YTL": "(USD)  US  Dollar  (Buying)"
+  },
+  "frequencyConversion": {
+    "TP.DK.USD.A.YTL": true
+  }
+}
