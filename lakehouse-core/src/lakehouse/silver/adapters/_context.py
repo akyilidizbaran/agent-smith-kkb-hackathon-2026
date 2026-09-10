@@ -11,7 +11,7 @@ import unicodedata
 import pandas as pd
 
 from ...storage.parquet import ParquetIdentity
-from ..foundation import SilverValidationError
+from ..foundation import SILVER_STAGING_COLUMNS, SilverValidationError
 
 
 _TURKISH_ASCII = str.maketrans(
@@ -51,6 +51,23 @@ def lineage_fields(
             else None
         ),
     }
+
+
+def staging_frame(records: list[dict[str, object]]) -> pd.DataFrame:
+    """Build a staging frame that keeps a source ``NULL`` as ``None``.
+
+    ``DataFrame.from_records`` infers a ``str`` dtype for a column of strings that also holds
+    ``None``, and on pandas 3 that dtype's missing marker is ``NaN``. A source null would then
+    be indistinguishable from a genuine non-finite number and be rejected outright, so
+    ``value_raw`` is rebuilt as ``object`` from the records themselves. Columns without any
+    missing value are unaffected.
+    """
+
+    frame = pd.DataFrame.from_records(records, columns=SILVER_STAGING_COLUMNS)
+    frame["value_raw"] = pd.Series(
+        [record["value_raw"] for record in records], dtype=object, index=frame.index
+    )
+    return frame
 
 
 def bddk_entity_id(raw_label: object, *, row_number: int) -> str:
@@ -95,4 +112,4 @@ def bddk_entity_code(raw_code: object, *, row_number: int) -> str:
     return f"bddk:{code}"
 
 
-__all__ = ["bddk_entity_code", "bddk_entity_id", "lineage_fields"]
+__all__ = ["bddk_entity_code", "bddk_entity_id", "lineage_fields", "staging_frame"]

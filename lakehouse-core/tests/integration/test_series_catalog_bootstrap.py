@@ -103,6 +103,7 @@ def test_bootstrap_loads_the_repository_catalog(tmp_path: Path) -> None:
     assert _series_ids(connection) == [
         "bddk_monthly:1534_Toplam",
         "bddk_weekly:5690_3",
+        "evds:TP.FG.J0",
         "evds:TP.KFE.TR",
         "evds:TP.KTF12",
     ]
@@ -317,7 +318,7 @@ def test_catalog_load_is_offline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
     connection = bootstrap_database(tmp_path / "t.duckdb")
 
-    assert len(_series_ids(connection)) == 4
+    assert len(_series_ids(connection)) == 5
     connection.close()
 
 

@@ -60,3 +60,37 @@ series:
     semantic_source: source_service
     metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=TP.KFE.TR
     status: active
+
+  - series_id: evds:TP.FG.J0
+    native_code: TP.FG.J0
+    dataset_id: evds_cpi
+    name_tr: Tüketici Fiyat Endeksi (TÜFE, genel)
+    description: >-
+      TCMB EVDS üzerinden yayımlanan TÜİK Tüketici Fiyat Endeksi genel seviyesi,
+      aylık. Bu bir ENDEKS SEVİYESİDİR; aylık veya yıllık değişim oranı DEĞİLDİR.
+      Reel dönüşümde bölen olarak kullanılır (reel = nominal / (TÜFE / TÜFE_baz)),
+      fakat bu hesap Gold katmanına aittir; Silver hiçbir arındırma veya yeniden
+      bazlama yapmaz.
+      DİKKAT: endeksin BAZ YILI bu repoda DOĞRULANMAMIŞTIR. Talep belgesinde
+      "2003=100" iddiası geçmektedir, ancak ne resmî bir yanıt, ne fixture, ne de
+      bir ADR bu değeri kanıtlamaktadır; bu nedenle semantic_confidence 'derived'
+      ve semantic_source 'manual' işaretlenmiştir. Baz yılı doğrulanmadan farklı
+      bazlı endeks serileri birleştirilmemeli (splice) ve reel dönüşümde
+      kullanılmamalıdır. Doğrulama durumu docs/sources/evds.md içinde izlenir.
+    aliases:
+      - tüfe
+      - tufe
+      - enflasyon
+      - tüketici fiyat endeksi
+      - fiyat endeksi
+      - TÜFE endeksi
+      - genel fiyat endeksi
+    tags: [enflasyon, fiyat, endeks, tcmb, tuik]
+    frequency: monthly
+    unit: index
+    measure_type: index
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: manual
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=TP.FG.J0
+    status: active

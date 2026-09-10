@@ -12,7 +12,7 @@ import pandas as pd
 from ...parsers.evds import EVDS_SCHEMA_VERSION
 from ...silver.foundation import SILVER_STAGING_COLUMNS, SilverValidationError
 from ...storage.parquet import ParquetIdentity
-from ._context import lineage_fields
+from ._context import lineage_fields, staging_frame
 
 
 SUPPORTED_KTF12_SERIES_ID = "evds:TP.KTF12"
@@ -20,6 +20,9 @@ SUPPORTED_KTF12_SERIES_ID = "evds:TP.KTF12"
 
 SUPPORTED_KFE_SERIES_ID = "evds:TP.KFE.TR"
 """The second EVDS series mapped by this Silver slice."""
+
+SUPPORTED_CPI_SERIES_ID = "evds:TP.FG.J0"
+"""Consumer price index. Mapped as an index *level*, never as a change rate."""
 
 # Kept as a compatibility alias for the Phase 2.4 public constant.
 SUPPORTED_SERIES_ID = SUPPORTED_KTF12_SERIES_ID
@@ -147,7 +150,7 @@ def evds_ktf12_to_staging(
                 lineage=lineage,
             )
         )
-    return pd.DataFrame.from_records(records, columns=SILVER_STAGING_COLUMNS)
+    return staging_frame(records)
 
 
 _KFE_DATE_PATTERN = re.compile(r"^\d{2}-\d{4}$")
@@ -168,21 +171,25 @@ def _period_bounds(raw: object, row_number: int) -> tuple[date, date]:
     return period_start, period_end
 
 
-def evds_kfe_to_staging(
+def _evds_monthly_to_staging(
     frame: pd.DataFrame,
     *,
     identity: ParquetIdentity,
+    expected_series_id: str,
     run_id: str | None = None,
     source_warnings: Sequence[str] = (),
     vintage_id: str | None = None,
 ) -> pd.DataFrame:
-    """Map ``TP.KFE.TR`` monthly Bronze rows to generic Silver staging.
+    """Map any monthly ``MM-YYYY`` EVDS series to generic Silver staging.
 
-    The source month is converted to its first and last calendar dates. No base-year
-    assumption, rebasing, percentage conversion, or catalog semantic enrichment occurs here.
+    Shared by every monthly EVDS series so a second one cannot drift from the first. The
+    source month is converted to its first and last calendar dates and nothing else happens
+    here: no base-year assumption, no rebasing, no percentage or change-rate conversion, no
+    deflation, and no catalog semantic enrichment. Whether the values are a price level, a
+    price index or anything else is decided by ``meta.series``, not by this function.
     """
 
-    _validate_input(frame, identity, expected_series_id=SUPPORTED_KFE_SERIES_ID)
+    _validate_input(frame, identity, expected_series_id=expected_series_id)
     records: list[dict[str, object]] = []
     lineage = lineage_fields(
         identity,
@@ -201,13 +208,62 @@ def evds_kfe_to_staging(
                 lineage=lineage,
             )
         )
-    return pd.DataFrame.from_records(records, columns=SILVER_STAGING_COLUMNS)
+    return staging_frame(records)
+
+
+def evds_kfe_to_staging(
+    frame: pd.DataFrame,
+    *,
+    identity: ParquetIdentity,
+    run_id: str | None = None,
+    source_warnings: Sequence[str] = (),
+    vintage_id: str | None = None,
+) -> pd.DataFrame:
+    """Map ``TP.KFE.TR`` monthly Bronze rows to generic Silver staging."""
+
+    return _evds_monthly_to_staging(
+        frame,
+        identity=identity,
+        expected_series_id=SUPPORTED_KFE_SERIES_ID,
+        run_id=run_id,
+        source_warnings=source_warnings,
+        vintage_id=vintage_id,
+    )
+
+
+def evds_cpi_to_staging(
+    frame: pd.DataFrame,
+    *,
+    identity: ParquetIdentity,
+    run_id: str | None = None,
+    source_warnings: Sequence[str] = (),
+    vintage_id: str | None = None,
+) -> pd.DataFrame:
+    """Map ``TP.FG.J0`` (TÜFE) monthly Bronze rows to generic Silver staging.
+
+    The consumer price index reaches Silver as the **index level the source published**.
+    Deflating a nominal series with it, rebasing it, or turning it into a month-over-month
+    change rate are Gold concerns and are deliberately absent here. The base year is not
+    assumed anywhere in this path; see ``catalog/series/evds.yml`` and
+    ``docs/sources/evds.md`` for its verification status.
+    """
+
+    return _evds_monthly_to_staging(
+        frame,
+        identity=identity,
+        expected_series_id=SUPPORTED_CPI_SERIES_ID,
+        run_id=run_id,
+        source_warnings=source_warnings,
+        vintage_id=vintage_id,
+    )
 
 
 __all__ = [
+    "SUPPORTED_CPI_SERIES_ID",
     "SUPPORTED_KFE_SERIES_ID",
     "SUPPORTED_KTF12_SERIES_ID",
     "SUPPORTED_SERIES_ID",
+    "evds_cpi_to_staging",
     "evds_kfe_to_staging",
     "evds_ktf12_to_staging",
 ]

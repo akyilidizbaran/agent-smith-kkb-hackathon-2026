@@ -13,7 +13,7 @@ import pandas as pd
 from ...parsers.bddk_monthly import BDDK_MONTHLY_SCHEMA_VERSION
 from ...silver.foundation import SILVER_STAGING_COLUMNS, SilverValidationError
 from ...storage.parquet import ParquetIdentity
-from ._context import bddk_entity_id, lineage_fields
+from ._context import bddk_entity_id, lineage_fields, staging_frame
 
 
 SUPPORTED_SERIES_ID = "bddk_monthly:1534_Toplam"
@@ -151,7 +151,7 @@ def bddk_monthly_to_staging(
                 **lineage,
             }
         )
-    return pd.DataFrame.from_records(records, columns=SILVER_STAGING_COLUMNS)
+    return staging_frame(records)
 
 
 __all__ = ["SUPPORTED_SERIES_ID", "bddk_monthly_to_staging"]

@@ -15,6 +15,9 @@ Different parts of this integration carry **different levels of evidence**. Pass
 | Connector HTTP behaviour (retry, classification, key handling, RAW write) | **Verified by test only** | All connector tests use a **fake in-process session**. No socket is opened. |
 | Parser response shape (envelope, `Tarih`, `UNIXTIME`, string values, nulls) | **Verified against `/fe` captures** | Fixtures came from the EVDS3 web application's own `POST /igmevdsms-dis/fe` endpoint, not from the documented keyed endpoint |
 | **Official keyed endpoint, live** | ❌ **NOT VERIFIED** | No API key was available. The keyed endpoint has never been called by this track. |
+| **`TP.FG.J0` (TÜFE) response, live or captured** | ❌ **NOT VERIFIED** | No response has ever been captured. `tests/integration/test_evds_cpi_silver.py` uses a clearly-labelled **synthetic** payload and is a contract test only |
+| **`TP.FG.J0` base year (`2003=100`)** | ❌ **NOT VERIFIED** | Asserted in the agent team's `DATA_TEAM_REQUESTS.md`, but no fixture, no response record and no ADR supports it. ADR-0020 on `feature/agent-engine` covers adapter hardening and TLS, **not** TÜFE |
+| **`TP.FG.J0` 2025-01 value (`2819,65`)** | ❌ **NOT VERIFIED** | Same. The number appears only in the request document itself |
 
 ### What this means in practice
 
@@ -26,6 +29,30 @@ Different parts of this integration carry **different levels of evidence**. Pass
 - The two endpoints are served by the same EVDS3 backend and take the same `type=json`
   contract, so the envelope is **expected** to be identical — but that is an expectation, not a
   measurement.
+
+### `TP.FG.J0` (TÜFE) — what is and is not established
+
+The series is **catalogued and mapped**, and the generic EVDS connector, parser and Silver
+adapter carry it end to end with no source-specific code
+(`tests/integration/test_evds_cpi_silver.py`). That is a statement about *this repository's
+code*, proved with synthetic bytes.
+
+Nothing about the *source* is established. Specifically **not** established: that the official
+keyed endpoint returns this series at all, its real values, its date ordering, and its base
+year. `catalog/series/evds.yml` therefore records it as `semantic_confidence: derived` with
+`semantic_source: manual`, and the base-year caveat is written into its `description`. This
+mirrors how `TP.KFE.TR` already handles an unverified base year.
+
+**To raise it to `verified`, this is what has to arrive:**
+
+1. One real keyed-endpoint response for `TP.FG.J0` over a short range, committed as a fixture
+   under `tests/fixtures/raw/evds/` with **no key in the bytes, the filename or the metadata**.
+2. The request URL and the capture date recorded in this document.
+3. Base-year evidence from a TCMB/TÜİK source, cited here — not inferred from the values.
+4. `tests/integration/test_evds_cpi_silver.py` re-pointed at that fixture, with the synthetic
+   payload deleted rather than kept alongside it.
+
+Until then no code, catalog entry or test in this repository may state the base year as fact.
 
 ### Required smoke test once an API key exists
 

@@ -1,5 +1,6 @@
 """Generic Silver V1 foundation."""
 
+from .coverage import COVERAGE_SOURCE_RELATION, CoverageError, refresh_series_coverage
 from .foundation import (
     FACT_OBSERVATION_COLUMNS,
     QUALITY_FLAGS,
@@ -20,6 +21,9 @@ __all__ = [
     "SILVER_STAGING_COLUMNS",
     "SilverValidationError",
     "SilverAdapter",
+    "COVERAGE_SOURCE_RELATION",
+    "CoverageError",
+    "refresh_series_coverage",
     "artifact_vintage_id",
     "materialize_fact_observation_snapshot",
     "prepare_staging_frame",

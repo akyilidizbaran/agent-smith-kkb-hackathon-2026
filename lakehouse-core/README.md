@@ -38,8 +38,10 @@ BDDK / EVDS / future sources
 ```
 
 Connectors and parsers are implemented for the current source fixtures. Silver V1
-is implemented and tested for four real series. Gold and Agent layers remain
-planned; they are not required to run the current data path.
+is implemented and tested for four captured real series. A fifth TÜFE mapping is
+contract-tested with an explicitly synthetic EVDS envelope while its official
+`TP.FG.J0` capture and base-year evidence remain pending. Gold and Agent layers
+remain planned; they are not required to run the current data path.
 
 ## Data Layers
 
@@ -63,6 +65,7 @@ The current tested mappings are:
 | `bddk_weekly:5690_3` | weekly | `TRY_mn` | stock |
 | `evds:TP.KTF12` | weekly | `pct` | rate |
 | `evds:TP.KFE.TR` | monthly | `index` | index |
+| `evds:TP.FG.J0` | monthly | `index` | index *(external evidence pending)* |
 
 Frequency, unit, and measure semantics come from `meta.series`; they are not
 hard-coded into the generic Silver foundation.

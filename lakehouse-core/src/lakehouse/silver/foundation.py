@@ -16,6 +16,7 @@ from typing import Final
 import duckdb
 import pandas as pd
 
+from .coverage import CoverageError, refresh_series_coverage
 from ..contracts.identifiers import (
     validate_dataset_id,
     validate_run_id,
@@ -311,6 +312,20 @@ def _validate_sql_inputs(connection: duckdb.DuckDBPyConnection) -> None:
         )
 
 
+def _begin_transaction(connection: duckdb.DuckDBPyConnection) -> bool:
+    """Start a transaction unless the caller already owns one.
+
+    Returns whether this call opened it, so an outer transaction started by the caller is
+    neither committed nor rolled back on their behalf.
+    """
+
+    try:
+        connection.execute("BEGIN TRANSACTION")
+    except duckdb.TransactionException:
+        return False
+    return True
+
+
 def _unregister(connection: duckdb.DuckDBPyConnection, relation_name: str) -> None:
     try:
         connection.unregister(relation_name)
@@ -355,6 +370,10 @@ def materialize_fact_observation_snapshot(
     The caller must combine all intended source-adapter outputs before calling this operation.
     A later call replaces the entire trusted DuckDB table; it never appends, merges, or selects
     a current vintage. No source-specific adapter is invoked here.
+
+    On success ``meta.series.first_obs`` / ``last_obs`` are recomputed from the new snapshot
+    in the same transaction, so a published snapshot and the coverage the catalog advertises
+    can never disagree. See :func:`~lakehouse.silver.coverage.refresh_series_coverage`.
     """
 
     prepared = prepare_staging_frame(staging)
@@ -377,10 +396,24 @@ def materialize_fact_observation_snapshot(
             )
         _validate_result(result)
         connection.execute("CREATE SCHEMA IF NOT EXISTS silver")
-        connection.execute(
-            "CREATE OR REPLACE TABLE silver.fact_observation AS "
-            f"SELECT * FROM {_MODEL_RELATION}"
-        )
+
+        # The table swap and the catalog coverage refresh are one unit of work. DuckDB rolls
+        # back `CREATE OR REPLACE TABLE` as well as the `UPDATE`, so a coverage failure leaves
+        # the previous snapshot *and* the previous coverage untouched rather than publishing a
+        # new snapshot whose advertised coverage was never computed.
+        owns_transaction = _begin_transaction(connection)
+        try:
+            connection.execute(
+                "CREATE OR REPLACE TABLE silver.fact_observation AS "
+                f"SELECT * FROM {_MODEL_RELATION}"
+            )
+            refresh_series_coverage(connection)
+        except Exception:
+            if owns_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        if owns_transaction:
+            connection.execute("COMMIT")
         return result
     finally:
         connection.execute(f"DROP VIEW IF EXISTS {_MODEL_RELATION}")
@@ -392,6 +425,8 @@ __all__ = [
     "QUALITY_FLAGS",
     "SILVER_STAGING_COLUMNS",
     "SILVER_SCHEMA_VERSION",
+    "CoverageError",
+    "refresh_series_coverage",
     "SilverValidationError",
     "artifact_vintage_id",
     "materialize_fact_observation_snapshot",

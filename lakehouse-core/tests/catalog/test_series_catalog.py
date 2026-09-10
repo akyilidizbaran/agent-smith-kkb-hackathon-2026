@@ -69,6 +69,7 @@ def test_repository_catalog_parses_and_has_the_expected_series() -> None:
     assert set(by_id) == {
         "evds:TP.KTF12",
         "evds:TP.KFE.TR",
+        "evds:TP.FG.J0",
         "bddk_monthly:1534_Toplam",
         "bddk_weekly:5690_3",
     }

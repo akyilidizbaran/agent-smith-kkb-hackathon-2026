@@ -200,9 +200,34 @@ class ParquetStorage:
 
     @staticmethod
     def read(path: str | Path) -> pd.DataFrame:
-        """Read a Parquet artifact back into a pandas DataFrame."""
+        """Read a Parquet artifact back into a pandas DataFrame, preserving source nulls.
 
-        return pq.read_table(Path(path)).to_pandas()
+        Arrow stores a source ``null`` faithfully, but ``Table.to_pandas()`` on pandas 3
+        materializes a nullable string column as ``str`` dtype whose missing marker is
+        ``NaN``. A Bronze ``value_raw`` of ``None`` would therefore reach Silver as a float
+        ``NaN`` and be rejected as a non-finite number, which would make the documented
+        contract "source nulls remain null" unreachable through the real Bronze path and
+        leave ``quality_flag = 'missing_value'`` producible only by hand-built frames.
+
+        Only text columns that actually contain a null are rebuilt, straight from Arrow's own
+        values, so a file with no missing data round-trips exactly as before.
+        """
+
+        table = pq.read_table(Path(path))
+        frame = table.to_pandas()
+        for name in table.schema.names:
+            field_type = table.schema.field(name).type
+            is_text = (
+                pa.types.is_string(field_type)
+                or pa.types.is_large_string(field_type)
+                or pa.types.is_binary(field_type)
+                or pa.types.is_large_binary(field_type)
+            )
+            if is_text and table.column(name).null_count:
+                frame[name] = pd.Series(
+                    table.column(name).to_pylist(), dtype=object, index=frame.index
+                )
+        return frame
 
 
 __all__ = [

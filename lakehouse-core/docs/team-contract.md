@@ -70,6 +70,18 @@ aggregation, cross-frequency alignment, revision/current-selection logic or agen
 Incremental, append, merge and current-vintage behavior are deferred. Silver semantics come
 from `meta.series`; source-specific fields remain in Bronze.
 
+A successful `materialize_fact_observation_snapshot(...)` also recomputes
+`meta.series.first_obs` / `last_obs` from the new snapshot, in the **same transaction** as the
+table swap. Coverage is operational: it is derived only from `silver.fact_observation`, never
+authored in YAML, and the catalog loader still never writes or clears it. Because
+materialization replaces the whole snapshot, a series absent from the new snapshot has its
+coverage cleared to `NULL` rather than keeping a stale window; an empty snapshot clears every
+window; a *missing* snapshot is an error rather than an empty one.
+
+Gold will need `measure_type`, `default_agg` and `week_anchor`. Those are catalog facts and
+must be read from `meta.series` at call time, never taken as parameters from the model and
+never copied into fact rows.
+
 The supported ingestion-to-Silver boundary is `stage_ingestion_result(...)`. It passes the
 ingestion `run_id` and parser warnings to the adapter so callers cannot silently lose trust
 metadata. When a source has no native vintage, Silver uses the immutable RAW artifact digest as
