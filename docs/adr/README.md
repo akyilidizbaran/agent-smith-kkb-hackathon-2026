@@ -44,3 +44,4 @@ sıfırdan başlatmamak için kayıt tutulur.
 | [0017](0017-donem-filtresi-zorunlulugu.md) | Soruda geçen dönem sorguda yoksa ret | Kabul edildi |
 | [0018](0018-donem-anahtari-uyumu.md) | Dönem anahtarı dönem sonu; kolon adı korundu | Kabul edildi |
 | [0019](0019-arac-ciktisi-boyut-siniri.md) | Araç çıktısı modelin taşıyabileceği boyutta | Kabul edildi |
+| [0020](0020-adaptor-sertlestirme-ve-tls.md) | Adaptörde savunma derinliği; TLS doğrulaması kapatılmaz | Kabul edildi |

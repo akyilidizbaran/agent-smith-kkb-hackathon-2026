@@ -21,6 +21,7 @@ import duckdb
 import pandas as pd
 from pydantic import BaseModel, Field
 
+from ..adapters.duckdb_lakehouse import hardened_connection
 from ..contracts.lakehouse import LakehouseClient, LakehouseError
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
@@ -243,7 +244,8 @@ class WorkspaceComputeColumnTool(Tool):
         if params.column_name in table.columns:
             return ToolResult.error(f"'{params.column_name}' zaten tabloda var.")
 
-        con = duckdb.connect()
+        # Adaptörle aynı sınırlar: dış dosya/ağ erişimi kapalı, yapılandırma kilitli.
+        con = hardened_connection()
         try:
             con.register("analiz", table)
             out = con.execute(

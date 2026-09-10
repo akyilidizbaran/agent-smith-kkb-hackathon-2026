@@ -19,6 +19,7 @@ from pathlib import Path
 
 import duckdb
 import httpx
+import truststore
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -89,8 +90,11 @@ def fetch_month(client: httpx.Client, tablo_no: int, yil: int, ay: int) -> list[
 
 def main() -> None:
     rows: list[dict] = []
-    # BDDK sertifika zinciri eksik -> verify=False. Üretimde CA bundle ile çözülmeli.
-    with httpx.Client(timeout=30.0, verify=False) as client:
+    # BDDK sunucusu ara sertifikayı göndermiyor; certifi ile doğrulama başarısız olur.
+    # verify=False KULLANILMAZ: işletim sisteminin sertifika deposu (truststore)
+    # ara sertifikayı içeriyor, doğrulama açık kalır.
+    truststore.inject_into_ssl()
+    with httpx.Client(timeout=30.0) as client:
         for tablo_no in TABLES:
             for yil in range(2021, 2027):
                 for ay in range(1, 13):

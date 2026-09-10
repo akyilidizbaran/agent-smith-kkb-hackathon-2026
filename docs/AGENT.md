@@ -35,16 +35,16 @@ Tüm komutlar `agent-core/` dizininden çalıştırılır.
 cp ../.env.example ../.env    # değerleri doldurun; .env asla commit edilmez
 ollama pull qwen3:8b          # geliştirme modeli
 
-uv venv && uv pip install duckdb httpx pandas pydantic openai python-dotenv
+uv sync --extra dev              # uv.lock'taki sabit sürümlerle kurar
 python scripts/dev_seed.py    # gerçek BDDK verisiyle geliştirme lakehouse'u
 ```
 
 ## Kullanım
 
 ```bash
-PYTHONPATH=src python -m kkb_agent.cli --health
-PYTHONPATH=src python -m kkb_agent.cli --trace "2025'te konut kredisi nasıl değişti?"
-PYTHONPATH=src python -m kkb_agent.cli          # etkileşimli
+uv run python -m kkb_agent.cli --health
+uv run python -m kkb_agent.cli --trace "2025'te konut kredisi nasıl değişti?"
+uv run python -m kkb_agent.cli          # etkileşimli
 ```
 
 ## Testler
@@ -52,8 +52,8 @@ PYTHONPATH=src python -m kkb_agent.cli          # etkileşimli
 İki katmanlı doğrulama:
 
 ```bash
-PYTHONPATH=src python -m pytest tests/ -q      # araç birim testleri, saniyeler
-PYTHONPATH=src python scripts/run_golden.py    # uçtan uca davranış, dakikalar
+uv run pytest -q                        # birim testleri, saniyeler
+uv run python scripts/run_golden.py     # uçtan uca davranış, dakikalar
 ```
 
 Birim testleri deterministiktir ve bir aracın bozulduğunu golden set'i beklemeden söyler.
@@ -63,8 +63,8 @@ bakılarak "düzeldi" denmemelidir.
 ## Golden set — ilerlemenin objektif ölçüsü
 
 ```bash
-PYTHONPATH=src python scripts/run_golden.py
-PYTHONPATH=src python scripts/run_golden.py G2 G4      # seçili vakalar
+uv run python scripts/run_golden.py
+uv run python scripts/run_golden.py G2 G4      # seçili vakalar
 ```
 
 Vakalar serbest metni değil, agent'ın ürettiği **analiz tablosunu** denetler

@@ -92,11 +92,11 @@ cp .env.example .env          # değerleri doldurun — .env asla commit edilmez
 ollama pull qwen3:8b          # geliştirme modeli
 
 cd agent-core
-uv venv && uv pip install duckdb httpx pandas pydantic openai python-dotenv
+uv sync --extra dev              # uv.lock'taki sabit sürümlerle kurar
 python scripts/dev_seed.py    # gerçek BDDK verisiyle geliştirme lakehouse'u
 
-PYTHONPATH=src python -m kkb_agent.cli --trace "2025'te konut kredisi nasıl değişti?"
-PYTHONPATH=src python scripts/run_golden.py
+uv run python -m kkb_agent.cli --trace "2025'te konut kredisi nasıl değişti?"
+uv run python scripts/run_golden.py
 ```
 
 Ayrıntı: [docs/AGENT.md](docs/AGENT.md)

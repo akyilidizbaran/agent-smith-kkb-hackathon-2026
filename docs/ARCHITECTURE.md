@@ -200,7 +200,8 @@ nihai sentez turunda reasoning'i **açmak** — orada kalite hıza değer.
 
 **Native tool-calling yoksa:** harness JSON-protokol moduna düşer; system prompt'a araç
 kataloğu eklenir, model `{"tool": ..., "args": ...}` döndürür, `_parse_json_call`
-ayrıştırır. Kod yazılı, gerçek koşulda henüz denenmedi — MIA'da ilk ölçülecek şey.
+ayrıştırır. MIA'da native tool-calling **çalıştığı ölçüldü** (10 Eylül); fallback
+yalnız sağlayıcı değişirse devreye girer.
 
 `ToolCall.from_openai` bozuk JSON'u yakalar ve `{"__raw__": ...}` olarak taşır;
 onarım döngüsü devreye girer.
@@ -505,6 +506,9 @@ Veri ekibinin adaptörü hazır olduğunda `cli.build_agent()` içinde tek satı
 
 Hızlı yol açıldığında 2–4 tek bir deterministik adıma iner.
 
+Yukarıdaki süreler yerel qwen3:8b ile. **MIA (Qwen3.8-27B) üzerinde aynı soru 4–6 s**,
+tam golden set 29 s; her vaka 3/3 tekrarda kararlı (ADR-0004, 10 Eylül ölçümü).
+
 ---
 
 ## 12. Jeneriklik nasıl garanti ediliyor
@@ -568,14 +572,19 @@ ve düzeltildi (ADR-0007).
 
 ## 15. Bilinen sınırlar
 
-- Canlı jüri için süre hâlâ yüksek (107 s/soru); retrieval katmanı ve filtre
-  enjeksiyonu bekliyor.
-- MIA üzerinde hiç ölçüm yok: `reasoning_effort`, native tool-calling, rate limit
-  bilinmiyor.
+**MIA üzerinde ölçülenler (10 Eylül):** `reasoning_effort=none` çalışıyor (51 tok/1,0 s →
+4 tok/0,1 s), native tool-calling çalışıyor, embedding 4096 boyut. Golden **7/7, her vaka
+3/3 kararlı, 4–12 s**. Sağlayıcı geçişi `.env` + tek satır kod (ikinci system mesajı
+kaldırıldı — vLLM reddediyordu).
+
+**Hâlâ açık:**
+- Rate limit / toplam kota bilinmiyor; header dönmüyor, mentörde.
 - Türkçe performansı ölçülmedi; İngilizce system prompt A/B'si yapılmadı.
+- Retrieval katmanı ve dönem filtresi enjeksiyonu yazılmadı; G6 adım limitinin tam
+  sınırında (10/10).
 - Görselleştirme yok.
-- Ad-hoc ingest ve otomatik katalog yok — jürinin sınayacağı yetenek.
+- Ad-hoc ingest ve otomatik katalog yok — jürinin sınayacağı yetenek. OCR MIA'da denenmedi.
 - Analitik araçlar (anomali, changepoint, causality) ve web araçları yok.
-- Gerçek Lakehouse'a bağlı değil; kendi seed'iyle çalışıyor. Veri ekibinden
-  `meta.series` bekleniyor.
+- Gerçek Lakehouse'a bağlı değil; kendi seed'iyle çalışıyor. Veri ekibinin
+  `silver.fact_observation` + `meta.series`'i hazır; adaptör yazılacak.
 - Golden set kapsamı dar: tek kaynak, kredi kalemleri.
