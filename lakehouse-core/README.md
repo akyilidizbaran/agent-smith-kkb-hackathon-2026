@@ -43,6 +43,27 @@ contract-tested with an explicitly synthetic EVDS envelope while its official
 `TP.FG.J0` capture and base-year evidence remain pending. Gold and Agent layers
 remain planned; they are not required to run the current data path.
 
+## Current Delivery Status
+
+The Silver V1 acceptance gate is closed. The current Agent/Data P0 handoff adds:
+
+- `evds:TP.FG.J0` CPI catalog and Silver mapping support;
+- transactional `first_obs` / `last_obs` refresh from the complete Silver snapshot;
+- a file-backed untrusted connection and guarded `QueryExecutor` proof that reads
+  `silver.fact_observation` without granting write access;
+- regression coverage for CPI mapping, coverage refresh, query safety, and
+  Parquet/Arrow null preservation.
+
+The repository test baseline at this checkpoint is **576 passing tests**, including
+**37/37 Silver acceptance tests**. See
+[`docs/branches/agent-data-p0.md`](docs/branches/agent-data-p0.md) for the exact scope,
+evidence boundary, and remaining work.
+
+`evds:TP.FG.J0` is code-ready but its checked-in test envelope is explicitly
+synthetic. Until a keyed EVDS capture and official base-year evidence are added, its
+catalog confidence remains `derived`; the codebase must not present it as externally
+verified.
+
 ## Data Layers
 
 - **RAW:** immutable original fetched bytes, identified by SHA-256.
@@ -139,9 +160,12 @@ The test suite does not require live BDDK or EVDS network access.
 
 The following are intentionally planned for later work:
 
-- Gold analytical models and cross-frequency joins.
-- Weekly-to-monthly aggregation policy and other derived metrics.
+- Gold functions for frequency alignment, cumulative decomposition, and period joins.
+- Generic connector/parser and programmatic draft-series registration.
+- An isolated ad-hoc observation surface and executable ingestion CLI.
+- EVDS request windowing for responses that exceed source observation limits.
 - FinTürk Silver mapping and entity/geography modeling.
+- Broader catalog coverage for retrieval and genericity evaluation.
 - Gold current-revision selection policy.
 - Gold-only `QueryExecutor` restrictions.
 - Agent tools and LangGraph orchestration.
