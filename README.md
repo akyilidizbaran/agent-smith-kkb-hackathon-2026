@@ -10,7 +10,8 @@ generic Python data lakehouse foundation.
 semantic catalog loading, ingestion observability, and an acceptance-tested,
 source-independent Silver V1 observation layer. The first Agent/Data P0 handoff is
 also implemented: CPI catalog/Silver support, automatic series coverage, and safe
-read-only Agent queries over Silver. Gold analytical functions are the next delivery.
+read-only Agent queries over Silver. Gold P0 is implemented as catalog-driven,
+fail-closed functions for frequency alignment, cumulative decomposition, and period joins.
 
 ## Repository map
 
@@ -30,9 +31,11 @@ For architecture, supported series, setup, and usage, see the
   [`silver-v1-acceptance-pack.md`](lakehouse-core/docs/acceptance/silver-v1-acceptance-pack.md)
 - Agent/Data P0 handoff:
   [`agent-data-p0.md`](lakehouse-core/docs/branches/agent-data-p0.md)
+- Gold P0 API and branch delivery:
+  [`gold-contract.md`](lakehouse-core/docs/gold-contract.md) ·
+  [`gold-functions-v1.md`](lakehouse-core/docs/branches/gold-functions-v1.md)
 - Independent architecture and quality audit:
   [`data-lakehouse-bagimsiz-denetim-raporu-2026-09-10.md`](lakehouse-core/docs/audits/data-lakehouse-bagimsiz-denetim-raporu-2026-09-10.md)
 
-The remaining Data/Lakehouse scope is delivered in focused branches: Gold
-frequency/cumulative/join functions first, then generic and ad-hoc ingestion,
-operational CLI/windowing, and finally catalog/FinTürk expansion.
+The remaining Data/Lakehouse scope is delivered in focused branches: generic and ad-hoc
+ingestion next, then operational CLI/windowing, and finally catalog/FinTürk expansion.

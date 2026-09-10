@@ -32,7 +32,7 @@ BDDK / EVDS / future sources
             |
  Silver Parquet + trusted DuckDB
             |
-       Gold (planned)
+ Gold analytical functions
             |
    Agent tools (planned)
 ```
@@ -40,8 +40,8 @@ BDDK / EVDS / future sources
 Connectors and parsers are implemented for the current source fixtures. Silver V1
 is implemented and tested for four captured real series. A fifth TÜFE mapping is
 contract-tested with an explicitly synthetic EVDS envelope while its official
-`TP.FG.J0` capture and base-year evidence remain pending. Gold and Agent layers
-remain planned; they are not required to run the current data path.
+`TP.FG.J0` capture and base-year evidence remain pending. Gold P0 functions are
+implemented; Agent tools remain planned.
 
 ## Current Delivery Status
 
@@ -54,8 +54,8 @@ The Silver V1 acceptance gate is closed. The current Agent/Data P0 handoff adds:
 - regression coverage for CPI mapping, coverage refresh, query safety, and
   Parquet/Arrow null preservation.
 
-The repository test baseline at this checkpoint is **576 passing tests**, including
-**37/37 Silver acceptance tests**. See
+The Agent/Data P0 checkpoint has **576 passing tests**, including **37/37 Silver
+acceptance tests**. See
 [`docs/branches/agent-data-p0.md`](docs/branches/agent-data-p0.md) for the exact scope,
 evidence boundary, and remaining work.
 
@@ -64,12 +64,36 @@ synthetic. Until a keyed EVDS capture and official base-year evidence are added,
 catalog confidence remains `derived`; the codebase must not present it as externally
 verified.
 
+### Gold P0
+
+Gold is implemented as read-only functions rather than prebuilt source-specific tables:
+
+- `align_frequency(...)` applies the catalog's stock/flow/rate/index rule to monthly or
+  quarterly periods;
+- `decompose_cumulative(...)` safely decomposes supported monthly/quarterly cumulative
+  series;
+- `join_on_period(...)` outer-joins independently aligned series without hiding coverage
+  gaps.
+
+The functions read `measure_type`, `default_agg`, frequency, status, and semantic
+confidence from `meta.series`; callers cannot supply their own arithmetic. Unsupported,
+inactive, under-evidenced, ambiguous-vintage, or unsafe transformations fail closed with a
+machine-readable reason. Derived rows retain contributor dates and artifact/vintage/run
+lineage. No interpolation, implicit carry-forward, silent revision selection, or database
+write is performed.
+
+The current branch checkpoint has **677 passing tests**: the unchanged 576-test baseline
+plus **101 Gold tests**. The API and limitations are documented in
+[`docs/gold-contract.md`](docs/gold-contract.md), with implementation evidence in
+[`docs/branches/gold-functions-v1.md`](docs/branches/gold-functions-v1.md).
+
 ## Data Layers
 
 - **RAW:** immutable original fetched bytes, identified by SHA-256.
 - **Bronze:** parsed and source-faithful data stored as Parquet.
 - **Silver:** canonical, validated, source-independent observations.
-- **Gold:** planned analysis-ready joins, frequency alignment, aggregations, and derived views.
+- **Gold:** read-only, catalog-driven frequency alignment, cumulative decomposition, and
+  period joins; no persisted Gold tables yet.
 
 ## Silver V1
 
@@ -150,6 +174,7 @@ The test suite does not require live BDDK or EVDS network access.
 - `src/lakehouse/storage/`: RAW and Parquet persistence.
 - `src/lakehouse/catalog/`: `meta.series` semantic catalog loading.
 - `src/lakehouse/silver/`: generic Silver foundation and source adapters.
+- `src/lakehouse/gold/`: fail-closed analytical transformations over Silver.
 - `models/`: SQL models.
 - `schemas/`: formal data contracts.
 - `catalog/series/`: reviewed series metadata.
@@ -160,12 +185,12 @@ The test suite does not require live BDDK or EVDS network access.
 
 The following are intentionally planned for later work:
 
-- Gold functions for frequency alignment, cumulative decomposition, and period joins.
 - Generic connector/parser and programmatic draft-series registration.
 - An isolated ad-hoc observation surface and executable ingestion CLI.
 - EVDS request windowing for responses that exceed source observation limits.
 - FinTürk Silver mapping and entity/geography modeling.
 - Broader catalog coverage for retrieval and genericity evaluation.
+- Safe decomposition-to-alignment composition and persisted Gold publication.
 - Gold current-revision selection policy.
 - Gold-only `QueryExecutor` restrictions.
 - Agent tools and LangGraph orchestration.
