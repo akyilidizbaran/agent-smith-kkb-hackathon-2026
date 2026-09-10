@@ -34,12 +34,35 @@ from tests.golden.cases import CASES as GOLDEN, GoldenCase  # noqa: E402
 
 ENGINES: dict[str, Callable[[], Any]] = {}
 
+# Motorun araç adları golden/alt-küme kontrollerinden farklıysa buraya eşleme yazılır:
+# {"motor": {"onun_adı": "kontrollerin beklediği ad"}}. Kontroller lakehouse_query(sql),
+# workspace_add_column, workspace_compute_column adlarını bekler (docs/BENCHMARK_PROTOCOL.md).
+TOOL_ALIASES: dict[str, dict[str, str]] = {"team": {}, "v3": {}}
+
 
 def _load_engines() -> None:
     from kkb_agent.cli import build_agent as team_build
     from kkb_agent_v3.cli import build_agent as v3_build
     ENGINES["team"] = lambda: team_build(max_steps=12)
     ENGINES["v3"] = lambda: v3_build(max_steps=8)
+
+
+class _Step:
+    """Adım görünümü: motorun kendi AgentStep'i ne olursa olsun kontroller bunu okur."""
+
+    def __init__(self, s: Any, aliases: dict[str, str]) -> None:
+        self.index = getattr(s, "index", 0)
+        name = getattr(s, "tool_name", None)
+        self.tool_name = aliases.get(name, name) if name else None
+        self.tool_args = dict(getattr(s, "tool_args", {}) or {})
+        self.ok = bool(getattr(s, "ok", True))
+        self.result_summary = getattr(s, "result_summary", "") or ""
+        self.thought = getattr(s, "thought", "") or ""
+        self.error_code = getattr(s, "error_code", None)
+
+
+def _norm_steps(steps: list[Any], engine: str) -> list[_Step]:
+    return [_Step(s, TOOL_ALIASES.get(engine, {})) for s in steps]
 
 
 # ---------------------------------------------------------------------------
@@ -173,16 +196,16 @@ def _finalize(agent, answer, steps, failures: list[str], started: float) -> RunO
     )
 
 
-def run_golden_case(build: Callable[[], Any], case: GoldenCase) -> RunOutcome:
+def run_golden_case(build: Callable[[], Any], case: GoldenCase, engine: str = "") -> RunOutcome:
     """tests/golden/cases.py kontrolleri; scripts/run_golden.py ile aynı mantık, motor parametrik."""
     agent = build()
     started = time.perf_counter()
     answer = agent.ask(case.question)
-    steps = list(answer.steps)
+    steps = _norm_steps(list(answer.steps), engine)
     extra = dict(getattr(answer, "extra", {}) or {})
     if case.follow_up:
         answer2 = agent.ask(case.follow_up)
-        steps += answer2.steps
+        steps += _norm_steps(list(answer2.steps), engine)
         e2 = getattr(answer2, "extra", {}) or {}
         extra = {
             "llm_turns": (extra.get("llm_turns") or 0) + (e2.get("llm_turns") or 0),
@@ -225,14 +248,15 @@ def run_golden_case(build: Callable[[], Any], case: GoldenCase) -> RunOutcome:
     return _finalize(agent, answer, steps, failures, started)
 
 
-def run_subset_case(build: Callable[[], Any], cid: str, question: str, checks) -> RunOutcome:
+def run_subset_case(build: Callable[[], Any], cid: str, question: str, checks, engine: str = "") -> RunOutcome:
     agent = build()
     started = time.perf_counter()
     answer = agent.ask(question)
-    failures = [x for c in checks for x in c(agent, answer, answer.steps)]
+    steps = _norm_steps(list(answer.steps), engine)
+    failures = [x for c in checks for x in c(agent, answer, steps)]
     if getattr(answer, "hit_step_limit", False):
         failures.append("adım limiti")
-    return _finalize(agent, answer, answer.steps, failures, started)
+    return _finalize(agent, answer, steps, failures, started)
 
 
 def _safe(fn, *a) -> RunOutcome:
@@ -251,7 +275,7 @@ def run_engine(engine: str, which: str, repeat: int, case_ids: list[str]) -> lis
                 continue
             rep = CaseReport(id=case.id, level="G")
             for i in range(repeat):
-                o = _safe(run_golden_case, build, case)
+                o = _safe(run_golden_case, build, case, engine)
                 rep.runs.append(o)
                 print(f"  [{engine}] {case.id} {i + 1}/{repeat} {'✓' if o.passed else '✗'} {o.duration_s:.1f}s "
                       f"tur={o.llm_turns} adım={o.tool_steps} hata={o.error_codes or '-'} {o.failures or ''}", flush=True)
@@ -262,7 +286,7 @@ def run_engine(engine: str, which: str, repeat: int, case_ids: list[str]) -> lis
                 continue
             rep = CaseReport(id=cid, level=level)
             for i in range(repeat):
-                o = _safe(run_subset_case, build, cid, q, checks)
+                o = _safe(run_subset_case, build, cid, q, checks, engine)
                 rep.runs.append(o)
                 print(f"  [{engine}] {cid} {i + 1}/{repeat} {'✓' if o.passed else '✗'} {o.duration_s:.1f}s "
                       f"tur={o.llm_turns} adım={o.tool_steps} hata={o.error_codes or '-'} {o.failures or ''}", flush=True)
@@ -322,7 +346,7 @@ def render_md(summaries: list[dict[str, Any]], per_engine: dict[str, list[CaseRe
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--engine", action="append", choices=["team", "v3"], help="tekrarlanabilir")
+    ap.add_argument("--engine", action="append", help="tekrarlanabilir; _load_engines()'daki adlar (team, v3, …)")
     ap.add_argument("--set", default="golden", choices=["golden", "subset", "all"])
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--cases", default="", help="virgülle id parçaları, ör. G1,G4,L9")
@@ -330,6 +354,9 @@ def main() -> None:
     args = ap.parse_args()
     _load_engines()
     engines = args.engine or ["team", "v3"]
+    unknown = [e for e in engines if e not in ENGINES]
+    if unknown:
+        sys.exit(f"bilinmeyen motor: {unknown}; kayıtlı: {list(ENGINES)} (bkz. docs/BENCHMARK_PROTOCOL.md §4)")
     case_ids = [c for c in args.cases.split(",") if c]
     import os
     model = os.getenv("LLM_MODEL", "?")
