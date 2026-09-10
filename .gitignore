@@ -27,3 +27,6 @@ data/
 .DS_Store
 .idea/
 .vscode/
+
+# Claude Code kişisel ayarlar (takım ayarları .claude/settings.json'a yazılır)
+.claude/settings.local.json

@@ -1,0 +1,119 @@
+[
+  {
+    "id": "G1_tek_deger",
+    "passed": true,
+    "duration_s": 4.9,
+    "steps": 4,
+    "tools_used": [
+      "lakehouse_search",
+      "lakehouse_describe",
+      "lakehouse_distinct_values",
+      "lakehouse_query"
+    ],
+    "tool_errors": 0,
+    "failures": [],
+    "answer_preview": "2025 Aralık ay sonu itibarıyla bankacılık sektöründeki **konut kredisi bakiyesi 678.970 milyon TL** idi.  Bunu parçalara ayırırsak: - Türk parası (TL) cinsi: 678.912 milyon TL - Yabancı para cinsi (TL"
+  },
+  {
+    "id": "G2_aylik_seri",
+    "passed": true,
+    "duration_s": 5.7,
+    "steps": 5,
+    "tools_used": [
+      "lakehouse_search",
+      "lakehouse_describe",
+      "lakehouse_distinct_values",
+      "lakehouse_query",
+      "workspace_show"
+    ],
+    "tool_errors": 0,
+    "failures": [],
+    "answer_preview": "2025 yılı konut kredisi bakiyeleri (ay sonu, sektör toplamı, milyon TL):  | Ay | Bakiye (milyon TL) | |---|---| | Ocak 2025 | 523.455 | | Şubat 2025 | 535.029 | | Mart 2025 | 548.385 | | Nisan 2025 | "
+  },
+  {
+    "id": "G3_turetilmis_hesap",
+    "passed": true,
+    "duration_s": 7.3,
+    "steps": 5,
+    "tools_used": [
+      "lakehouse_search",
+      "lakehouse_describe",
+      "lakehouse_distinct_values",
+      "lakehouse_query",
+      "workspace_show"
+    ],
+    "tool_errors": 0,
+    "failures": [],
+    "answer_preview": "2025 yılında konut kredisi bakiyesinin aylık değişimi aşağıdaki gibidir (BDDK Aylık Bülten, \"Tüketici Kredileri – Konut\" kalemi, sektör toplamı, milyon TL):  | Ay | Bakiye (milyon TL) | Aylık Değişim "
+  },
+  {
+    "id": "G4_kapsam_disi",
+    "passed": true,
+    "duration_s": 5.6,
+    "steps": 4,
+    "tools_used": [
+      "lakehouse_search",
+      "lakehouse_describe",
+      "lakehouse_query",
+      "lakehouse_query"
+    ],
+    "tool_errors": 1,
+    "failures": [],
+    "answer_preview": "2015 yılına ait konut kredisi bakiyesi bu veri kaynağında bulunmuyor. BDDK Aylık Bülten'deki kredi bakiyesi verisi yalnızca **Ocak 2021 – Haziran 2026** dönemini kapsıyor; 2015 bu aralığın dışında kal"
+  },
+  {
+    "id": "G5_karsilastirma",
+    "passed": true,
+    "duration_s": 7.2,
+    "steps": 5,
+    "tools_used": [
+      "lakehouse_search",
+      "lakehouse_describe",
+      "lakehouse_distinct_values",
+      "lakehouse_distinct_values",
+      "lakehouse_query"
+    ],
+    "tool_errors": 0,
+    "failures": [],
+    "answer_preview": "2025 yılı boyunca konut ve ihtiyaç kredisi bakiyeleri (BDDK Aylık Bülten, sektör toplamı, ay sonu stok, milyon TL):  | Ay | Konut | İhtiyaç | |---|---|---| | Ocak | 523.455 | 1.467.814 | | Şubat | 535"
+  },
+  {
+    "id": "G7_tablo_uzerinde_hesap",
+    "passed": true,
+    "duration_s": 10.5,
+    "steps": 7,
+    "tools_used": [
+      "lakehouse_search",
+      "lakehouse_describe",
+      "lakehouse_distinct_values",
+      "lakehouse_query",
+      "workspace_show",
+      "workspace_compute_column",
+      "workspace_show"
+    ],
+    "tool_errors": 0,
+    "failures": [],
+    "answer_preview": "Tabloya aylık yüzde değişim sütunu eklendi (mevcut tablo bozulmadı):  | Ay | Bakiye (milyon TL) | Aylık % değişim | |---|---|---| | Ocak 2025 | 523.455 | — | | Şubat 2025 | 535.029 | %2,21 | | Mart 20"
+  },
+  {
+    "id": "G6_tabloyu_bozmadan",
+    "passed": true,
+    "duration_s": 14.4,
+    "steps": 10,
+    "tools_used": [
+      "lakehouse_search",
+      "lakehouse_describe",
+      "lakehouse_distinct_values",
+      "lakehouse_query",
+      "workspace_show",
+      "lakehouse_search",
+      "lakehouse_describe",
+      "lakehouse_distinct_values",
+      "workspace_add_column",
+      "workspace_show"
+    ],
+    "tool_errors": 0,
+    "failures": [],
+    "answer_preview": "Tablo bozulmadan yeni sütun eklendi. 2025 yılı konut ve taşıt kredisi bakiyeleri (ay sonu, sektör toplamı, milyon TL):  | Ay | Konut (milyon TL) | Taşıt (milyon TL) | |---|---|---| | Ocak 2025 | 523.4"
+  }
+]
