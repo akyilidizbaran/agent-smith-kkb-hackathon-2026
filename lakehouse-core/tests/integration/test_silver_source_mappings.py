@@ -622,16 +622,49 @@ def test_all_four_real_series_coexist_in_one_fact_observation_table(
         assert list(silver.columns) == list(FACT_OBSERVATION_COLUMNS)
         assert trusted.execute(
             """
-            SELECT series_id, frequency, unit, measure_type, COUNT(*)
+            SELECT series_id, frequency, unit, measure_type, COUNT(*),
+                   MIN(observation_date), MAX(observation_date)
             FROM silver.fact_observation
             GROUP BY series_id, frequency, unit, measure_type
             ORDER BY series_id
             """
         ).fetchall() == [
-            ("bddk_monthly:1534_Toplam", "monthly", "TRY_mn", "stock", 5),
-            ("bddk_weekly:5690_3", "weekly", "TRY_mn", "stock", 5),
-            ("evds:TP.KFE.TR", "monthly", "index", "index", 3),
-            ("evds:TP.KTF12", "weekly", "pct", "rate", 5),
+            (
+                "bddk_monthly:1534_Toplam",
+                "monthly",
+                "TRY_mn",
+                "stock",
+                5,
+                date(2021, 1, 31),
+                date(2026, 6, 30),
+            ),
+            (
+                "bddk_weekly:5690_3",
+                "weekly",
+                "TRY_mn",
+                "stock",
+                5,
+                date(2026, 1, 2),
+                date(2026, 6, 26),
+            ),
+            (
+                "evds:TP.KFE.TR",
+                "monthly",
+                "index",
+                "index",
+                3,
+                date(2026, 1, 31),
+                date(2026, 3, 31),
+            ),
+            (
+                "evds:TP.KTF12",
+                "weekly",
+                "pct",
+                "rate",
+                5,
+                date(2021, 1, 1),
+                date(2026, 7, 3),
+            ),
         ]
     finally:
         trusted.close()

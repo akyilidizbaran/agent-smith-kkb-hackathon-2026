@@ -96,13 +96,18 @@ def test_bddk_monthly_adapter_uses_calendar_month_end_and_rejects_invalid_month(
         metadata={"requested_kalem_sutun": ["1534?Toplam"]},
     )
     one = frame.iloc[[0]].copy()
-    one.loc[one.index[0], "year_raw"] = 2024
-    one.loc[one.index[0], "month_raw"] = 2
-
-    staging = bddk_monthly_to_staging(one, identity=identity)
-    assert staging.loc[0, "period_start"] == date(2024, 2, 1)
-    assert staging.loc[0, "period_end"] == date(2024, 2, 29)
-    assert staging.loc[0, "observation_date"] == date(2024, 2, 29)
+    for year, month, expected_end in (
+        (2024, 2, date(2024, 2, 29)),
+        (2025, 2, date(2025, 2, 28)),
+        (2025, 4, date(2025, 4, 30)),
+        (2025, 1, date(2025, 1, 31)),
+    ):
+        one.loc[one.index[0], "year_raw"] = year
+        one.loc[one.index[0], "month_raw"] = month
+        staging = bddk_monthly_to_staging(one, identity=identity)
+        assert staging.loc[0, "period_start"] == date(year, month, 1)
+        assert staging.loc[0, "period_end"] == expected_end
+        assert staging.loc[0, "observation_date"] == expected_end
 
     invalid = one.copy()
     invalid.loc[invalid.index[0], "month_raw"] = 13
