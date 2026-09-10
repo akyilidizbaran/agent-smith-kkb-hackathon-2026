@@ -1,6 +1,6 @@
 # ADR-0015: Embedding/reranker yatırımının ertelenmesi
 
-**Durum:** Ertelendi · **Tarih:** 2026-09-09
+**Durum:** Ertelendi (ölçümle) · **Tarih:** 2026-09-09 · **Güncelleme 10 Eylül:** kural engeli kalktı, bkz. ADR-0021
 
 ## Bağlam
 Retrieval'ı LLM yerine bi-encoder/cross-encoder ile yapmak gündeme geldi. Hız
@@ -38,6 +38,12 @@ mevcut keyword aramasıyla yapılacak.
   ve araç dokümantasyonunda kesin terminoloji var ve keyword eşleşmesi orada
   embedding'i yeniyor.
 - Ölçülemeyen iyileştirme yapılmaz: şu an tek tablomuz var, seçilecek bir şey yok.
+
+## Güncelleme (10 Eylül)
+Mentör yerel yardımcı modelleri (sentence-transformer, reranker, BM25) retrieval
+katmanında serbest bıraktı. Erteleme artık yalnız ölçüme dayanıyor: tek tablolu
+katalogda kazanç ölçülemez. Sözleşmeler (`contracts/retrieval.py`) tanımlandı;
+uygulama tetikleyici geldiğinde agent'a dokunmadan eklenir.
 
 ## Yeniden değerlendirme tetikleyicileri
 1. Katalog çok tablolu hale geldiğinde (veri ekibinin çıktısı),

@@ -9,7 +9,7 @@ import logging
 import time
 from typing import Any
 
-from openai import APIError, OpenAI
+from openai import APIError, OpenAI, RateLimitError
 
 from .base import ChatMessage, LLMResponse, ToolCall
 
@@ -91,9 +91,15 @@ class OpenAICompatClient:
                         else {}
                     ),
                 )
-            except APIError as exc:  # ağ/limit hataları — Kloudeks'te rate limit olacak
+            except APIError as exc:
                 last_err = exc
+                # Mentör: kota yok ama retry/backoff olsun. 429'da sunucunun
+                # Retry-After'ı varsa ona uy; yoksa üstel bekleme (2,4,8… ≤15 s).
                 wait = min(2**attempt, 15)
+                if isinstance(exc, RateLimitError):
+                    ra = (getattr(exc, "response", None) or {}) and exc.response.headers.get("retry-after")
+                    if ra and str(ra).isdigit():
+                        wait = min(int(ra), 60)
                 log.warning(
                     "LLM çağrısı başarısız (deneme %d/%d): %s — %ss bekleniyor",
                     attempt,

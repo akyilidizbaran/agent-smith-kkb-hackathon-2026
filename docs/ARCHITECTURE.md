@@ -65,13 +65,26 @@ verisiyle çalışabilmeli"* maddesinden gelir.
                                    (aynı Protocol, sıfır kod değişikliği)
 ```
 
+**Üç dış sağlayıcı katmanı birbirinden ayrıdır** (mentör kararı, 10 Eylül):
+
+```
+ LLM (MIA)            Search (Tavily/Firecrawl/…)     Retrieval (BM25 · embedding · reranker)
+ llm/LLMClient        contracts/SearchClient           contracts/{Embedder, LexicalIndex, Reranker}
+      │                       │                                  │
+      └───────────────────────┴──────────────────────────────────┘
+                              agent yalnız Protocol'leri görür; sağlayıcı .env'de
+```
+
+Ana LLM MIA olarak kalır; arama ve sıralama bileşenleri ayrı katmanda, değiştirilebilir.
+Servis veya yöntem değişse de ana yapı değişmez.
+
 Bağımlılık yönü tek taraflıdır ve içeriden dışarıya doğrudur:
 
 ```
 contracts ◄── core ◄── tools ◄── cli
     ▲           ▲
     │           └── llm
-    └── adapters, domain
+    └── adapters, domain, (search, retrieval uygulamaları)
 ```
 
 `contracts/` hiçbir şeye bağımlı değildir; `core/` yalnız `contracts/`, `llm/` ve
@@ -207,6 +220,17 @@ yalnız sağlayıcı değişirse devreye girer.
 onarım döngüsü devreye girer.
 
 ---
+
+## 4b. Search katmanı — `contracts/search.py`
+
+`SearchClient` (Protocol): `search(query, max_results) -> list[SearchHit]` ve
+`fetch(url, max_chars) -> PageContent`. `web_search` ve `web_url` araçları bu sözleşmeye
+karşı yazılır; Tavily, Firecrawl ya da DuckDuckGo arkada değişebilir, araç kodu değişmez.
+`PageContent` ham HTML değil temizlenmiş metin + ayıklanmış tablolar taşır; PDF/görsel
+OCR'ı bu katmanın değil vision katmanının işidir.
+
+Mentör netleştirmesi: web search/scraping servisleri serbest; kısıt yalnız cloud
+warehouse'larda (Snowflake, BigQuery). Bu katman o sınırın dışında.
 
 ## 5. Çekirdek — `core/`
 
@@ -440,33 +464,32 @@ soruya ekstra tur maliyeti ve bugünkü sorunlarımızın yönlendirme sorunu ol
 
 ---
 
-## 9. Retrieval katmanı (planlı — ADR-0013, canlı jüri için öncelik)
+## 9. Retrieval katmanı — `contracts/retrieval.py`
 
-Adım profili (qwen3:8b, ölçülmüş): search 10,9 s + describe 2,1 s + distinct 6,0 s +
-distinct 3,6 s = **22,6 s** — hepsi arama, hiçbiri karar. Canlı jüride 107 s/soru
-kabul edilemez; hedef 30 s altı.
+Üç bağımsız Protocol, üç bağımsız yetenek:
+
+| Protocol | İş | Aday uygulamalar |
+|---|---|---|
+| `LexicalIndex` | BM25/FTS; kesin terimlerde güçlü | DuckDB FTS, `rank_bm25` |
+| `Embedder` | metin → vektör, toplu | MIA `Qwen3-Embedding-8B` (4096), yerel sentence-transformer |
+| `Reranker` | kısa listeyi soruya göre sırala | yerel cross-encoder, LLM-as-reranker |
+
+`reciprocal_rank_fusion()` sıralamaları modelsiz birleştirir — "hibrit > saf semantik"
+bulgusunun en ucuz uygulaması. Mentör kararıyla yerel yardımcı modeller serbest; ADR-0015'in
+kural engeli kalktı, karar ölçümle verilir.
+
+**Neden hâlâ öncelik değil:** MIA'da sorular 4–12 s; retrieval'ın kazandıracağı 3 tur artık
+demo için belirleyici değil. Katalog büyüdüğünde (veri ekibi 4 → onlarca seri) ve
+`ingest_from_url` yeni tablolar eklediğinde devreye girer. Sözleşme şimdi tanımlı ki o gün
+agent'a dokunmadan eklensin.
+
+**Bağlam ön-yükleme akışı (uygulandığında):**
 
 ```
-soru
- ├─ BM25 (DuckDB FTS) + Qwen3-Embedding-8B → RRF birleştirme
- │     → aday tablolar (top-5), aday kalemler, dönem çıkarımı, kapsam kontrolü
- ├─ güven eşiği
- │     yüksek (tek tablo, tek alt-toplam-olmayan kalem, net dönem):
- │        → HIZLI YOL: şema kartı + kalem + WHERE şartı bağlama ENJEKTE
- │          → LLM tek turda SQL → cevap                    (2 tur, ~25 s)
- │     düşük:
- │        → ReAct, araçlar açık                             (5–8 tur)
- └─ araçlar kayıtlı kalır: model "aradığım burada yok" derse search'e dönebilir
+soru → LexicalIndex + Embedder → RRF → (Reranker) → aday tablo/kalem, dönem, kapsam
+     → güven yüksek: bağlam enjekte, LLM tek turda SQL     (hızlı yol)
+     → güven düşük:  ReAct, araçlar açık
 ```
-
-Eşik bir `if`, LLM değil. Hızlı yola giren soru oranı ve oradaki doğruluk ölçülür.
-Reranker şu ölçekte gereksiz: aday listesi 3–5'e inince LLM zaten seçici (katalog 100+
-olursa yeniden değerlendirilir).
-
-Retrieval'ın önceden bulduğu dönem, `lakehouse_query`'de ret yerine **enjeksiyon**
-olur — bugün her sorguda harcanan ret→düzelt turu kalkar.
-
----
 
 ## 10. Adaptör — `adapters/duckdb_lakehouse.py`
 
@@ -578,13 +601,15 @@ ve düzeltildi (ADR-0007).
 kaldırıldı — vLLM reddediyordu).
 
 **Hâlâ açık:**
-- Rate limit / toplam kota bilinmiyor; header dönmüyor, mentörde.
+- Kota: mentör netleştirdi — özel limit yok, gerekirse artırılır; retry/backoff ve 429
+  `Retry-After` desteği var. Mimariyi kota kaygısıyla kısıtlamaya gerek yok.
 - Türkçe performansı ölçülmedi; İngilizce system prompt A/B'si yapılmadı.
 - Retrieval katmanı ve dönem filtresi enjeksiyonu yazılmadı; G6 adım limitinin tam
   sınırında (10/10).
 - Görselleştirme yok.
 - Ad-hoc ingest ve otomatik katalog yok — jürinin sınayacağı yetenek. OCR MIA'da denenmedi.
-- Analitik araçlar (anomali, changepoint, causality) ve web araçları yok.
+- Analitik araçlar (anomali, changepoint, causality) yok. Web araçları yok — sözleşme
+  (`SearchClient`) tanımlı, sağlayıcı seçimi ve uygulama bekliyor.
 - Gerçek Lakehouse'a bağlı değil; kendi seed'iyle çalışıyor. Veri ekibinin
   `silver.fact_observation` + `meta.series`'i hazır; adaptör yazılacak.
 - Golden set kapsamı dar: tek kaynak, kredi kalemleri.
