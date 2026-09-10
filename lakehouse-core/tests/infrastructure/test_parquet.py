@@ -108,7 +108,8 @@ def test_generic_frame_writer_supports_the_silver_identity_layout(tmp_path: Path
         source_id="demo_energy",
         dataset_id="demo_energy_load",
         artifact_sha256=sha256_bytes(b"silver-fixture"),
-        schema_version="demo_energy.v1",
+        schema_version="fact_observation.v1",
+        representation="silver",
     )
     frame = pd.DataFrame(
         {
@@ -122,6 +123,7 @@ def test_generic_frame_writer_supports_the_silver_identity_layout(tmp_path: Path
     second = storage.write_frame(frame, identity=identity)
 
     assert first == second == storage.path_for_identity(identity)
+    assert "representation=silver" in first.parts
     assert storage.read(first).to_dict(orient="records") == frame.to_dict(orient="records")
     assert read_identity(first) == identity
 
@@ -131,3 +133,17 @@ def test_generic_frame_writer_supports_the_silver_identity_layout(tmp_path: Path
             identity=identity,
             overwrite=True,
         )
+
+
+def test_parquet_rejects_an_unknown_representation(tmp_path: Path) -> None:
+    storage = ParquetStorage(tmp_path / "data")
+    identity = ParquetIdentity(
+        source_id="demo_energy",
+        dataset_id="demo_energy_load",
+        artifact_sha256=sha256_bytes(b"unknown-representation"),
+        schema_version="fact_observation.v1",
+        representation="gold",
+    )
+
+    with pytest.raises(ValueError, match="representation"):
+        storage.write_frame(pd.DataFrame({"value": [1.0]}), identity=identity)

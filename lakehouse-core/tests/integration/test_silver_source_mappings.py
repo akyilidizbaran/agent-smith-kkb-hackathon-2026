@@ -22,7 +22,12 @@ from src.lakehouse.parsers.evds import EvdsParser
 from src.lakehouse.silver.adapters.bddk_monthly import bddk_monthly_to_staging
 from src.lakehouse.silver.adapters.bddk_weekly import bddk_weekly_to_staging
 from src.lakehouse.silver.adapters.evds import evds_kfe_to_staging, evds_ktf12_to_staging
-from src.lakehouse.silver.foundation import FACT_OBSERVATION_COLUMNS, materialize_fact_observation_snapshot
+from src.lakehouse.silver.foundation import (
+    FACT_OBSERVATION_COLUMNS,
+    materialize_fact_observation_snapshot,
+    silver_identity_for,
+)
+from src.lakehouse.silver.pipeline import stage_ingestion_result
 from src.lakehouse.storage.parquet import ParquetStorage, read_identity
 from src.lakehouse.storage.raw import RawStorage, sha256_bytes
 
@@ -76,12 +81,10 @@ def _run_to_silver(
     )
 
     result = pipeline.run(spec)[0]
-    bronze = ParquetStorage.read(result.bronze_path)
-    identity = read_identity(result.bronze_path)
-    staging = adapter(bronze, identity=identity)
+    staging, identity = stage_ingestion_result(result, adapter=adapter)
     silver = materialize_fact_observation_snapshot(trusted, staging)
     silver_path = ParquetStorage(tmp_path / "data/silver/fact_observation").write_frame(
-        silver, identity=identity
+        silver, identity=silver_identity_for(identity)
     )
     return trusted, result, staging, silver, silver_path
 
@@ -124,7 +127,8 @@ def test_bddk_monthly_reaches_silver_from_real_connector_parser_and_fixture(
         assert result.asset.raw_path.read_bytes() == fixture.read_bytes()
         assert result.asset.artifact_sha256 == sha256_bytes(fixture.read_bytes())
         assert result.parsed_batch.warnings
-        assert staging["source_warning"].isna().all()
+        assert staging["source_warning"].notna().all()
+        assert set(staging["run_id"]) == {result.run_id}
         assert list(staging.columns) == [
             "series_id",
             "entity_id",
@@ -152,7 +156,7 @@ def test_bddk_monthly_reaches_silver_from_real_connector_parser_and_fixture(
         ).fetchone()
         assert row == (
             "bddk_monthly:1534_Toplam",
-            None,
+            "bddk:10001",
             date(2026, 6, 30),
             date(2026, 6, 1),
             date(2026, 6, 30),
@@ -160,14 +164,14 @@ def test_bddk_monthly_reaches_silver_from_real_connector_parser_and_fixture(
             "monthly",
             "TRY_mn",
             "stock",
-            "ok",
+            "source_warning",
             "bddk_monthly",
             "bddk_monthly_housing_loans",
             result.asset.artifact_sha256,
         )
         assert len(silver) == 5
         assert silver_path.is_file()
-        assert read_identity(silver_path) == read_identity(result.bronze_path)
+        assert read_identity(silver_path) == silver_identity_for(read_identity(result.bronze_path))
         assert json.loads(
             trusted.execute(
                 "SELECT request_metadata_json FROM meta.artifact_request"
@@ -237,7 +241,7 @@ def test_evds_ktf12_reaches_silver_from_real_connector_parser_and_fixture(
         )
         assert len(silver) == 5
         assert silver_path.is_file()
-        assert read_identity(silver_path) == read_identity(result.bronze_path)
+        assert read_identity(silver_path) == silver_identity_for(read_identity(result.bronze_path))
         assert fake_key not in json.dumps(result.asset.metadata)
     finally:
         trusted.close()
@@ -405,7 +409,7 @@ def test_bddk_weekly_reaches_silver_from_real_connector_parser_and_fixture(
         ).fetchone()
         assert row == (
             "bddk_weekly:5690_3",
-            None,
+            "bddk:10001",
             date(2026, 3, 19),
             734860.422,
             "weekly",
@@ -418,7 +422,7 @@ def test_bddk_weekly_reaches_silver_from_real_connector_parser_and_fixture(
         )
         assert len(silver) == 5
         assert silver_path.is_file()
-        assert read_identity(silver_path) == read_identity(result.bronze_path)
+        assert read_identity(silver_path) == silver_identity_for(read_identity(result.bronze_path))
     finally:
         trusted.close()
 
@@ -485,7 +489,7 @@ def test_evds_kfe_reaches_silver_from_generic_connector_parser_and_fixture(
         )
         assert len(silver) == 3
         assert silver_path.is_file()
-        assert read_identity(silver_path) == read_identity(result.bronze_path)
+        assert read_identity(silver_path) == silver_identity_for(read_identity(result.bronze_path))
         assert fake_key not in json.dumps(result.asset.metadata)
     finally:
         trusted.close()
@@ -604,10 +608,7 @@ def test_all_four_real_series_coexist_in_one_fact_observation_table(
 
     try:
         def stage(result: Any, adapter: Any) -> pd.DataFrame:
-            return adapter(
-                ParquetStorage.read(result.bronze_path),
-                identity=read_identity(result.bronze_path),
-            )
+            return stage_ingestion_result(result, adapter=adapter)[0]
 
         staging = pd.concat(
             [

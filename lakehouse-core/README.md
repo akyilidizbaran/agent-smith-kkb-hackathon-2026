@@ -19,6 +19,9 @@ BDDK / EVDS / future sources
             |
       Bronze Parquet
             |
+ IngestionResult context
+ (run_id + warnings)
+            |
   Source-specific Silver Adapter
             |
    Generic Silver Staging
@@ -72,12 +75,20 @@ hard-coded into the generic Silver foundation.
 - BDDK Weekly observation dates are preserved exactly; `week_anchor` does not rewrite them.
 - EVDS KFE remains an index; no base year or rebasing is assumed.
 - Same-artifact duplicate observations fail; the same observation from different artifacts is preserved.
-- Current revision selection is deferred.
+- Every immutable artifact gets a deterministic `artifact:<sha256>` vintage; current revision selection is deferred.
+- BDDK source units are reconciled before publication and source populations receive stable `entity_id` values.
+- Parser warnings mark derived rows as `source_warning` and remain queryable through the row's `run_id`.
+- Silver Parquet carries its own `fact_observation.v1` / `silver` representation identity.
 
 Silver materialization uses:
 
 ```python
-materialize_fact_observation_snapshot(...)
+staging, bronze_identity = stage_ingestion_result(result, adapter=source_adapter)
+silver = materialize_fact_observation_snapshot(connection, staging)
+silver_path = silver_storage.write_frame(
+    silver,
+    identity=silver_identity_for(bronze_identity),
+)
 ```
 
 The function expects the complete intended Silver staging snapshot and replaces
@@ -128,6 +139,6 @@ The following are intentionally planned for later work:
 - Gold analytical models and cross-frequency joins.
 - Weekly-to-monthly aggregation policy and other derived metrics.
 - FinTürk Silver mapping and entity/geography modeling.
-- Run, vintage, and current-revision lifecycles.
+- Gold current-revision selection policy.
 - Gold-only `QueryExecutor` restrictions.
 - Agent tools and LangGraph orchestration.

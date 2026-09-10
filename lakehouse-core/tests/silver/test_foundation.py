@@ -10,6 +10,7 @@ from src.lakehouse.db.bootstrap import bootstrap_database
 from src.lakehouse.silver.foundation import (
     FACT_OBSERVATION_COLUMNS,
     SilverValidationError,
+    artifact_vintage_id,
     materialize_fact_observation_snapshot,
 )
 
@@ -93,6 +94,7 @@ def test_healthy_generic_row_uses_catalog_semantics() -> None:
         assert result.loc[0, "frequency"] == "weekly"
         assert result.loc[0, "unit"] == "pct"
         assert result.loc[0, "measure_type"] == "rate"
+        assert result.loc[0, "vintage_id"] == artifact_vintage_id(ARTIFACT_A)
     finally:
         connection.close()
 
@@ -239,6 +241,10 @@ def test_different_artifacts_for_same_observation_are_preserved() -> None:
 
         assert len(result) == 2
         assert set(result["artifact_sha256"]) == {ARTIFACT_A, ARTIFACT_B}
+        assert set(result["vintage_id"]) == {
+            artifact_vintage_id(ARTIFACT_A),
+            artifact_vintage_id(ARTIFACT_B),
+        }
     finally:
         connection.close()
 

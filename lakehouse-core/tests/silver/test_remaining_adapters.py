@@ -91,7 +91,7 @@ def test_bddk_weekly_maps_real_fixture_and_catalog_semantics(tmp_path: Path) -> 
     assert staging.loc[0, "series_id"] == "bddk_weekly:5690_3"
     assert staging.loc[0, "observation_date"] == date(2026, 1, 2)
     assert staging.loc[0, "value_raw"] == 679216.118
-    assert staging.loc[0, "entity_id"] is None
+    assert staging.loc[0, "entity_id"] == "bddk:10001"
     assert staging["source_warning"].isna().all()
     assert staging.loc[0, "schema_version"] == "bddk_weekly_observations.v1"
     assert not {"date_raw", "entity_code", "column_label", "series_title"}.intersection(
@@ -112,7 +112,7 @@ def test_bddk_weekly_maps_real_fixture_and_catalog_semantics(tmp_path: Path) -> 
         ).fetchone()
         assert row == (
             "bddk_weekly:5690_3",
-            None,
+            "bddk:10001",
             date(2026, 3, 19),
             734860.422,
             "weekly",

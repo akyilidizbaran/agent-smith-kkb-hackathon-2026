@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from calendar import monthrange
 from datetime import date
 from numbers import Integral
+import unicodedata
 
 import pandas as pd
 
 from ...parsers.bddk_monthly import BDDK_MONTHLY_SCHEMA_VERSION
 from ...silver.foundation import SILVER_STAGING_COLUMNS, SilverValidationError
 from ...storage.parquet import ParquetIdentity
+from ._context import bddk_entity_id, lineage_fields
 
 
 SUPPORTED_SERIES_ID = "bddk_monthly:1534_Toplam"
@@ -21,6 +24,8 @@ _REQUIRED_BRONZE_COLUMNS = frozenset(
         "source_id",
         "dataset_id",
         "series_id",
+        "unit_label",
+        "entity_label",
         "year_raw",
         "month_raw",
         "value_raw",
@@ -28,6 +33,8 @@ _REQUIRED_BRONZE_COLUMNS = frozenset(
         "fetched_at",
     }
 )
+
+_EXPECTED_SOURCE_UNIT = "milyon tl"
 
 
 def _validate_input(frame: pd.DataFrame, identity: ParquetIdentity) -> None:
@@ -84,26 +91,55 @@ def _period_bounds(year_raw: object, month_raw: object, row_number: int) -> tupl
     return period_start, period_end
 
 
+def _validate_source_unit(raw: object, row_number: int) -> None:
+    if raw is None or raw is pd.NA or pd.isna(raw):
+        raise SilverValidationError(
+            f"BDDK monthly unit_label must not be NULL at row {row_number}"
+        )
+    if not isinstance(raw, str):
+        raise SilverValidationError(
+            f"BDDK monthly unit_label must be a string at row {row_number}"
+        )
+    normalized = " ".join(unicodedata.normalize("NFKC", raw).casefold().split())
+    if normalized != _EXPECTED_SOURCE_UNIT:
+        raise SilverValidationError(
+            "BDDK monthly source unit conflicts with the reviewed TRY_mn mapping at row "
+            f"{row_number}: {raw!r}; expected 'milyon TL'"
+        )
+
+
 def bddk_monthly_to_staging(
-    frame: pd.DataFrame, *, identity: ParquetIdentity
+    frame: pd.DataFrame,
+    *,
+    identity: ParquetIdentity,
+    run_id: str | None = None,
+    source_warnings: Sequence[str] = (),
+    vintage_id: str | None = None,
 ) -> pd.DataFrame:
     """Map ``1534_Toplam`` Bronze rows to the generic Silver staging contract.
 
     Only the source's year/month representation is interpreted here. Values remain raw,
-    entity identity is deliberately NULL, and frequency/unit/measure semantics come from
-    ``meta.series`` in the generic Silver foundation.
+    source unit and entity identity are checked explicitly, while frequency/unit/measure
+    semantics still come from ``meta.series`` in the generic Silver foundation.
     """
 
     _validate_input(frame, identity)
     records: list[dict[str, object]] = []
+    lineage = lineage_fields(
+        identity,
+        run_id=run_id,
+        source_warnings=source_warnings,
+        vintage_id=vintage_id,
+    )
     for row_number, (_, row) in enumerate(frame.iterrows()):
+        _validate_source_unit(row["unit_label"], row_number)
         period_start, period_end = _period_bounds(
             row["year_raw"], row["month_raw"], row_number
         )
         records.append(
             {
                 "series_id": row["series_id"],
-                "entity_id": None,
+                "entity_id": bddk_entity_id(row["entity_label"], row_number=row_number),
                 "observation_date": period_end,
                 "period_start": period_start,
                 "period_end": period_end,
@@ -112,10 +148,7 @@ def bddk_monthly_to_staging(
                 "dataset_id": row["dataset_id"],
                 "artifact_sha256": row["artifact_sha256"],
                 "fetched_at": row["fetched_at"],
-                "schema_version": identity.schema_version,
-                "vintage_id": None,
-                "run_id": None,
-                "source_warning": None,
+                **lineage,
             }
         )
     return pd.DataFrame.from_records(records, columns=SILVER_STAGING_COLUMNS)

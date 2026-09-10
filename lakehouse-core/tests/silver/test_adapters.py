@@ -73,7 +73,7 @@ def test_bddk_monthly_adapter_maps_real_bronze_shape_to_generic_staging(
     assert list(staging.columns) == list(SILVER_STAGING_COLUMNS)
     assert len(staging) == 5
     assert first["series_id"] == "bddk_monthly:1534_Toplam"
-    assert first["entity_id"] is None
+    assert first["entity_id"] == "bddk:10001"
     assert first["observation_date"] == date(2026, 6, 30)
     assert first["period_start"] == date(2026, 6, 1)
     assert first["period_end"] == date(2026, 6, 30)

@@ -74,7 +74,7 @@ def test_fact_observation_types_and_nullability_match_v1() -> None:
         "artifact_sha256": False,
         "fetched_at": False,
         "schema_version": False,
-        "vintage_id": True,
+        "vintage_id": False,
         "run_id": True,
     }
 

@@ -5,7 +5,10 @@ from datetime import date, datetime, timezone
 import pandas as pd
 
 from src.lakehouse.db.bootstrap import bootstrap_database
-from src.lakehouse.silver.foundation import materialize_fact_observation_snapshot
+from src.lakehouse.silver.foundation import (
+    materialize_fact_observation_snapshot,
+    silver_identity_for,
+)
 from src.lakehouse.storage.parquet import ParquetIdentity, ParquetStorage
 
 
@@ -33,11 +36,13 @@ def test_generic_staging_to_silver_parquet_and_duckdb(tmp_path) -> None:
         result = materialize_fact_observation_snapshot(connection, staging)
         silver_path = ParquetStorage(tmp_path / "data/silver/fact_observation").write_frame(
             result,
-            identity=ParquetIdentity(
-                source_id="evds",
-                dataset_id="evds_housing_interest",
-                artifact_sha256="a" * 64,
-                schema_version="evds_observations.v1",
+            identity=silver_identity_for(
+                ParquetIdentity(
+                    source_id="evds",
+                    dataset_id="evds_housing_interest",
+                    artifact_sha256="a" * 64,
+                    schema_version="evds_observations.v1",
+                )
             ),
         )
 

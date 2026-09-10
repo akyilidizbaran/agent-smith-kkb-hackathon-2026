@@ -23,12 +23,13 @@ class ParquetConflictError(ValueError):
 
 @dataclass(frozen=True)
 class ParquetIdentity:
-    """Recoverable provenance identity embedded in every Bronze Parquet file."""
+    """Recoverable provenance and representation identity embedded in Parquet."""
 
     source_id: str
     dataset_id: str
     artifact_sha256: str
     schema_version: str
+    representation: str = "bronze"
 
 
 def schema_version_key(schema_version: str) -> str:
@@ -64,11 +65,13 @@ def read_identity(path: str | Path) -> ParquetIdentity:
     }
     if any(value is None for value in values.values()):
         raise ParquetConflictError(f"Parquet file has incomplete lakehouse identity: {path}")
+    representation = metadata.get(b"lakehouse.representation", b"bronze").decode("utf-8")
     return ParquetIdentity(
         source_id=values["source_id"].decode("utf-8"),
         dataset_id=values["dataset_id"].decode("utf-8"),
         artifact_sha256=values["artifact_sha256"].decode("utf-8"),
         schema_version=values["schema_version"].decode("utf-8"),
+        representation=representation,
     )
 
 
@@ -91,8 +94,16 @@ class ParquetStorage:
         validate_sha256(identity.artifact_sha256)
         if not identity.schema_version.strip():
             raise ValueError("schema_version must not be empty")
+        if identity.representation not in {"bronze", "silver"}:
+            raise ValueError("representation must be either 'bronze' or 'silver'")
+        representation_path = (
+            []
+            if identity.representation == "bronze"
+            else [f"representation={identity.representation}"]
+        )
         return (
             self.root
+            .joinpath(*representation_path)
             / f"source_id={identity.source_id}"
             / f"dataset_id={identity.dataset_id}"
             / f"schema_version_sha256={schema_version_key(identity.schema_version)}"
@@ -176,6 +187,7 @@ class ParquetStorage:
                 b"lakehouse.dataset_id": identity.dataset_id.encode("utf-8"),
                 b"lakehouse.artifact_sha256": identity.artifact_sha256.encode("utf-8"),
                 b"lakehouse.schema_version": identity.schema_version.encode("utf-8"),
+                b"lakehouse.representation": identity.representation.encode("utf-8"),
             }
         )
         return table.replace_schema_metadata(metadata)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date, datetime
 import re
 
@@ -10,6 +11,7 @@ import pandas as pd
 from ...parsers.bddk_weekly import BDDK_WEEKLY_SCHEMA_VERSION
 from ...silver.foundation import SILVER_STAGING_COLUMNS, SilverValidationError
 from ...storage.parquet import ParquetIdentity
+from ._context import bddk_entity_code, lineage_fields
 
 
 SUPPORTED_SERIES_ID = "bddk_weekly:5690_3"
@@ -20,6 +22,8 @@ _REQUIRED_BRONZE_COLUMNS = frozenset(
         "source_id",
         "dataset_id",
         "series_id",
+        "entity_code",
+        "currency_label",
         "date_raw",
         "value_raw",
         "artifact_sha256",
@@ -73,7 +77,12 @@ def _observation_date(raw: object, row_number: int) -> date:
 
 
 def bddk_weekly_to_staging(
-    frame: pd.DataFrame, *, identity: ParquetIdentity
+    frame: pd.DataFrame,
+    *,
+    identity: ParquetIdentity,
+    run_id: str | None = None,
+    source_warnings: Sequence[str] = (),
+    vintage_id: str | None = None,
 ) -> pd.DataFrame:
     """Map ``5690_3`` Bronze rows to the generic Silver staging contract.
 
@@ -83,11 +92,24 @@ def bddk_weekly_to_staging(
 
     _validate_input(frame, identity)
     records: list[dict[str, object]] = []
+    lineage = lineage_fields(
+        identity,
+        run_id=run_id,
+        source_warnings=source_warnings,
+        vintage_id=vintage_id,
+    )
     for row_number, (_, row) in enumerate(frame.iterrows()):
+        if (
+            not isinstance(row["currency_label"], str)
+            or row["currency_label"].strip() != "TRY"
+        ):
+            raise SilverValidationError(
+                f"BDDK weekly currency_label must be 'TRY' at row {row_number}"
+            )
         records.append(
             {
                 "series_id": row["series_id"],
-                "entity_id": None,
+                "entity_id": bddk_entity_code(row["entity_code"], row_number=row_number),
                 "observation_date": _observation_date(row["date_raw"], row_number),
                 "period_start": None,
                 "period_end": None,
@@ -96,10 +118,7 @@ def bddk_weekly_to_staging(
                 "dataset_id": row["dataset_id"],
                 "artifact_sha256": row["artifact_sha256"],
                 "fetched_at": row["fetched_at"],
-                "schema_version": identity.schema_version,
-                "vintage_id": None,
-                "run_id": None,
-                "source_warning": None,
+                **lineage,
             }
         )
     return pd.DataFrame.from_records(records, columns=SILVER_STAGING_COLUMNS)

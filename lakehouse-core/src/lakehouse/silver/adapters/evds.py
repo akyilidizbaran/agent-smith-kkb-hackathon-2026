@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from calendar import monthrange
+from collections.abc import Sequence
 from datetime import date, datetime
 import re
 
@@ -11,6 +12,7 @@ import pandas as pd
 from ...parsers.evds import EVDS_SCHEMA_VERSION
 from ...silver.foundation import SILVER_STAGING_COLUMNS, SilverValidationError
 from ...storage.parquet import ParquetIdentity
+from ._context import lineage_fields
 
 
 SUPPORTED_KTF12_SERIES_ID = "evds:TP.KTF12"
@@ -89,10 +91,10 @@ def _observation_date(raw: object, row_number: int) -> date:
 def _staging_record(
     row: pd.Series,
     *,
-    identity: ParquetIdentity,
     observation_date: date,
     period_start: date | None,
     period_end: date | None,
+    lineage: dict[str, object],
 ) -> dict[str, object]:
     """Build the shared generic staging record for either EVDS date policy."""
 
@@ -107,15 +109,17 @@ def _staging_record(
         "dataset_id": row["dataset_id"],
         "artifact_sha256": row["artifact_sha256"],
         "fetched_at": row["fetched_at"],
-        "schema_version": identity.schema_version,
-        "vintage_id": None,
-        "run_id": None,
-        "source_warning": None,
+        **lineage,
     }
 
 
 def evds_ktf12_to_staging(
-    frame: pd.DataFrame, *, identity: ParquetIdentity
+    frame: pd.DataFrame,
+    *,
+    identity: ParquetIdentity,
+    run_id: str | None = None,
+    source_warnings: Sequence[str] = (),
+    vintage_id: str | None = None,
 ) -> pd.DataFrame:
     """Map ``TP.KTF12`` Bronze rows to the generic Silver staging contract.
 
@@ -127,14 +131,20 @@ def evds_ktf12_to_staging(
         frame, identity, expected_series_id=SUPPORTED_KTF12_SERIES_ID
     )
     records: list[dict[str, object]] = []
+    lineage = lineage_fields(
+        identity,
+        run_id=run_id,
+        source_warnings=source_warnings,
+        vintage_id=vintage_id,
+    )
     for row_number, (_, row) in enumerate(frame.iterrows()):
         records.append(
             _staging_record(
                 row,
-                identity=identity,
                 observation_date=_observation_date(row["date_raw"], row_number),
                 period_start=None,
                 period_end=None,
+                lineage=lineage,
             )
         )
     return pd.DataFrame.from_records(records, columns=SILVER_STAGING_COLUMNS)
@@ -159,7 +169,12 @@ def _period_bounds(raw: object, row_number: int) -> tuple[date, date]:
 
 
 def evds_kfe_to_staging(
-    frame: pd.DataFrame, *, identity: ParquetIdentity
+    frame: pd.DataFrame,
+    *,
+    identity: ParquetIdentity,
+    run_id: str | None = None,
+    source_warnings: Sequence[str] = (),
+    vintage_id: str | None = None,
 ) -> pd.DataFrame:
     """Map ``TP.KFE.TR`` monthly Bronze rows to generic Silver staging.
 
@@ -169,15 +184,21 @@ def evds_kfe_to_staging(
 
     _validate_input(frame, identity, expected_series_id=SUPPORTED_KFE_SERIES_ID)
     records: list[dict[str, object]] = []
+    lineage = lineage_fields(
+        identity,
+        run_id=run_id,
+        source_warnings=source_warnings,
+        vintage_id=vintage_id,
+    )
     for row_number, (_, row) in enumerate(frame.iterrows()):
         period_start, period_end = _period_bounds(row["date_raw"], row_number)
         records.append(
             _staging_record(
                 row,
-                identity=identity,
                 observation_date=period_end,
                 period_start=period_start,
                 period_end=period_end,
+                lineage=lineage,
             )
         )
     return pd.DataFrame.from_records(records, columns=SILVER_STAGING_COLUMNS)

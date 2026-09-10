@@ -9,7 +9,7 @@ fields:
   - name: entity_id
     type: string
     nullable: true
-    description: Optional canonical entity identifier; NULL for the current V1 source series.
+    description: Canonical entity identifier when the source identifies a population; BDDK sector total is bddk:10001.
   - name: observation_date
     type: date
     nullable: false
@@ -64,8 +64,8 @@ fields:
     description: Actual Bronze/parser schema version used for the source representation.
   - name: vintage_id
     type: string
-    nullable: true
-    description: Optional source or dataset ingestion vintage; V1 does not invent one.
+    nullable: false
+    description: Deterministic content vintage; defaults to artifact:<artifact_sha256> when the source has no native vintage.
   - name: run_id
     type: uuid
     nullable: true
@@ -91,3 +91,5 @@ notes:
   - Bronze retains source-faithful value_raw; Silver V1 exposes only the canonical value.
   - week_anchor, default_agg and semantic_confidence remain catalog metadata and are not copied into fact rows.
   - Silver V1 does not perform aggregation, frequency alignment, revision selection or business metric derivation.
+  - Parser warnings are carried into staging and quality_flag; their complete text remains reachable from meta.ingest_warning through run_id.
+  - Silver Parquet uses schema_version fact_observation.v1 and representation silver rather than reusing Bronze file identity.

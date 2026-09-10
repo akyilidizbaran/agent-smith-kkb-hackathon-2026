@@ -23,10 +23,34 @@ from ..contracts.identifiers import (
     validate_sha256,
     validate_source_id,
 )
+from ..storage.parquet import ParquetIdentity
 
 
 class SilverValidationError(ValueError):
     """Raised when prepared staging data cannot produce valid Silver rows."""
+
+
+SILVER_SCHEMA_VERSION: Final[str] = "fact_observation.v1"
+"""Schema identity written into a materialized Silver Parquet representation."""
+
+
+def artifact_vintage_id(artifact_sha256: str) -> str:
+    """Return the deterministic content vintage for one immutable source artifact."""
+
+    validate_sha256(artifact_sha256)
+    return f"artifact:{artifact_sha256}"
+
+
+def silver_identity_for(bronze_identity: ParquetIdentity) -> ParquetIdentity:
+    """Build a Silver file identity without losing the originating artifact lineage."""
+
+    return ParquetIdentity(
+        source_id=bronze_identity.source_id,
+        dataset_id=bronze_identity.dataset_id,
+        artifact_sha256=bronze_identity.artifact_sha256,
+        schema_version=SILVER_SCHEMA_VERSION,
+        representation="silver",
+    )
 
 
 SILVER_STAGING_COLUMNS: Final[tuple[str, ...]] = (
@@ -199,7 +223,9 @@ def prepare_staging_frame(staging: pd.DataFrame) -> pd.DataFrame:
         prepared.at[row_number, "fetched_at"] = _as_utc(row["fetched_at"], row_number)
 
         vintage_id = row["vintage_id"]
-        if vintage_id is not None and vintage_id is not pd.NA and not pd.isna(vintage_id):
+        if vintage_id is None or vintage_id is pd.NA or pd.isna(vintage_id):
+            prepared.at[row_number, "vintage_id"] = artifact_vintage_id(artifact_sha256)
+        else:
             if not isinstance(vintage_id, str) or not vintage_id.strip():
                 raise SilverValidationError(
                     f"vintage_id must be NULL or a non-empty string at row {row_number}"
@@ -309,6 +335,7 @@ def _validate_result(result: pd.DataFrame) -> None:
         "artifact_sha256",
         "fetched_at",
         "schema_version",
+        "vintage_id",
     ):
         if result[field_name].isna().any():
             raise SilverValidationError(f"Silver field {field_name!r} contains NULL")
@@ -364,7 +391,10 @@ __all__ = [
     "FACT_OBSERVATION_COLUMNS",
     "QUALITY_FLAGS",
     "SILVER_STAGING_COLUMNS",
+    "SILVER_SCHEMA_VERSION",
     "SilverValidationError",
+    "artifact_vintage_id",
     "materialize_fact_observation_snapshot",
     "prepare_staging_frame",
+    "silver_identity_for",
 ]

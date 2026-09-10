@@ -70,6 +70,14 @@ aggregation, cross-frequency alignment, revision/current-selection logic or agen
 Incremental, append, merge and current-vintage behavior are deferred. Silver semantics come
 from `meta.series`; source-specific fields remain in Bronze.
 
+The supported ingestion-to-Silver boundary is `stage_ingestion_result(...)`. It passes the
+ingestion `run_id` and parser warnings to the adapter so callers cannot silently lose trust
+metadata. When a source has no native vintage, Silver uses the immutable RAW artifact digest as
+`artifact:<sha256>`. BDDK population identifiers are source-namespaced; sector total is
+`bddk:10001`. A materialized Silver file must use `silver_identity_for(...)`, which writes
+`schema_version=fact_observation.v1` and `representation=silver` while retaining the originating
+artifact digest.
+
 ## Errors and fixtures
 
 The shared error codes are `SOURCE_UNAVAILABLE`, `FETCH_TIMEOUT`, `HTTP_ERROR`,
