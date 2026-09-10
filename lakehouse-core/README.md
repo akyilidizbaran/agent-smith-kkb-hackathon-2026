@@ -1,36 +1,133 @@
-# kkb-agentic-analytics
+# Lakehouse Core
 
-> Source Access branch'inde yapılan EVDS ve BDDK çalışmalarının toplantı özeti için
-> [`SOURCE_ACCESS_TOPLANTI_OZETI.md`](SOURCE_ACCESS_TOPLANTI_OZETI.md) dosyasına bakın.
+## Purpose
 
-Python 3.12 tabanli, local-first ve generic bir data lakehouse temelidir.
-Phase 0.5 ortak contract'lari; dis kaynak erisimi, immutable RAW artifact saklama ve
-offline parser akisini tanimlar. Gercek kaynak connector'lari, Silver/Gold donusumleri
-ve agent katmani bu phase'in disindadir.
+`lakehouse-core` is a local-first, generic Python data lakehouse component. It
+collects source data without coupling the core model to a particular provider,
+keeps the original evidence, and produces validated analytical observations.
 
-## Ortak komutlar
+## Architecture
 
 ```text
-uv sync
+BDDK / EVDS / future sources
+            |
+        Connector
+            |
+           RAW
+            |
+         Parser
+            |
+      Bronze Parquet
+            |
+  Source-specific Silver Adapter
+            |
+   Generic Silver Staging
+            |
+    meta.series enrichment
+            |
+   silver.fact_observation
+            |
+ Silver Parquet + trusted DuckDB
+            |
+       Gold (planned)
+            |
+   Agent tools (planned)
+```
+
+Connectors and parsers are implemented for the current source fixtures. Silver V1
+is implemented and tested for four real series. Gold and Agent layers remain
+planned; they are not required to run the current data path.
+
+## Data Layers
+
+- **RAW:** immutable original fetched bytes, identified by SHA-256.
+- **Bronze:** parsed and source-faithful data stored as Parquet.
+- **Silver:** canonical, validated, source-independent observations.
+- **Gold:** planned analysis-ready joins, frequency alignment, aggregations, and derived views.
+
+## Silver V1
+
+The canonical table is `silver.fact_observation`. Its formal contract is
+[`schemas/fact_observation.yml`](schemas/fact_observation.yml). Important fields
+include `series_id`, `observation_date`, `value`, `frequency`, `unit`,
+`measure_type`, `quality_flag`, and artifact/source provenance.
+
+The current tested mappings are:
+
+| Series | Frequency | Unit | Measure |
+|---|---|---|---|
+| `bddk_monthly:1534_Toplam` | monthly | `TRY_mn` | stock |
+| `bddk_weekly:5690_3` | weekly | `TRY_mn` | stock |
+| `evds:TP.KTF12` | weekly | `pct` | rate |
+| `evds:TP.KFE.TR` | monthly | `index` | index |
+
+Frequency, unit, and measure semantics come from `meta.series`; they are not
+hard-coded into the generic Silver foundation.
+
+## Important Semantics
+
+- A true source `NULL` remains `NULL` and receives `quality_flag = missing_value`.
+- Invalid dates, invalid numerics, NaN, and positive or negative Infinity fail validation.
+- Source-specific Bronze fields do not enter `silver.fact_observation`.
+- BDDK Weekly observation dates are preserved exactly; `week_anchor` does not rewrite them.
+- EVDS KFE remains an index; no base year or rebasing is assumed.
+- Same-artifact duplicate observations fail; the same observation from different artifacts is preserved.
+- Current revision selection is deferred.
+
+Silver materialization uses:
+
+```python
+materialize_fact_observation_snapshot(...)
+```
+
+The function expects the complete intended Silver staging snapshot and replaces
+the complete `silver.fact_observation` table. It is not append, upsert, merge, or
+incremental revision handling. Outputs from multiple adapters must be combined
+before calling it.
+
+## Quick Start
+
+Python 3.12 and `uv` are required.
+
+```bash
+uv sync --frozen
+uv lock --check
 make test
 make build
 make demo-check
 ```
 
-## Klasor yapisi
+## Testing
 
-- `src/lakehouse/`: Ortak Python namespace'i.
-- `src/lakehouse/connectors/`: Dis kaynak erisim contract'lari.
-- `src/lakehouse/parsers/`: RAW artifact -> pandas DataFrame contract'lari.
-- `src/lakehouse/storage/`: Content-addressed RAW storage yardimcilari.
-- `src/lakehouse/contracts/`: Paylasilan dataclass, identifier ve type contract'lari.
-- `src/lakehouse/quality/`, `catalog/`, `provenance/`, `semantics/`, `tools/`: Gelecek fazlar icin bos sinirlar.
-- `data/raw/`: Degismez ham artifact'lar.
-- `data/bronze/`, `data/silver/`, `data/quarantine/`: Nihai mimarinin sonraki veri alanlari.
-- `models/silver/`, `models/gold/`: Gelecekteki SQL modelleri.
-- `schemas/`: Veri semasi contract'lari.
-- `tests/fixtures/raw/`: Agsiz, kucuk ve secretsiz test fixture'lari.
-- `docs/`: Takim ve contract dokumantasyonu.
+The automated end-to-end tests use fixture/fake transport and the production path:
 
-Eski `src/connectors/`, `src/parsers/`, `src/storage/` ve `src/contracts/` yollarinda yalnizca
-geriye donuk import shim'leri bulunur; asil kod `src/lakehouse/` altindadir.
+```text
+fixture/fake transport -> connector -> RAW -> parser -> Bronze
+-> Silver adapter -> Silver foundation -> Parquet -> DuckDB
+```
+
+The test suite does not require live BDDK or EVDS network access.
+
+## Repository Map
+
+- `src/lakehouse/connectors/`: external source access.
+- `src/lakehouse/parsers/`: persisted RAW to source-faithful Bronze parsing.
+- `src/lakehouse/storage/`: RAW and Parquet persistence.
+- `src/lakehouse/catalog/`: `meta.series` semantic catalog loading.
+- `src/lakehouse/silver/`: generic Silver foundation and source adapters.
+- `models/`: SQL models.
+- `schemas/`: formal data contracts.
+- `catalog/series/`: reviewed series metadata.
+- `tests/`: contract, unit, security, infrastructure, and offline integration tests.
+- `docs/`: detailed team and source documentation.
+
+## Deferred Work
+
+The following are intentionally planned for later work:
+
+- Gold analytical models and cross-frequency joins.
+- Weekly-to-monthly aggregation policy and other derived metrics.
+- FinTürk Silver mapping and entity/geography modeling.
+- Run, vintage, and current-revision lifecycles.
+- Gold-only `QueryExecutor` restrictions.
+- Agent tools and LangGraph orchestration.

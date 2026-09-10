@@ -59,6 +59,8 @@ Observation dates use `datetime.date`. Operational timestamps are timezone-aware
 `fetched_at` is the download time; `observation_date` is the canonical date of an observation.
 They are different concepts. Canonical numeric values are `float | None`; percentages such as
 `%12.5` are stored as `12.5`, not `0.125`. Bronze retains source-faithful raw values.
+Non-finite numeric values such as NaN and positive or negative Infinity are invalid Silver inputs
+and fail validation; they are never converted to `NULL` or `missing_value`.
 
 Silver is the canonical, typed, validated and source-independent observation layer. Trusted
 DuckDB materialization is a complete snapshot replacement through
