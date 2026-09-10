@@ -1,8 +1,9 @@
 """Durable run tracking and parser-warning storage for ingestion.
 
-This module owns two things and nothing else: the lifecycle of a ``meta.run`` row and the
-``meta.ingest_warning`` rows produced during that run. It deliberately does not know about
-connectors, parsers or storage; :class:`~lakehouse.ingestion.pipeline.IngestionPipeline`
+This module owns three things and nothing else: the lifecycle of a ``meta.run`` row, the
+``meta.ingest_warning`` rows produced during that run, and the ``meta.run_artifact`` rows
+that record which RAW artifacts the run actually fetched. It deliberately does not know
+about connectors, parsers or storage; :class:`~lakehouse.ingestion.pipeline.IngestionPipeline`
 drives it.
 
 Why a separate repository instead of extending ``ArtifactRepository``: artifacts are
@@ -25,7 +26,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Sequence
 
 import duckdb
@@ -45,6 +46,11 @@ class RunLifecycleError(ValueError):
 
 class WarningIntegrityError(ValueError):
     """Raised when a warning cannot be attached to a consistent run and artifact."""
+
+
+class RunArtifactIntegrityError(ValueError):
+    """Raised when a run-artifact link is inconsistent with the run, the artifact, or an
+    existing link for the same pair."""
 
 
 RUN_STATUS_RUNNING = "running"
@@ -207,6 +213,36 @@ class IngestionWarning:
             raise ValueError("warning message must be a non-empty string")
 
 
+@dataclass(frozen=True)
+class RunArtifactLink:
+    """The durable fact that one run fetched one RAW artifact.
+
+    ``fetched_at`` is the connector's timestamp for this run's fetch. ``parser_config_sha256``
+    is the generic connector's canonical parser-choice digest, or ``None`` for sources that
+    have no such configuration. Both are compared, not merely stored: publication refuses a
+    result whose in-memory values disagree with the link.
+    """
+
+    run_id: str
+    artifact_sha256: str
+    source_id: str
+    dataset_id: str
+    fetched_at: datetime
+    parser_config_sha256: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "run_id", validate_run_id(self.run_id))
+        validate_sha256(self.artifact_sha256)
+        validate_source_id(self.source_id)
+        validate_dataset_id(self.dataset_id)
+        if self.parser_config_sha256 is not None:
+            validate_sha256(self.parser_config_sha256)
+        object.__setattr__(self, "fetched_at", _as_utc(self.fetched_at, "fetched_at"))
+
+
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
 def _epoch_ms(moment: datetime) -> int:
     """Millisecond epoch, matching DuckDB's ``epoch_ms``.
 
@@ -218,9 +254,29 @@ def _epoch_ms(moment: datetime) -> int:
     return int(moment.timestamp() * 1000)
 
 
+def epoch_us(moment: datetime) -> int:
+    """Exact microsecond epoch of an aware datetime, matching DuckDB's ``epoch_us``.
+
+    Computed with integer ``timedelta`` arithmetic rather than ``timestamp() * 1e6`` so a
+    stored ``TIMESTAMPTZ`` and the Python value that produced it compare equal to the
+    microsecond, which is the precision both sides carry.
+    """
+
+    return (_as_utc(moment, "moment") - _EPOCH) // timedelta(microseconds=1)
+
+
+def datetime_from_epoch_us(microseconds: int) -> datetime:
+    """Inverse of :func:`epoch_us`: an aware UTC datetime, without ``pytz``."""
+
+    if isinstance(microseconds, bool) or not isinstance(microseconds, int):
+        raise TypeError("microseconds must be an int")
+    return _EPOCH + timedelta(microseconds=microseconds)
+
+
 @dataclass
 class RunRepository:
-    """Open, annotate and close ``meta.run`` rows and their ``meta.ingest_warning`` rows.
+    """Open, annotate and close ``meta.run`` rows, their ``meta.ingest_warning`` rows and
+    their ``meta.run_artifact`` links.
 
     The repository holds no clock: every timestamp arrives as an argument so callers and
     tests decide time explicitly.
@@ -342,6 +398,107 @@ class RunRepository:
                 f"run {canonical_run_id} was closed concurrently; a run is closed exactly once"
             )
 
+    # ---------------------------------------------------------------- artifacts
+
+    def link_artifact(self, link: RunArtifactLink) -> bool:
+        """Durably record that ``link.run_id`` fetched ``link.artifact_sha256``.
+
+        Returns ``True`` when a new ``meta.run_artifact`` row was written and ``False`` when
+        an identical row already existed. Idempotence is exact: the same pair may be linked
+        any number of times with the same facts and produces one row; the same pair with a
+        different ``fetched_at`` or ``parser_config_sha256`` is a
+        :class:`RunArtifactIntegrityError`, because a link is a statement about what happened
+        and what happened does not change.
+
+        A *new* link is accepted only when every referential rule holds, checked before a
+        single row is written: the run exists and is still ``running`` (a closed run cannot
+        acquire artifacts), the run's source/dataset equal the link's, the artifact is
+        registered in ``meta.artifact``, and that registration's source/dataset equal the
+        link's as well. These are the rules a foreign key would not express even if one
+        were usable here; see ``sql/bootstrap/011_run_artifact.sql``.
+        """
+
+        if not isinstance(link, RunArtifactLink):
+            raise TypeError("link_artifact() requires a RunArtifactLink")
+
+        existing = self.connection.execute(
+            """
+            SELECT source_id, dataset_id, epoch_us(fetched_at), parser_config_sha256
+            FROM meta.run_artifact
+            WHERE run_id = ? AND artifact_sha256 = ?
+            """,
+            [link.run_id, link.artifact_sha256],
+        ).fetchone()
+        if existing is not None:
+            expected = (
+                link.source_id,
+                link.dataset_id,
+                epoch_us(link.fetched_at),
+                link.parser_config_sha256,
+            )
+            if tuple(existing) != expected:
+                raise RunArtifactIntegrityError(
+                    f"run {link.run_id} already links artifact {link.artifact_sha256} with "
+                    f"different facts (stored source/dataset/fetched_at/parser_config "
+                    f"{tuple(existing)!r}, offered {expected!r}); a link is never rewritten"
+                )
+            return False
+
+        run = self.connection.execute(
+            "SELECT status, source_id, dataset_id FROM meta.run WHERE run_id = ?",
+            [link.run_id],
+        ).fetchone()
+        if run is None:
+            raise RunArtifactIntegrityError(
+                f"cannot link artifact {link.artifact_sha256} to run {link.run_id}: the run "
+                "does not exist"
+            )
+        run_status, run_source_id, run_dataset_id = run
+        if run_status != RUN_STATUS_RUNNING:
+            raise RunArtifactIntegrityError(
+                f"cannot link artifact {link.artifact_sha256} to run {link.run_id}: the run "
+                f"is already closed with status {run_status!r}"
+            )
+        if (run_source_id, run_dataset_id) != (link.source_id, link.dataset_id):
+            raise RunArtifactIntegrityError(
+                f"link claims {link.source_id}/{link.dataset_id} but run {link.run_id} "
+                f"covers {run_source_id}/{run_dataset_id}"
+            )
+
+        artifact = self.connection.execute(
+            "SELECT source_id, dataset_id FROM meta.artifact WHERE artifact_sha256 = ?",
+            [link.artifact_sha256],
+        ).fetchone()
+        if artifact is None:
+            raise RunArtifactIntegrityError(
+                f"cannot link artifact {link.artifact_sha256} to run {link.run_id}: the "
+                "artifact is not registered in meta.artifact"
+            )
+        if tuple(artifact) != (link.source_id, link.dataset_id):
+            raise RunArtifactIntegrityError(
+                f"artifact {link.artifact_sha256} is registered under "
+                f"{artifact[0]}/{artifact[1]} but the link claims "
+                f"{link.source_id}/{link.dataset_id}"
+            )
+
+        self.connection.execute(
+            """
+            INSERT INTO meta.run_artifact (
+                run_id, artifact_sha256, source_id, dataset_id, fetched_at,
+                parser_config_sha256
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [
+                link.run_id,
+                link.artifact_sha256,
+                link.source_id,
+                link.dataset_id,
+                link.fetched_at,
+                link.parser_config_sha256,
+            ],
+        )
+        return True
+
     # ----------------------------------------------------------------- warnings
 
     def record_warnings(
@@ -454,9 +611,13 @@ __all__ = [
     "RUN_STATUS_WARNING",
     "TERMINAL_RUN_STATUSES",
     "IngestionWarning",
+    "RunArtifactIntegrityError",
+    "RunArtifactLink",
     "RunLifecycleError",
     "RunRepository",
     "WarningIntegrityError",
+    "datetime_from_epoch_us",
     "describe_exception",
+    "epoch_us",
     "redact_error_text",
 ]

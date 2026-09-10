@@ -87,6 +87,30 @@ plus **101 Gold tests**. The API and limitations are documented in
 [`docs/gold-contract.md`](docs/gold-contract.md), with implementation evidence in
 [`docs/branches/gold-functions-v1.md`](docs/branches/gold-functions-v1.md).
 
+### Generic and ad-hoc ingestion V1
+
+The next delivery adds a guarded vertical slice for previously unknown tabular data:
+
+- local files and public HTTP(S) resources can enter through one generic connector;
+- CSV, XLSX, JSON records, and static HTML tables are parsed with explicit ambiguity
+  failures instead of silent guesses;
+- parser choices are canonicalized, hashed, and retained in RAW request provenance and
+  Bronze identity;
+- profiler-proposed series can only be registered as `draft` / `derived` and cannot
+  masquerade as curator-verified catalog entries;
+- mapped observations publish into the isolated `adhoc.fact_observation` table, never
+  directly into curated Silver;
+- every publication must match durable RAW, Bronze, request, run, warning, and
+  `meta.run_artifact` provenance. Another run identifier or a forged fetch timestamp is
+  rejected.
+
+The current branch checkpoint has **942 passing tests**. The Generic/Ad-hoc package accounts
+for **265 tests**, while the pre-existing non-Generic/Ad-hoc baseline remains **677 tests**.
+Its contracts, security boundaries, review fixes, and remaining limitations are documented
+in [`docs/generic-ingestion-contract.md`](docs/generic-ingestion-contract.md),
+[`docs/adhoc-publication-contract.md`](docs/adhoc-publication-contract.md), and
+[`docs/branches/generic-adhoc-review-fixes.md`](docs/branches/generic-adhoc-review-fixes.md).
+
 ## Data Layers
 
 - **RAW:** immutable original fetched bytes, identified by SHA-256.
@@ -173,6 +197,8 @@ The test suite does not require live BDDK or EVDS network access.
 - `src/lakehouse/parsers/`: persisted RAW to source-faithful Bronze parsing.
 - `src/lakehouse/storage/`: RAW and Parquet persistence.
 - `src/lakehouse/catalog/`: `meta.series` semantic catalog loading.
+- `src/lakehouse/generic/`: guarded unknown tabular source access and parsing.
+- `src/lakehouse/adhoc/`: isolated mapping and publication for unreviewed observations.
 - `src/lakehouse/silver/`: generic Silver foundation and source adapters.
 - `src/lakehouse/gold/`: fail-closed analytical transformations over Silver.
 - `models/`: SQL models.

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from ..catalog.artifacts import ArtifactRepository
 from ..connectors.base import BaseConnector
-from ..contracts.identifiers import new_run_id
+from ..contracts.identifiers import new_run_id, validate_run_id
 from ..contracts.models import FetchedAsset, FetchSpec, ParsedBatch
 from ..errors import ErrorPayload, LakehouseError
 from ..parsers.base import BaseParser
@@ -19,6 +19,7 @@ from .observability import (
     RUN_STATUS_SUCCESS,
     RUN_STATUS_WARNING,
     IngestionWarning,
+    RunArtifactLink,
     RunRepository,
     describe_exception,
 )
@@ -40,7 +41,7 @@ class IngestionResult:
     the same ``run_id``.
 
     The field is last and defaulted so that constructing a result the historical way, with
-    the four original arguments, still works.
+    the four original arguments, still works for legacy sources. Ad-hoc requires a run_id.
     """
 
     asset: FetchedAsset
@@ -48,6 +49,12 @@ class IngestionResult:
     bronze_path: Path
     artifact_inserted: bool
     run_id: str | None = None
+
+    def __post_init__(self) -> None:
+        # Legacy results for curated sources keep their historical constructor contract.
+        # Ad-hoc results can never exist without a usable provenance run identifier.
+        if self.asset.source_id == "adhoc" or self.run_id is not None:
+            object.__setattr__(self, "run_id", validate_run_id(self.run_id))
 
 
 @dataclass
@@ -63,8 +70,9 @@ class _RunProgress:
 class IngestionPipeline:
     """Connect source access, artifact registration, parsing and Bronze storage.
 
-    **Run tracking is always on.** Every ``run`` call opens a ``meta.run`` row, persists
-    every parser warning into ``meta.ingest_warning``, and closes the run as ``success``,
+    **Run tracking is always on.** Every ``run`` call opens a ``meta.run`` row, links every
+    registered artifact to it in ``meta.run_artifact`` before parsing it, persists every
+    parser warning into ``meta.ingest_warning``, and closes the run as ``success``,
     ``warning`` or ``failed``. There is no configuration that turns this off: parser
     warnings describe real data-quality problems, and a pipeline that silently discards them
     is the defect this layer exists to remove.
@@ -134,6 +142,10 @@ class IngestionPipeline:
         for asset in assets:
             self._validate_asset(spec, asset)
             artifact_inserted = self.artifact_repository.register(asset)
+            # The run-artifact link is written as soon as the bytes are registered and
+            # before anything can still go wrong, so a parse or Bronze failure below leaves
+            # "this run fetched this artifact" behind while the run itself closes as failed.
+            self._link_artifact(progress, asset)
             parsed_batch = self.parser.parse(asset)
             self._validate_batch(asset, parsed_batch)
             # Warnings are stored before the Bronze write so that a write failure still
@@ -173,6 +185,29 @@ class IngestionPipeline:
             source_id=spec.source_id,
             dataset_id=spec.dataset_id,
             started_at=self._now(),
+        )
+
+    def _link_artifact(self, progress: _RunProgress, asset: FetchedAsset) -> None:
+        """Durably bind the just-registered artifact to this run.
+
+        ``parser_config_sha256`` is taken from the connector's asset metadata when the
+        connector produced one (the generic connector does); curated sources carry none and
+        link with ``NULL``. Linking the same asset twice inside one run is an exact no-op.
+        """
+
+        assert self.run_repository is not None  # guaranteed by __post_init__
+        parser_config_sha256 = None
+        if isinstance(asset.metadata, dict):
+            parser_config_sha256 = asset.metadata.get("parser_config_sha256")
+        self.run_repository.link_artifact(
+            RunArtifactLink(
+                run_id=progress.run_id,
+                artifact_sha256=asset.artifact_sha256,
+                source_id=asset.source_id,
+                dataset_id=asset.dataset_id,
+                fetched_at=asset.fetched_at,
+                parser_config_sha256=parser_config_sha256,
+            )
         )
 
     def _record_warnings(

@@ -30,6 +30,7 @@ class ParquetIdentity:
     artifact_sha256: str
     schema_version: str
     representation: str = "bronze"
+    parser_config_sha256: str | None = None
 
 
 def schema_version_key(schema_version: str) -> str:
@@ -46,6 +47,7 @@ def identity_for(batch: ParsedBatch) -> ParquetIdentity:
         dataset_id=batch.dataset_id,
         artifact_sha256=batch.artifact_sha256,
         schema_version=batch.schema_version,
+        parser_config_sha256=batch.parser_config_sha256,
     )
 
 
@@ -65,6 +67,8 @@ def read_identity(path: str | Path) -> ParquetIdentity:
     }
     if any(value is None for value in values.values()):
         raise ParquetConflictError(f"Parquet file has incomplete lakehouse identity: {path}")
+    if b"lakehouse.parser_config_sha256" in metadata and b"lakehouse.representation" not in metadata:
+        raise ParquetConflictError(f"configured Parquet file has no representation identity: {path}")
     representation = metadata.get(b"lakehouse.representation", b"bronze").decode("utf-8")
     return ParquetIdentity(
         source_id=values["source_id"].decode("utf-8"),
@@ -72,6 +76,10 @@ def read_identity(path: str | Path) -> ParquetIdentity:
         artifact_sha256=values["artifact_sha256"].decode("utf-8"),
         schema_version=values["schema_version"].decode("utf-8"),
         representation=representation,
+        parser_config_sha256=(
+            metadata[b"lakehouse.parser_config_sha256"].decode("ascii")
+            if b"lakehouse.parser_config_sha256" in metadata else None
+        ),
     )
 
 
@@ -96,18 +104,24 @@ class ParquetStorage:
             raise ValueError("schema_version must not be empty")
         if identity.representation not in {"bronze", "silver"}:
             raise ValueError("representation must be either 'bronze' or 'silver'")
+        if identity.parser_config_sha256 is not None:
+            validate_sha256(identity.parser_config_sha256)
+        config_path = (
+            [] if identity.parser_config_sha256 is None
+            else [f"parser_config_sha256={identity.parser_config_sha256}"]
+        )
         representation_path = (
             []
             if identity.representation == "bronze"
             else [f"representation={identity.representation}"]
         )
-        return (
-            self.root
-            .joinpath(*representation_path)
-            / f"source_id={identity.source_id}"
-            / f"dataset_id={identity.dataset_id}"
-            / f"schema_version_sha256={schema_version_key(identity.schema_version)}"
-            / f"artifact_sha256={identity.artifact_sha256}.parquet"
+        return self.root.joinpath(
+            *representation_path,
+            f"source_id={identity.source_id}",
+            f"dataset_id={identity.dataset_id}",
+            f"schema_version_sha256={schema_version_key(identity.schema_version)}",
+            *config_path,
+            f"artifact_sha256={identity.artifact_sha256}.parquet",
         )
 
     def write(self, batch: ParsedBatch, *, overwrite: bool = False) -> Path:
@@ -190,6 +204,8 @@ class ParquetStorage:
                 b"lakehouse.representation": identity.representation.encode("utf-8"),
             }
         )
+        if identity.parser_config_sha256 is not None:
+            metadata[b"lakehouse.parser_config_sha256"] = identity.parser_config_sha256.encode("ascii")
         return table.replace_schema_metadata(metadata)
 
     @staticmethod

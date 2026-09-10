@@ -145,6 +145,9 @@ class NoOpRunRepositoryForComparisonOnly:
     def record_warnings(self, warnings, *, created_at) -> None:
         return None
 
+    def link_artifact(self, link) -> bool:
+        return False
+
     def finish(self, *, run_id, status, ended_at, rows_out=None, error=None) -> None:
         return None
 

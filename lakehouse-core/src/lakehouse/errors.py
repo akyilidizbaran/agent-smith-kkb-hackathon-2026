@@ -5,12 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+# ACCESS_DENIED is a *policy* refusal: the target was reachable and well-formed, but reading
+# it is not allowed (a path outside the permitted roots, a private or loopback URL, an
+# oversized file). It is deliberately distinct from SOURCE_UNAVAILABLE, which means the source
+# could not be reached: an agent must be able to tell "I am not allowed" from "it is down",
+# because only one of those is worth retrying or reporting to the user as a source problem.
 ERROR_CODES = frozenset(
     {
         "SOURCE_UNAVAILABLE",
         "FETCH_TIMEOUT",
         "HTTP_ERROR",
         "UNSUPPORTED_FORMAT",
+        "ACCESS_DENIED",
         "PARSE_FAILED",
         "SCHEMA_MISMATCH",
         "EMPTY_DATASET",

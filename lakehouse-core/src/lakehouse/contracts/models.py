@@ -88,11 +88,14 @@ class ParsedBatch:
     schema_version: str
     dataframe: pd.DataFrame
     warnings: list[str] = field(default_factory=list)
+    parser_config_sha256: str | None = None
 
     def __post_init__(self) -> None:
         validate_source_id(self.source_id)
         validate_dataset_id(self.dataset_id)
         validate_sha256(self.artifact_sha256)
+        if self.parser_config_sha256 is not None:
+            validate_sha256(self.parser_config_sha256)
         if not self.schema_version.strip():
             raise ValueError("schema_version must not be empty")
         if not isinstance(self.dataframe, pd.DataFrame):

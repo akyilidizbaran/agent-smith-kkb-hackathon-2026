@@ -380,6 +380,18 @@ def _parse_entry(entry: dict[str, Any], source_id: str, where: str) -> SeriesRec
     return SeriesRecord(**{**record.__dict__, "content_sha256": _content_sha256(record.payload())})
 
 
+def build_series_record(entry: dict[str, Any], source_id: str, *, where: str) -> SeriesRecord:
+    """Validate one catalog entry and return it as a record.
+
+    This is the single validation surface for the whole catalog. ``parse_catalog_file`` uses
+    it for YAML, and :mod:`lakehouse.catalog.registration` uses it for programmatic drafts, so
+    the eighteen rules cannot drift apart between the two paths. ``where`` names the origin in
+    error messages -- a file and line for YAML, the caller for a programmatic record.
+    """
+
+    return _parse_entry(entry, source_id, where)
+
+
 def load_catalog_files(root: Path = DEFAULT_CATALOG_ROOT) -> list[SeriesRecord]:
     """Parse every catalog file under ``root`` and reject duplicates across files.
 
@@ -522,6 +534,7 @@ def _update(connection: duckdb.DuckDBPyConnection, record: SeriesRecord) -> None
 
 __all__ = [
     "AGGREGATIONS",
+    "build_series_record",
     "CATALOG_SCHEMA_VERSION",
     "CUMULATIVE_RESETS",
     "CatalogError",
