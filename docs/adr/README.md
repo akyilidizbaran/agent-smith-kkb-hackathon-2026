@@ -46,3 +46,5 @@ sıfırdan başlatmamak için kayıt tutulur.
 | [0019](0019-arac-ciktisi-boyut-siniri.md) | Araç çıktısı modelin taşıyabileceği boyutta | Kabul edildi |
 | [0020](0020-adaptor-sertlestirme-ve-tls.md) | Adaptörde savunma derinliği; TLS doğrulaması kapatılmaz | Kabul edildi |
 | [0021](0021-mia-search-retrieval-ayristirma.md) | MIA / Search / Retrieval üç ayrı sağlayıcı katmanı | Kabul edildi |
+| [0022](0022-pdf-cikarim-stratejisi.md) | PDF'ten tablo: OCR öncelikli, metin katmanı yedek | Kabul edildi |
+| [0023](0023-search-saglayicisi-tavily.md) | Arama Tavily, sayfa çekme kendi uygulamamız | Kabul edildi |
