@@ -19,6 +19,8 @@ from .application import (
 from .errors import LakehouseError
 from .generic.config import ENCODINGS
 from .generic.formats import SUPPORTED_FORMATS
+from .ingestion.observability import describe_exception
+from .ingestion.windowing import WindowedIngestionFailure
 
 
 _DEFAULT_DATABASE = Path("data/lakehouse.duckdb")
@@ -144,7 +146,7 @@ def _handle_bootstrap(args: argparse.Namespace, **_: Any) -> int:
 def _handle_ingest(
     args: argparse.Namespace, *, session: Any = None, clock: Any = None
 ) -> int:
-    summaries = run_known_source_ingestion(
+    summary = run_known_source_ingestion(
         source_id=args.source,
         dataset_id=args.dataset,
         start_date=args.start_date,
@@ -156,8 +158,7 @@ def _handle_ingest(
         session=session,
         clock=clock,
     )
-    for summary in summaries:
-        _print_ingestion_summary(summary)
+    _print_windowed_summary(summary)
     return 0
 
 
@@ -216,6 +217,26 @@ def _print_ingestion_summary(summary: Any) -> None:
         print(f"warnings: {summary.warning_count}")
 
 
+def _print_windowed_summary(summary: Any) -> None:
+    """Print all artifact identities without pretending one represents a whole run."""
+
+    print(f"status: {summary.status}")
+    print(f"source_id: {summary.source_id}")
+    print(f"dataset_id: {summary.dataset_id}")
+    print(f"run_id: {summary.run_id}")
+    if summary.window_count == 1 and len(summary.artifact_sha256s) == 1:
+        print(f"artifact_sha256: {summary.artifact_sha256s[0]}")
+        print(f"bronze_path: {summary.bronze_paths[0]}")
+    else:
+        print(f"window_count: {summary.window_count}")
+        print(f"artifact_count: {len(summary.artifact_sha256s)}")
+        print(f"artifact_sha256s: {', '.join(summary.artifact_sha256s)}")
+        print(f"bronze_paths: {', '.join(str(path) for path in summary.bronze_paths)}")
+    print(f"observation_count: {summary.observation_count}")
+    if summary.warning_count:
+        print(f"warnings: {summary.warning_count}")
+
+
 def main(
     argv: Sequence[str] | None = None, *, session: Any = None, clock: Any = None
 ) -> int:
@@ -225,6 +246,13 @@ def main(
     args = parser.parse_args(argv)
     try:
         return args.handler(args, session=session, clock=clock)
+    except WindowedIngestionFailure as exc:
+        print("status: failed", file=sys.stderr)
+        print(f"run_id: {exc.run_id}", file=sys.stderr)
+        print(f"failed_window_start: {exc.window.start_date}", file=sys.stderr)
+        print(f"failed_window_end: {exc.window.end_date}", file=sys.stderr)
+        print(f"error: {describe_exception(exc.cause)}", file=sys.stderr)
+        return 2
     except (LakehouseError, OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

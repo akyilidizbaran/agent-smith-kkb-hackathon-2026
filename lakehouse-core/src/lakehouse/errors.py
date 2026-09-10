@@ -21,6 +21,7 @@ ERROR_CODES = frozenset(
         "SCHEMA_MISMATCH",
         "EMPTY_DATASET",
         "OBSERVATION_COUNT_MISMATCH",
+        "REVISION_CONFLICT",
         "QUALITY_FAILED",
     }
 )

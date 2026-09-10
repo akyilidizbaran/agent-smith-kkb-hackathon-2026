@@ -20,8 +20,10 @@ uv run python -m lakehouse ingest \
   --end-date 2026-03-31
 ```
 
-The EVDS date range is required because automatic request windowing is not part of this
-phase. Only the explicitly registered `evds/evds_cpi` dataset is dispatched by this CLI.
+The EVDS date range is required. Long ranges are automatically split into deterministic
+365-day windows while short ranges remain one request; see
+docs/branches/evds-windowing.md. Only the explicitly registered evds/evds_cpi dataset is
+dispatched by this CLI.
 
 For a local or public tabular artifact, publication needs an explicit layout and semantic
 statement. The following is the minimum local CSV shape:
@@ -102,9 +104,9 @@ components. It does not write `meta.run`, RAW, Parquet, or Silver rows directly.
 
 ## Current limitation
 
-EVDS automatic date-windowing is not implemented. A request must use an explicit date range,
-and the existing parser warning for the EVDS per-request observation limit remains in force.
-Windowing is the next phase.
+Live CPI evidence and official base-year verification remain outside this phase. The
+windowing policy protects against the existing per-request observation limit but does not
+claim an EVDS rate quota.
 
 ## Tests
 

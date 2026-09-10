@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from itertools import chain
 from pathlib import Path
 
 from ..catalog.artifacts import ArtifactRepository
@@ -112,18 +113,66 @@ class IngestionPipeline:
         error handling are unaffected by the bookkeeping.
         """
 
-        progress = _RunProgress(run_id=self._open_run(spec))
+        return self.run_specs([spec])
+
+    def run_specs(
+        self,
+        specs: Iterable[FetchSpec],
+        *,
+        batch_validator: Callable[[FetchedAsset, ParsedBatch], None] | None = None,
+        failure_mapper: Callable[[FetchSpec, Exception], Exception] | None = None,
+        run_id: str | None = None,
+    ) -> list[IngestionResult]:
+        """Run ordered FetchSpecs under one logical run.
+
+        Each spec still uses the normal connector, parser and Bronze path. The optional
+        ``batch_validator`` runs after the corresponding Bronze file is durable, which lets
+        a coordinator reject a truncated or conflicting window without deleting evidence.
+        ``failure_mapper`` may add the current window context while preserving the original
+        exception as its cause.
+        """
+
+        iterator = iter(specs)
+        first_spec = next(iterator, None)
+        if first_spec is None:
+            raise ValueError("run_specs requires at least one FetchSpec")
+
+        progress = _RunProgress(run_id=self._open_run(first_spec, run_id=run_id))
+        results: list[IngestionResult] = []
+        current_spec = first_spec
         try:
-            results = self._ingest(spec, progress)
+            for current_spec in chain((first_spec,), iterator):
+                self._validate_spec(first_spec, current_spec)
+                results.extend(
+                    self._ingest(
+                        current_spec,
+                        progress,
+                        batch_validator=batch_validator,
+                    )
+                )
         except Exception as exception:
-            self._close_failed_run(progress, exception)
+            failure: Exception = exception
+            if failure_mapper is not None:
+                try:
+                    failure = failure_mapper(current_spec, exception)
+                except Exception:  # noqa: BLE001 - never mask the source failure
+                    failure = exception
+            self._close_failed_run(progress, failure)
+            if failure is not exception:
+                raise failure from exception
             raise
         self._close_completed_run(progress)
         return results
 
     # ------------------------------------------------------------------ ingest
 
-    def _ingest(self, spec: FetchSpec, progress: _RunProgress) -> list[IngestionResult]:
+    def _ingest(
+        self,
+        spec: FetchSpec,
+        progress: _RunProgress,
+        *,
+        batch_validator: Callable[[FetchedAsset, ParsedBatch], None] | None = None,
+    ) -> list[IngestionResult]:
         """The unchanged source-to-Bronze sequence, instrumented but not reordered."""
 
         assets = self.connector.fetch(spec)
@@ -153,6 +202,8 @@ class IngestionPipeline:
             self._record_warnings(progress, asset, parsed_batch)
             bronze_path = self.parquet_storage.write(parsed_batch)
             progress.rows_out += len(parsed_batch.dataframe)
+            if batch_validator is not None:
+                batch_validator(asset, parsed_batch)
             results.append(
                 IngestionResult(
                     asset=asset,
@@ -176,12 +227,12 @@ class IngestionPipeline:
             raise ValueError("ingestion clock must return a timezone-aware datetime")
         return moment.astimezone(timezone.utc)
 
-    def _open_run(self, spec: FetchSpec) -> str:
+    def _open_run(self, spec: FetchSpec, *, run_id: str | None = None) -> str:
         """Open a ``running`` row and return its canonical run_id."""
 
         assert self.run_repository is not None  # guaranteed by __post_init__
         return self.run_repository.start(
-            run_id=new_run_id(),
+            run_id=run_id or new_run_id(),
             source_id=spec.source_id,
             dataset_id=spec.dataset_id,
             started_at=self._now(),
@@ -264,6 +315,23 @@ class IngestionPipeline:
             )
         except Exception:  # noqa: BLE001 - never replace the original failure
             pass
+
+    @staticmethod
+    def _validate_spec(first: FetchSpec, current: FetchSpec) -> None:
+        if current.source_id != first.source_id or current.dataset_id != first.dataset_id:
+            raise LakehouseError(
+                ErrorPayload(
+                    error_code="SCHEMA_MISMATCH",
+                    message=(
+                        "window FetchSpec source/dataset must match the logical run: "
+                        f"expected {first.source_id}/{first.dataset_id}, got "
+                        f"{current.source_id}/{current.dataset_id}"
+                    ),
+                    source_id=first.source_id,
+                    dataset_id=first.dataset_id,
+                    retryable=False,
+                )
+            )
 
     @staticmethod
     def _validate_asset(spec: FetchSpec, asset: FetchedAsset) -> None:

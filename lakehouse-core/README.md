@@ -204,6 +204,10 @@ fixture/fake transport -> connector -> RAW -> parser -> Bronze
 
 The test suite does not require live BDDK or EVDS network access.
 
+Long EVDS date ranges are automatically split into deterministic windows while each
+response retains its own RAW, artifact, and Bronze provenance. See
+docs/branches/evds-windowing.md.
+
 ## Repository Map
 
 - `src/lakehouse/connectors/`: external source access.
@@ -224,7 +228,7 @@ The test suite does not require live BDDK or EVDS network access.
 
 The following are intentionally planned for later work:
 
-- EVDS request windowing for responses that exceed source observation limits.
+- EVDS live/CPI evidence closure.
 - FinTürk Silver mapping and entity/geography modeling.
 - Broader catalog coverage for retrieval and genericity evaluation.
 - Safe decomposition-to-alignment composition and persisted Gold publication.

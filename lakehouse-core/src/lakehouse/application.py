@@ -25,10 +25,19 @@ from .catalog.artifacts import ArtifactRepository
 from .catalog.registration import register_series
 from .connectors.base import BaseConnector
 from .connectors.evds import EvdsConnector
+from .contracts.identifiers import new_run_id
 from .contracts.models import FetchSpec
 from .db.bootstrap import bootstrap_database
 from .generic import GenericTabularConnector, GenericTabularParser
 from .ingestion.pipeline import IngestionPipeline, IngestionResult
+from .ingestion.windowing import (
+    EvdsWindowFailure,
+    EvdsWindowReconciler,
+    WindowedIngestionFailure,
+    plan_evds_windows,
+    windowed_fetch_specs,
+    wrap_window_failure,
+)
 from .parsers.base import BaseParser
 from .parsers.evds import EvdsParser
 from .storage.parquet import ParquetStorage
@@ -51,6 +60,7 @@ class KnownSourceDefinition:
     series: str
     connector_factory: ConnectorFactory
     parser_factory: ParserFactory
+    frequency: str = "daily"
 
 
 def _evds_cpi_connector(
@@ -69,6 +79,7 @@ KNOWN_SOURCES: dict[tuple[str, str], KnownSourceDefinition] = {
         series="TP.FG.J0",
         connector_factory=_evds_cpi_connector,
         parser_factory=EvdsParser,
+        frequency="monthly",
     ),
 }
 """Supported source/dataset dispatch entries for this CLI version."""
@@ -93,6 +104,21 @@ class IngestionSummary:
     artifact_sha256: str
     bronze_path: Path
     warning_count: int
+
+
+@dataclass(frozen=True)
+class WindowedIngestionSummary:
+    """Stable output for one logical EVDS run and all of its window artifacts."""
+
+    source_id: str
+    dataset_id: str
+    status: str
+    run_id: str
+    window_count: int
+    artifact_sha256s: tuple[str, ...]
+    bronze_paths: tuple[Path, ...]
+    warning_count: int
+    observation_count: int
 
 
 @dataclass(frozen=True)
@@ -184,6 +210,41 @@ def _summary(
     )
 
 
+def _windowed_summary(
+    connection: duckdb.DuckDBPyConnection,
+    results: list[IngestionResult],
+    *,
+    run_id: str,
+    window_count: int,
+    observation_count: int,
+) -> WindowedIngestionSummary:
+    """Read one logical run and retain every per-window output identity."""
+
+    run = connection.execute(
+        "SELECT source_id, dataset_id, status FROM meta.run WHERE run_id = ?",
+        [run_id],
+    ).fetchone()
+    if run is None:
+        raise ValueError(f"run {run_id} is missing from meta.run")
+    if any(result.run_id != run_id for result in results):
+        raise ValueError("windowed ingestion results do not share one run_id")
+    warning_count = connection.execute(
+        "SELECT count(*) FROM meta.ingest_warning WHERE run_id = ?",
+        [run_id],
+    ).fetchone()[0]
+    return WindowedIngestionSummary(
+        source_id=run[0],
+        dataset_id=run[1],
+        status=run[2],
+        run_id=run_id,
+        window_count=window_count,
+        artifact_sha256s=tuple(result.asset.artifact_sha256 for result in results),
+        bronze_paths=tuple(result.bronze_path for result in results),
+        warning_count=int(warning_count),
+        observation_count=observation_count,
+    )
+
+
 def run_bootstrap(database: str | Path) -> BootstrapSummary:
     """Bootstrap the configured database through the existing idempotent service."""
 
@@ -207,10 +268,11 @@ def run_known_source_ingestion(
     headers_ref: str | None = None,
     session: Any = None,
     clock: Clock | None = None,
-) -> list[IngestionSummary]:
-    """Run one explicitly registered source/dataset through the production pipeline."""
+) -> WindowedIngestionSummary:
+    """Run a registered EVDS range through one logical, window-aware pipeline run."""
 
     definition = _resolve_known_source(source_id, dataset_id)
+    windows = plan_evds_windows(start_date, end_date, frequency=definition.frequency)
     connection, pipeline, wall_clock = _compose_pipeline(
         database=database,
         data_root=data_root,
@@ -219,8 +281,10 @@ def run_known_source_ingestion(
         session=session,
         clock=clock,
     )
+    run_id = new_run_id()
+    reconciler = EvdsWindowReconciler()
     try:
-        spec = FetchSpec(
+        logical_spec = FetchSpec(
             source_id=source_id,
             dataset_id=dataset_id,
             locator=f"registry://{source_id}/{dataset_id}",
@@ -231,8 +295,28 @@ def run_known_source_ingestion(
             timeout=timeout,
             requested_at=wall_clock(),
         )
-        results = pipeline.run(spec)
-        return [_summary(connection, result) for result in results]
+        specs = windowed_fetch_specs(logical_spec, windows)
+        try:
+            results = pipeline.run_specs(
+                specs,
+                run_id=run_id,
+                batch_validator=reconciler.validate_batch,
+                failure_mapper=wrap_window_failure,
+            )
+        except EvdsWindowFailure as exc:
+            raise WindowedIngestionFailure(
+                run_id=run_id,
+                window=exc.window,
+                cause=exc,
+            ) from exc
+        combined = reconciler.combined()
+        return _windowed_summary(
+            connection,
+            results,
+            run_id=run_id,
+            window_count=len(windows),
+            observation_count=len(combined),
+        )
     finally:
         connection.close()
 
@@ -333,6 +417,8 @@ __all__ = [
     "AdhocIngestionSummary",
     "BootstrapSummary",
     "IngestionSummary",
+    "WindowedIngestionFailure",
+    "WindowedIngestionSummary",
     "KNOWN_SOURCES",
     "KnownSourceDefinition",
     "run_adhoc_ingestion",
