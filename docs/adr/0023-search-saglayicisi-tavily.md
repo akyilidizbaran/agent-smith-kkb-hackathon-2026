@@ -27,6 +27,13 @@ katmanı bu tür değişimlere karşı zaten koruyor.
 - Sağlayıcı `.env`'de: `SEARCH_PROVIDER=tavily`, `TAVILY_API_KEY`. DuckDuckGo anahtarsız
   yedek olarak ikinci uygulama.
 
+## Tavily'nin kendi çekmesi
+Tavily'nin `/extract` uç noktası var ("bir ya da daha çok URL'den LLM'e hazır temiz içerik");
+Tavily'nin kendi önerisi de iki adım: `/search` → `/extract`. PDF desteği ve URL başına kredi
+belgelenmemiş. Bu yüzden `fetch` için birincil uygulama bizim kodumuz; Tavily extract,
+`SearchClient.fetch`'in **ikinci uygulaması** olarak eklenebilir (HTML sayfalar için hızlı,
+PDF için değil). Arama sonucundan gelen URL'yi kendi `fetch`'imizle çekmek zaten çalışıyor.
+
 ## Sonuç
 Web araçları `SearchClient`'a karşı yazılır; Tavily'yi değiştirmek bir uygulama dosyası.
 Mentör kararıyla uyumlu: arama katmanı ayrı, provider-bağımsız.

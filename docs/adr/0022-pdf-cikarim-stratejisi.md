@@ -20,9 +20,12 @@ OCR her iki belgede de doğru; karmaşık başlıklı tabloda metin katmanından
 Çıktı `<|det|>tür [x0,y0,x1,y1]<|/det|>` yerleşim etiketleri + HTML `<table>` — `pandas.read_html`
 ile doğrudan DataFrame'e dönüyor.
 
-**Tuzak:** OCR çıktısının başında anlamsız bir önek gelebiliyor ("ovi podataka i sistovosti…",
-`ith_au`'da 150+ kr). İlk `<|det|>` öncesi atılmalı; atılmazsa tabloya karışmaz ama modele
-giderse kafa karıştırır.
+**Tuzak — ve ölçümü:** OCR çıktısının başında anlamsız bir önek geliyor. Aynı sayfa 3 kez,
+render ölçeği 1/2/3, `window_size` 128/1024 ve iki farklı istemle denendi: önek **belgeye göre
+deterministik** (`kmp_au` her seferinde `"ovi\n"`, 4 kr; `ith_au` her seferinde aynı 151 kr'lık
+dize), ayarlara duyarsız, belgeler arasında farklı. Yani rastgele gürültü değil, sayfa
+içeriğine (muhtemelen üstteki logo bölgesine) bağlı bir çözümleme artefaktı. İlk `<|det|>`
+öncesini atmak yeterli ve güvenli; tablo çıkarımını hiçbir denemede bozmadı (9/9 `<table>`).
 
 ## Karar
 1. **Tablolar için OCR öncelikli.** Sayfa PNG'ye çevrilir, OCR'a gider, `<table>`'lar
@@ -33,6 +36,13 @@ giderse kafa karıştırır.
 3. **Önek temizliği zorunlu:** ilk `<|det|>` öncesi atılır.
 4. Sayfa başına tek görsel (3 görsel/çağrı sınırı var ama tek sayfa tek çağrı daha
    öngörülebilir); çok sayfalı PDF sayfa sayfa, ilk sayfada tablo yoksa devam.
+
+## Denenen ve denenmeyen
+Denendi: 2 belge × 1 sayfa, 9 OCR çağrısı; ölçek 1/2/3; `window_size` 128/1024; istem
+varyantı; `read_html` ile DataFrame dönüşü; `ith_au`'da 4/4 sayı metin katmanıyla birebir.
+**Denenmedi:** çok sayfalı PDF, taranmış/düşük kaliteli belge, çağrı başına 3 görsel, düz
+metin sayfaları, yatay sayfa, grafik görseli (o iş Qwen3.8 vision'ın). Bunlar ingest
+alt-agent'ı yazılırken sırayla ölçülecek.
 
 ## Sonuç
 Demo senaryosunun en riskli parçası ölçüldü ve çalışıyor. `ingest_from_url` alt-agent'ının
