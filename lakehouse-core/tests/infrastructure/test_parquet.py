@@ -8,6 +8,7 @@ import pytest
 from src.lakehouse.contracts.models import ParsedBatch
 from src.lakehouse.storage.parquet import (
     ParquetConflictError,
+    ParquetIdentity,
     ParquetStorage,
     identity_for,
     read_identity,
@@ -99,3 +100,34 @@ def test_retry_reuses_path_and_different_output_conflicts(tmp_path: Path) -> Non
     with pytest.raises(ParquetConflictError):
         storage.write(changed, overwrite=True)
     assert storage.read(first_path)["value"].tolist()[0] == 10.5
+
+
+def test_generic_frame_writer_supports_the_silver_identity_layout(tmp_path: Path) -> None:
+    storage = ParquetStorage(tmp_path / "data/silver/fact_observation")
+    identity = ParquetIdentity(
+        source_id="demo_energy",
+        dataset_id="demo_energy_load",
+        artifact_sha256=sha256_bytes(b"silver-fixture"),
+        schema_version="demo_energy.v1",
+    )
+    frame = pd.DataFrame(
+        {
+            "series_id": ["demo_energy:load"],
+            "observation_date": [date(2026, 1, 1)],
+            "value": [42.5],
+        }
+    )
+
+    first = storage.write_frame(frame, identity=identity)
+    second = storage.write_frame(frame, identity=identity)
+
+    assert first == second == storage.path_for_identity(identity)
+    assert storage.read(first).to_dict(orient="records") == frame.to_dict(orient="records")
+    assert read_identity(first) == identity
+
+    with pytest.raises(ParquetConflictError):
+        storage.write_frame(
+            frame.assign(value=[99.0]),
+            identity=identity,
+            overwrite=True,
+        )

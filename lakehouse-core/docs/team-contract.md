@@ -56,10 +56,14 @@ metadata.
   existing physical artifact.
 
 Observation dates use `datetime.date`. Operational timestamps are timezone-aware UTC datetimes.
-`fetched_at` is the download time; `date_key` is the period to which an observation belongs.
+`fetched_at` is the download time; `observation_date` is the canonical date of an observation.
 They are different concepts. Canonical numeric values are `float | None`; percentages such as
-`%12.5` are stored as `12.5`, not `0.125`. Future normalized schemas retain `value_original` and
-`unit_original` where transformations occur.
+`%12.5` are stored as `12.5`, not `0.125`. Bronze retains source-faithful raw values.
+
+Silver is the canonical, typed, validated and source-independent observation layer. It is not
+source-specific Bronze structure, Gold aggregation, cross-frequency alignment,
+revision/current-selection logic or agent behaviour. Silver semantics come from `meta.series`;
+source-specific fields remain in Bronze.
 
 ## Errors and fixtures
 

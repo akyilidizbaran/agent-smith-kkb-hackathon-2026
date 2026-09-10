@@ -13,6 +13,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from ..contracts.identifiers import validate_dataset_id, validate_sha256, validate_source_id
 from ..contracts.models import ParsedBatch
 
 
@@ -80,20 +81,46 @@ class ParquetStorage:
     def path_for(self, batch: ParsedBatch) -> Path:
         """Return a deterministic Hive-style path including schema identity."""
 
+        return self.path_for_identity(identity_for(batch))
+
+    def path_for_identity(self, identity: ParquetIdentity) -> Path:
+        """Return the deterministic path for any identity-bearing Parquet frame."""
+
+        validate_source_id(identity.source_id)
+        validate_dataset_id(identity.dataset_id)
+        validate_sha256(identity.artifact_sha256)
+        if not identity.schema_version.strip():
+            raise ValueError("schema_version must not be empty")
         return (
             self.root
-            / f"source_id={batch.source_id}"
-            / f"dataset_id={batch.dataset_id}"
-            / f"schema_version_sha256={schema_version_key(batch.schema_version)}"
-            / f"artifact_sha256={batch.artifact_sha256}.parquet"
+            / f"source_id={identity.source_id}"
+            / f"dataset_id={identity.dataset_id}"
+            / f"schema_version_sha256={schema_version_key(identity.schema_version)}"
+            / f"artifact_sha256={identity.artifact_sha256}.parquet"
         )
 
     def write(self, batch: ParsedBatch, *, overwrite: bool = False) -> Path:
         """Atomically write a representation and reject identity-preserving mutation."""
 
-        path = self.path_for(batch)
-        identity = identity_for(batch)
-        table = self._table_for(batch, identity)
+        return self.write_frame(
+            batch.dataframe,
+            identity=identity_for(batch),
+            overwrite=overwrite,
+        )
+
+    def write_frame(
+        self,
+        dataframe: pd.DataFrame,
+        *,
+        identity: ParquetIdentity,
+        overwrite: bool = False,
+    ) -> Path:
+        """Atomically write an identity-bearing DataFrame with Bronze-compatible safeguards."""
+
+        if not isinstance(dataframe, pd.DataFrame):
+            raise TypeError("dataframe must be a pandas DataFrame")
+        path = self.path_for_identity(identity)
+        table = self._table_for_frame(dataframe, identity)
         path.parent.mkdir(parents=True, exist_ok=True)
 
         if path.exists():
@@ -140,8 +167,8 @@ class ParquetStorage:
         connection.register(relation_name, self.read(candidate))
 
     @staticmethod
-    def _table_for(batch: ParsedBatch, identity: ParquetIdentity) -> pa.Table:
-        table = pa.Table.from_pandas(batch.dataframe, preserve_index=False)
+    def _table_for_frame(dataframe: pd.DataFrame, identity: ParquetIdentity) -> pa.Table:
+        table = pa.Table.from_pandas(dataframe, preserve_index=False)
         metadata = dict(table.schema.metadata or {})
         metadata.update(
             {
@@ -152,6 +179,12 @@ class ParquetStorage:
             }
         )
         return table.replace_schema_metadata(metadata)
+
+    @staticmethod
+    def _table_for(batch: ParsedBatch, identity: ParquetIdentity) -> pa.Table:
+        """Build a Parquet table for the existing ParsedBatch-oriented helper contract."""
+
+        return ParquetStorage._table_for_frame(batch.dataframe, identity)
 
     @staticmethod
     def read(path: str | Path) -> pd.DataFrame:
