@@ -20,7 +20,7 @@ from src.lakehouse.silver.adapters import evds as evds_adapter
 from src.lakehouse.silver.foundation import (
     SILVER_STAGING_COLUMNS,
     SilverValidationError,
-    materialize_fact_observation,
+    materialize_fact_observation_snapshot,
 )
 from src.lakehouse.storage.parquet import ParquetIdentity, ParquetStorage, read_identity
 from src.lakehouse.storage.raw import RawStorage
@@ -221,11 +221,11 @@ def test_real_evds_mapping_rejects_same_artifact_duplicate_but_preserves_revisio
     connection = bootstrap_database(":memory:")
     try:
         with pytest.raises(SilverValidationError, match="duplicate Silver identity"):
-            materialize_fact_observation(connection, duplicate)
+            materialize_fact_observation_snapshot(connection, duplicate)
 
         revision = staging.copy()
         revision["artifact_sha256"] = "b" * 64
-        preserved = materialize_fact_observation(
+        preserved = materialize_fact_observation_snapshot(
             connection, pd.concat([staging, revision], ignore_index=True)
         )
         assert len(preserved) == 2

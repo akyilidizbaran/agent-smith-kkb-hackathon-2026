@@ -5,7 +5,7 @@ from .foundation import (
     QUALITY_FLAGS,
     SILVER_STAGING_COLUMNS,
     SilverValidationError,
-    materialize_fact_observation,
+    materialize_fact_observation_snapshot,
     prepare_staging_frame,
 )
 
@@ -14,6 +14,6 @@ __all__ = [
     "QUALITY_FLAGS",
     "SILVER_STAGING_COLUMNS",
     "SilverValidationError",
-    "materialize_fact_observation",
+    "materialize_fact_observation_snapshot",
     "prepare_staging_frame",
 ]

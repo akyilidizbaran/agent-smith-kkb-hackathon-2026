@@ -17,7 +17,7 @@ from src.lakehouse.silver.adapters.evds import evds_kfe_to_staging
 from src.lakehouse.silver.foundation import (
     SILVER_STAGING_COLUMNS,
     SilverValidationError,
-    materialize_fact_observation,
+    materialize_fact_observation_snapshot,
 )
 from src.lakehouse.storage.parquet import ParquetIdentity, ParquetStorage, read_identity
 from src.lakehouse.storage.raw import RawStorage
@@ -100,7 +100,7 @@ def test_bddk_weekly_maps_real_fixture_and_catalog_semantics(tmp_path: Path) -> 
 
     connection = bootstrap_database(":memory:")
     try:
-        result = materialize_fact_observation(connection, staging)
+        result = materialize_fact_observation_snapshot(connection, staging)
         row = connection.execute(
             """
             SELECT series_id, entity_id, observation_date, value, frequency,
@@ -154,13 +154,13 @@ def test_bddk_weekly_null_and_invalid_numeric_values_use_generic_foundation(
     missing = bddk_weekly_to_staging(one.assign(value_raw=None), identity=identity)
     connection = bootstrap_database(":memory:")
     try:
-        result = materialize_fact_observation(connection, missing)
+        result = materialize_fact_observation_snapshot(connection, missing)
         assert pd.isna(result.loc[0, "value"])
         assert result.loc[0, "quality_flag"] == "missing_value"
 
         invalid = bddk_weekly_to_staging(one.assign(value_raw="abc"), identity=identity)
         with pytest.raises(SilverValidationError, match="DOUBLE"):
-            materialize_fact_observation(connection, invalid)
+            materialize_fact_observation_snapshot(connection, invalid)
     finally:
         connection.close()
 
@@ -193,7 +193,7 @@ def test_evds_kfe_maps_real_fixture_without_base_year_or_semantic_leakage(
 
     connection = bootstrap_database(":memory:")
     try:
-        result = materialize_fact_observation(connection, staging)
+        result = materialize_fact_observation_snapshot(connection, staging)
         row = connection.execute(
             """
             SELECT series_id, entity_id, observation_date, period_start, period_end,
@@ -267,13 +267,13 @@ def test_evds_kfe_null_and_invalid_numeric_values_use_generic_foundation(
     missing = evds_kfe_to_staging(one.assign(value_raw=None), identity=identity)
     connection = bootstrap_database(":memory:")
     try:
-        result = materialize_fact_observation(connection, missing)
+        result = materialize_fact_observation_snapshot(connection, missing)
         assert pd.isna(result.loc[0, "value"])
         assert result.loc[0, "quality_flag"] == "missing_value"
 
         invalid = evds_kfe_to_staging(one.assign(value_raw="abc"), identity=identity)
         with pytest.raises(SilverValidationError, match="DOUBLE"):
-            materialize_fact_observation(connection, invalid)
+            materialize_fact_observation_snapshot(connection, invalid)
     finally:
         connection.close()
 
@@ -338,11 +338,11 @@ def test_both_new_mappings_share_duplicate_and_revision_policy(
     connection = bootstrap_database(":memory:")
     try:
         with pytest.raises(SilverValidationError, match="duplicate Silver identity"):
-            materialize_fact_observation(connection, duplicate)
+            materialize_fact_observation_snapshot(connection, duplicate)
 
         revision = staging.copy()
         revision["artifact_sha256"] = "c" * 64
-        preserved = materialize_fact_observation(
+        preserved = materialize_fact_observation_snapshot(
             connection, pd.concat([staging, revision], ignore_index=True)
         )
         assert len(preserved) == 2

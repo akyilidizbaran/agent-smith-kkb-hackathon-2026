@@ -8,6 +8,8 @@ knowledge of any concrete source, source-specific dates, or source-specific seri
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+import math
+from numbers import Real
 from pathlib import Path
 from typing import Final
 
@@ -186,6 +188,14 @@ def prepare_staging_frame(staging: pd.DataFrame) -> pd.DataFrame:
                 row[field_name], field_name, row_number
             )
 
+        raw_value = row["value_raw"]
+        if isinstance(raw_value, Real) and not isinstance(raw_value, bool):
+            if not math.isfinite(float(raw_value)):
+                raise SilverValidationError(
+                    "non-null value_raw must be a finite DOUBLE: "
+                    f"{raw_value!r}"
+                )
+
         prepared.at[row_number, "fetched_at"] = _as_utc(row["fetched_at"], row_number)
 
         vintage_id = row["vintage_id"]
@@ -217,16 +227,21 @@ def prepare_staging_frame(staging: pd.DataFrame) -> pd.DataFrame:
 def _validate_sql_inputs(connection: duckdb.DuckDBPyConnection) -> None:
     invalid_value = connection.execute(
         """
-        SELECT value_raw
-        FROM silver_staging
+        WITH converted AS (
+            SELECT value_raw, TRY_CAST(value_raw AS DOUBLE) AS value
+            FROM silver_staging
+        )
+        SELECT value_raw, value
+        FROM converted
         WHERE value_raw IS NOT NULL
-          AND TRY_CAST(value_raw AS DOUBLE) IS NULL
+          AND (value IS NULL OR NOT isfinite(value))
         LIMIT 1
         """
     ).fetchone()
     if invalid_value is not None:
         raise SilverValidationError(
-            f"non-null value_raw cannot be parsed as DOUBLE: {invalid_value[0]!r}"
+            "non-null value_raw must be a finite DOUBLE: "
+            f"{invalid_value[0]!r}"
         )
 
     invalid_semantics = connection.execute(
@@ -302,16 +317,17 @@ def _validate_result(result: pd.DataFrame) -> None:
         raise SilverValidationError(f"unsupported quality flags: {sorted(invalid_quality)}")
 
 
-def materialize_fact_observation(
+def materialize_fact_observation_snapshot(
     connection: duckdb.DuckDBPyConnection,
     staging: pd.DataFrame,
     *,
     model_path: Path = _MODEL_PATH,
 ) -> pd.DataFrame:
-    """Validate generic staging, run the SQL model, and materialize ``silver.fact_observation``.
+    """Replace ``silver.fact_observation`` with one complete validated snapshot.
 
-    The caller supplies the complete staged snapshot for this materialization. No current
-    vintage is selected and no source-specific adapter is invoked here.
+    The caller must combine all intended source-adapter outputs before calling this operation.
+    A later call replaces the entire trusted DuckDB table; it never appends, merges, or selects
+    a current vintage. No source-specific adapter is invoked here.
     """
 
     prepared = prepare_staging_frame(staging)
@@ -349,6 +365,6 @@ __all__ = [
     "QUALITY_FLAGS",
     "SILVER_STAGING_COLUMNS",
     "SilverValidationError",
-    "materialize_fact_observation",
+    "materialize_fact_observation_snapshot",
     "prepare_staging_frame",
 ]

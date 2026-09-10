@@ -22,7 +22,7 @@ from src.lakehouse.parsers.evds import EvdsParser
 from src.lakehouse.silver.adapters.bddk_monthly import bddk_monthly_to_staging
 from src.lakehouse.silver.adapters.bddk_weekly import bddk_weekly_to_staging
 from src.lakehouse.silver.adapters.evds import evds_kfe_to_staging, evds_ktf12_to_staging
-from src.lakehouse.silver.foundation import FACT_OBSERVATION_COLUMNS, materialize_fact_observation
+from src.lakehouse.silver.foundation import FACT_OBSERVATION_COLUMNS, materialize_fact_observation_snapshot
 from src.lakehouse.storage.parquet import ParquetStorage, read_identity
 from src.lakehouse.storage.raw import RawStorage, sha256_bytes
 
@@ -79,7 +79,7 @@ def _run_to_silver(
     bronze = ParquetStorage.read(result.bronze_path)
     identity = read_identity(result.bronze_path)
     staging = adapter(bronze, identity=identity)
-    silver = materialize_fact_observation(trusted, staging)
+    silver = materialize_fact_observation_snapshot(trusted, staging)
     silver_path = ParquetStorage(tmp_path / "data/silver/fact_observation").write_frame(
         silver, identity=identity
     )
@@ -313,7 +313,7 @@ def test_bddk_and_evds_coexist_in_one_canonical_silver_table(
             ParquetStorage.read(evds_result.bronze_path),
             identity=read_identity(evds_result.bronze_path),
         )
-        silver = materialize_fact_observation(
+        silver = materialize_fact_observation_snapshot(
             trusted, pd.concat([bddk_staging, evds_staging], ignore_index=True)
         )
 
@@ -618,7 +618,7 @@ def test_all_four_real_series_coexist_in_one_fact_observation_table(
             ],
             ignore_index=True,
         )
-        silver = materialize_fact_observation(trusted, staging)
+        silver = materialize_fact_observation_snapshot(trusted, staging)
         assert list(silver.columns) == list(FACT_OBSERVATION_COLUMNS)
         assert trusted.execute(
             """

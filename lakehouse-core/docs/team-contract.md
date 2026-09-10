@@ -60,10 +60,13 @@ Observation dates use `datetime.date`. Operational timestamps are timezone-aware
 They are different concepts. Canonical numeric values are `float | None`; percentages such as
 `%12.5` are stored as `12.5`, not `0.125`. Bronze retains source-faithful raw values.
 
-Silver is the canonical, typed, validated and source-independent observation layer. It is not
-source-specific Bronze structure, Gold aggregation, cross-frequency alignment,
-revision/current-selection logic or agent behaviour. Silver semantics come from `meta.series`;
-source-specific fields remain in Bronze.
+Silver is the canonical, typed, validated and source-independent observation layer. Trusted
+DuckDB materialization is a complete snapshot replacement through
+`materialize_fact_observation_snapshot(...)`: source-adapter outputs must be combined into the
+intended snapshot before materialization. It is not source-specific Bronze structure, Gold
+aggregation, cross-frequency alignment, revision/current-selection logic or agent behaviour.
+Incremental, append, merge and current-vintage behavior are deferred. Silver semantics come
+from `meta.series`; source-specific fields remain in Bronze.
 
 ## Errors and fixtures
 
