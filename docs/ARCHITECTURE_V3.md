@@ -183,6 +183,14 @@ Bunlar deneyle doğrulanacak hedeflerdir; ekibin 4–12 s golden ölçümü R i�
 - Bilinmeyen dataset onboarding'i: deterministic profil (tip, null, min/max, tarih kapsamı, aday anahtar) → LLM tip/alias önerisi (`semantic_confidence=derived`) → insan onayı → katalog. Unseen-schema golden vakaları (L8) bunu ölçer.
 - Bilinmeyen dataset onboarding'i: deterministic profil (tip, null, min/max, tarih kapsamı, aday anahtar) → LLM tip/alias önerisi (`semantic_confidence=derived`) → insan onayı → katalog. Unseen-schema golden vakaları (L8) bunu ölçer.
 
+### 3.8 Web erişim politikası — not (11 Eylül, henüz uygulanmadı)
+
+Web URL Agent yazılırken (§3.2) şu üç karar geçerli; kaynak: Büşra'nın iki gözlemi (üyelik isteyen PDF siteleri; bir kod ajanının link verilince alt sayfaları incelememesi) `[ORG]`-uyumlu çözümle.
+
+1. **Kimlik model tarafından üretilmez.** Ajan hiçbir sitede hesap açmaz, rastgele e-posta kullanmaz (ToS, KVKK, bot tespiti, organizatör "web search / URL" çerçevesi dışı, demoda CAPTCHA/2FA riski). Kimlik **platform düzeyinde, bir kez, insan eliyle** tanımlanır: demo senaryosunda geçebilecek kaynaklara ekip önceden üye olur, anahtar/oturum `.env`'de durur (EVDS API anahtarı bugün böyle), ajan o alan adını görünce kullanır ve cevapta "ekip hesabıyla alındı" der. `ingest_url` 401/403/giriş formu görünce **`AUTH_REQUIRED`** (`retryable=false`, `needs_user_input=true`) döner ve kullanıcıya üç seçenek sunar: (a) dosyayı indirip ver (`ingest-file`, data ekibinin yolu `[SRC]`), (b) ekip hesabı tanımlıysa otomatik, (c) kendi anahtarını ayarlara ekle. Kullanıcı hesabının ajana verilmesi P0 dışı (oturum + prompt injection riski).
+2. **Keşfi harness yapar, seçimi model.** `discover_url(url)` deterministik ve LLM'siz: aynı alan adındaki alt sayfalar, tablolar, PDF/XLSX bağlantıları, varsa `sitemap.xml` → **manifest** ("12 alt sayfa, 3 tablo, 5 PDF"); derinlik sınırı, robots.txt, aynı-alan-adı ve SSRF politikası kodda (review D). `ingest_url(resource)` manifestteki tek kalemi alır. Manifest cache'lenir; "alt başlıkları da incele" takip sorusu yeniden taramaz. Katalog ön-yüklemesiyle aynı ilke: modelin "yeterince baktım" hissine güvenilmez.
+3. **Kapsam beyanı zorunlu.** Manifestte N kaynak varken K'sı kullanıldıysa cevap "incelenmeyenler: …" satırı olmadan geçmez (edge-case 19 şablonu, grounding guard'a kural). "Ben sormasaydım eksik kalacaktı" durumu bu satırla önlenir.
+
 ---
 
 ## 4. Edge-case matrisi
