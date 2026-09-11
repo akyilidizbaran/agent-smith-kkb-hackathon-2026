@@ -115,6 +115,7 @@ def test_workspace_adaptoru_hatayi_koda_cevirir(lakehouse: StubLakehouse) -> Non
     r = reg.execute("lakehouse_query", {"sql": "SELECT donem, toplam FROM test_krediler", "purpose": "aylık"})
     assert r.ok
     r = reg.execute("workspace_compute_column", {"expression": "DROP TABLE x", "column_name": "y", "purpose": "p"})
-    assert r.error_code == "POLICY_VIOLATION" and r.error.is_retryable is False
+    # Ekip zarfı (ADR-0025) UNSAFE_SQL döndürüyor; kod aynen geçer, retry edilemezliği korunur.
+    assert r.error_code == "UNSAFE_SQL" and r.error.is_retryable is False
     r = reg.execute("workspace_compute_column", {"expression": "toplam * 2", "column_name": "iki_kat", "purpose": "p"})
     assert r.ok and "iki_kat" in ws.columns()

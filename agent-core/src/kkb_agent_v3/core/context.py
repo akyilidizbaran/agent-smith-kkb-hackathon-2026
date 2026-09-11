@@ -29,7 +29,7 @@ class CatalogContext:
 
 
 def build_catalog_context(
-    lakehouse: LakehouseClient, *, budget_tokens: int = 6000, max_values: int = 120
+    lakehouse: LakehouseClient, *, budget_tokens: int = 6000, max_values: int = 120, max_value_specs: int = 20
 ) -> CatalogContext:
     specs = lakehouse.list_datasets()
     if not specs:
@@ -38,6 +38,10 @@ def build_catalog_context(
     parts: list[str] = []
     for spec in specs:
         parts.append(spec.to_prompt_card())
+        # Seri-merkezli katalogda (Silver: her seri bir spec, binlerce olabilir) kırılım
+        # değerlerini sorgulamak hem yavaş hem bütçeyi kesin aşar; yalnız küçük katalogda yapılır.
+        if len(specs) > max_value_specs:
+            continue
         for col in spec.columns:
             if col.role != ColumnRole.DIMENSION or col.dtype.upper() not in ("VARCHAR", "TEXT", "STRING"):
                 continue

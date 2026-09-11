@@ -18,7 +18,7 @@ import logging
 import os
 import sys
 
-from kkb_agent.adapters.duckdb_lakehouse import DuckDBLakehouse
+from kkb_agent.cli import open_lakehouse
 from kkb_agent.config import load_settings
 from kkb_agent.core.workspace import AnalysisWorkspace
 from kkb_agent.domain import DomainProfile
@@ -40,7 +40,8 @@ from .tools.workspace import workspace_tools
 
 def build_agent(max_steps: int = 8, config: AgentConfig | None = None) -> V3Agent:
     settings = load_settings()
-    lakehouse = DuckDBLakehouse(settings.lakehouse_path)
+    # Ekip adaptör seçimi (ADR-0024): Silver şeması varsa SilverLakehouse, yoksa BDDK seed.
+    lakehouse = open_lakehouse(settings.lakehouse_path)
     workspace = AnalysisWorkspace()
     profile = DomainProfile.from_catalog(
         lakehouse.list_datasets(), domain=settings.domain_description, audience=settings.domain_audience
