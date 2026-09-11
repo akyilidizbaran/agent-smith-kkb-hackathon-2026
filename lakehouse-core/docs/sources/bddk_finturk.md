@@ -15,8 +15,8 @@
 | Whether those cookies are actually validated (vs. accepted anonymously) | ❌ **Not verified** | Unlike the weekly endpoint's explicit cookie-less proof, no cookie-less/token-less request was attempted against this endpoint |
 | Production connector against the live endpoint | **Verified live** 2026-09-10 | `BddkFinTurkConnector` + real `requests.Session`, `sehir=YALOVA`, one month (2025-09): HTTP 200, 8 measure rows, values byte-identical to the DevTools capture below |
 | Response envelope shape | **Verified live** | `{"success": true, "Json": {colNames, colModels, data: {rows: [{cell: [...]}]}}}`, structurally identical to `docs/sources/bddk_monthly.md`'s envelope |
-| Unit of any measure column | ❌ **Not verified** | No unit appears anywhere in the response (no `(milyon TL)`-style suffix like the monthly endpoint) and none was found on the FinTürk page itself in this round |
-| Multi-province, multi-period coverage | ❌ **Not verified** | Only `YALOVA` × `2025-9` was captured with `tabloNo=3`. Other provinces/periods are assumed to share the same schema (their own response envelopes for `tabloNo=1`/`4` matched across `ANKARA`/`ADANA`/`AĞRI`) but this is an inference, not a per-province measurement |
+| Unit of the `tabloNo=3` measure columns | **Verified** 2026-09-11 | **Bin TL.** Two independent proofs, below: the source page's own table selector labels `tabloNo=3` as `Bireysel Bankacılık (Bin TL)`, and the live 81-province sum reproduces the separately verified BDDK Aylık national total to within 0.001%. The response body still carries no unit — the evidence is the page and the arithmetic, not the payload |
+| Multi-province coverage | **Verified live** 2026-09-11 | All 81 catalogued provinces fetched for `2025-09` through the production connector and parser: 81/81 HTTP 200, every response carried a `KonutKredisi` column, every derived `series_id` matched its catalog entry. Earlier this was an inference from one province; it is now a measurement over all of them. Multi-*period* breadth beyond the YALOVA backfill is still inferred from the quarter probe |
 | Data is published **quarterly, not monthly** | **Verified live** 2026-09-10 | Every `donem` from 2021-1 to 2026-6 (66 values) probed directly: only March/June/September/December return HTTP 200; every other month returns HTTP 500 (unhandled server error), for every year tested |
 
 **How this was captured:** a person (not this connector) used a real browser's DevTools Network
@@ -167,32 +167,55 @@ measures matter is a catalog decision, not a parsing one.
    set of measure columns. Guessing a `tabloNo` without capturing its response first is exactly
    how `1` and `4` were ruled out in this round — do not assume a new `tabloNo` carries housing
    data without checking.
-4. **No unit anywhere.** Neither the response body nor (as far as this round observed) the
-   FinTürk page itself states a unit for `Konut Kredisi`. `docs/sources/bddk_monthly.md`'s
-   monthly aggregate for a comparable concept is in the hundreds-of-thousands (milyon TL); this
-   endpoint's raw values for a single province (e.g. `2104493`) are consistent with **thousand
-   TL** rather than million TL, but this is an inference from magnitude, not a citation, and is
-   explicitly **not** used as the catalog's unit (`unit: null`, `semantic_confidence: derived`).
-5. **Session/antiforgery cookies observed but not proven required.** See "Verification status"
-   above. `BddkFinTurkConnector` primes a session with one `GET` before posting, as a
-   conservative default matching what a real browser does — this is a choice made in the absence
-   of a disproof, not a confirmed requirement.
-6. **`formatoptions.defaultValue` is `"0"`** on every measure column, the same display-default
-   behaviour as the monthly endpoint (`docs/sources/bddk_monthly.md`, anomaly 5). The parser
-   never substitutes a value and emits a warning per fetch instead.
+4. **Unit: Bin TL — established 2026-09-11.** The response body still states no unit. The
+   unit was established from two independent directions instead, and both had to agree before
+   the catalog was moved off `unit: null`.
+
+   **(a) The source's own label.** `https://www.bddk.org.tr/BultenFinTurk` renders the table
+   chooser as a `<select id="ddlTablo">` whose option *values* are exactly the `tabloNo` this
+   connector sends on the wire, and whose labels state each table's unit. Captured verbatim in
+   `tests/fixtures/pages/bddk_finturk_table_units.html`:
+
+   ```html
+   <option value="3">Bireysel Bankacılık (Bin TL)</option>
+   ```
+
+   This is the same category of evidence `docs/sources/bddk_weekly.md` calls "verified from
+   page source", and it is bound to the wire parameter rather than to a screenshot of a
+   rendered grid.
+
+   **(b) A cross-source identity, measured live.** All 81 catalogued provinces were fetched for
+   `2025-09` through the production connector and parser, and their `KonutKredisi` values
+   summed. The result was compared against `bddk_monthly:1534_Toplam` — a different endpoint,
+   a different parser, and a series whose own unit (`milyon TL`) is stated in its response and
+   already verified:
+
+   | | |
+   |---|---|
+   | Provinces fetched | 81/81, no failures |
+   | Sum of raw province values (2025-09) | `623,770,000` |
+   | Read as **Bin TL** | `623,770` milyon TL |
+   | BDDK Aylık national total (2025-09, milyon TL) | `623,765` |
+   | Difference | **0.0008%** (rounding: FinTürk rounds to a thousand TL, the monthly bulletin to a million) |
+
+   The other two readings are not close calls. As `milyon TL`, İstanbul alone would be 294× the
+   national stock; as plain `TL`, all 81 provinces together would come to 624 million lira.
+
+   The same run is also the first province-wide verification of the catalog itself: every one of
+   the 81 province entries resolved to a live response with a `KonutKredisi` column, which the
+   earlier single-province (YALOVA) check could only assume.
+
+   Catalog effect: all 81 entries move from `unit: null` / `semantic_confidence: derived` to
+   `unit: TRY_th` / `semantic_confidence: verified`. Note that (b) also confirms these are
+   *sector* totals comparable to the national series, not a subset of banks.
 
 ## Confirmation required
 
 1. **Cookie/token necessity.** Untested; see above.
-2. **Unit.** Genuinely unknown; do not splice or convert without first finding an authoritative
-   unit statement (e.g. on the FinTürk page's table header, the way the weekly endpoint's unit
-   was confirmed from `docs/sources/bddk_weekly.md`'s official table header citation).
-3. **`tarafList`/`sehirList` repeatability.** Only a single index (`[0]`) was ever sent in the
-   captures this contract is based on. Whether the endpoint accepts multiple parties or
-   provinces per call, the way the monthly endpoint's `taraf` does, was not tested.
-4. **Revision behaviour.** Not observed in this round; treat monthly figures as potentially
-   revisable by default, consistent with `docs/sources/bddk_weekly.md`'s stated policy for BDDK
-   sources generally.
+2. **Unit — resolved, see above.** Established as Bin TL on 2026-09-11 from the source page's
+   own table label plus an 81-province cross-check against the monthly bulletin. The remaining
+   unit question is the *other* tables (`tabloNo` 1, 2, 4, 7 are all labelled Bin TL on the same
+   selector, but none of them has been cross-checked the way table 3 has).
 
 ## Not implemented in this track
 

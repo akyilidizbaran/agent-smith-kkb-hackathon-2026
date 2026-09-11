@@ -4,6 +4,11 @@
 # Every field must be traceable to docs/sources/bddk_finturk.md or to a committed fixture.
 # See docs/catalog-contract.md for the field contract and validation rules.
 #
+# The unit was established on 2026-09-11 and is no longer null: BDDK's own table selector
+# labels tabloNo=3 as "Bireysel Bankacılık (Bin TL)", and the 81-province sum for 2025-09
+# reproduces the independently verified BDDK Aylık national total to within 0.001%. Both
+# proofs are recorded in docs/sources/bddk_finturk.md.
+#
 # All 81 provinces from BDDK's own FinTürk province dropdown (fetched live 2026-09-10/11,
 # not guessed) are listed here, one series per province, all pointing at the same verified
 # table (tabloNo=3, Bireysel Bankacılık) and the same verified column (Konut Kredisi). The
@@ -31,18 +36,20 @@ series:
       sütunu, ADANA ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - adana konut kredisi
       - adana konut kredisi bakiyesi
       - adana ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -56,18 +63,20 @@ series:
       sütunu, ADIYAMAN ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - adiyaman konut kredisi
       - adiyaman konut kredisi bakiyesi
       - adiyaman ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -81,18 +90,20 @@ series:
       sütunu, AFYONKARAHİSAR ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - afyonkarahisar konut kredisi
       - afyonkarahisar konut kredisi bakiyesi
       - afyonkarahisar ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -106,18 +117,20 @@ series:
       sütunu, AĞRI ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - agri konut kredisi
       - agri konut kredisi bakiyesi
       - agri ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -131,18 +144,20 @@ series:
       sütunu, AKSARAY ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - aksaray konut kredisi
       - aksaray konut kredisi bakiyesi
       - aksaray ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -156,18 +171,20 @@ series:
       sütunu, AMASYA ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - amasya konut kredisi
       - amasya konut kredisi bakiyesi
       - amasya ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -181,18 +198,20 @@ series:
       sütunu, ANKARA ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - ankara konut kredisi
       - ankara konut kredisi bakiyesi
       - ankara ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -206,18 +225,20 @@ series:
       sütunu, ANTALYA ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - antalya konut kredisi
       - antalya konut kredisi bakiyesi
       - antalya ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -231,18 +252,20 @@ series:
       sütunu, ARDAHAN ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - ardahan konut kredisi
       - ardahan konut kredisi bakiyesi
       - ardahan ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -256,18 +279,20 @@ series:
       sütunu, ARTVİN ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - artvin konut kredisi
       - artvin konut kredisi bakiyesi
       - artvin ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -281,18 +306,20 @@ series:
       sütunu, AYDIN ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - aydin konut kredisi
       - aydin konut kredisi bakiyesi
       - aydin ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -306,18 +333,20 @@ series:
       sütunu, BALIKESİR ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - balikesir konut kredisi
       - balikesir konut kredisi bakiyesi
       - balikesir ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -331,18 +360,20 @@ series:
       sütunu, BARTIN ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - bartin konut kredisi
       - bartin konut kredisi bakiyesi
       - bartin ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -356,18 +387,20 @@ series:
       sütunu, BATMAN ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - batman konut kredisi
       - batman konut kredisi bakiyesi
       - batman ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -381,18 +414,20 @@ series:
       sütunu, BAYBURT ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - bayburt konut kredisi
       - bayburt konut kredisi bakiyesi
       - bayburt ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -406,18 +441,20 @@ series:
       sütunu, BİLECİK ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - bilecik konut kredisi
       - bilecik konut kredisi bakiyesi
       - bilecik ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -431,18 +468,20 @@ series:
       sütunu, BİNGÖL ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - bingol konut kredisi
       - bingol konut kredisi bakiyesi
       - bingol ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -456,18 +495,20 @@ series:
       sütunu, BİTLİS ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - bitlis konut kredisi
       - bitlis konut kredisi bakiyesi
       - bitlis ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -481,18 +522,20 @@ series:
       sütunu, BOLU ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - bolu konut kredisi
       - bolu konut kredisi bakiyesi
       - bolu ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -506,18 +549,20 @@ series:
       sütunu, BURDUR ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - burdur konut kredisi
       - burdur konut kredisi bakiyesi
       - burdur ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -531,18 +576,20 @@ series:
       sütunu, BURSA ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - bursa konut kredisi
       - bursa konut kredisi bakiyesi
       - bursa ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -556,18 +603,20 @@ series:
       sütunu, ÇANAKKALE ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - canakkale konut kredisi
       - canakkale konut kredisi bakiyesi
       - canakkale ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -581,18 +630,20 @@ series:
       sütunu, ÇANKIRI ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - cankiri konut kredisi
       - cankiri konut kredisi bakiyesi
       - cankiri ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -606,18 +657,20 @@ series:
       sütunu, ÇORUM ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - corum konut kredisi
       - corum konut kredisi bakiyesi
       - corum ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -631,18 +684,20 @@ series:
       sütunu, DENİZLİ ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - denizli konut kredisi
       - denizli konut kredisi bakiyesi
       - denizli ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -656,18 +711,20 @@ series:
       sütunu, DİYARBAKIR ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - diyarbakir konut kredisi
       - diyarbakir konut kredisi bakiyesi
       - diyarbakir ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -681,18 +738,20 @@ series:
       sütunu, DÜZCE ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - duzce konut kredisi
       - duzce konut kredisi bakiyesi
       - duzce ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -706,18 +765,20 @@ series:
       sütunu, EDİRNE ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - edirne konut kredisi
       - edirne konut kredisi bakiyesi
       - edirne ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -731,18 +792,20 @@ series:
       sütunu, ELAZIĞ ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - elazig konut kredisi
       - elazig konut kredisi bakiyesi
       - elazig ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -756,18 +819,20 @@ series:
       sütunu, ERZİNCAN ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - erzincan konut kredisi
       - erzincan konut kredisi bakiyesi
       - erzincan ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -781,18 +846,20 @@ series:
       sütunu, ERZURUM ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - erzurum konut kredisi
       - erzurum konut kredisi bakiyesi
       - erzurum ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -806,18 +873,20 @@ series:
       sütunu, ESKİŞEHİR ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - eskisehir konut kredisi
       - eskisehir konut kredisi bakiyesi
       - eskisehir ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -831,18 +900,20 @@ series:
       sütunu, GAZİANTEP ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - gaziantep konut kredisi
       - gaziantep konut kredisi bakiyesi
       - gaziantep ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -856,18 +927,20 @@ series:
       sütunu, GİRESUN ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - giresun konut kredisi
       - giresun konut kredisi bakiyesi
       - giresun ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -881,18 +954,20 @@ series:
       sütunu, GÜMÜŞHANE ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - gumushane konut kredisi
       - gumushane konut kredisi bakiyesi
       - gumushane ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -906,18 +981,20 @@ series:
       sütunu, HAKKARİ ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - hakkari konut kredisi
       - hakkari konut kredisi bakiyesi
       - hakkari ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -931,18 +1008,20 @@ series:
       sütunu, HATAY ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - hatay konut kredisi
       - hatay konut kredisi bakiyesi
       - hatay ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -956,18 +1035,20 @@ series:
       sütunu, IĞDIR ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - igdir konut kredisi
       - igdir konut kredisi bakiyesi
       - igdir ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -981,18 +1062,20 @@ series:
       sütunu, ISPARTA ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - isparta konut kredisi
       - isparta konut kredisi bakiyesi
       - isparta ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1006,18 +1089,20 @@ series:
       sütunu, İSTANBUL ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - istanbul konut kredisi
       - istanbul konut kredisi bakiyesi
       - istanbul ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1031,18 +1116,20 @@ series:
       sütunu, İZMİR ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - izmir konut kredisi
       - izmir konut kredisi bakiyesi
       - izmir ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1056,18 +1143,20 @@ series:
       sütunu, KAHRAMANMARAŞ ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - kahramanmaras konut kredisi
       - kahramanmaras konut kredisi bakiyesi
       - kahramanmaras ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1081,18 +1170,20 @@ series:
       sütunu, KARABÜK ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - karabuk konut kredisi
       - karabuk konut kredisi bakiyesi
       - karabuk ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1106,18 +1197,20 @@ series:
       sütunu, KARAMAN ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - karaman konut kredisi
       - karaman konut kredisi bakiyesi
       - karaman ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1131,18 +1224,20 @@ series:
       sütunu, KARS ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - kars konut kredisi
       - kars konut kredisi bakiyesi
       - kars ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1156,18 +1251,20 @@ series:
       sütunu, KASTAMONU ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - kastamonu konut kredisi
       - kastamonu konut kredisi bakiyesi
       - kastamonu ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1181,18 +1278,20 @@ series:
       sütunu, KAYSERİ ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - kayseri konut kredisi
       - kayseri konut kredisi bakiyesi
       - kayseri ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1206,18 +1305,20 @@ series:
       sütunu, KIRIKKALE ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - kirikkale konut kredisi
       - kirikkale konut kredisi bakiyesi
       - kirikkale ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1231,18 +1332,20 @@ series:
       sütunu, KIRKLARELİ ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - kirklareli konut kredisi
       - kirklareli konut kredisi bakiyesi
       - kirklareli ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1256,18 +1359,20 @@ series:
       sütunu, KIRŞEHİR ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - kirsehir konut kredisi
       - kirsehir konut kredisi bakiyesi
       - kirsehir ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1281,18 +1386,20 @@ series:
       sütunu, KİLİS ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - kilis konut kredisi
       - kilis konut kredisi bakiyesi
       - kilis ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1306,18 +1413,20 @@ series:
       sütunu, KOCAELİ ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - kocaeli konut kredisi
       - kocaeli konut kredisi bakiyesi
       - kocaeli ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1331,18 +1440,20 @@ series:
       sütunu, KONYA ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - konya konut kredisi
       - konya konut kredisi bakiyesi
       - konya ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1356,18 +1467,20 @@ series:
       sütunu, KÜTAHYA ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - kutahya konut kredisi
       - kutahya konut kredisi bakiyesi
       - kutahya ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1381,18 +1494,20 @@ series:
       sütunu, MALATYA ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - malatya konut kredisi
       - malatya konut kredisi bakiyesi
       - malatya ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1406,18 +1521,20 @@ series:
       sütunu, MANİSA ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - manisa konut kredisi
       - manisa konut kredisi bakiyesi
       - manisa ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1431,18 +1548,20 @@ series:
       sütunu, MARDİN ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - mardin konut kredisi
       - mardin konut kredisi bakiyesi
       - mardin ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1456,18 +1575,20 @@ series:
       sütunu, MERSİN ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - mersin konut kredisi
       - mersin konut kredisi bakiyesi
       - mersin ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1481,18 +1602,20 @@ series:
       sütunu, MUĞLA ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - mugla konut kredisi
       - mugla konut kredisi bakiyesi
       - mugla ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1506,18 +1629,20 @@ series:
       sütunu, MUŞ ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - mus konut kredisi
       - mus konut kredisi bakiyesi
       - mus ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1531,18 +1656,20 @@ series:
       sütunu, NEVŞEHİR ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - nevsehir konut kredisi
       - nevsehir konut kredisi bakiyesi
       - nevsehir ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1556,18 +1683,20 @@ series:
       sütunu, NİĞDE ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - nigde konut kredisi
       - nigde konut kredisi bakiyesi
       - nigde ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1581,18 +1710,20 @@ series:
       sütunu, ORDU ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - ordu konut kredisi
       - ordu konut kredisi bakiyesi
       - ordu ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1606,18 +1737,20 @@ series:
       sütunu, OSMANİYE ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - osmaniye konut kredisi
       - osmaniye konut kredisi bakiyesi
       - osmaniye ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1631,18 +1764,20 @@ series:
       sütunu, RİZE ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - rize konut kredisi
       - rize konut kredisi bakiyesi
       - rize ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1656,18 +1791,20 @@ series:
       sütunu, SAKARYA ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - sakarya konut kredisi
       - sakarya konut kredisi bakiyesi
       - sakarya ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1681,18 +1818,20 @@ series:
       sütunu, SAMSUN ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - samsun konut kredisi
       - samsun konut kredisi bakiyesi
       - samsun ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1706,18 +1845,20 @@ series:
       sütunu, SİİRT ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - siirt konut kredisi
       - siirt konut kredisi bakiyesi
       - siirt ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1731,18 +1872,20 @@ series:
       sütunu, SİNOP ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - sinop konut kredisi
       - sinop konut kredisi bakiyesi
       - sinop ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1756,18 +1899,20 @@ series:
       sütunu, SİVAS ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - sivas konut kredisi
       - sivas konut kredisi bakiyesi
       - sivas ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1781,18 +1926,20 @@ series:
       sütunu, ŞANLIURFA ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - sanliurfa konut kredisi
       - sanliurfa konut kredisi bakiyesi
       - sanliurfa ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1806,18 +1953,20 @@ series:
       sütunu, ŞIRNAK ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - sirnak konut kredisi
       - sirnak konut kredisi bakiyesi
       - sirnak ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1831,18 +1980,20 @@ series:
       sütunu, TEKİRDAĞ ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - tekirdag konut kredisi
       - tekirdag konut kredisi bakiyesi
       - tekirdag ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1856,18 +2007,20 @@ series:
       sütunu, TOKAT ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - tokat konut kredisi
       - tokat konut kredisi bakiyesi
       - tokat ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1881,18 +2034,20 @@ series:
       sütunu, TRABZON ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - trabzon konut kredisi
       - trabzon konut kredisi bakiyesi
       - trabzon ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1906,18 +2061,20 @@ series:
       sütunu, TUNCELİ ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - tunceli konut kredisi
       - tunceli konut kredisi bakiyesi
       - tunceli ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1931,18 +2088,20 @@ series:
       sütunu, UŞAK ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - usak konut kredisi
       - usak konut kredisi bakiyesi
       - usak ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1956,18 +2115,20 @@ series:
       sütunu, VAN ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - van konut kredisi
       - van konut kredisi bakiyesi
       - van ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -1981,18 +2142,20 @@ series:
       sütunu, YALOVA ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - yalova konut kredisi
       - yalova konut kredisi bakiyesi
       - yalova ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -2006,18 +2169,20 @@ series:
       sütunu, YOZGAT ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - yozgat konut kredisi
       - yozgat konut kredisi bakiyesi
       - yozgat ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active
@@ -2031,18 +2196,20 @@ series:
       sütunu, ZONGULDAK ili, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (stok).
       FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil
       — bkz. docs/sources/bddk_finturk.md.
-      BİRİM DOĞRULANMAMIŞ: yanıtta hiçbir birim bilgisi yok; semantic_confidence bu yüzden
-      'derived', 'verified' değil.
+      BİRİM: Bin TL. Kaynağın kendi tablo seçicisi bu tabloyu "Bireysel Bankacılık
+      (Bin TL)" diye etiketliyor (tabloNo=3) ve 81 ilin 2025-09 toplamı, bağımsız olarak
+      doğrulanmış BDDK Aylık ulusal konut kredisi stokuyla %0,001 içinde örtüşüyor —
+      bkz. docs/sources/bddk_finturk.md.
     aliases:
       - zonguldak konut kredisi
       - zonguldak konut kredisi bakiyesi
       - zonguldak ili konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok, il]
     frequency: quarterly
-    unit: null
+    unit: TRY_th
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenFinTurk
     status: active

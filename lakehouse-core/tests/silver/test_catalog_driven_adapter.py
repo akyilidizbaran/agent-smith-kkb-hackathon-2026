@@ -211,25 +211,43 @@ def test_finturk_non_quarter_month_is_refused(tmp_path: Path) -> None:
         )
 
 
-def test_finturk_is_withheld_by_the_real_catalog_until_its_unit_is_known(
+def test_finturk_reaches_silver_under_the_real_catalog(
     tmp_path: Path, semantics: dict[str, SeriesSemantics]
 ) -> None:
-    """The province series are ingestible today but not publishable, and this says why.
+    """The third BDDK source is publishable once its unit is evidenced, not before.
 
-    ``docs/sources/bddk_finturk.md`` records that no unit appears anywhere in the response.
-    The catalog therefore leaves ``unit`` null, and the Silver contract refuses a series whose
-    unit nobody verified. This test exists so that gap is visible as a failing precondition
-    with a reason attached, rather than as an empty table nobody can explain.
+    The response body states no unit, so these series sat at ``unit: null`` and could not be
+    published. The unit is now established from the source's own table label and an
+    81-province cross-check against the monthly bulletin (docs/sources/bddk_finturk.md), which
+    is what moves them into Silver. The assertion is on the catalog value rather than on the
+    prose, so weakening the evidence without weakening the claim is not possible here.
     """
 
     series = semantics["bddk_finturk:YALOVA_KonutKredisi"]
-
-    assert series.unpublishable_reason == "unit is not set in the catalog"
+    assert series.unpublishable_reason is None
+    assert series.unit == "TRY_th"
 
     frame, identity = _finturk_bronze(tmp_path)
     housing = frame.loc[frame["series_id"] == "bddk_finturk:YALOVA_KonutKredisi"]
-    with pytest.raises(SilverValidationError, match="unit is not set"):
-        catalog_driven_to_staging(housing, identity=identity, semantics=semantics)
+    staging = catalog_driven_to_staging(housing, identity=identity, semantics=semantics)
+
+    assert list(staging["series_id"]) == ["bddk_finturk:YALOVA_KonutKredisi"]
+    assert list(staging["observation_date"]) == [date(2025, 9, 30)]
+
+
+def test_the_committed_page_evidence_still_says_what_the_catalog_claims() -> None:
+    """The unit is a claim about the source, so its evidence is committed and checked.
+
+    ``TRY_th`` for these series rests on BDDK labelling ``tabloNo=3`` as *(Bin TL)* on its own
+    page. That capture is a fixture, and this test fails if someone edits the fixture to say
+    something else while leaving the catalog claiming a verified unit.
+    """
+
+    evidence = Path("tests/fixtures/pages/bddk_finturk_table_units.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert '<option value="3">Bireysel Bankacılık (Bin TL)</option>' in evidence
 
 
 def test_uncatalogued_series_never_reaches_silver(

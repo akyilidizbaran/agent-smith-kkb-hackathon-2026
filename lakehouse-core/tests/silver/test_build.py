@@ -149,14 +149,14 @@ def test_build_is_reproducible_over_the_same_bronze_tree(
     assert first.equals(second)
 
 
-def test_build_withholds_uncatalogued_and_unitless_series_with_a_reason(
+def test_build_publishes_the_catalogued_measure_and_withholds_the_rest_with_a_reason(
     tmp_path: Path, connection: duckdb.DuckDBPyConnection
 ) -> None:
-    """The FinTürk grid is ingested today and publishable by nothing — and says so.
+    """One FinTürk response is a grid; the catalog registers one column of it.
 
-    Seven of its eight measure columns are not in the catalog at all; the eighth is, but its
-    unit is unverified. An operator must be able to read both facts off the build report
-    instead of wondering why a province has no rows.
+    Seven of its eight measure columns are not catalogued at all. Leaving them out is correct.
+    Leaving them out without saying so is how a province quietly ends up with no rows and
+    nobody can explain why, so each exclusion is counted against its series in the report.
     """
 
     data_root = tmp_path / "data"
@@ -165,14 +165,20 @@ def test_build_withholds_uncatalogued_and_unitless_series_with_a_reason(
 
     report = build_silver_snapshot(connection, bronze_root=data_root / "bronze")
 
-    assert report.artifacts_staged == 1
-    assert (
-        report.withheld_series["bddk_finturk:YALOVA_KonutKredisi"]
-        == "unit is not set in the catalog"
-    )
+    assert report.artifacts_staged == 2
+    assert "bddk_finturk:YALOVA_KonutKredisi" in report.series_published
     assert report.withheld_series["bddk_finturk:YALOVA_TasitKredisi"] == "not in meta.series"
-    assert len(report.withheld_series) == 8
-    assert "no publishable series in this artifact" in report.render()
+    assert len(report.withheld_series) == 7
+    assert "series withheld        : 7" in report.render()
+
+    quarter = connection.execute(
+        """
+        SELECT observation_date, period_start, unit, entity_id
+        FROM silver.fact_observation
+        WHERE series_id = 'bddk_finturk:YALOVA_KonutKredisi'
+        """
+    ).fetchone()
+    assert quarter == (date(2025, 9, 30), date(2025, 7, 1), "TRY_th", "bddk:10001")
 
 
 def test_build_keeps_the_parser_warning_that_produced_a_quality_flag(
