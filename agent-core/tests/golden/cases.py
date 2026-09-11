@@ -30,6 +30,18 @@ class GoldenCase:
     # Doğru aracı seçti mi? Sonuç doğru olsa bile yanlış yoldan gelinmiş olabilir.
     must_use_tools: list[str] = field(default_factory=list)
     expect_no_table: bool = False
+    #: Araç adımı üst sınırı. Amacı kaçak döngüyü yakalamak, cimrilik değil.
+    #:
+    #: ADR-0027 (anlatı doğrulama) devreye girdikten sonra bütçeler bir kez yukarı
+    #: çekildi ve sebebi ölçüldü: model tabloyu doğru üretip anlatıda tabloda olmayan
+    #: bir sayı yazdığında guard cevabı geri gönderiyor, model de o sayıyı bu kez
+    #: GERÇEKTEN hesaplıyor (`workspace_compute_column`). Yani fazladan adımlar
+    #: kaçak değil, ONARIM — ve onarımsız hâli yanlış cevaptı:
+    #:
+    #:   G5, seed: "MISS:662.871, 2.078.450, 685.340, 2.160.923, 2,8, 3,1"
+    #:   G6, seed: "MISS:155.515"
+    #:
+    #: Bütçeyi düşürmek bu vakaları "geçirir" ama uydurma sayıyı geri getirir.
     max_steps_used: int = 8
     follow_up: str | None = None  # çok turlu senaryolar için
 
@@ -125,7 +137,8 @@ CASES: list[GoldenCase] = [
                 lambda df: len(df.select_dtypes("number").columns) >= 2 or len(df) >= 24,
             ),
         ],
-        max_steps_used=8,
+        # 8 -> 11: grounding onarımı ölçüldü, 3 compute_column turu ekliyor (ADR-0027)
+        max_steps_used=11,
     ),
     GoldenCase(
         id="G7_tablo_uzerinde_hesap",
@@ -136,7 +149,8 @@ CASES: list[GoldenCase] = [
         "Enflasyon serisi EVDS'den gelince aynı akış oraya uygulanacak.",
         table_checks=[("hâlâ 12 satır (tablo bozulmamış)", _rows(12))],
         must_use_tools=["workspace_compute_column"],
-        max_steps_used=8,
+        # 8 -> 11: aynı sebep; iki turlu vakada onarım ikinci turda da olabiliyor
+        max_steps_used=11,
     ),
     GoldenCase(
         id="G6_tabloyu_bozmadan",
@@ -149,6 +163,7 @@ CASES: list[GoldenCase] = [
         # Doğru kanıt: sütunu ekleyen aracın gerçekten çalışmış olması.
         table_checks=[("hâlâ 12 satır (tablo bozulmamış)", _rows(12))],
         must_use_tools=["workspace_add_column"],
-        max_steps_used=10,
+        # 10 -> 13: aynı sebep (ölçülen en kötü hâl 13)
+        max_steps_used=13,
     ),
 ]
