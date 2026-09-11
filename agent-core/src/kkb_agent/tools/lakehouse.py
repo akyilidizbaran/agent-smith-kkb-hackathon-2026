@@ -159,6 +159,14 @@ class LakehouseQueryTool(Tool):
         # Sorgu çalışmadan önce reddet: uyarı olarak eklendiğinde model onu
         # okuyup yine de cevaba geçiyordu (ölçüldü: 0/2). Kapsam kontrolünde
         # işe yarayan kalıp bu — modele seçenek bırakmamak (ADR-0010).
+        kapsam_disi_soru = self._soru_kapsam_disi()
+        if kapsam_disi_soru:
+            return ToolResult.fail(
+                "OUT_OF_COVERAGE", kapsam_disi_soru,
+                hint="Bu dönem için sorgu çalıştırma. Kullanıcıya verinin hangi tarihe "
+                     "kadar yayımlandığını söyle; istersen mevcut son dönemi teklif et.",
+                layer="data",
+            )
         eksik_donem = self._atlanmis_donem_filtresi(params.sql)
         if eksik_donem:
             yil = eksik_donem.split(",")[0].strip()
@@ -251,6 +259,55 @@ class LakehouseQueryTool(Tool):
         sorguda = set(re.findall(r"\b(19\d{2}|20\d{2})\b", sql))
         eksik = sorted(sorulan - sorguda)
         return ", ".join(eksik) if eksik else None
+
+    _AYLAR = {
+        "ocak": 1, "şubat": 2, "subat": 2, "mart": 3, "nisan": 4, "mayıs": 5, "mayis": 5,
+        "haziran": 6, "temmuz": 7, "ağustos": 8, "agustos": 8, "eylül": 9, "eylul": 9,
+        "ekim": 10, "kasım": 11, "kasim": 11, "aralık": 12, "aralik": 12,
+    }
+
+    def _soru_kapsam_disi(self) -> str | None:
+        """Sorudaki AY kapsamın dışındaysa sorguyu hiç çalıştırma.
+
+        Kapsam kontrolü yıl çözünürlüğündeydi ve bu bir boşluk bırakıyordu: veri
+        2026-06'da bitiyorken "2026 Ağustos kaç?" sorusunda 2026 kapsam içinde
+        göründüğü için hiçbir şey tetiklenmiyordu. Model o yılın mevcut aylarını
+        çekip tablo kuruyor, sonra "Ağustos yok" diyordu. Cevap doğru ama ekranda
+        sayı dolu bir tablo duruyor; jüri bakışında bunlardan birinin Ağustos
+        olduğu sanılabilir. Ölçüldü (L9-02): iki şemada da 0/3.
+
+        Yalnız hiçbir serinin veremeyeceği dönemlerde tetikleniyor — kataloğun en
+        geniş aralığı dışında kalmayan bir ay varsa karışmıyor.
+        """
+        soru = getattr(self._registry, "active_question", "") or ""
+        if not soru:
+            return None
+        istenen: set[tuple[int, int]] = set()
+        low = soru.lower()
+        for ay_adi, ay in self._AYLAR.items():
+            for m in re.finditer(rf"\b(19\d{{2}}|20\d{{2}})\b[^\d]{{0,12}}{ay_adi}\b", low):
+                istenen.add((int(m.group(1)), ay))
+            for m in re.finditer(rf"{ay_adi}\b[^\d]{{0,12}}\b(19\d{{2}}|20\d{{2}})\b", low):
+                istenen.add((int(m.group(1)), ay))
+        for m in re.finditer(r"\b(19\d{2}|20\d{2})[-/](0[1-9]|1[0-2])\b", low):
+            istenen.add((int(m.group(1)), int(m.group(2))))
+        if not istenen:
+            return None
+
+        specs = self.lakehouse.list_datasets()
+        if not specs:
+            return None
+        ilk = min(s.coverage.start for s in specs)
+        son = max(s.coverage.end for s in specs)
+        sinirlar = ((ilk.year, ilk.month), (son.year, son.month))
+        disarida = sorted(d for d in istenen if d < sinirlar[0] or d > sinirlar[1])
+        if not disarida or len(disarida) != len(istenen):
+            return None
+        yazi = ", ".join(f"{y}-{ay:02d}" for y, ay in disarida)
+        return (
+            f"Sorulan dönem ({yazi}) veri kapsamının dışında. Veri {ilk} ile {son} "
+            "arasını kapsıyor; bu dönem için hiçbir seride gözlem yok."
+        )
 
     def _out_of_coverage(self, sql: str) -> str | None:
         """Sorgudaki yıllar katalog kapsamının dışında mı?

@@ -156,3 +156,58 @@ def test_basarili_sorgu_analiz_tablosunu_kurar() -> None:
          "as_active_table": True}
     )
     assert ws.has_table and len(ws.table) == 1
+
+
+def _ay_araci(question: str) -> LakehouseQueryTool:
+    """Kapsamı 2021-01 → 2026-06 olan tek serilik bir lakehouse üstünde sorgu aracı."""
+
+    class _Registry:
+        active_question = question
+
+    stub = StubLakehouse(pd.DataFrame({"donem": [date(2026, 1, 31)], "deger": [1.0]}))
+    return LakehouseQueryTool(stub, AnalysisWorkspace(), registry=_Registry())
+
+
+def test_sorudaki_ay_kapsam_disiysa_sorgu_hic_calismaz() -> None:
+    """Yıl kapsamda, ay değil: eski kontrol bu boşluğu görmüyordu.
+
+    Veri 2026-06'da bitiyor. "2026 Ağustos kaç?" sorusunda 2026 kapsam içinde
+    göründüğü için hiçbir şey tetiklenmiyor, model o yılın mevcut aylarını çekip
+    tablo kuruyordu. Cevap metni doğru çıksa bile ekranda sayı dolu bir tablo
+    kalıyor. Ölçüldü (L9-02): iki şemada da 0/3.
+    """
+    tool = _ay_araci("2026 Ağustos konut kredisi bakiyesi kaç?")
+
+    result = tool.run(
+        LakehouseQueryTool.Params(
+            sql="SELECT donem, toplam FROM t WHERE EXTRACT(year FROM donem)=2026",
+            purpose="2026 aylık",
+        )
+    )
+
+    assert not result.ok
+    assert result.error is not None and result.error.error_code == "OUT_OF_COVERAGE"
+    assert not result.error.is_retryable, "tekrar denemek bu dönemi var etmez"
+    assert not tool.workspace.has_table, "kapsam dışı soruya tablo kurulmamalı"
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "2026 Mart konut kredisi bakiyesi kaç?",   # kapsam içinde
+        "2025 yılında aylık göster",               # ay yok, yalnız yıl
+        "Konut kredisi bakiyesi nedir?",           # dönem yok
+    ],
+)
+def test_kapsamdaki_ay_ve_donemsiz_sorular_engellenmez(question: str) -> None:
+    """Kontrol yalnız hiçbir serinin veremeyeceği dönemde tetiklenmeli."""
+    tool = _ay_araci(question)
+
+    result = tool.run(
+        LakehouseQueryTool.Params(
+            sql="SELECT donem, toplam FROM t WHERE EXTRACT(year FROM donem)=2026",
+            purpose="x",
+        )
+    )
+
+    assert result.ok or (result.error and result.error.error_code != "OUT_OF_COVERAGE")
