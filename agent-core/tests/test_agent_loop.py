@@ -204,3 +204,25 @@ def test_veri_cekilmemisse_grounding_olculmez() -> None:
     answer = agent.ask("Hangi yıllar var?")
 
     assert answer.grounding == ""
+
+
+def test_extra_yazilabilir_olmali() -> None:
+    """Karşılaştırma koşucusu iki turlu vakalarda bu alana geri yazıyor.
+
+    `answer.extra = {...}` — property olarak tanımlanınca bu atama AttributeError
+    veriyor ve vaka "çalıştırma hatası" olarak düşüyor. Ölçüldü: G6 ve G7 0/3, hem de
+    motorun davranışıyla hiç ilgisi olmayan bir sebeple. Ölçüm aracının okuduğu
+    yüzey, ölçülen şeyi bozmamalı.
+    """
+    from kkb_agent.core.agent import AgentAnswer, AgentStep
+
+    answer = AgentAnswer(
+        text="x",
+        steps=[AgentStep(index=1, tool_name="lakehouse_query", error_code="SQL_FAILED")],
+        grounding="OK",
+    )
+
+    assert answer.extra == {"grounding": "OK", "error_codes": ["SQL_FAILED"]}
+
+    answer.extra = {"grounding": "OK | MISS:5", "error_codes": ["SQL_FAILED", "SQL_FAILED"]}
+    assert answer.extra["grounding"] == "OK | MISS:5"

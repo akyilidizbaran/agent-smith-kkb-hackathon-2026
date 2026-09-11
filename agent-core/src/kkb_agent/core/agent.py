@@ -123,18 +123,20 @@ class AgentAnswer:
     #: için ölçülmedi. Koşucular bunu rapor eder; anlatı doğrulaması görünür olmalı.
     grounding: str = ""
 
-    @property
-    def extra(self) -> dict[str, object]:
-        """Motor-bağımsız koşucuların okuduğu özet (benchmark uyumluluğu).
+    #: Motor-bağımsız koşucuların okuduğu özet. Alan, property DEĞİL: karşılaştırma
+    #: koşucusu iki turlu vakalarda iki cevabın özetini birleştirip geri YAZIYOR
+    #: (`answer.extra = ...`). Property olarak yazınca o atama AttributeError veriyor
+    #: ve vaka "çalıştırma hatası" olarak düşüyor — ölçüldü, G6 ve G7 0/3.
+    extra: dict[str, object] = field(default_factory=dict)
 
-        `error_codes` burada TEKRARLI liste: aynı sınıf iki kez bozulduysa iki kez
-        geçer. Benzersiz anahtar döndürmek karşılaştırmayı sessizce bozar — koşucu
-        bu alanı doğrudan sayıyor.
-        """
-        return {
-            "grounding": self.grounding,
-            "error_codes": [s.error_code for s in self.steps if s.error_code],
-        }
+    def __post_init__(self) -> None:
+        if not self.extra:
+            # `error_codes` TEKRARLI liste: aynı sınıf iki kez bozulduysa iki kez geçer.
+            # Benzersiz anahtar döndürmek karşılaştırmayı sessizce bozar.
+            self.extra = {
+                "grounding": self.grounding,
+                "error_codes": [s.error_code for s in self.steps if s.error_code],
+            }
 
     def error_codes(self) -> dict[str, int]:
         """Hangi hata sınıfı kaç kez oluştu.

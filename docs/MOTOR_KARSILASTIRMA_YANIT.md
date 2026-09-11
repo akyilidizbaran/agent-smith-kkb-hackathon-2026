@@ -44,8 +44,11 @@ koşudan koşuya yer değiştiriyor.
 Bu bir itiraz değil, protokole bir not: **pass^3 üç tekrarla, paylaşılan bir uçta,
 kararı taşıyacak kadar kararlı değil.** Karar kuralının 1. basamağı "düşük olan
 elenir" diyor; iki koşuda iki farklı sonuç veren bir ölçüt eleme yapamaz. Süre için
-zaten yazmışsın ("oranlar anlamlı, mutlak saniyeler değil) — aynı uyarı pass^3 için
+zaten yazmışsın ("oranlar anlamlı, mutlak saniyeler değil") — aynı uyarı pass^3 için
 de geçerli. Bende V3 seed'de G3 18,4 s, G5 26,2 s sürdü; senin koşunda 6 s civarıydı.
+
+Bu gözlemin ne kadar güçlü olduğunu §3.3'te kazara ölçtüm: **aynı kodu** iki kez
+koşturdum ve bir vaka 0/3'ten 3/3'e, bir hata sınıfı 21'den 0'a gitti.
 
 **Kararlı olan tek şey tur ve adım sayısı** ve orada fark net:
 
@@ -104,7 +107,7 @@ cevap doğru ama ekranda sayı dolu bir tablo kalıyor. Artık ay çözünürlü
 
 ---
 
-## 3. Raporunda görünmeyen üç şey
+## 3. Raporunda görünmeyen dört şey
 
 ### 3.1 Ön-yükleme gerçek katalogda çalışmıyor
 
@@ -151,7 +154,44 @@ Kusur değil, yazılmamış iş — ama "sınır doğrulayıcı politika katman�
 `SERIES_NOT_MATERIALIZED` kodu tanımlı ve hiç üretilmiyor; o kodun mekanizmasını
 bu hafta ben yazdım (ADR-0026). Birleştirmede doğal bir buluşma noktası.
 
-### 3.3 Paralel çağrı bizim bağlantımızı yarıştırıyor
+### 3.3 Koşucu, ölçmek istediğin motoru sessizce değiştirebiliyor
+
+Bunu düzeltmelerimi ölçmeye çalışırken buldum ve ayrı bir başlık hak ediyor, çünkü
+ölçüm aracının kendisiyle ilgili.
+
+`scripts/run_benchmark.py` başında:
+
+```python
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+```
+
+`insert(0, ...)` **PYTHONPATH'in önüne geçiyor**. Yani ekip motorunu başka bir
+checkout'tan koşmak için `PYTHONPATH=<başka>/src` vermek işe yaramıyor: `import
+kkb_agent` yine koşucunun kendi `src`'sinden geliyor. Ben tam olarak bunu yaptım ve
+"düzeltmelerden sonraki" diye bir tur koştum; sonradan fark ettim ki o tur da
+düzeltmesiz kodu ölçmüş.
+
+Bu kazadan çıkan sonuç, düzeltmelerden bağımsız olarak önemli — **aynı kodun iki
+koşusu şunları verdi:**
+
+| | tur 1 | tur 2 | ikisi de aynı kod |
+|---|---|---|---|
+| seed · ekip pass^3 | 15/18 | 16/18 | evet |
+| Silver · ekip pass^3 | 15/18 | 16/18 | evet |
+| seed · `DUPLICATE_CALL` | 21 | 0 | evet |
+| Silver · `SQL_FAILED` | 15 | 18 | evet |
+| L4-01 (seed) | 0/3 | 3/3 | evet |
+| L6-04 (Silver) | 0/3 | 3/3 | evet |
+
+Bir vakanın 0/3'ten 3/3'e çıkması ve bir hata sınıfının 21'den 0'a inmesi — **kod
+değişmeden**. `--repeat 3` ile pass^3, bir motoru elemeye yetecek çözünürlükte değil.
+
+Önerim: `sys.path.insert` yerine "zaten import edilebiliyorsa dokunma" ya da açık
+bir `--engine-src` seçeneği; ve karar kuralının 1. basamağına bir eşik (ör. fark
+≥2 vaka) ya da `--repeat` için daha yüksek bir varsayılan.
+
+### 3.4 Paralel çağrı bizim bağlantımızı yarıştırıyor
 
 `AgentConfig.parallel` varsayılan `True`. Bir turdaki iki okuma aracı aynı adaptörü
 ve **tek `DuckDBPyConnection`'ı** kullanıyor. Ölçtüm — 4 iş parçacığı, 800 sorgu:
@@ -220,9 +260,10 @@ Bu bizim kör noktamızdı ve tam da jürinin okuyacağı yerdeydi: golden vakal
    `context.py` ve paralel yürütme de aynı yere gelsin; iki motor da import etsin.
    Böylece "hangi motor" sorusu bir bakım sorusu olmaktan çıkıyor.
 2. **Tek harness.** Hangisi olduğu ikincil. İki harness'ın maliyeti şu an bile
-   görünür: V3 bizim son commit'imizi almamış ve `list_datasets()` davranışı altında
-   değişti — ön-yükleme 44k token'a çıktı, kimse fark etmedi çünkü gerçek katalogla
-   hiç koşulmamıştı.
+   görünür: ön-yükleme dört serilik seed'de ölçülmüş ve orada gerçekten iyi
+   (1.387 token, tur 6,9 → 3,3); gerçek katalogla hiç koşulmadığı için 44k token'a
+   çıktığı görülmemiş. Ortak katmanda olsaydı, `list_datasets()`'i biz değiştirdiğimiz
+   gün aynı ölçüm iki motorda birden koşacaktı.
 3. **Benchmark koşucusu ortak ölçüm aracı olsun** ve `--repeat` varsayılanı 3'ten
    yukarı çıksın; ya da karar kuralının 1. basamağı "pass^3 farkı ≥2 vaka" gibi bir
    eşik istesin. İki koşuda iki farklı sıralama çıktı.
