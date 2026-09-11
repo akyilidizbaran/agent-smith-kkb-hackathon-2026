@@ -1,0 +1,45 @@
+{
+  "totalCount": 5,
+  "items": [
+    {
+      "Tarih": "01-01-2021",
+      "YEARWEEK": "2021-1",
+      "TP_KTF12": "18.61000000",
+      "UNIXTIME": {
+        "$numberLong": "1609455600"
+      }
+    },
+    {
+      "Tarih": "08-01-2021",
+      "YEARWEEK": "2021-2",
+      "TP_KTF12": "18.61000000",
+      "UNIXTIME": {
+        "$numberLong": "1610060400"
+      }
+    },
+    {
+      "Tarih": "15-01-2021",
+      "YEARWEEK": "2021-3",
+      "TP_KTF12": "18.40000000",
+      "UNIXTIME": {
+        "$numberLong": "1610665200"
+      }
+    },
+    {
+      "Tarih": "22-01-2021",
+      "YEARWEEK": "2021-4",
+      "TP_KTF12": "18.19000000",
+      "UNIXTIME": {
+        "$numberLong": "1611270000"
+      }
+    },
+    {
+      "Tarih": "29-01-2021",
+      "YEARWEEK": "2021-5",
+      "TP_KTF12": "18.13000000",
+      "UNIXTIME": {
+        "$numberLong": "1611874800"
+      }
+    }
+  ]
+}

@@ -362,3 +362,68 @@ def test_series_from_another_source_is_refused(
 
     with pytest.raises(SilverValidationError, match="belongs to source"):
         catalog_driven_to_staging(mislabelled, identity=identity, semantics=semantics)
+
+
+_LIVE_KEYED_CASES = {
+    "weekly": dict(
+        fixture=FIXTURE_ROOT / "evds/evds_ktf12_weekly_live_keyed.json",
+        dataset_id="evds_housing_interest",
+        series="TP.KTF12",
+        expected=[
+            date(2021, 1, 1),
+            date(2021, 1, 8),
+            date(2021, 1, 15),
+            date(2021, 1, 22),
+            date(2021, 1, 29),
+        ],
+    ),
+    "monthly": dict(
+        fixture=FIXTURE_ROOT / "evds/evds_kfe_monthly_live_keyed.json",
+        dataset_id="evds_housing_price_index",
+        series="TP.KFE.TR",
+        expected=[
+            date(2021, 1, 31),
+            date(2021, 2, 28),
+            date(2021, 3, 31),
+            date(2021, 4, 30),
+            date(2021, 5, 31),
+        ],
+    ),
+}
+
+
+@pytest.mark.parametrize("case_name", sorted(_LIVE_KEYED_CASES))
+def test_the_live_keyed_endpoint_response_maps_to_the_right_calendar_dates(
+    case_name: str, tmp_path: Path, semantics: dict[str, SeriesSemantics]
+) -> None:
+    """Captured from the documented, key-authenticated EVDS endpoint on 2026-09-11.
+
+    Until a key existed, every EVDS fixture came from the web application's own endpoint, and
+    ``tests/fixtures/raw/evds/README.md`` said in as many words that passing tests proved
+    parser behaviour against those captures rather than against the official endpoint, asking
+    for a re-capture once a key was available. The re-capture found two differences, and only
+    one of them was loud:
+
+    * monthly ``Tarih`` is ``2021-1`` live and ``01-2021`` in the capture — the old mapping
+      rejected it outright;
+    * weekly ``Tarih`` is ``08-01-2021`` live and ``01-08-2021`` in the capture — the old
+      mapping accepted it as 1 August 2021 and said nothing.
+
+    The expected dates below are the Fridays that ``TP.KTF12`` is actually published on, and
+    the month ends ``TP.KFE.TR`` is actually published for. A mapping that reads the field
+    order instead of ``UNIXTIME`` cannot produce them.
+    """
+
+    case = _LIVE_KEYED_CASES[case_name]
+    frame, identity = _bronze(
+        tmp_path,
+        fixture=case["fixture"],
+        source_id="evds",
+        dataset_id=case["dataset_id"],
+        parser=EvdsParser(),
+        metadata={"requested_series": [case["series"]]},
+    )
+
+    staging = catalog_driven_to_staging(frame, identity=identity, semantics=semantics)
+
+    assert list(staging["observation_date"]) == case["expected"]

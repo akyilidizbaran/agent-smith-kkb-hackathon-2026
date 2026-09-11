@@ -236,9 +236,19 @@ def test_evds_kfe_maps_real_fixture_without_base_year_or_semantic_leakage(
 def test_evds_kfe_uses_calendar_month_boundaries(
     tmp_path: Path, raw: str, period_start: date, period_end: date
 ) -> None:
+    """Month boundaries, with ``Tarih`` left as the only evidence of which month it is.
+
+    ``unixtime`` is cleared alongside the rewritten ``date_raw``: since the live keyed endpoint
+    was found to spell ``Tarih`` in the opposite field order from the captured fixtures, the
+    adapter reads the date from ``UNIXTIME`` and treats a disagreeing ``Tarih`` as a source
+    change. Rewriting only one of the two would test that conflict rule, not the month
+    arithmetic this case is about.
+    """
+
     frame, identity = _kfe_bronze(tmp_path)
     one = frame.iloc[[0]].copy()
     one.loc[one.index[0], "date_raw"] = raw
+    one.loc[one.index[0], "unixtime"] = None
 
     staging = evds_kfe_to_staging(one, identity=identity)
     assert staging.loc[0, "period_start"] == period_start
@@ -246,16 +256,44 @@ def test_evds_kfe_uses_calendar_month_boundaries(
     assert staging.loc[0, "observation_date"] == period_end
 
 
-@pytest.mark.parametrize("raw", ["2-2025", "02/2025", "13-2025", "02-25"])
+@pytest.mark.parametrize("raw", ["02/2025", "13-2025", "02-25", "2025", ""])
 def test_evds_kfe_rejects_malformed_or_invalid_month(
     tmp_path: Path, raw: str
 ) -> None:
+    """A month that cannot be read at all is refused rather than interpreted.
+
+    ``02-25`` is here for a specific reason: ``%Y`` reads ``25`` as the year 25, so without an
+    explicit plausibility floor this would silently become February of year 25.
+
+    ``2-2025`` used to be in this list and is now accepted. That is deliberate, not a
+    loosening by accident: the live keyed endpoint publishes single-digit months (``2021-1``),
+    so a rule that required two digits was rejecting the real source's own spelling.
+    """
+
     frame, identity = _kfe_bronze(tmp_path)
     one = frame.iloc[[0]].copy()
     one.loc[one.index[0], "date_raw"] = raw
+    one.loc[one.index[0], "unixtime"] = None
 
-    with pytest.raises(SilverValidationError, match="invalid EVDS KFE date_raw"):
+    with pytest.raises(SilverValidationError, match="EVDS date_raw"):
         evds_kfe_to_staging(one, identity=identity)
+
+
+@pytest.mark.parametrize("raw", ["2-2025", "2025-2", "02-2025"])
+def test_evds_kfe_reads_every_month_spelling_the_source_actually_uses(
+    tmp_path: Path, raw: str
+) -> None:
+    """``MM-YYYY`` from the captured fixtures and ``YYYY-M`` from the live keyed endpoint."""
+
+    frame, identity = _kfe_bronze(tmp_path)
+    one = frame.iloc[[0]].copy()
+    one.loc[one.index[0], "date_raw"] = raw
+    one.loc[one.index[0], "unixtime"] = None
+
+    staging = evds_kfe_to_staging(one, identity=identity)
+
+    assert staging.loc[0, "period_start"] == date(2025, 2, 1)
+    assert staging.loc[0, "period_end"] == date(2025, 2, 28)
 
 
 def test_evds_kfe_null_and_invalid_numeric_values_use_generic_foundation(

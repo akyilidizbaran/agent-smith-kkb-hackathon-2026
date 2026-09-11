@@ -41,6 +41,7 @@ from ...parsers.evds import EVDS_SCHEMA_VERSION
 from ..foundation import SilverValidationError
 from ...storage.parquet import ParquetIdentity
 from ._context import bddk_entity_code, bddk_entity_id, lineage_fields, staging_frame
+from ._evds_time import evds_month_bounds, evds_point_date
 
 
 @dataclass(frozen=True)
@@ -215,42 +216,6 @@ def _bddk_weekly_date(raw: object, row_number: int) -> date:
         ) from exc
 
 
-def _evds_point_date(raw: object, row_number: int) -> date:
-    """Parse the EVDS ``MM-DD-YYYY`` response date exactly as the first EVDS adapter did."""
-
-    if (
-        not isinstance(raw, str)
-        or len(raw) != 10
-        or raw[2] != "-"
-        or raw[5] != "-"
-        or not raw[:2].isdigit()
-        or not raw[3:5].isdigit()
-        or not raw[6:].isdigit()
-    ):
-        raise SilverValidationError(f"invalid EVDS date_raw at row {row_number}: {raw!r}")
-    try:
-        return datetime.strptime(raw, "%m-%d-%Y").date()
-    except ValueError as exc:
-        raise SilverValidationError(
-            f"invalid EVDS date_raw at row {row_number}: {raw!r}"
-        ) from exc
-
-
-def _evds_month_bounds(raw: object, row_number: int) -> tuple[date, date]:
-    if not isinstance(raw, str) or _EVDS_MONTH.fullmatch(raw) is None:
-        raise SilverValidationError(
-            f"invalid EVDS monthly date_raw at row {row_number}: {raw!r}"
-        )
-    try:
-        period_start = datetime.strptime(raw, "%m-%Y").date().replace(day=1)
-    except ValueError as exc:
-        raise SilverValidationError(
-            f"invalid EVDS monthly date_raw at row {row_number}: {raw!r}"
-        ) from exc
-    last_day = monthrange(period_start.year, period_start.month)[1]
-    return period_start, period_start.replace(day=last_day)
-
-
 # ------------------------------------------------------------------- source mappings
 
 
@@ -301,16 +266,16 @@ def _bddk_finturk_row(row: pd.Series, row_number: int, semantics: SeriesSemantic
 def _evds_row(row: pd.Series, row_number: int, semantics: SeriesSemantics):
     """Choose the EVDS date policy from the catalog frequency, never from the value's shape.
 
-    EVDS returns ``MM-DD-YYYY`` for the series published as a point in time and ``MM-YYYY`` for
-    the ones published for a whole month. Which of the two a series uses is a property of the
-    series, and the catalog is where that property is recorded. A frequency this module has not
-    been shown a real response for is refused rather than guessed.
+    Whether an observation is a point in time or a whole month is a property of the series, and
+    the catalog is where that property is recorded. The *spelling* of the date is not trusted at
+    all — see :mod:`._evds_time`. A frequency this module has not been shown a real response for
+    is refused rather than guessed.
     """
 
     if semantics.frequency in {"daily", "weekly", "business_daily"}:
-        return _Temporal(_evds_point_date(row["date_raw"], row_number), None, None), None
+        return _Temporal(evds_point_date(row, row_number), None, None), None
     if semantics.frequency == "monthly":
-        period_start, period_end = _evds_month_bounds(row["date_raw"], row_number)
+        period_start, period_end = evds_month_bounds(row, row_number)
         return _Temporal(period_end, period_start, period_end), None
     raise SilverValidationError(
         f"{semantics.series_id}: no reviewed EVDS date policy for frequency "
@@ -358,7 +323,7 @@ SOURCE_MAPPINGS: dict[str, SourceMapping] = {
     "evds": SourceMapping(
         source_id="evds",
         schema_version=EVDS_SCHEMA_VERSION,
-        required_columns=_COMMON_COLUMNS | {"date_raw"},
+        required_columns=_COMMON_COLUMNS | {"date_raw", "unixtime"},
         row_mapper=_evds_row,
     ),
 }

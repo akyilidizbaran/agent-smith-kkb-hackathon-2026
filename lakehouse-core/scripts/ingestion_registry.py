@@ -80,11 +80,22 @@ def _evds_spec(row: SeriesRow, start: date, end: date) -> FetchSpec:
 # --------------------------------------------------------------------- BDDK Aylık
 # Fully derivable: the monthly endpoint addresses a series by its stable native
 # item id (docs/sources/bddk_monthly.md: "Item address: stable item id 1534"),
-# not a positional one, so kalemSutun = "<native_code>?Toplam" is a source-wide
-# convention, not a per-series guess. taraf/paraBirimi/periyot/gosterimTuru are
-# constant across every series this connector has ever verified.
+# not a positional one. taraf/paraBirimi/periyot/gosterimTuru are constant across
+# every series this connector has ever verified.
+#
+# kalemSutun is "<item>?<column>", and the catalog's native_code already carries
+# that whole address for the one catalogued series ("1534?Toplam"). Appending
+# "?Toplam" unconditionally produced "1534?Toplam?Toplam" on the wire; the endpoint
+# answered with correct values, but the parser derived series_id from the request
+# and returned "bddk_monthly:1534_Toplam_Toplam", which matches no catalog row. The
+# series therefore parsed, reached Bronze, and then silently failed to publish — the
+# flagship monthly series was absent from Silver while every log line said success.
+# The column is appended only when native_code does not already name one.
 
 def _bddk_monthly_spec(row: SeriesRow, start: date, end: date) -> FetchSpec:
+    kalem_sutun = (
+        row.native_code if "?" in row.native_code else f"{row.native_code}?Toplam"
+    )
     return FetchSpec(
         source_id=row.source_id,
         dataset_id=row.dataset_id,
@@ -95,7 +106,7 @@ def _bddk_monthly_spec(row: SeriesRow, start: date, end: date) -> FetchSpec:
             "periyot": "1",
             "paraBirimi": "TL",
             "taraf": ["10001"],
-            "kalemSutun": f"{row.native_code}?Toplam",
+            "kalemSutun": kalem_sutun,
             "gosterimTuru": "grid",
         },
     )

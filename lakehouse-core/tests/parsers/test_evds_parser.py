@@ -103,13 +103,51 @@ def test_source_nulls_are_preserved_and_never_become_zero() -> None:
 
 # 12. Fixture-driven tests pass without internet: implied by every test above.
 def test_fixture_directory_contains_no_secret_material() -> None:
+    """No fixture may carry a key, a header, or any part of a request.
+
+    The envelope check that used to live here required ``seriesNames`` in every fixture. That
+    held for the captures from the EVDS web application, but the documented key-authenticated
+    endpoint — called live for the first time on 2026-09-11 — omits the field entirely. The
+    parser already reads it defensively (``document.get("seriesNames") or {}``) and simply
+    leaves ``series_name`` null, so the requirement belonged to one endpoint rather than to the
+    contract. What every EVDS response does carry is asserted below instead.
+    """
+
     for fixture in sorted(FIXTURE_DIR.glob("*.json")):
         text = fixture.read_text(encoding="utf-8").lower()
         assert "api_key" not in text
         assert "authorization" not in text
         assert "bearer " not in text
         document = json.loads(fixture.read_text(encoding="utf-8"))
-        assert set(document) >= {"totalCount", "items", "seriesNames"}
+        assert set(document) >= {"totalCount", "items"}, fixture.name
+
+
+def test_the_keyed_endpoint_capture_omits_the_series_name_the_web_app_sends() -> None:
+    """A difference worth pinning, because it is the quiet kind.
+
+    ``series_name`` is the human-readable series title. It is decoration in Bronze — nothing
+    joins on it — so its disappearance produces no error anywhere. Pinning it here means the
+    difference is a recorded fact about the source rather than something rediscovered later.
+    """
+
+    web_app = json.loads(
+        (FIXTURE_DIR / "evds_ktf12_weekly.json").read_text(encoding="utf-8")
+    )
+    keyed = json.loads(
+        (FIXTURE_DIR / "evds_ktf12_weekly_live_keyed.json").read_text(encoding="utf-8")
+    )
+
+    assert "seriesNames" in web_app
+    assert "seriesNames" not in keyed
+
+    frame = EvdsParser().parse(
+        _asset(
+            FIXTURE_DIR / "evds_ktf12_weekly_live_keyed.json",
+            metadata={"requested_series": ["TP.KTF12"]},
+        )
+    ).dataframe
+    assert set(frame["series_name"]) == {None}
+    assert set(frame["series_column"]) == {"TP_KTF12"}
 
 
 def test_raw_date_and_value_fields_are_kept_verbatim() -> None:
