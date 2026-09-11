@@ -67,6 +67,7 @@ class CaseOutcome:
     tools_used: list[str] = field(default_factory=list)
     tool_errors: int = 0
     error_codes: dict[str, int] = field(default_factory=dict)
+    grounding: str = ""
     failures: list[str] = field(default_factory=list)
     answer_preview: str = ""
 
@@ -130,6 +131,7 @@ def run_case(case: GoldenCase) -> CaseOutcome:
         tools_used=tools,
         tool_errors=errors,
         error_codes=codes,
+        grounding=answer.grounding,
         failures=failures,
         answer_preview=answer.text[:200].replace("\n", " "),
     )
@@ -262,6 +264,12 @@ def main() -> None:
     if all_codes:
         print("HATA SINIFLARI: " + ", ".join(
             f"{k}×{v}" for k, v in sorted(all_codes.items(), key=lambda x: -x[1])))
+    measured = [o for o in outcomes if o.grounding]
+    if measured:
+        clean = sum(1 for o in measured if o.grounding == "OK")
+        print(f"ANLATI DOĞRULAMA: {clean}/{len(measured)} temiz" + (
+            "" if clean == len(measured)
+            else " | " + "; ".join(f"{o.id}: {o.grounding}" for o in measured if o.grounding != "OK")))
     if json_out:
         json_out.write_text(
             json.dumps([asdict(o) for o in outcomes], ensure_ascii=False, indent=2), encoding="utf-8"

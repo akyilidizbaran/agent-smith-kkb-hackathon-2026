@@ -121,3 +121,86 @@ def test_veri_cekmeden_cevap_bir_kez_geri_gonderilir() -> None:
 
     assert any(s.thought and "veri" in s.thought.lower() for s in answer.steps)
     assert answer.text
+
+
+class _NoToolTool(Tool):
+    """Sayı döndüren bir veri aracı; grounding havuzunu doldurmak için."""
+
+    name = "lakehouse_query"
+    description = "test aracı"
+    Params = _Params
+
+    def run(self, params: _Params) -> ToolResult:
+        return ToolResult(
+            content="Sorgu başarılı: 2 satır.\ndonem=2025-01 deger=100.0\ndonem=2025-12 deger=110.0",
+            data=pd.DataFrame({"donem": ["2025-01", "2025-12"], "deger": [100.0, 110.0]}),
+        )
+
+
+def _grounding_agent(turns: list[LLMResponse]) -> tuple[AnalyticsAgent, _ScriptedLLM]:
+    registry = ToolRegistry()
+    registry.register(_NoToolTool())
+    llm = _ScriptedLLM(turns)
+    return (
+        AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=10),
+        llm,
+    )
+
+
+def test_anlatidaki_uydurma_sayi_bir_kez_geri_gonderilir() -> None:
+    """SQL'de hesap yaptırmak, modelin anlatıda kendi aritmetiğini yapmasını engellemiyor.
+
+    Araç çıktısında 100 ve 110 var; "10,5 arttı" hiçbirinde yok. Harness cevabı bir kez
+    geri gönderir; ikinci cevap temizse o gider.
+    """
+    agent, llm = _grounding_agent([
+        LLMResponse(content="", tool_calls=[_call(1)]),
+        LLMResponse(content="Bakiye 10,5 milyon TL arttı."),
+        LLMResponse(content="Bakiye 100'den 110'a çıktı."),
+    ])
+
+    answer = agent.ask("2025'te ne oldu?")
+
+    assert answer.text.startswith("Bakiye 100")
+    assert answer.grounding == "OK"
+    assert any(s.thought and s.thought.startswith("grounding: MISS") for s in answer.steps)
+
+
+def test_ikinci_denemede_de_dogrulanamayan_sayi_isaretlenir() -> None:
+    """Cevap engellenmiyor — doğrulanamayan değer açıkça işaretleniyor.
+
+    Tabloyu kullanıcı zaten görüyor; cevabı tümden bastırmak bilgi kaybı olur.
+    """
+    agent, _ = _grounding_agent([
+        LLMResponse(content="", tool_calls=[_call(1)]),
+        LLMResponse(content="Bakiye 10,5 milyon TL arttı."),
+        LLMResponse(content="Yine de 10,5 milyon TL arttı."),
+    ])
+
+    answer = agent.ask("2025'te ne oldu?")
+
+    assert "doğrulanamadı" in answer.text
+    assert answer.grounding.startswith("MISS")
+
+
+def test_nedensellik_iddiasi_da_geri_gonderilir() -> None:
+    """Veriden çıkarılamayan neden-sonuç, uydurma sayı kadar risklidir."""
+    agent, _ = _grounding_agent([
+        LLMResponse(content="", tool_calls=[_call(1)]),
+        LLMResponse(content="Bakiye 100'den 110'a çıktı; faiz indirimi buna yol açtı."),
+        LLMResponse(content="Bakiye 100'den 110'a çıktı."),
+    ])
+
+    answer = agent.ask("2025'te ne oldu?")
+
+    assert "yol açtı" not in answer.text
+    assert answer.grounding == "OK"
+
+
+def test_veri_cekilmemisse_grounding_olculmez() -> None:
+    """Havuz boşken her sayı 'eksik' görünür; ölçüm anlamsız olur."""
+    agent, _ = _grounding_agent([LLMResponse(content="Kapsam 2021-2026 arası.")])
+
+    answer = agent.ask("Hangi yıllar var?")
+
+    assert answer.grounding == ""

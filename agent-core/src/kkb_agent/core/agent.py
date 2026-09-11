@@ -25,6 +25,7 @@ from typing import Any
 from ..domain import DomainProfile
 from ..llm.base import ChatMessage, LLMClient, ToolCall
 from .errors import ToolError
+from .grounding import causal_language, grounding_check
 from .registry import ToolRegistry
 from .tool import ToolResult
 from .workspace import AnalysisWorkspace
@@ -118,6 +119,14 @@ class AgentAnswer:
     steps: list[AgentStep] = field(default_factory=list)
     workspace: AnalysisWorkspace | None = None
     hit_step_limit: bool = False
+    #: "OK" ya da "MISS:<sayılar>" (+ "| CAUSAL:<ifadeler>"). Boş: veri çekilmediği
+    #: için ölçülmedi. Koşucular bunu rapor eder; anlatı doğrulaması görünür olmalı.
+    grounding: str = ""
+
+    @property
+    def extra(self) -> dict[str, object]:
+        """Motor-bağımsız koşucuların okuduğu özet (benchmark uyumluluğu)."""
+        return {"grounding": self.grounding, "error_codes": list(self.error_codes())}
 
     def error_codes(self) -> dict[str, int]:
         """Hangi hata sınıfı kaç kez oluştu.
@@ -203,6 +212,9 @@ class AnalyticsAgent:
         duplicates = 0                       # kilidin kaç kez devreye girdiği
         terminal: ToolError | None = None    # tekrar denemeyle çözülmeyen hata
         stuck_note: str | None = None        # son tura verilecek özel yönerge
+        tool_texts: list[str] = []           # grounding havuzu: araçların gerçekten söyledikleri
+        regenerated = False                  # cevap bir kez geri gönderildi mi
+        grounding = ""                       # son ölçüm; AgentAnswer'a taşınır
 
         for i in range(1, self.max_steps + 1):
             started = time.perf_counter()
@@ -238,6 +250,53 @@ class AnalyticsAgent:
                     continue
 
                 answer_text = self._strip_reasoning(response.content)
+
+                # Anlatı denetimi: cevaptaki her sayı bir araç çıktısında var mı?
+                # SQL hesabı yaptırmak modelin anlatıda kendi aritmetiğini yapmasını
+                # engellemiyor — ölçümde "155.515 milyon TL arttı" gibi tabloda
+                # olmayan farklar görüldü. Bir kez geri gönderiyoruz; ikinci kez de
+                # tutmazsa cevap gider ama doğrulanamayan sayılar işaretlenir.
+                if produced_data:
+                    grounding = grounding_check(question, answer_text, tool_texts)
+                    causal = causal_language(answer_text)
+                    if causal:
+                        grounding += " | CAUSAL:" + ",".join(causal)
+                    if not regenerated and (grounding.startswith("MISS") or causal):
+                        regenerated = True
+                        steps.append(
+                            AgentStep(
+                                index=i,
+                                thought=f"grounding: {grounding}",
+                                ok=False,
+                                duration_ms=(time.perf_counter() - started) * 1000,
+                            )
+                        )
+                        problems = []
+                        if grounding.startswith("MISS"):
+                            problems.append(
+                                "şu sayılar hiçbir araç çıktısında yok: "
+                                + grounding.split("|")[0][5:].strip()
+                            )
+                        if causal:
+                            problems.append("nedensellik iddiası var: " + ", ".join(causal))
+                        messages.append(ChatMessage(role="assistant", content=response.content))
+                        messages.append(
+                            ChatMessage(
+                                role="user",
+                                content="Cevabında " + "; ".join(problems) + ". Yalnızca "
+                                "araçlardan dönen sayıları kullan; hesap gerekiyorsa "
+                                "workspace_compute_column ile yaptır. Veriden çıkarılamayan "
+                                "neden-sonuç iddiası kurma. Cevabını yeniden yaz.",
+                            )
+                        )
+                        continue
+                    if regenerated and grounding.startswith("MISS"):
+                        answer_text += (
+                            "\n\n(Not: anlatımdaki şu değerler araç çıktısında birebir "
+                            "doğrulanamadı: " + grounding.split("|")[0][5:].strip()
+                            + ". Kesin değerler için tabloya bakın.)"
+                        )
+
                 steps.append(
                     AgentStep(
                         index=i,
@@ -248,7 +307,8 @@ class AnalyticsAgent:
                 )
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=answer_text))
-                return AgentAnswer(text=answer_text, steps=steps, workspace=self.workspace)
+                return AgentAnswer(text=answer_text, steps=steps, workspace=self.workspace,
+                                   grounding=grounding)
 
             # --- Araçları çalıştır ---
             messages.append(
@@ -297,6 +357,8 @@ class AnalyticsAgent:
                         error_code=result.error.error_code if result.error else None,
                     )
                 )
+                if result.ok:
+                    tool_texts.append(result.content)
                 if result.ok and call.name in self.DATA_PRODUCING_TOOLS:
                     produced_data = True
                 if result.error is not None and not result.error.is_retryable:
@@ -323,7 +385,7 @@ class AnalyticsAgent:
                 text = self._strip_reasoning(final.content)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=text))
-                return AgentAnswer(text=text, steps=steps, workspace=self.workspace)
+                return AgentAnswer(text=text, steps=steps, workspace=self.workspace, grounding=grounding)
 
         # --- Adım limiti ---
         final = self.llm.chat(
@@ -337,7 +399,8 @@ class AnalyticsAgent:
             ]
         )
         text = self._strip_reasoning(final.content)
-        return AgentAnswer(text=text, steps=steps, workspace=self.workspace, hit_step_limit=True)
+        return AgentAnswer(text=text, steps=steps, workspace=self.workspace,
+                           hit_step_limit=True, grounding=grounding)
 
     # ------------------------------------------------------------------
     def _build_messages(self, question: str) -> list[ChatMessage]:
