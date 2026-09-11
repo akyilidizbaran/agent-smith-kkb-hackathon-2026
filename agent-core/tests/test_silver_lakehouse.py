@@ -75,8 +75,14 @@ def lake(tmp_path: Path) -> SilverLakehouse:
             name_tr="Konut Faizi")
     _series(con, "evds:TP.KFE.TR", unit="index", measure_type="index",
             semantic_confidence="derived", aliases=["konut fiyat endeksi"], name_tr="KFE")
+    # Katalogda tanımlı, tek gözlemi yok: veri ekibinin gerçek veritabanında 1620 serinin
+    # 1605'i bu durumda. Adaptörün bunu ayrı bir durum olarak ele alması test ediliyor.
+    _series(con, "evds:TP.HENUZ.CEKILMEDI", aliases=["taşıt kredisi"],
+            name_tr="Taşıt Kredisi (henüz çekilmedi)")
     for i, v in enumerate([100.0, 110.0, 121.0], start=1):
         _obs(con, "bddk_monthly:konut", date(2025, i, 28), v)
+    for i, v in enumerate([42.1, 41.8, 41.5], start=1):
+        _obs(con, "evds:TP.KTF12", date(2025, i, 28), v, unit="pct", mt="rate")
     _obs(con, "evds:TP.KFE.TR", date(2025, 1, 31), 1842.3, unit="index", mt="index")
     _obs(con, "evds:TP.KFE.TR", date(2025, 2, 28), None, flag="missing_value",
          unit="index", mt="index")
@@ -88,9 +94,43 @@ def test_protokolu_karsilar(lake: SilverLakehouse) -> None:
     assert isinstance(lake, LakehouseClient)
 
 
-def test_her_seri_bir_dataset(lake: SilverLakehouse) -> None:
+def test_yalnizca_gozlemi_olan_seri_katalogda(lake: SilverLakehouse) -> None:
+    """Katalogda dört seri var, üçünde gözlem var; modele gidecek olan o üçü.
+
+    Veri ekibinin gerçek veritabanında bu oran 1620'ye 15: `meta.series` "hangi serinin
+    anlamı kayıtlı" sorusunu yanıtlıyor, "hangi serinin verisi var" sorusunu değil.
+    Sorgulanamayan seriyi kataloğa koymak, modele üzerinden cevap üretemeyeceği bir tablo
+    göstermek demektir.
+    """
     ids = {s.dataset_id for s in lake.list_datasets()}
     assert ids == {"bddk_monthly:konut", "evds:TP.KTF12", "evds:TP.KFE.TR"}
+    assert "evds:TP.HENUZ.CEKILMEDI" not in ids
+
+
+def test_yuklenmemis_seri_yok_sayilmaz_ayri_sebeple_reddedilir(
+    lake: SilverLakehouse,
+) -> None:
+    """'Böyle bir seri yok' ile 'verisi yok' aynı cevap değildir.
+
+    Jüri katalogda olup henüz çekilmemiş bir seriyi sorduğunda doğru cevap "bilmiyorum"
+    değil, "bu seri tanımlı fakat verisi yüklenmemiş"tir. İkisini tek hataya indirgersek
+    o ayrımı söyleyemeyiz.
+    """
+    with pytest.raises(LakehouseError, match="henüz hiç gözlem yüklenmemiş"):
+        lake.get_dataset("evds:TP.HENUZ.CEKILMEDI")
+
+    with pytest.raises(LakehouseError, match="bulunamadı"):
+        lake.get_dataset("evds:BOYLE.BIR.SERI.YOK")
+
+
+def test_eslesme_yoksa_arama_alakasiz_tablo_dondurmez(lake: SilverLakehouse) -> None:
+    """Boş sonuç, yanlış sonuçtan iyidir.
+
+    Skorlama hiçbir şey bulmadığında eskiden kataloğun ilk N serisi dönüyordu. Dört
+    tablolu bir seed'de zararsızdı; 1620 serilik katalogda modele alakasız bir tablo
+    verip ondan cevap üretmeye davet ediyor.
+    """
+    assert lake.search_datasets("kuantum kromodinamiği") == []
 
 
 def test_measure_type_ve_birim_cevrilir(lake: SilverLakehouse) -> None:

@@ -108,6 +108,19 @@ class SilverLakehouse:
                 )
 
     def _load_catalog(self) -> dict[str, DatasetSpec]:
+        """Kataloğu yükler ve yüklenmemiş serileri ayırır.
+
+        `meta.series` "hangi serinin anlamı kayıtlı" sorusunu yanıtlar, "hangi serinin
+        verisi var" sorusunu değil. Veri ekibinin kataloğunda 1620 seri var, bunların
+        yalnızca bir kısmı gerçekten çekilmiş durumda. İkisi arasındaki fark modele
+        gösterilecek olsaydı, model sorgulanamayacak bir seri seçip ya boş sonuç alır ya
+        da — daha kötüsü — adından bir sayı uydururdu.
+
+        Bu yüzden gözlemi olmayan seri kataloğa girmiyor. Ama yok sayılmıyor da: adı ve
+        kimliği `_uningested` içinde tutuluyor, böylece "böyle bir seri var mı?" sorusuna
+        "yok" değil, "var ama henüz yüklenmemiş" denebiliyor. Bu iki cevap birbirinin
+        yerine geçmez.
+        """
         rows = self._con.execute(
             """
             SELECT series_id, source_id, native_code, dataset_id, name_tr, description,
@@ -124,7 +137,15 @@ class SilverLakehouse:
                 f"SELECT series_id, count(*) FROM {SILVER_RELATION} GROUP BY 1"
             ).fetchall()
         )
-        return {r[0]: self._to_spec(r, counts.get(r[0])) for r in rows}
+        catalog: dict[str, DatasetSpec] = {}
+        self._uningested: dict[str, str] = {}
+        for row in rows:
+            series_id, name_tr = row[0], row[4]
+            if counts.get(series_id):
+                catalog[series_id] = self._to_spec(row, counts[series_id])
+            else:
+                self._uningested[series_id] = name_tr
+        return catalog
 
     def _to_spec(self, row: tuple, row_count: int | None) -> DatasetSpec:
         (series_id, source_id, native_code, dataset_id, name_tr, description, aliases, tags,
@@ -209,11 +230,21 @@ class SilverLakehouse:
 
     def get_dataset(self, dataset_id: str) -> DatasetSpec:
         spec = self._catalog.get(dataset_id)
-        if spec is None:
+        if spec is not None:
+            return spec
+        if dataset_id in self._uningested:
             raise LakehouseError(
-                f"'{dataset_id}' bulunamadı. Mevcut seriler: {', '.join(sorted(self._catalog))}"
+                f"'{dataset_id}' ({self._uningested[dataset_id]}) katalogda tanımlı fakat bu "
+                "veri tabanına henüz hiç gözlem yüklenmemiş. Seri yok değil, verisi yok — "
+                "bu ikisi aynı şey değildir ve kullanıcıya böyle söylenmelidir."
             )
-        return spec
+        # Tüm katalog listelenmiyor: 1600'den fazla seride bu mesajın kendisi hataya dönüşür.
+        near = [sid for sid in self._catalog if dataset_id.lower() in sid.lower()][:8]
+        suffix = f" Benzer olanlar: {', '.join(near)}" if near else ""
+        raise LakehouseError(
+            f"'{dataset_id}' bulunamadı ({len(self._catalog)} seri yüklü)."
+            f"{suffix} Doğru kimliği bulmak için lakehouse_search kullan."
+        )
 
     def search_datasets(self, query: str, limit: int = 5) -> list[DatasetSpec]:
         """Anahtar kelime skorlaması; `aliases` en ağırlıklı alan.
@@ -230,7 +261,10 @@ class SilverLakehouse:
             if score:
                 scored.append((score, spec))
         scored.sort(key=lambda x: (-x[0], x[1].dataset_id))
-        return [s for _, s in scored[:limit]] or list(self._catalog.values())[:limit]
+        # Eşleşme yoksa boş dönüyoruz. Eskiden kataloğun ilk N serisi dönüyordu; dört
+        # tablolu bir seed'de zararsız bir kolaylıktı, 1620 serilik bir katalogda ise
+        # modele alakasız bir tablo verip onu o tablodan cevap üretmeye davet ediyor.
+        return [s for _, s in scored[:limit]]
 
     # ---------- Sorgulama ----------
     def execute_sql(self, sql: str, *, max_rows: int = 10_000) -> QueryResult:
@@ -310,16 +344,22 @@ class SilverLakehouse:
 
     def health(self) -> dict[str, Any]:
         n_obs = self._con.execute(f"SELECT count(*) FROM {SILVER_RELATION}").fetchone()[0]
-        unverified = [
+        unverified = sorted(
             s.dataset_id for s in self._catalog.values()
             if any("DOĞRULANMAMIŞ" in n for n in s.notes)
-        ]
+        )
         return {
             "ok": True,
             "db_path": str(self.db_path),
             "relation": SILVER_RELATION,
-            "series": len(self._catalog),
+            "queryable_series": len(self._catalog),
+            "catalogued_series": len(self._catalog) + len(self._uningested),
+            "uningested_series": len(self._uningested),
             "observations": n_obs,
-            "unverified_series": unverified,
+            # Sayı önce, örnek sonra: 1600 kimliği ekrana dökmek teşhis değil gürültüdür.
+            "unverified_series": (
+                f"{len(unverified)} seri"
+                + (f" (ör. {', '.join(unverified[:5])})" if unverified else "")
+            ),
             "hardened": True,
         }
