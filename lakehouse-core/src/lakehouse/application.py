@@ -40,6 +40,7 @@ from .ingestion.windowing import (
 )
 from .parsers.base import BaseParser
 from .parsers.evds import EvdsParser
+from .silver.build import SilverBuildReport, build_silver_snapshot
 from .storage.parquet import ParquetStorage
 from .storage.raw import RawStorage
 
@@ -252,6 +253,24 @@ def run_bootstrap(database: str | Path) -> BootstrapSummary:
     try:
         count = connection.execute("SELECT count(*) FROM meta.series").fetchone()[0]
         return BootstrapSummary(database=Path(database), catalog_series_count=int(count))
+    finally:
+        connection.close()
+
+
+def run_silver_build(
+    *, database: str | Path, data_root: str | Path
+) -> SilverBuildReport:
+    """Publish one Silver snapshot from everything durable in the Bronze tree.
+
+    Bootstrap first, so a rebuild on a database that predates a schema or catalog change maps
+    against the catalog as it is now rather than as it was when the bytes were fetched.
+    """
+
+    connection = bootstrap_database(database)
+    try:
+        return build_silver_snapshot(
+            connection, bronze_root=Path(data_root) / "bronze"
+        )
     finally:
         connection.close()
 

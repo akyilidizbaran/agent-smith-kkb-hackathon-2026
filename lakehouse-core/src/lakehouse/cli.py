@@ -15,6 +15,7 @@ from .application import (
     run_adhoc_ingestion,
     run_bootstrap,
     run_known_source_ingestion,
+    run_silver_build,
 )
 from .errors import LakehouseError
 from .generic.config import ENCODINGS
@@ -79,6 +80,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     ingest.add_argument("--timeout", type=float, default=30.0)
     ingest.set_defaults(handler=_handle_ingest)
+
+    silver = commands.add_parser(
+        "silver",
+        help="rebuild silver.fact_observation from every catalogued Bronze observation",
+    )
+    _add_storage_options(silver)
+    silver.set_defaults(handler=_handle_silver)
 
     ingest_file = commands.add_parser(
         "ingest-file", help="ingest a local or public tabular artifact into the ad-hoc table"
@@ -159,6 +167,17 @@ def _handle_ingest(
         clock=clock,
     )
     _print_windowed_summary(summary)
+    return 0
+
+
+def _handle_silver(
+    args: argparse.Namespace, *, session: Any = None, clock: Any = None
+) -> int:
+    """Turn Bronze into the trusted query surface an agent actually reads."""
+
+    report = run_silver_build(database=args.database, data_root=args.data_root)
+    print("status: success")
+    print(report.render())
     return 0
 
 

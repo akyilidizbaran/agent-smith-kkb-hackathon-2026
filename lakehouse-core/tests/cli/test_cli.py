@@ -11,6 +11,7 @@ from typing import Any
 
 import duckdb
 
+from src.lakehouse.catalog.series import load_catalog_files
 from src.lakehouse.cli import main
 from tests.generic._support import write_bytes, write_csv, xlsx_bytes
 
@@ -172,7 +173,13 @@ def test_fresh_bootstrap_and_repeat_are_idempotent(tmp_path: Path) -> None:
 
     assert first.returncode == second.returncode == 0
     assert "status: success" in first.stdout
-    assert _read(database, "SELECT count(*) FROM meta.series")[0][0] == 5
+    # Counted from the repository catalog rather than written as a literal: the catalog grows
+    # as sources and series are added, and a hard-coded size makes an unrelated catalog commit
+    # fail this test. What bootstrap must guarantee is that the real catalog is loaded whole
+    # and that a second run neither duplicates nor drops a row.
+    expected_series = len(load_catalog_files(ROOT / "catalog" / "series"))
+    assert expected_series >= 5, "repository catalog precondition"
+    assert _read(database, "SELECT count(*) FROM meta.series")[0][0] == expected_series
     assert _read(database, "SELECT count(*) FROM meta.artifact")[0][0] == 0
 
 
@@ -344,3 +351,45 @@ def test_ambiguous_generic_input_fails_through_production_parser(
     assert result != 0
     assert "delimiter" in captured.err
     assert _read(tmp_path / "data" / "lakehouse.duckdb", "SELECT status FROM meta.run")[0][0] == "failed"
+
+
+def test_silver_command_publishes_bronze_into_the_trusted_query_surface(
+    tmp_path: Path, capsys: Any
+) -> None:
+    """The step that was missing between ``ingest`` and anything that reads Silver.
+
+    Without this command a complete, successful ingestion still left
+    ``silver.fact_observation`` empty, because the only callers of the snapshot operation were
+    tests. The command is what makes "source to agent" a path an operator can run.
+    """
+
+    from src.lakehouse.parsers.bddk_monthly import BddkMonthlyParser
+    from src.lakehouse.storage.parquet import ParquetStorage
+    from src.lakehouse.storage.raw import RawStorage
+
+    database = tmp_path / "data" / "lakehouse.duckdb"
+    data_root = tmp_path / "data"
+    fixture = ROOT / "tests/fixtures/raw/bddk_monthly/bddk_monthly_housing_loans.json"
+    asset = RawStorage(data_root / "raw").store(
+        source_id="bddk_monthly",
+        dataset_id="bddk_monthly_housing_loans",
+        locator="fixture://bddk_monthly",
+        content=fixture.read_bytes(),
+        media_type="application/json",
+        fetched_at=FIXED_TIME,
+        extension="json",
+        metadata={"requested_kalem_sutun": ["1534?Toplam"]},
+    )
+    ParquetStorage(data_root / "bronze").write(BddkMonthlyParser().parse(asset))
+
+    exit_code = main(["silver", "--database", str(database), "--data-root", str(data_root)])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "status: success" in output
+    assert "bronze artifacts staged: 1" in output
+    published = _read(
+        database, "SELECT count(*) FROM silver.fact_observation"
+    )[0][0]
+    assert published > 0
+    assert f"rows published         : {published}" in output

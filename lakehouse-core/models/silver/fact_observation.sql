@@ -52,4 +52,16 @@ SELECT
     schema_version,
     vintage_id,
     run_id
-FROM semantic;
+FROM semantic
+-- A snapshot's row order is part of its identity here: acceptance tests compare Silver rows
+-- positionally against their Bronze source, and a Silver Parquet representation is written
+-- from this projection. Without an explicit order the join above decides, and that order
+-- changed silently when meta.series grew from 5 rows to 1620 — five acceptance tests that had
+-- been passing started failing on data that had not changed. Ordering is stated rather than
+-- inherited from the optimiser.
+ORDER BY
+    series_id,
+    entity_id NULLS FIRST,
+    observation_date,
+    period_start NULLS FIRST,
+    artifact_sha256;
