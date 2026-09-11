@@ -125,8 +125,16 @@ class AgentAnswer:
 
     @property
     def extra(self) -> dict[str, object]:
-        """Motor-bağımsız koşucuların okuduğu özet (benchmark uyumluluğu)."""
-        return {"grounding": self.grounding, "error_codes": list(self.error_codes())}
+        """Motor-bağımsız koşucuların okuduğu özet (benchmark uyumluluğu).
+
+        `error_codes` burada TEKRARLI liste: aynı sınıf iki kez bozulduysa iki kez
+        geçer. Benzersiz anahtar döndürmek karşılaştırmayı sessizce bozar — koşucu
+        bu alanı doğrudan sayıyor.
+        """
+        return {
+            "grounding": self.grounding,
+            "error_codes": [s.error_code for s in self.steps if s.error_code],
+        }
 
     def error_codes(self) -> dict[str, int]:
         """Hangi hata sınıfı kaç kez oluştu.
