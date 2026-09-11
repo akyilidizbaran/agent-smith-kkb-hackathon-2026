@@ -98,15 +98,18 @@ def test_bootstrap_creates_the_series_table(tmp_path: Path) -> None:
 
 
 def test_bootstrap_loads_the_repository_catalog(tmp_path: Path) -> None:
+    """The original four hand-verified series must always load, among whatever else the
+    repository catalog now also defines -- catalog growth must not shrink this list."""
+
     connection = bootstrap_database(tmp_path / "t.duckdb")
 
-    assert _series_ids(connection) == [
+    assert {
         "bddk_monthly:1534_Toplam",
         "bddk_weekly:5690_3",
         "evds:TP.FG.J0",
         "evds:TP.KFE.TR",
         "evds:TP.KTF12",
-    ]
+    }.issubset(set(_series_ids(connection)))
     row = connection.execute(
         "SELECT frequency, week_anchor, unit, measure_type, default_agg, "
         "semantic_confidence, status FROM meta.series WHERE series_id = 'evds:TP.KTF12'"
@@ -318,7 +321,9 @@ def test_catalog_load_is_offline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
     connection = bootstrap_database(tmp_path / "t.duckdb")
 
-    assert len(_series_ids(connection)) == 5
+    # Not an exact count: the repository catalog grows over time. What this test guards is
+    # that an offline load still populates meta.series from the real repo catalog at all.
+    assert len(_series_ids(connection)) >= 5
     connection.close()
 
 

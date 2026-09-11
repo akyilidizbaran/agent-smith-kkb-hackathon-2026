@@ -16,6 +16,7 @@ dependencies = [
     # with the standard library's html.parser instead, which is why lxml, html5lib and
     # beautifulsoup4 are deliberately absent.
     "openpyxl",
+    "truststore>=0.10.4",
 ]
 
 [tool.uv]
