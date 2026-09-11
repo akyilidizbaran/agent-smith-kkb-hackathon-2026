@@ -151,6 +151,11 @@ class AnalyticsAgent:
     # Yalnız bu araçlar "kullanıcının sorusunu cevaplayan veri" üretir.
     # Katalog araçları (search/describe/distinct_values) da DataFrame döndürür
     # ama bunlar keşif adımıdır; cevabın dayanağı olamaz.
+    DUPLICATE_LIMIT = 2
+    """Kaç tekrardan sonra araçların geri alınacağı. Bir tane fazla iyimser (model bazen
+    ikinci denemede argümanı düzeltiyor), üç tane fazla cömert: ölçümde döngü ikinci
+    tekrardan sonra kendiliğinden çıkmıyordu."""
+
     DATA_PRODUCING_TOOLS = frozenset(
         {
             "lakehouse_query",
@@ -195,7 +200,9 @@ class AnalyticsAgent:
         produced_data = False   # veri getiren bir araç başarıyla çalıştı mı?
         nudged = False          # "önce veriyi çek" uyarısı bir kez verilir
         seen: set[tuple[str, str]] = set()   # (araç, argüman) — döngü kilidi
+        duplicates = 0                       # kilidin kaç kez devreye girdiği
         terminal: ToolError | None = None    # tekrar denemeyle çözülmeyen hata
+        stuck_note: str | None = None        # son tura verilecek özel yönerge
 
         for i in range(1, self.max_steps + 1):
             started = time.perf_counter()
@@ -256,12 +263,25 @@ class AnalyticsAgent:
                 # Ölçülmüş hata modu: aynı sorgunun art arda 7 kez çalıştırılması.
                 signature = (call.name, json.dumps(call.arguments, sort_keys=True, default=str))
                 if signature in seen:
+                    duplicates += 1
                     result = ToolResult.fail(
                         "DUPLICATE_CALL",
                         f"'{call.name}' aynı argümanlarla zaten çalıştırıldı; sonuç aynı olacak.",
                         hint="Argümanları değiştir ya da elindeki sonuçla cevaba geç.",
                         layer="harness",
                     )
+                    # Kilit aracı korur ama döngüyü kırmaz. Ölçüldü (11 Eylül karşılaştırması,
+                    # L4-01): model DUPLICATE_CALL alıp aynı çağrıyı 7 kez daha istedi ve adım
+                    # limitini yaktı. İkinci tekrarda niyet açık — model elindekiyle cevap
+                    # yazmak yerine döngüde. Araçları geri alıp cevap yazdırıyoruz.
+                    if duplicates >= self.DUPLICATE_LIMIT and terminal is None:
+                        terminal = result.error
+                        stuck_note = (
+                            "Aynı aracı aynı argümanlarla tekrar tekrar çağırdın; sonuç "
+                            "değişmiyor. ARAÇ ÇAĞIRMA; ŞU ANA KADAR TOPLADIĞIN VERİLERLE "
+                            "kullanıcının sorusunu cevapla. Eksik kalan bir şey varsa onu "
+                            "cevabın sonunda tek cümleyle söyle. Sayı uydurma."
+                        )
                 else:
                     seen.add(signature)
                     result = self.registry.execute(call.name, call.arguments)
@@ -293,7 +313,8 @@ class AnalyticsAgent:
                     + [
                         ChatMessage(
                             role="user",
-                            content="Bu yoldan sonuç çıkmayacağı anlaşıldı. ARAÇ ÇAĞIRMA; "
+                            content=stuck_note
+                            or "Bu yoldan sonuç çıkmayacağı anlaşıldı. ARAÇ ÇAĞIRMA; "
                             "kullanıcıya durumu tek paragrafta açıkla: neyi isteyemediğini "
                             "ve elinde ne olduğunu söyle. Sayı uydurma.",
                         )

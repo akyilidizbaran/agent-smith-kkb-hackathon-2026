@@ -214,3 +214,68 @@ def test_eksik_iliski_erken_yakalanir(tmp_path: Path) -> None:
     duckdb.connect(str(db)).close()
     with pytest.raises(LakehouseError, match="meta.series"):
         SilverLakehouse(db)
+
+
+def test_arama_kimligin_tablo_adi_olmadigini_soyluyor(lake: SilverLakehouse) -> None:
+    """Silver'da `dataset_id` bir tablo adı değil; arama çıktısı bunu söylemek zorunda.
+
+    Ölçüm (Büşra'nın 11 Eylül karşılaştırması, Silver şeması): motorumuzdaki 33 araç
+    hatasının 21'i tek kök nedenden geliyordu — model `FROM bddk_monthly:konut_toplam`
+    yazıyordu. Kalıp `lakehouse_describe` çıktısında zaten vardı, ama model önce arama
+    yapıyor ve arama çıktısı kimliği "tablo" diye sunup fiziksel erişimden hiç söz
+    etmiyordu. Kalıbı adaptör üretiyor (ADR-0024 `series_sql`), araç metin kurmuyor:
+    verilen şey kopyalanıp çalıştırılabilir SQL, tarif değil.
+    """
+    from kkb_agent.tools.lakehouse import LakehouseSearchTool
+
+    out = LakehouseSearchTool(lake).run(
+        LakehouseSearchTool.Params(query="konut kredisi")
+    ).content
+
+    assert "bir tablo adı DEĞİL" in out
+    assert "FROM silver.fact_observation WHERE series_id = 'bddk_monthly:konut'" in out
+
+
+def test_kimlik_zaten_tablo_adiysa_ipucu_verilmez(tmp_path: Path) -> None:
+    """Seed adaptöründe `dataset_id` gerçekten tablo adı; orada aynı satır gürültü olur.
+
+    Bu, ipucunun tahminle değil ölçümle verildiğinin kanıtı: araç kimliğin tablo olup
+    olmadığını varsaymıyor, adaptörün ürettiği SQL'de `FROM <dataset_id>` geçip
+    geçmediğine bakıyor.
+    """
+    from kkb_agent.adapters.duckdb_lakehouse import DuckDBLakehouse
+    from kkb_agent.tools.lakehouse import LakehouseSearchTool
+
+    seed = Path("data/lakehouse.duckdb")
+    if not seed.is_file():
+        pytest.skip("seed veritabanı yok (scripts/dev_seed.py)")
+    lake = DuckDBLakehouse(seed)
+
+    out = LakehouseSearchTool(lake).run(
+        LakehouseSearchTool.Params(query="konut kredisi")
+    ).content
+
+    assert "bir tablo adı DEĞİL" not in out
+
+
+def test_ayni_adaptor_es_zamanli_sorgulari_kaldirir(lake: SilverLakehouse) -> None:
+    """Bir turda paralel çalışan okuma araçları tek bağlantıyı paylaşır.
+
+    Ölçüldü: tek bir `DuckDBPyConnection`'ı dört iş parçacığından kullanınca 800
+    sorgunun 2'si `TypeError: object of type 'NoneType' has no len()` ile düştü —
+    sonuç kümesi çağıranın altından çekiliyor. Oran küçük ama hata biçimi kötü:
+    SQL hatası gibi değil, harness'ın içinden gelen anlamsız bir tip hatası gibi
+    görünüyor. Her sorgu artık kendi imlecinde çalışıyor.
+    """
+    import concurrent.futures as cf
+
+    sql = (
+        "SELECT count(*) AS n FROM silver.fact_observation "
+        "WHERE series_id = 'bddk_monthly:konut'"
+    )
+    expected = lake.execute_sql(sql).data.iloc[0, 0]
+
+    with cf.ThreadPoolExecutor(max_workers=4) as pool:
+        results = [f.result() for f in [pool.submit(lake.execute_sql, sql) for _ in range(200)]]
+
+    assert all(r.data.iloc[0, 0] == expected for r in results)

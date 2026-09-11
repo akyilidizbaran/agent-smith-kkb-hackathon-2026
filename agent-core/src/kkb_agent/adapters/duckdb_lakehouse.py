@@ -174,7 +174,8 @@ class DuckDBLakehouse:
         bounded = f"SELECT * FROM ({text}) AS _q LIMIT {int(max_rows) + 1}"
         started = time.perf_counter()
         try:
-            df = self._con.execute(bounded).fetch_df()
+            # Her sorgu kendi imlecinde; gerekçe silver_lakehouse.execute_sql'de.
+            df = self._con.cursor().execute(bounded).fetch_df()
         except Exception as exc:
             raise LakehouseError(f"SQL çalıştırılamadı: {exc}") from exc
         duration = (time.perf_counter() - started) * 1000

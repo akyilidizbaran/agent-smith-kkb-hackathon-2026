@@ -15,6 +15,7 @@ import re
 
 from pydantic import BaseModel, Field
 
+from ..contracts.catalog import ColumnRole
 from ..contracts.lakehouse import LakehouseClient, LakehouseError
 from ..domain import kisa_terim
 from ..core.tool import Tool, ToolResult
@@ -49,8 +50,40 @@ class LakehouseSearchTool(Tool):
                 f"- {s.dataset_id}: {s.name}. {s.description[:180]} "
                 f"[frekans: {s.frequency.value}, kapsam: {s.coverage.start}→{s.coverage.end}]"
             )
+            # Kimlik ile fiziksel erişim kalıbı aynı şey olmak zorunda değil. Seed'de
+            # dataset_id gerçekten tablo adı; Silver'da 'evds:TP.KTF12' bir tablo DEĞİL,
+            # tek bir ilişkideki bir satır kümesinin kimliği. Bu satır olmadığında model
+            # arama çıktısındaki kimliği FROM'a yazıyordu (ölçüldü: Silver şemasında
+            # SQL_FAILED, tek kök neden). Kalıbı adaptör üretiyor (ADR-0024, series_sql):
+            # çalıştırılabilir SQL veriyoruz, tarif değil — tarif kopyalanınca bozuluyor.
+            hint = self._access_sql(s)
+            if hint:
+                lines.append(f"    '{s.dataset_id}' bir tablo adı DEĞİL. SQL'de şöyle eriş: {hint}")
         lines.append("\nSorgu yazmadan önce lakehouse_describe ile kolonları incele.")
         return ToolResult(content="\n".join(lines))
+
+    def _access_sql(self, spec) -> str | None:
+        """Kimliğin tablo adı olmadığı adaptörler için çalıştırılabilir erişim kalıbı.
+
+        Seed adaptöründe `dataset_id` gerçekten tablo adıdır ve satır yalnız gürültü
+        olur; orada `source_detail` boştur ve bu metot None döner. Kalıbın nasıl
+        yazılacağını adaptör bilir, araç değil.
+        """
+        measure = next((c for c in spec.columns if c.role is ColumnRole.MEASURE), None)
+        if measure is None:
+            return None
+        try:
+            sql = self.lakehouse.series_sql(
+                spec.dataset_id, key_column=spec.time_column, value_column=measure.name
+            )
+        except Exception:  # noqa: BLE001 — ipucu üretilemiyorsa arama sonucu yine geçerli
+            return None
+        # Kimliğin tablo adı olup olmadığını tahmin etmiyoruz: adaptörün ürettiği SQL'e
+        # bakıyoruz. `FROM <dataset_id>` yazıyorsa kimlik zaten tablo adıdır ve ipucu
+        # yalnız gürültü olur (seed adaptörü böyle). Silver'da ilişki başka bir addır.
+        if re.search(rf"\bFROM\s+{re.escape(spec.dataset_id)}\b", sql, re.IGNORECASE):
+            return None
+        return sql
 
 
 class DescribeParams(BaseModel):

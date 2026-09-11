@@ -272,7 +272,13 @@ class SilverLakehouse:
         bounded = f"SELECT * FROM ({text}) AS _q LIMIT {int(max_rows) + 1}"
         started = time.perf_counter()
         try:
-            df = self._con.execute(bounded).fetch_df()
+            # Her sorgu kendi imlecinde. Tek bir DuckDBPyConnection'ı iki iş
+            # parçacığından aynı anda kullanmak sonucu ortadan çekiyor: ölçüldü, 800
+            # eşzamanlı sorguda 2 kez "TypeError: object of type 'NoneType' has no
+            # len()". Motor bir turda birden çok okuma aracını paralel çalıştırabildiği
+            # için bu teorik bir durum değil. cursor() aynı veritabanını paylaşır,
+            # sertleştirilmiş yapılandırma (read_only + kilitli config) korunur.
+            df = self._con.cursor().execute(bounded).fetch_df()
         except Exception as exc:
             raise LakehouseError(f"SQL çalıştırılamadı: {exc}") from exc
         duration = (time.perf_counter() - started) * 1000
