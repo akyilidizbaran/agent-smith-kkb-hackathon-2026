@@ -71,12 +71,14 @@ series:
       Reel dönüşümde bölen olarak kullanılır (reel = nominal / (TÜFE / TÜFE_baz)),
       fakat bu hesap Gold katmanına aittir; Silver hiçbir arındırma veya yeniden
       bazlama yapmaz.
-      DİKKAT: endeksin BAZ YILI bu repoda DOĞRULANMAMIŞTIR. Talep belgesinde
-      "2003=100" iddiası geçmektedir, ancak ne resmî bir yanıt, ne fixture, ne de
-      bir ADR bu değeri kanıtlamaktadır; bu nedenle semantic_confidence 'derived'
-      ve semantic_source 'manual' işaretlenmiştir. Baz yılı doğrulanmadan farklı
-      bazlı endeks serileri birleştirilmemeli (splice) ve reel dönüşümde
-      kullanılmamalıdır. Doğrulama durumu docs/sources/evds.md içinde izlenir.
+      Resmî kamuya açık kaynaklar TP.FG.J0 kodunu 2003=100 referanslı genel TÜFE
+      endeksiyle ilişkilendirir. Bu kanıt, güncel kimlik doğrulamalı EVDS3 API
+      yanıtının doğrulandığı anlamına gelmez. Canlı yanıt ve güncel yayın durumu
+      doğrulanmadığından semantic_confidence 'derived' olarak korunur;
+      semantic_source 'source_docs' kamuya açık belge kanıtını belirtir.
+      Farklı bazlı endeksler otomatik birleştirilmemeli; canlı uyumluluk
+      doğrulanmadan üretim reel dönüşümlerinde kullanılmamalıdır.
+      Kanıtlar ve sınırlamalar docs/sources/evds.md içinde izlenir.
     aliases:
       - tüfe
       - tufe
@@ -91,6 +93,6 @@ series:
     measure_type: index
     default_agg: last
     semantic_confidence: derived
-    semantic_source: manual
+    semantic_source: source_docs
     metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=TP.FG.J0
     status: active

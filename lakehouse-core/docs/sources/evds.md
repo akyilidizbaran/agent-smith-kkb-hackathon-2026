@@ -14,10 +14,10 @@ Different parts of this integration carry **different levels of evidence**. Pass
 | Missing key is rejected | **Verified live** | Keyless request returned HTTP 403 `{"status":"403","message":"Required request header 'key' is not present"}` |
 | Connector HTTP behaviour (retry, classification, key handling, RAW write) | **Verified by test only** | All connector tests use a **fake in-process session**. No socket is opened. |
 | Parser response shape (envelope, `Tarih`, `UNIXTIME`, string values, nulls) | **Verified against `/fe` captures** | Fixtures came from the EVDS3 web application's own `POST /igmevdsms-dis/fe` endpoint, not from the documented keyed endpoint |
-| **Official keyed endpoint, live** | ❌ **NOT VERIFIED** | No API key was available. The keyed endpoint has never been called by this track. |
+| **Official keyed endpoint, successful live data** | **LIVE_NOT_VERIFIED** | Prior diagnostics on 2026-09-11 returned HTTP 401 with the available credential; no successful authenticated data response was obtained. No authentication diagnostics were repeated in Phase 3.3A. |
 | **`TP.FG.J0` (TÜFE) response, live or captured** | ❌ **NOT VERIFIED** | No response has ever been captured. `tests/integration/test_evds_cpi_silver.py` uses a clearly-labelled **synthetic** payload and is a contract test only |
-| **`TP.FG.J0` base year (`2003=100`)** | ❌ **NOT VERIFIED** | Asserted in the agent team's `DATA_TEAM_REQUESTS.md`, but no fixture, no response record and no ADR supports it. ADR-0020 on `feature/agent-engine` covers adapter hardening and TLS, **not** TÜFE |
-| **`TP.FG.J0` 2025-01 value (`2819,65`)** | ❌ **NOT VERIFIED** | Same. The number appears only in the request document itself |
+| **`TP.FG.J0` reference/base (`2003=100`)** | **VERIFIED_PUBLIC** | TCMB-hosted Central Bank Review appendix explicitly maps the code to general CPI (2003=100); corroborated by public EVDS listing and TÜİK methodology below. This is not live API evidence. |
+| **`TP.FG.J0` 2025-01 value** | **LIVE_NOT_VERIFIED** | No authoritative observation was verified in this phase; no numeric assertion is adopted. |
 
 ### What this means in practice
 
@@ -37,11 +37,47 @@ adapter carry it end to end with no source-specific code
 (`tests/integration/test_evds_cpi_silver.py`). That is a statement about *this repository's
 code*, proved with synthetic bytes.
 
-Nothing about the *source* is established. Specifically **not** established: that the official
-keyed endpoint returns this series at all, its real values, its date ordering, and its base
-year. `catalog/series/evds.yml` therefore records it as `semantic_confidence: derived` with
-`semantic_source: manual`, and the base-year caveat is written into its `description`. This
-mirrors how `TP.KFE.TR` already handles an unverified base year.
+Public evidence reviewed on **2026-09-11** establishes the historical native code, general
+CPI identity and 2003=100 reference. Monthly publication and index nature are supported by
+TÜİK documentation. TÜİK produces the statistics; TCMB distributes them through EVDS.
+The catalog now uses `semantic_source: source_docs`, while `semantic_confidence: derived`
+is retained. `default_agg: last` is a project policy, not a verified provider default.
+Catalog `status: active` is retained as project configuration; it does not prove that this
+native code remains actively updated by the provider.
+
+The prior production request returned HTTP 401 with the available credential. This does
+**not** establish that the series or endpoint semantics are wrong. Authenticated EVDS3
+live API response was NOT verified in this environment: exact envelope, live field names,
+values and Connector -> Parser compatibility remain unverified.
+
+#### Public evidence and retrieval limits
+
+- **P1: [EVDS public series navigation](https://evds3.tcmb.gov.tr/tumSeriler/3003/bie_mbblnca)**:
+  the indexed first-party page lists "Tüketici Fiyat Endeksi (Genel) (2003=100)"
+  under TÜİK CPI, alongside a 2025=100 group. This is navigation on another group's
+  page, not native-code metadata. Direct text retrieval returned a JavaScript shell;
+  the indexed label corroborates identity, but does not establish active/archived status.
+- **P2: [TÜİK CPI calculation explanation](https://data.tuik.gov.tr/Bulten/DownloadFile?p=e57pu%2FoqllLLsPnCJ%2FWfZBbWEES14WLyBBzOSfPLheutBKMQ72Flp%2FSc3W8IItrFMn7J3h2YyHL0XrBe1T9AblCZzd2Dq8C2hMJuRPE18x0%3D)**:
+  indexed official text describes the 2003=100 CPI as a chained index with annual
+  basket/weight updates. Direct retrieval redirects to the TÜİK JavaScript portal.
+  The public download identifier is not an authentication token. This historical
+  methodology does not imply that every currently published CPI uses this reference.
+- **P3: [Şahin and Ülke, Central Bank Review 15(1), 2015, pp. 65-93](https://www.tcmb.gov.tr/wps/wcm/connect/8cd1b17c-73fc-4552-ae36-2aa7c9cf170a/Jan15-4.pdf?CACHEID=ROOTWORKSPACE-8cd1b17c-73fc-4552-ae36-2aa7c9cf170a-m3fw4IA&MOD=AJPERES)**:
+  directly retrieved PDF, printed p. 85 (PDF page 21), Appendix A, Table A1,
+  price row maps `TP.FG.J0: 0.GENEL` to post-2003 CPI (2003=100), sourced from EVDS.
+  This TCMB-hosted research publication is historical evidence, not a current API
+  specification or institutional endorsement of its authors' views. Its abstract
+  identifies a monthly sample; section 3 inconsistently calls the price variable PPI,
+  so the explicit appendix mapping is used together with P1/P2, not that prose alone.
+- **P4: [TÜİK August 2019 CPI bulletin and metadata](https://data.tuik.gov.tr/Bulten/Index?p=Tuketici-Fiyat-Endeksi-Agustos-2019-30856)**:
+  indexed official text distinguishes index levels from percentage changes, identifies
+  TÜİK as processor, and describes monthly release of results. Direct retrieval requires
+  JavaScript after redirect. This supports monthly CPI semantics, not present-day API fields.
+
+All four references were independently checked through first-party public content or its
+indexed text on 2026-09-11. No third-party financial interpretation is used. Retrieval date
+is not publication date; search-engine relative dates are not adopted as source dates.
+See [the evidence matrix and confidence decision](../branches/evds-cpi-semantic-evidence.md).
 
 **To raise it to `verified`, this is what has to arrive:**
 
@@ -49,10 +85,13 @@ mirrors how `TP.KFE.TR` already handles an unverified base year.
    under `tests/fixtures/raw/evds/` with **no key in the bytes, the filename or the metadata**.
 2. The request URL and the capture date recorded in this document.
 3. Base-year evidence from a TCMB/TÜİK source, cited here — not inferred from the values.
+   **Public portion completed in Phase 3.3A**, as documented above.
 4. `tests/integration/test_evds_cpi_silver.py` re-pointed at that fixture, with the synthetic
    payload deleted rather than kept alongside it.
 
-Until then no code, catalog entry or test in this repository may state the base year as fact.
+The public reference/base may now be stated with the scope above. The existing promotion
+gate is unchanged: public semantics do not substitute for steps 1, 2 and 4 or establish
+current provider status. No live fixture was created; the synthetic contract test remains.
 
 ### Required smoke test once an API key exists
 
@@ -134,8 +173,8 @@ locator, artifact metadata, logs, or exception messages. `.env` is git-ignored a
 
 ## Open items
 
-- **The documented keyed endpoint has never been called live.** See "Verification status"
-  above for exactly what is and is not verified, and for the smoke test to run once a key
-  exists. `/fe` is a shape-discovery tool only and must not become a production fallback.
+- **Successful authenticated data from the documented keyed endpoint remains unverified.**
+  Prior requests returned HTTP 401; see "Verification status" and the pending smoke test.
+  `/fe` is a shape-discovery tool only and must not become a production fallback.
 - The exact `Tarih` format for quarterly, semi-annual and yearly frequencies is unverified.
 - No rate limit is documented. The guide only advises fetching once per day.
