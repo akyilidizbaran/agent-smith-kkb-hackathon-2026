@@ -48,8 +48,12 @@ class ToolRegistry:
     def execute(self, name: str, args: dict[str, Any]) -> ToolResult:
         tool = self.get(name)
         if tool is None:
-            return ToolResult.error(
-                f"'{name}' adlı bir araç yok. Kullanılabilir araçlar: {', '.join(self.names())}"
+            return ToolResult.fail(
+                "UNKNOWN_TOOL",
+                f"'{name}' adlı bir araç yok.",
+                hint="Yalnızca listelenen araçlardan birini çağır.",
+                candidates=self.names(),
+                layer="schema",
             )
         return tool.validate_and_run(args)
 

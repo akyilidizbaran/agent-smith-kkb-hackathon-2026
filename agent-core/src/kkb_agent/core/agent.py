@@ -24,6 +24,7 @@ from typing import Any
 
 from ..domain import DomainProfile
 from ..llm.base import ChatMessage, LLMClient, ToolCall
+from .errors import ToolError
 from .registry import ToolRegistry
 from .tool import ToolResult
 from .workspace import AnalysisWorkspace
@@ -108,6 +109,7 @@ class AgentStep:
     result_summary: str = ""
     ok: bool = True
     duration_ms: float = 0.0
+    error_code: str | None = None   # ToolError.error_code; ölçüm ve trace için
 
 
 @dataclass
@@ -117,14 +119,28 @@ class AgentAnswer:
     workspace: AnalysisWorkspace | None = None
     hit_step_limit: bool = False
 
+    def error_codes(self) -> dict[str, int]:
+        """Hangi hata sınıfı kaç kez oluştu.
+
+        Serbest metin hatalarla bu sayılamıyordu; ölçek arttıkça hangi sınıfın
+        bozulduğunu görmek gerekiyor (ADR-0025).
+        """
+        counts: dict[str, int] = {}
+        for s in self.steps:
+            if s.error_code:
+                counts[s.error_code] = counts.get(s.error_code, 0) + 1
+        return counts
+
     def trace_text(self) -> str:
         lines = []
         for s in self.steps:
             mark = "✓" if s.ok else "✗"
             if s.tool_name:
+                code = f" {s.error_code}" if s.error_code else ""
                 lines.append(
-                    f"{mark} [{s.index}] {s.tool_name}({json.dumps(s.tool_args, ensure_ascii=False)[:120]})"
-                    f" → {s.result_summary[:160]} ({s.duration_ms:.0f}ms)"
+                    f"{mark}{code} [{s.index}] {s.tool_name}"
+                    f"({json.dumps(s.tool_args, ensure_ascii=False)[:110]})"
+                    f" → {s.result_summary[:150]} ({s.duration_ms:.0f}ms)"
                 )
             elif s.thought:
                 lines.append(f"  [{s.index}] düşünce: {s.thought[:160]}")
@@ -178,6 +194,8 @@ class AnalyticsAgent:
         tools = self.registry.schemas() if native else None
         produced_data = False   # veri getiren bir araç başarıyla çalıştı mı?
         nudged = False          # "önce veriyi çek" uyarısı bir kez verilir
+        seen: set[tuple[str, str]] = set()   # (araç, argüman) — döngü kilidi
+        terminal: ToolError | None = None    # tekrar denemeyle çözülmeyen hata
 
         for i in range(1, self.max_steps + 1):
             started = time.perf_counter()
@@ -234,7 +252,19 @@ class AnalyticsAgent:
                 )
             )
             for call in calls:
-                result = self.registry.execute(call.name, call.arguments)
+                # Döngü kilidi: model aynı çağrıyı tekrarlıyorsa sonuç değişmez.
+                # Ölçülmüş hata modu: aynı sorgunun art arda 7 kez çalıştırılması.
+                signature = (call.name, json.dumps(call.arguments, sort_keys=True, default=str))
+                if signature in seen:
+                    result = ToolResult.fail(
+                        "DUPLICATE_CALL",
+                        f"'{call.name}' aynı argümanlarla zaten çalıştırıldı; sonuç aynı olacak.",
+                        hint="Argümanları değiştir ya da elindeki sonuçla cevaba geç.",
+                        layer="harness",
+                    )
+                else:
+                    seen.add(signature)
+                    result = self.registry.execute(call.name, call.arguments)
                 elapsed = (time.perf_counter() - started) * 1000
                 steps.append(
                     AgentStep(
@@ -244,12 +274,35 @@ class AnalyticsAgent:
                         result_summary=result.content[:300],
                         ok=result.ok,
                         duration_ms=elapsed,
+                        error_code=result.error.error_code if result.error else None,
                     )
                 )
                 if result.ok and call.name in self.DATA_PRODUCING_TOOLS:
                     produced_data = True
+                if result.error is not None and not result.error.is_retryable:
+                    terminal = result.error
                 log.info("adım %d: %s -> %s", i, call.name, "ok" if result.ok else "HATA")
                 messages.append(self._result_message(call, result, native=native))
+
+            if terminal is not None:
+                # Tekrar denemeyle çözülmeyecek bir hata: modele araç verilmeden
+                # son bir tur. Aksi halde model aynı yolu farklı yazımlarla
+                # denemeye devam ediyor ve adım limitini yakıyor (ADR-0017).
+                final = self.llm.chat(
+                    messages
+                    + [
+                        ChatMessage(
+                            role="user",
+                            content="Bu yoldan sonuç çıkmayacağı anlaşıldı. ARAÇ ÇAĞIRMA; "
+                            "kullanıcıya durumu tek paragrafta açıkla: neyi isteyemediğini "
+                            "ve elinde ne olduğunu söyle. Sayı uydurma.",
+                        )
+                    ]
+                )
+                text = self._strip_reasoning(final.content)
+                self._history.append(ChatMessage(role="user", content=question))
+                self._history.append(ChatMessage(role="assistant", content=text))
+                return AgentAnswer(text=text, steps=steps, workspace=self.workspace)
 
         # --- Adım limiti ---
         final = self.llm.chat(

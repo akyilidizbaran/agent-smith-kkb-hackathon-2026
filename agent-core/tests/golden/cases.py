@@ -38,6 +38,21 @@ def _has_cols(*cols: str) -> Callable[[pd.DataFrame], bool]:
     return lambda df: all(any(c.lower() in col.lower() for col in df.columns) for c in cols)
 
 
+def _has_time_column(df: pd.DataFrame) -> bool:
+    """Bir zaman kolonu var mı — ADINDAN bağımsız.
+
+    Kolon adı veri kaynağına göre değişiyor (`donem`, `observation_date`, …);
+    golden set şemaya değil DAVRANIŞA bakmalı. Gerçek Lakehouse'a geçişte
+    vakaların yeniden yazılmaması bu sayede.
+    """
+    if any(pd.api.types.is_datetime64_any_dtype(df[c]) for c in df.columns):
+        return True
+    return any(
+        df[c].dropna().map(lambda v: hasattr(v, "year")).all() and not df[c].dropna().empty
+        for c in df.columns
+    )
+
+
 def _rows(n: int) -> Callable[[pd.DataFrame], bool]:
     return lambda df: len(df) == n
 
@@ -72,7 +87,7 @@ CASES: list[GoldenCase] = [
         "LIKE '%Konut%' ile üç ayrı kalem mükerrer toplandı. 12 ay = 12 satır olmalı.",
         table_checks=[
             ("tam 12 satır (mükerrer sayım yok)", _rows(12)),
-            ("dönem kolonu var", _has_cols("donem")),
+            ("dönem kolonu var", _has_time_column),
         ],
         max_steps_used=8,
     ),

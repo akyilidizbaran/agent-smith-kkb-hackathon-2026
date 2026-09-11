@@ -46,6 +46,22 @@ class FakeLakehouse:
             coverage=Coverage(start=date(2021, 1, 1), end=date(2026, 6, 1)),
         )
 
+    def series_sql(self, dataset_id, *, key_column, value_column,
+                   filter_column=None, filter_value=None):
+        """Adaptör sözleşmesi: kolonları katalogla doğrular, fiziksel SQL'i üretir."""
+        from kkb_agent.contracts.lakehouse import LakehouseError
+
+        valid = {c.name for c in self.get_dataset(dataset_id).columns}
+        for field, name in (("key_column", key_column), ("value_column", value_column),
+                            ("filter_column", filter_column)):
+            if name and name not in valid:
+                raise LakehouseError(
+                    f"{field}='{name}' {dataset_id} tablosunda yok. "
+                    f"Mevcut kolonlar: {', '.join(sorted(valid))}"
+                )
+        where = f" WHERE {filter_column} = '{filter_value}'" if filter_column else ""
+        return f"SELECT {key_column}, {value_column} FROM {dataset_id}{where}"
+
     def execute_sql(self, sql: str, *, max_rows: int = 10_000):
         from kkb_agent.contracts.lakehouse import QueryProvenance, QueryResult
 

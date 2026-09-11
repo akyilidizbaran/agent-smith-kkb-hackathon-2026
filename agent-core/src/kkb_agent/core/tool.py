@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from ..contracts.lakehouse import QueryProvenance
 from ..domain import DomainProfile
+from .errors import ErrorCode, ToolError
 
 
 @dataclass
@@ -34,11 +35,32 @@ class ToolResult:
     data: pd.DataFrame | None = None
     provenance: QueryProvenance | None = None
     artifacts: dict[str, Any] = field(default_factory=dict)  # grafik verisi, dosya yolu vb.
+    error: ToolError | None = None  # ok=False ise dolu
 
     @classmethod
-    def error(cls, message: str) -> ToolResult:
-        """Hata da bir sonuçtur: modele geri verilir ki kendini onarsın."""
-        return cls(content=f"HATA: {message}", ok=False)
+    def fail(
+        cls,
+        error_code: ErrorCode,
+        message: str,
+        *,
+        hint: str | None = None,
+        candidates: list[str] | None = None,
+        layer: str = "data",
+        retryable: bool | None = None,
+    ) -> ToolResult:
+        """Hata da bir sonuçtur: modele geri verilir ki kendini onarsın.
+
+        Kod ve onarılabilirlik bilgisi harness'a; mesaj ve ipucu modele gider.
+        """
+        err = ToolError(
+            error_code=error_code,
+            message=message,
+            hint=hint,
+            candidates=list(candidates or []),
+            layer=layer,  # type: ignore[arg-type]
+            retryable=retryable,
+        )
+        return cls(content=err.render(), ok=False, error=err)
 
 
 class Tool(ABC):
@@ -101,11 +123,19 @@ class Tool(ABC):
         try:
             params = self.Params(**raw_args)
         except Exception as exc:
-            return ToolResult.error(
-                f"'{self.name}' aracının parametreleri geçersiz: {exc}. "
-                f"Beklenen şema: {self.Params.model_json_schema().get('properties')}"
+            props = list(self.Params.model_json_schema().get("properties", {}))
+            return ToolResult.fail(
+                "INVALID_ARGS",
+                f"'{self.name}' aracının parametreleri geçersiz: {exc}",
+                hint=f"Beklenen alanları doldur: {', '.join(props)}",
+                candidates=props,
+                layer="schema",
             )
         try:
             return self.run(params)
         except Exception as exc:
-            return ToolResult.error(f"'{self.name}' çalışırken hata: {type(exc).__name__}: {exc}")
+            return ToolResult.fail(
+                "TOOL_FAILED",
+                f"'{self.name}' çalışırken hata: {type(exc).__name__}: {exc}",
+                layer="harness",
+            )

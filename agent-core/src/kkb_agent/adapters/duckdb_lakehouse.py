@@ -203,6 +203,30 @@ class DuckDBLakehouse:
         self.get_dataset(dataset_id)  # varlık kontrolü
         return self.execute_sql(f"SELECT * FROM {dataset_id} LIMIT {int(n)}")
 
+    def series_sql(
+        self,
+        dataset_id: str,
+        *,
+        key_column: str,
+        value_column: str,
+        filter_column: str | None = None,
+        filter_value: str | None = None,
+    ) -> str:
+        """Bu yerleşimde `dataset_id` doğrudan tablo adıdır."""
+        spec = self.get_dataset(dataset_id)
+        valid = {c.name for c in spec.columns}
+        for field, name in (("key_column", key_column), ("value_column", value_column),
+                            ("filter_column", filter_column)):
+            if name and name not in valid:
+                raise LakehouseError(
+                    f"{field}='{name}' {dataset_id} tablosunda yok. "
+                    f"Mevcut kolonlar: {', '.join(sorted(valid))}"
+                )
+        where = ""
+        if filter_column and filter_value is not None:
+            where = f" WHERE {filter_column} = '{filter_value.replace(chr(39), chr(39) * 2)}'"
+        return f"SELECT {key_column}, {value_column} FROM {dataset_id}{where}"
+
     def health(self) -> dict[str, Any]:
         tables = self._con.execute("SHOW TABLES").fetch_df()
         return {

@@ -73,7 +73,12 @@ class LakehouseDescribeTool(Tool):
             spec = self.lakehouse.get_dataset(params.dataset_id)
             sample = self.lakehouse.preview(params.dataset_id, n=5)
         except LakehouseError as exc:
-            return ToolResult.error(str(exc))
+            return ToolResult.fail(
+                "DATASET_NOT_FOUND", str(exc),
+                hint="lakehouse_search ile doğru kimliği bul.",
+                candidates=[s.dataset_id for s in self.lakehouse.list_datasets()],
+                layer="reference",
+            )
 
         content = spec.to_prompt_card()
         content += "\n\nÖrnek satırlar:\n" + sample.data.to_string(index=False)
@@ -123,17 +128,29 @@ class LakehouseQueryTool(Tool):
         # işe yarayan kalıp bu — modele seçenek bırakmamak (ADR-0010).
         eksik_donem = self._atlanmis_donem_filtresi(params.sql)
         if eksik_donem:
-            return ToolResult.error(
+            yil = eksik_donem.split(",")[0].strip()
+            return ToolResult.fail(
+                "MISSING_PERIOD_FILTER",
                 f"Sorguda dönem filtresi yok. Kullanıcı {eksik_donem} dönemini sordu ama "
-                f"sorgun tablonun tamamını getiriyor.\n"
-                f"YAPACAĞIN: sorguya dönem kısıtını ekleyip tekrar çalıştır, ör. "
-                f"WHERE EXTRACT(year FROM <dönem_kolonu>) = {eksik_donem.split(',')[0].strip()}"
+                f"sorgun tablonun tamamını getiriyor.",
+                hint=f"Sorguya dönem kısıtını ekleyip tekrar çalıştır, ör. "
+                     f"WHERE EXTRACT(year FROM <dönem_kolonu>) = {yil}",
+                layer="policy",
             )
         try:
             result = self.lakehouse.execute_sql(params.sql)
         except LakehouseError as exc:
             # Hata modele geri döner; harness'ın onarım döngüsü devreye girer.
-            return ToolResult.error(str(exc))
+            # Politika ihlali (guard) ile çalışma hatası ayrılır: ilki tekrar
+            # denemeyle çözülmez, ikincisi çözülebilir.
+            msg = str(exc)
+            unsafe = any(k in msg for k in ("izin veril", "kullanılamaz", "Tek bir sorgu"))
+            return ToolResult.fail(
+                "UNSAFE_SQL" if unsafe else "SQL_FAILED", msg,
+                hint=None if unsafe else "SQL'i düzeltip tekrar dene; kolon adlarını "
+                                         "lakehouse_describe çıktısıyla karşılaştır.",
+                layer="policy" if unsafe else "data",
+            )
 
         if result.is_empty:
             # Boş sonucun iki farklı sebebi var ve modele söylenecek şey taban tabana zıt:
@@ -282,12 +299,21 @@ class LakehouseDistinctValuesTool(Tool):
         try:
             spec = self.lakehouse.get_dataset(params.dataset_id)
         except LakehouseError as exc:
-            return ToolResult.error(str(exc))
+            return ToolResult.fail(
+                "DATASET_NOT_FOUND", str(exc),
+                hint="lakehouse_search ile doğru kimliği bul.",
+                candidates=[s.dataset_id for s in self.lakehouse.list_datasets()],
+                layer="reference",
+            )
 
         if spec.column(params.column) is None:
-            return ToolResult.error(
+            return ToolResult.fail(
+                "COLUMN_NOT_FOUND",
                 f"'{params.column}' kolonu {params.dataset_id} tablosunda yok. "
-                f"Mevcut kolonlar: {', '.join(c.name for c in spec.columns)}"
+                f"Mevcut kolonlar: {', '.join(c.name for c in spec.columns)}",
+                hint="Kırılım kolonlarından birini seç.",
+                candidates=[c.name for c in spec.columns],
+                layer="reference",
             )
 
         col = params.column
@@ -306,7 +332,7 @@ class LakehouseDistinctValuesTool(Tool):
         try:
             result = self.lakehouse.execute_sql(sql)
         except LakehouseError as exc:
-            return ToolResult.error(str(exc))
+            return ToolResult.fail("SQL_FAILED", str(exc), layer="data")
 
         if result.is_empty:
             hint = f" ('{params.contains}' içeren değer yok)" if params.contains else ""

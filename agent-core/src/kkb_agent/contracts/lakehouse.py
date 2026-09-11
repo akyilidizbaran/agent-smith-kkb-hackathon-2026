@@ -102,6 +102,24 @@ class LakehouseClient(Protocol):
         """Tablodan örnek satırlar — agent'ın veriyi 'görmesi' için."""
         ...
 
+    def series_sql(
+        self,
+        dataset_id: str,
+        *,
+        key_column: str,
+        value_column: str,
+        filter_column: str | None = None,
+        filter_value: str | None = None,
+    ) -> str:
+        """Bir veri setinden anahtar+değer çeken SQL'i üretir.
+
+        Fiziksel yerleşim adaptörün bilgisidir: bir uygulamada `dataset_id` tablo
+        adıdır, bir başkasında uzun formatlı tek tablodaki bir seri kimliğidir.
+        Araçlar bu farkı bilmemeli — bilirse adaptör değişince kırılırlar
+        (nitekim kırıldı: `workspace_add_column` dataset_id'yi tablo adı sanıyordu).
+        """
+        ...
+
     # ---------- Sağlık ----------
     def health(self) -> dict[str, Any]:
         """Bağlantı durumu, tablo sayısı, son yenilenme zamanı."""
