@@ -48,3 +48,4 @@ sıfırdan başlatmamak için kayıt tutulur.
 | [0021](0021-mia-search-retrieval-ayristirma.md) | MIA / Search / Retrieval üç ayrı sağlayıcı katmanı | Kabul edildi |
 | [0022](0022-pdf-cikarim-stratejisi.md) | PDF'ten tablo: OCR öncelikli, metin katmanı yedek | Kabul edildi |
 | [0023](0023-search-saglayicisi-tavily.md) | Arama Tavily, sayfa çekme kendi uygulamamız | Kabul edildi |
+| [0024](0024-silver-adaptoru-ve-fiziksel-sql.md) | Silver adaptörü; fiziksel SQL adaptörün işidir | Kabul edildi |

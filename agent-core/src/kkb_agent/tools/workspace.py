@@ -103,39 +103,25 @@ class WorkspaceAddColumnTool(Tool):
         if params.column_name in table.columns:
             return ToolResult.error(f"'{params.column_name}' zaten tabloda var. Farklı bir ad seç.")
 
-        # Kolon adları katalogla doğrulanır: model var olmayan bir kolon uyduramaz.
+        # SQL'i adaptör üretir: fiziksel yerleşim (tablo adı mı, uzun formatlı
+        # tablodaki seri mi) aracın bilgisi değildir. Kolon doğrulaması da orada,
+        # katalogdan yapılır — model var olmayan bir kolon uyduramaz.
         try:
-            spec = self.lakehouse.get_dataset(params.dataset_id)
+            sql = self.lakehouse.series_sql(
+                params.dataset_id,
+                key_column=params.key_column,
+                value_column=params.value_column,
+                filter_column=params.filter_column,
+                filter_value=params.filter_value,
+            )
         except LakehouseError as exc:
-            return ToolResult.error(str(exc))
-
-        gecerli = {c.name for c in spec.columns}
-        for alan, deger in (
-            ("key_column", params.key_column),
-            ("value_column", params.value_column),
-            ("filter_column", params.filter_column),
-        ):
-            if deger and deger not in gecerli:
-                ipucu = ""
-                if deger == params.column_name:
-                    ipucu = (
-                        f" '{deger}' senin eklemek istediğin YENİ sütunun adı; kaynak tabloda "
-                        f"böyle bir kolon yok. value_column'a var olan bir ölçüm kolonu yaz."
-                    )
-                return ToolResult.error(
-                    f"{alan}='{deger}' {params.dataset_id} tablosunda yok.{ipucu} "
-                    f"Mevcut kolonlar: {', '.join(sorted(gecerli))}"
+            ipucu = ""
+            if params.value_column == params.column_name:
+                ipucu = (
+                    f" '{params.column_name}' senin eklemek istediğin YENİ sütunun adı; "
+                    "value_column'a kaynakta var olan bir ölçüm kolonu yaz."
                 )
-
-        # SQL'i harness üretir, model değil.
-        where = ""
-        if params.filter_column and params.filter_value is not None:
-            kacisli = params.filter_value.replace("'", "''")
-            where = f" WHERE {params.filter_column} = '{kacisli}'"
-        sql = (
-            f"SELECT {params.key_column}, {params.value_column} "
-            f"FROM {params.dataset_id}{where}"
-        )
+            return ToolResult.error(f"{exc}{ipucu}")
 
         try:
             result = self.lakehouse.execute_sql(sql)

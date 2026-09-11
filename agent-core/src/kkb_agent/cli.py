@@ -13,6 +13,8 @@ import logging
 import sys
 
 from .adapters.duckdb_lakehouse import DuckDBLakehouse
+from .adapters.silver_lakehouse import SilverLakehouse
+from .contracts.lakehouse import LakehouseError
 from .config import load_settings
 from .core.agent import AnalyticsAgent
 from .core.registry import ToolRegistry
@@ -32,10 +34,28 @@ from .tools.lakehouse import (
 )
 
 
+def open_lakehouse(path) -> SilverLakehouse | DuckDBLakehouse:
+    """Veritabanının şemasına göre adaptörü seçer.
+
+    Şemayı ayrı bir bağlantı açarak yoklamıyoruz: DuckDB aynı dosyaya farklı
+    yapılandırmayla ikinci bağlantıyı reddediyor (sertleştirilmiş bağlantı
+    read_only + locked config kullanıyor). Bunun yerine Silver adaptörünü
+    kurmayı deniyoruz; beklenen ilişkiler yoksa kendi seed adaptörümüze düşüyoruz.
+    """
+    try:
+        return SilverLakehouse(path)
+    except LakehouseError as exc:
+        if "meta.series" not in str(exc) and "silver.fact_observation" not in str(exc):
+            raise
+        return DuckDBLakehouse(path)
+
+
 def build_agent(max_steps: int = 10) -> AnalyticsAgent:
     """Motoru kurar. Yeni araçlar buraya eklenir; agent kodu değişmez."""
     settings = load_settings()
-    lakehouse = DuckDBLakehouse(settings.lakehouse_path)
+    # Veri ekibinin Silver şeması varsa ona bağlan; yoksa kendi BDDK seed'imize.
+    # Gerçek Lakehouse geldiğinde değişen tek şey LAKEHOUSE_PATH olur.
+    lakehouse = open_lakehouse(settings.lakehouse_path)
     workspace = AnalysisWorkspace()
 
     # Alan profili katalogdan deterministik olarak türetilir; üslup tercihleri
@@ -90,16 +110,17 @@ def main() -> None:
     )
 
     if args.health:
-        settings = load_settings()
-        lh = DuckDBLakehouse(settings.lakehouse_path)
+        agent = build_agent()
+        lh = agent.registry.get("lakehouse_search").lakehouse
         info = lh.health()
-        print(f"Lakehouse : {info['db_path']}")
-        print(f"Tablolar  : {', '.join(info['physical_tables']) or '—'}")
-        print(f"Katalog   : {', '.join(info['catalog_datasets']) or '—'}")
+        for key, value in info.items():
+            shown = ", ".join(map(str, value)) if isinstance(value, list) else value
+            print(f"  {key:20} {shown if shown != '' else '—'}")
+        print(f"  {'alan profili':20} {agent.profile.domain}")
         for spec in lh.list_datasets():
             print(
-                f"  - {spec.dataset_id}: {spec.coverage.row_count} satır "
-                f"({spec.coverage.start} → {spec.coverage.end})"
+                f"    - {spec.dataset_id}: {spec.coverage.row_count} gözlem "
+                f"({spec.coverage.start} → {spec.coverage.end}) [{spec.frequency.value}]"
             )
         return
 
