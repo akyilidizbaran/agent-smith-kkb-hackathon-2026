@@ -49,3 +49,4 @@ sıfırdan başlatmamak için kayıt tutulur.
 | [0022](0022-pdf-cikarim-stratejisi.md) | PDF'ten tablo: OCR öncelikli, metin katmanı yedek | Kabul edildi |
 | [0023](0023-search-saglayicisi-tavily.md) | Arama Tavily, sayfa çekme kendi uygulamamız | Kabul edildi |
 | [0024](0024-silver-adaptoru-ve-fiziksel-sql.md) | Silver adaptörü; fiziksel SQL adaptörün işidir | Kabul edildi |
+| [0025](0025-yapilandirilmis-hata-zarfi.md) | Yapılandırılmış hata zarfı ve döngü kilidi | Kabul edildi |

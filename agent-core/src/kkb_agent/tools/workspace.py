@@ -89,19 +89,32 @@ class WorkspaceAddColumnTool(Tool):
 
     def run(self, params: AddColumnParams) -> ToolResult:
         if not self.workspace.has_table:
-            return ToolResult.error(
-                "Ortada bir analiz tablosu yok. Önce lakehouse_query ile tabloyu oluştur."
+            return ToolResult.fail(
+                "NO_ACTIVE_TABLE",
+                "Ortada bir analiz tablosu yok.",
+                hint="Önce lakehouse_query ile tabloyu oluştur.",
+                layer="workspace",
             )
         table = self.workspace.table
         assert table is not None
 
         if params.join_on not in table.columns:
-            return ToolResult.error(
+            return ToolResult.fail(
+                "COLUMN_NOT_FOUND",
                 f"'{params.join_on}' kolonu analiz tablosunda yok. "
-                f"Mevcut kolonlar: {', '.join(table.columns)}"
+                f"Mevcut kolonlar: {', '.join(table.columns)}",
+                hint="join_on, analiz tablosundaki eşleştirme kolonudur.",
+                candidates=list(table.columns),
+                layer="workspace",
             )
         if params.column_name in table.columns:
-            return ToolResult.error(f"'{params.column_name}' zaten tabloda var. Farklı bir ad seç.")
+            return ToolResult.fail(
+                "COLUMN_EXISTS",
+                f"'{params.column_name}' zaten tabloda var.",
+                hint="Farklı bir ad seç.",
+                candidates=list(table.columns),
+                layer="workspace",
+            )
 
         # SQL'i adaptör üretir: fiziksel yerleşim (tablo adı mı, uzun formatlı
         # tablodaki seri mi) aracın bilgisi değildir. Kolon doğrulaması da orada,
@@ -121,18 +134,24 @@ class WorkspaceAddColumnTool(Tool):
                     f" '{params.column_name}' senin eklemek istediğin YENİ sütunun adı; "
                     "value_column'a kaynakta var olan bir ölçüm kolonu yaz."
                 )
-            return ToolResult.error(f"{exc}{ipucu}")
+            return ToolResult.fail(
+                "COLUMN_NOT_FOUND", f"{exc}{ipucu}",
+                hint="Kaynakta var olan bir ölçüm kolonu seç.",
+                layer="reference",
+            )
 
         try:
             result = self.lakehouse.execute_sql(sql)
         except LakehouseError as exc:
-            return ToolResult.error(str(exc))
+            return ToolResult.fail("SQL_FAILED", str(exc), layer="data")
 
         df = result.data
         if df.empty:
-            return ToolResult.error(
-                f"Sorgu hiç satır döndürmedi. filter_value='{params.filter_value}' "
-                f"değerini lakehouse_distinct_values ile doğrula."
+            return ToolResult.fail(
+                "EMPTY_RESULT",
+                f"Sorgu hiç satır döndürmedi (filter_value='{params.filter_value}').",
+                hint="Değeri lakehouse_distinct_values ile doğrula.",
+                layer="data",
             )
 
         key_col, value_col = df.columns[0], df.columns[1]
@@ -144,9 +163,13 @@ class WorkspaceAddColumnTool(Tool):
 
         matched = int(aligned.notna().sum())
         if matched == 0:
-            return ToolResult.error(
+            return ToolResult.fail(
+                "JOIN_MISMATCH",
                 f"Eşleşen satır bulunamadı: kaynak '{key_col}' değerleri ile tablodaki "
-                f"'{params.join_on}' değerleri örtüşmüyor."
+                f"'{params.join_on}' değerleri örtüşmüyor.",
+                hint="Dönem aralıklarının ve anahtar kolonların aynı granülariteyi "
+                     "taşıdığını kontrol et.",
+                layer="data",
             )
 
         self.workspace.add_column(
@@ -217,18 +240,26 @@ class WorkspaceComputeColumnTool(Tool):
 
     def run(self, params: ComputeColumnParams) -> ToolResult:
         if not self.workspace.has_table:
-            return ToolResult.error(
-                "Ortada bir analiz tablosu yok. Önce lakehouse_query ile tabloyu oluştur."
+            return ToolResult.fail(
+                "NO_ACTIVE_TABLE",
+                "Ortada bir analiz tablosu yok.",
+                hint="Önce lakehouse_query ile tabloyu oluştur.",
+                layer="workspace",
             )
         if _UNSAFE.search(params.expression):
-            return ToolResult.error(
+            return ToolResult.fail(
+                "UNSAFE_SQL",
                 "İfade yalnızca hesap içerebilir; veri değiştiren veya dosya okuyan "
-                "ifadelere izin verilmez."
+                "ifadelere izin verilmez.",
+                layer="policy",
             )
         table = self.workspace.table
         assert table is not None
         if params.column_name in table.columns:
-            return ToolResult.error(f"'{params.column_name}' zaten tabloda var.")
+            return ToolResult.fail(
+                "COLUMN_EXISTS", f"'{params.column_name}' zaten tabloda var.",
+                hint="Farklı bir ad seç.", candidates=list(table.columns), layer="workspace",
+            )
 
         # Adaptörle aynı sınırlar: dış dosya/ağ erişimi kapalı, yapılandırma kilitli.
         con = hardened_connection()
@@ -238,16 +269,20 @@ class WorkspaceComputeColumnTool(Tool):
                 f'SELECT ({params.expression}) AS "{params.column_name}" FROM analiz'
             ).fetch_df()
         except Exception as exc:
-            return ToolResult.error(
-                f"İfade hesaplanamadı: {exc}. Kullanılabilir sütunlar: {', '.join(table.columns)}"
+            return ToolResult.fail(
+                "SQL_FAILED", f"İfade hesaplanamadı: {exc}",
+                hint="Yalnızca tablodaki sütunları kullan.",
+                candidates=list(table.columns), layer="data",
             )
         finally:
             con.close()
 
         if len(out) != len(table):
-            return ToolResult.error(
-                f"İfade {len(out)} satır üretti, tabloda {len(table)} satır var. "
-                "Satır sayısını değiştiren bir ifade kullanma."
+            return ToolResult.fail(
+                "JOIN_MISMATCH",
+                f"İfade {len(out)} satır üretti, tabloda {len(table)} satır var.",
+                hint="Satır sayısını değiştiren bir ifade kullanma; pencere fonksiyonu kullan.",
+                layer="data",
             )
 
         self.workspace.add_column(

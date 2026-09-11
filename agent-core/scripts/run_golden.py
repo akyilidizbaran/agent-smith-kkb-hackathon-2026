@@ -66,6 +66,7 @@ class CaseOutcome:
     steps: int
     tools_used: list[str] = field(default_factory=list)
     tool_errors: int = 0
+    error_codes: dict[str, int] = field(default_factory=dict)
     failures: list[str] = field(default_factory=list)
     answer_preview: str = ""
 
@@ -83,6 +84,10 @@ def run_case(case: GoldenCase) -> CaseOutcome:
     duration = time.perf_counter() - started
     tools = [s.tool_name for s in steps if s.tool_name]
     errors = sum(1 for s in steps if s.tool_name and not s.ok)
+    codes: dict[str, int] = {}
+    for s in steps:
+        if s.error_code:
+            codes[s.error_code] = codes.get(s.error_code, 0) + 1
     failures: list[str] = []
 
     table = agent.workspace.table
@@ -124,6 +129,7 @@ def run_case(case: GoldenCase) -> CaseOutcome:
         steps=tool_steps,
         tools_used=tools,
         tool_errors=errors,
+        error_codes=codes,
         failures=failures,
         answer_preview=answer.text[:200].replace("\n", " "),
     )
@@ -228,9 +234,14 @@ def main() -> None:
             )
         outcomes.append(outcome)
         mark = "✓ GEÇTİ" if outcome.passed else "✗ KALDI"
+        codes = (
+            " | " + ", ".join(f"{k}×{v}" for k, v in sorted(outcome.error_codes.items()))
+            if outcome.error_codes else ""
+        )
         print(
             f"  {mark} | {outcome.duration_s}s | {outcome.steps} adım | "
-            f"{outcome.tool_errors} araç hatası | araçlar: {', '.join(outcome.tools_used) or '—'}"
+            f"{outcome.tool_errors} araç hatası{codes} | "
+            f"araçlar: {', '.join(outcome.tools_used) or '—'}"
         )
         for f in outcome.failures:
             print(f"    - {f}")
@@ -239,11 +250,18 @@ def main() -> None:
     passed = sum(1 for o in outcomes if o.passed)
     total_time = sum(o.duration_s for o in outcomes)
     avg_steps = sum(o.steps for o in outcomes) / max(len(outcomes), 1)
+    all_codes: dict[str, int] = {}
+    for o in outcomes:
+        for k, v in o.error_codes.items():
+            all_codes[k] = all_codes.get(k, 0) + v
     print(
         f"SONUÇ: {passed}/{len(outcomes)} geçti | toplam {total_time:.0f}s | "
         f"vaka başına ort. {total_time / max(len(outcomes), 1):.0f}s, {avg_steps:.1f} adım | "
         f"toplam araç hatası: {sum(o.tool_errors for o in outcomes)}"
     )
+    if all_codes:
+        print("HATA SINIFLARI: " + ", ".join(
+            f"{k}×{v}" for k, v in sorted(all_codes.items(), key=lambda x: -x[1])))
     if json_out:
         json_out.write_text(
             json.dumps([asdict(o) for o in outcomes], ensure_ascii=False, indent=2), encoding="utf-8"
