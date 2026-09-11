@@ -15,9 +15,9 @@ Different parts of this integration carry **different levels of evidence**. Pass
 | Connector HTTP behaviour (retry, classification, key handling, RAW write) | **Verified by test only** | All connector tests use a **fake in-process session**. No socket is opened. |
 | Parser response shape (envelope, `Tarih`, `UNIXTIME`, string values, nulls) | **Verified against `/fe` captures** | Fixtures came from the EVDS3 web application's own `POST /igmevdsms-dis/fe` endpoint, not from the documented keyed endpoint |
 | **Official keyed endpoint, successful live data** | **LIVE_NOT_VERIFIED** | Prior diagnostics on 2026-09-11 returned HTTP 401 with the available credential; no successful authenticated data response was obtained. No authentication diagnostics were repeated in Phase 3.3A. |
-| **`TP.FG.J0` (TÜFE) response, live or captured** | ❌ **NOT VERIFIED** | No response has ever been captured. `tests/integration/test_evds_cpi_silver.py` uses a clearly-labelled **synthetic** payload and is a contract test only |
+| **`TP.FG.J0` (TÜFE) response, live or captured** | **CAPTURED LIVE** 2026-09-11 | `tests/fixtures/raw/evds/evds_cpi_monthly_live_keyed.json`, from the documented key-authenticated endpoint — see "Live keyed capture" below. `tests/integration/test_evds_cpi_silver.py` still uses its synthetic payload, so gate step 4 is open |
 | **`TP.FG.J0` reference/base (`2003=100`)** | **VERIFIED_PUBLIC** | TCMB-hosted Central Bank Review appendix explicitly maps the code to general CPI (2003=100); corroborated by public EVDS listing and TÜİK methodology below. This is not live API evidence. |
-| **`TP.FG.J0` 2025-01 value** | **LIVE_NOT_VERIFIED** | No authoritative observation was verified in this phase; no numeric assertion is adopted. |
+| **`TP.FG.J0` values against a published figure** | **AGREES** 2026-09-11 | Year-on-year change computed from the live response reproduces TÜİK's published December headline inflation exactly: 2023-12 **64,77%**, 2024-12 **44,38%**. This is a consistency check on the captured values, not a substitute for gate step 4. |
 
 ### What this means in practice
 
@@ -91,7 +91,32 @@ See [the evidence matrix and confidence decision](../branches/evds-cpi-semantic-
 
 The public reference/base may now be stated with the scope above. The existing promotion
 gate is unchanged: public semantics do not substitute for steps 1, 2 and 4 or establish
-current provider status. No live fixture was created; the synthetic contract test remains.
+current provider status.
+
+### Live keyed capture (2026-09-11) — gate steps 1 and 2 are now met
+
+A working `EVDS_API_KEY` became available and the documented endpoint was called for real.
+
+| | |
+|---|---|
+| Endpoint | `GET https://evds3.tcmb.gov.tr/igmevdsms-dis/series=TP.FG.J0&startDate=01-01-2021&endDate=30-06-2026&type=json` (key passed as a header, never in a committed file) |
+| Captured | 2026-09-11 |
+| HTTP status | 200, `application/json` |
+| Observations returned | 61 (2021-01 … 2026-01) |
+| Fixture | `tests/fixtures/raw/evds/evds_cpi_monthly_live_keyed.json` — four observations, response body only, no key in the bytes, the filename or the metadata |
+| Known-value agreement | Year-on-year from the captured index: 2023-12 → **64,77%**, 2024-12 → **44,38%**, matching TÜİK's published December headline inflation |
+| Index level | 2021-01 = 513,30 and 2023-12 = 1.859,38, consistent with the `2003=100` reference established from public sources above |
+
+Two contract differences from the web-application captures were found in the same call and
+apply to every EVDS series, not only this one — monthly `Tarih` is `2021-1` rather than
+`01-2021`, and `seriesNames` is absent entirely. Both are recorded in
+`tests/fixtures/raw/evds/README.md`; the Silver mapping now reads the date from `UNIXTIME`
+(`src/lakehouse/silver/adapters/_evds_time.py`).
+
+**What is still open:** gate step 4 — `tests/integration/test_evds_cpi_silver.py` has to be
+re-pointed at this fixture with the synthetic payload deleted rather than kept beside it.
+Until then `semantic_confidence` stays `derived`, and a presentation must not call this series
+live-provider-verified.
 
 ### Required smoke test once an API key exists
 
