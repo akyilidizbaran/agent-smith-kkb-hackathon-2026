@@ -309,29 +309,43 @@ ekleyebilir. "Tabloyu bozmadan" garantisi prompt'a değil, aracın imkânlarına
           if not produced_data and not nudged:
               nudged = True
               "Henüz veri çekmedin" → geri gönder, continue   ← CEVAP GUARD'I
+          if produced_data:
+              grounding_check(soru, cevap, araç çıktıları)     ← ANLATI GUARD'I
+              MISS ya da nedensellik → bir kez geri gönder
+              ikinci kez de MISS → cevap gider, değerler işaretlenir
           return AgentAnswer(_strip_reasoning(content))
 
       for call in calls:
+          if (call.name, args) daha önce görüldüyse:
+              DUPLICATE_CALL; ikinci tekrarda araçlar geri alınır  ← DÖNGÜ KİLİDİ
           result = registry.execute(call.name, call.arguments)
           if result.ok and call.name in DATA_PRODUCING_TOOLS:
               produced_data = True
           messages.append(tool mesajı: result.content)     ← data DEĞİL, content
           steps.append(AgentStep(...))                       ← izlenebilirlik
 
+      if terminal hata (retryable değil):
+          araçsız son tur: "durumu açıkla, sayı uydurma"     ← ÇIKMAZ GUARD'I
+
  4. max_steps aşıldı:
       "Elindekiyle en iyi cevabı ver, neyi tamamlayamadığını söyle" → son tur
 ```
 
-Dört guard, hepsi ölçülmüş bir hata moduna karşılık:
+Yedi guard, hepsi ölçülmüş bir hata moduna karşılık:
 
 | Guard | Hata modu | ADR |
 |---|---|---|
 | Cevap guard'ı (`produced_data`) | Model katalogu okuyup veri çekmeden cevap yazıyordu | 0010 |
 | `DATA_PRODUCING_TOOLS` araç adına göre | İlk sürüm DataFrame varlığına bakıyordu; `describe` de DataFrame döndürüyor, guard hiç tetiklenmedi | 0010 |
+| Anlatı guard'ı (`grounding_check`) | Tablo doğru, anlatıda tabloda olmayan sayı: "155.515 milyon TL arttı" | 0027 |
+| Nedensellik filtresi | "faiz indirimi buna yol açtı" — veriden çıkarılamaz | 0027 |
+| Döngü kilidi + kırılması | Aynı çağrı tekrar tekrar; kilit aracı korudu ama model yedi kez daha istedi ve adım limitini yaktı | 0025 |
+| Çıkmaz guard'ı (araçsız son tur) | Tekrar denemeyle çözülmeyen hatada model aynı yolu farklı yazımlarla deniyordu | 0017, 0025 |
 | `max_steps` + son tur | Sessiz kesilme yerine "neyi tamamlayamadım" | — |
 | `_strip_reasoning` | Qwen3/DeepSeek `<think>` blokları kullanıcıya sızmasın | — |
 
-`AgentAnswer` cevap metni + `steps` (trace) + `workspace` + `hit_step_limit` taşır.
+`AgentAnswer` cevap metni + `steps` (trace) + `workspace` + `hit_step_limit` +
+`grounding` taşır.
 Trace yalnız hata ayıklama için değil; demoda "bu sonuca nasıl vardın?" sorusunun cevabı.
 
 ---
