@@ -320,8 +320,10 @@ def summarize(engine: str, reports: list[CaseReport]) -> dict[str, Any]:
 
 
 def render_md(summaries: list[dict[str, Any]], per_engine: dict[str, list[CaseReport]], repeat: int, which: str, model: str) -> str:
+    import os as _os
+    db = _os.getenv("LAKEHOUSE_PATH", "data/lakehouse.duckdb")
     lines = [f"# Motor karşılaştırması — {which} seti", "",
-             f"tarih={date.today()} · repeat={repeat} · model={model} · veri=agent-core/data/lakehouse.duckdb (dev seed)", "",
+             f"tarih={date.today()} · repeat={repeat} · model={model} · veri={db}", "",
              "| Motor | vaka pass^k | koşu | ort. s | p50 s | araç adımı | LLM turu | token | araç hatası | hata kodları | grounding temiz |",
              "|---|---|---|---|---|---|---|---|---|---|---|"]
     for s in summaries:

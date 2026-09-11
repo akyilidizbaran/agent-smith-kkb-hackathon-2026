@@ -85,6 +85,10 @@ class AgentConfig:
     escalate: bool = True
     answer_max_words: int = 120
     nudge_if_no_data: bool = True
+    # Üretim tavanı. 11 Eylül seed benchmark'ında (G5) model cevap turunda saçmalayıp 103 s
+    # boyunca token üretti; tavan olmadan en kötü durum sınırsız. Araç turları kısa JSON,
+    # 700 token en uzun SQL'e de yeter.
+    max_tokens: int = 700
 
 
 @dataclass
@@ -297,14 +301,14 @@ class V3Agent:
 
     # ------------------------------------------------------------------
     def _chat(self, messages, *, tools, extra=None):
-        kwargs: dict[str, Any] = {"tools": tools}
+        kwargs: dict[str, Any] = {"tools": tools, "max_tokens": self.config.max_tokens}
         if extra:
             kwargs["extra"] = extra
         try:
             return self.llm.chat(messages, **kwargs)
         except TypeError:
             # Ekip istemcisi `extra` almıyor; yükseltmesiz devam.
-            return self.llm.chat(messages, tools=tools)
+            return self.llm.chat(messages, tools=tools, max_tokens=self.config.max_tokens)
 
     def _execute_calls(self, calls: list[ToolCall]) -> list[ToolResult]:
         """Tablo değiştirmeyen çağrılar eşzamanlı, değiştirenler sırayla; sonuç sırası korunur."""

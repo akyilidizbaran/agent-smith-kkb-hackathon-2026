@@ -36,6 +36,8 @@ def test_ayni_turda_iki_cagri_paralel_ve_sirali_doner(lakehouse: StubLakehouse) 
     tool_msgs = [m for m in llm.calls[1]["messages"] if m.role == "tool"]
     assert [m.tool_call_id for m in tool_msgs] == ["c1", "c2"]
     assert ans.extra["grounding"] == "OK"
+    # Üretim tavanı her turda gönderilir (11 Eylül: tavansız cevap turu 103 s sürdü)
+    assert all(c["max_tokens"] == 700 for c in llm.calls)
 
 
 def test_retry_edilemez_hata_aracsiz_cevap_turu(lakehouse: StubLakehouse) -> None:

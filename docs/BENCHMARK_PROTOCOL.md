@@ -21,17 +21,21 @@
 
 Paylaşılan ve **değiştirilmeyen** katman: `kkb_agent.contracts/*`, `adapters/duckdb_lakehouse.py`, `core/workspace.py`, `DomainProfile`, `tools/workspace.py` (V3 sarar), `tests/golden/cases.py`, seed verisi. Domain bilgisi `kkb_agent_v3/domain/finance.md` (markdown; `health.md` boş şablon).
 
-## 3. Son ölçüm (10 Eylül) `[EMP]`
+## 3. Son ölçüm (11 Eylül, ekip motoru ADR-0024/0025 sonrası, iki şema) `[EMP]`
 
-| | Ekip motoru | V3 |
-|---|---|---|
-| vaka pass^3 | 17/18 (51/54 koşu) | 17/18 (51/54) |
-| ort. süre | 5,7 s | 4,1 s |
-| LLM turu | 5,6 | 3,2 |
-| araç adımı | 4,8 | 1,6 |
-| anlatı doğrulama | yok | 41/45 temiz |
+| | Ekip motoru · seed | V3 · seed | Ekip motoru · Silver | V3 · Silver |
+|---|---|---|---|---|
+| vaka pass^3 | 14/18 (45/54) | **17/18** (51/54) | 13/18 (45/54) | **16/18** (48/54) |
+| ort. süre | 9,5 s | 7,9 s* | 8,4 s | **3,7 s** |
+| p50 süre | 8,1 s | 5,6 s | 7,1 s | 3,1 s |
+| LLM turu | 5,7 | 3,1 | 5,4 | 2,9 |
+| araç adımı | 5,0 | 1,5 | 4,7 | 1,3 |
+| araç hatası | 17 | 13 | 33 (`SQL_FAILED×21`) | 15 |
+| anlatı doğrulama | yok | 43/45 | yok | 45/45 |
 
-İkisinde de düşen: L10-01 (belirsiz soru; `clarify` yok). Kaynak: `docs/experiments/benchmark_all_2026-09-10_r3.md`, `_r3_v3fix.md`.
+\* V3 seed ortalaması G5'teki tek 103 s'lik koşuyu içeriyor: cevap turunda model bozuk çıktı üretip durmadı; harness'ta üretim tavanı yoktu → `max_tokens=700` eklendi (bu ölçümden sonra). Onsuz seed ortalaması ≈ 6 s.
+
+Düşen vakalar: L10-01 ikisinde de (`clarify` yok). Ekip motoru ayrıca L6-04 (yıllık özet sorgusu aktif tabloyu 1 satıra indiriyor), L9-02 (Silver'da `FROM <series_id>` yazıp `SQL_FAILED`, sonra 2026'nın 6 ayını tablo yapıyor), L4-01 (adım limiti), G4/L11-02 Silver'da 2/3. V3 Silver'da G3 (0/3): LAG çapası için Aralık 2024'ü tabloya kattı → 13 satır, golden 12 istiyor; analitik olarak savunulabilir, kural eklenmedi. MIA gecikmesi günden güne değişiyor (aynı ekip motoru dün 5,7 s, bugün 9,5 s) — **yalnız aynı koşu içindeki oranlar** karşılaştırılır. Kaynak: `docs/experiments/benchmark_all_2026-09-11_{seed,silver}_r3.md/.json` (adım düzeyi ayrıntı JSON'da). Önceki ölçüm (10 Eylül): `benchmark_all_2026-09-10_r3.md`, `_r3_v3fix.md`.
 
 ## 4. Motorun benchmark'a girmesi için sözleşme
 

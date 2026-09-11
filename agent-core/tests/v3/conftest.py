@@ -91,7 +91,7 @@ class FakeLLM:
 
     def chat(self, messages: list[ChatMessage], *, tools=None, temperature: float = 0.0,
              max_tokens=None, extra=None) -> LLMResponse:
-        self.calls.append({"tools": tools, "extra": extra, "messages": list(messages)})
+        self.calls.append({"tools": tools, "extra": extra, "max_tokens": max_tokens, "messages": list(messages)})
         if not self._responses:
             return LLMResponse(content="(cevap kalmadı)")
         return self._responses.pop(0)
