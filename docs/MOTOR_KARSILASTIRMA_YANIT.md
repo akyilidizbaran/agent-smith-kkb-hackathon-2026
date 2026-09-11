@@ -9,10 +9,14 @@
 ## 0. Kısa cevap
 
 Benchmark koşucusu, grounding guard, ön-yükleme ve sınır doğrulayıcı **iyi işler** ve
-üçünü almak istiyorum — birini zaten aldım. Ama önerine bir itirazım var ve itiraz
+hepsini almak istiyorum — birini zaten aldım. Ama önerine bir itirazım var ve itiraz
 "benim motorum daha iyi" değil: **iki motoru birlikte yaşatmaya karşıyım.** Ölçülen
 üstünlüğün tamamı motordan bağımsız dört modülden geliyor; bunu sen de protokolün
 §6'sında yazmışsın. Modülleri taşıyalım, ikinci harness'ı taşımayalım.
+
+Raporundaki iki bulgu doğruydu; kök nedenlerini kapattım ve **doğruluk eşitlendi**
+(seed 17/18–17/18, Silver 17/18–16/18). Geriye V3'ün tur/süre avantajı kalıyor ve
+onun da tek kaynağı ön-yükleme — yani yine bir modül.
 
 Hangi harness'ın kalacağı ayrı ve küçük bir karar. Seninki kalsın diyorsan bizim
 guard'larımızı (dönem filtresi, kapsam reddi, workspace kuralları, hata zarfı) oraya
@@ -234,7 +238,44 @@ harness kuralı olmalı, tur sayısının yan etkisi değil.
 
 ---
 
-## 5. Aldıklarım
+## 5. Düzeltmelerden sonra: doğruluk eşitlendi, tur farkı durdu
+
+Bu tur, motorumuzun güncel kopyası koşucunun `src`'sine yerleştirilerek koşuldu
+(§3.3'teki tuzağa düşmemek için).
+
+| | ekip · önce | **ekip · sonra** | V3 |
+|---|---|---|---|
+| seed pass³ | 15/18 | **17/18** | 17/18 |
+| Silver pass³ | 15/18 | **17/18** | 16/18 |
+| Silver araç hatası | 20–33 | **3** | 18 |
+| Silver hata kodları | `SQL_FAILED×18, MISSING_PERIOD_FILTER×5` | **`OUT_OF_COVERAGE×3`** | `MISSING_PERIOD_FILTER×9, OUT_OF_COVERAGE×6, EMPTY_DATASET×3` |
+| anlatı doğrulama | ölçülmüyordu | **48/48** | 45/45 |
+| seed tur / adım | 5,9 / 5,2 | 6,0 / 5,2 | **2,9 / 1,3** |
+| seed ort. süre | 10,4 s | 6,8 s | **3,9 s** |
+
+`SQL_FAILED` **18 → 0**. Kalan üç hata `OUT_OF_COVERAGE`, yani hata değil doğru
+davranış: kapsam dışı soruda sorgu hiç çalışmıyor.
+
+İki motorun da kaybettiği tek ortak vaka **L10-01** (belirsiz soruya netleştirme) —
+`clarify` aracı ikimizde de yok. V3 ayrıca Silver'da `G3`'ü kaybediyor.
+
+### Karar kuralını kendi basamaklarıyla işletirsek
+
+1. **pass³** — artık kimseyi elemiyor: seed'de berabere, Silver'da ekip motoru önde.
+2. **Doğrulanmış anlatı** — berabere; ikisi de temiz (48/48 ve 45/45).
+3. **Tur ve süre** — **V3 açık ara önde** (2,9 tur / 3,9 s ↔ 6,0 tur / 6,8 s).
+
+Yani kural 3. basamakta V3'ü işaret ediyor. Ama o basamaktaki farkın tamamı
+**ön-yüklemeden** geliyor — bir motor özelliği değil, bir modül; ve §3.1'de
+ölçüldüğü gibi gerçek katalogda bizim ADR-0026 değişikliğimiz olmadan çalışmıyor.
+
+Bu yüzden önerim "hangi motor kazandı" sorusunun cevabı değil: **sınırlı
+ön-yüklemeyi ortak katmana alalım ve tur farkını ölçelim.** Kapanırsa tartışma
+bitiyor; kapanmazsa kalan farkın nereden geldiğini bilerek konuşuruz.
+
+---
+
+## 6. Aldıklarım
 
 **Grounding guard'ı aldım** — modülü `kkb_agent_v3/core/grounding.py`'dan
 `kkb_agent/core/grounding.py`'a taşıdım ki tek kopya olsun. Saf fonksiyon, yalnız
@@ -254,7 +295,7 @@ Bu bizim kör noktamızdı ve tam da jürinin okuyacağı yerdeydi: golden vakal
 
 ---
 
-## 6. Önerim
+## 7. Önerim
 
 1. **Modüller ortak katmana, tek kopya.** `grounding.py` taşındı. `validator.py`,
    `context.py` ve paralel yürütme de aynı yere gelsin; iki motor da import etsin.
