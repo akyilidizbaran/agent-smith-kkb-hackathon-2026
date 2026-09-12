@@ -23,18 +23,25 @@ from pydantic import BaseModel, Field
 
 from ..builder.ingest import LakehouseCLI
 from ..builder.profile import profile_table, propose
-from ..builder.read import ReadRefused, read_table_for_profiling
+from ..builder.read import ReadRefused, read_bytes_for_profiling, read_table_for_profiling
 from ..builder.verify import verify_mapping
 from ..adapters.duckdb_lakehouse import release_connections
 from ..contracts.lakehouse import LakehouseClient
 from ..core.access_policy import decide, detect_source_constraint, render_for_model, to_tool_error
 from ..core.intent import locator_from_user, write_intent
+from ..vision.ocr import is_document, ocr_document
+from ..web.html import extract_ocr_page
 from ..core.errors import ToolError
 from ..core.tool import Tool, ToolResult
 
 
+class OcrUnavailable(RuntimeError):
+    """Belge var ama OCR yok ya da tablo bulunamadı: uydurma yok, kullanıcıya söylenir."""
+
+
 class IngestParams(BaseModel):
-    locator: str = Field(description="Yerel dosya yolu ya da http(s) URL'i (CSV, TSV, XLSX, JSON)")
+    locator: str = Field(description="Yerel dosya yolu ya da http(s) URL'i (CSV, TSV, XLSX, JSON; PDF/PNG/JPG belgeler OCR ile okunur)")
+    table_index: int | None = Field(default=None, description="PDF/görselde birden çok tablo varsa hangisi (0 tabanlı); boşsa en büyük tablo")
     name: str = Field(description="Serinin okunabilir adı, ör. 'İl bazında konut satışları'")
     series_key: str | None = Field(
         default=None,
@@ -127,14 +134,52 @@ class IngestFromUrlTool(Tool):
 
     def __init__(
         self, lakehouse: LakehouseClient, cli: LakehouseCLI, *, allowed_root: Path,
-        registry: object | None = None, dataset_prefix: str = "adhoc", session: Any = None,
+        registry: object | None = None, dataset_prefix: str = "adhoc", session: Any = None, ocr: Any = None,
     ) -> None:
+        self.ocr = ocr            # PDF/görsel belgeler için OCR istemcisi (ADR-0041)
         self.lakehouse = lakehouse
         self.cli = cli
         self.allowed_root = Path(allowed_root)
         self._registry = registry
         self.dataset_prefix = dataset_prefix
         self.session = session  # HTTP oturumu; testte sahte, üretimde requests'in kendisi
+
+    # ------------------------------------------------------------------ belge (PDF/görsel)
+    def _read_document(self, params: IngestParams):
+        """PDF/görsel → OCR → seçilen tablo → izinli köke CSV (belgenin kendisi de yanına).
+
+        Veri ekibinin CLI'ı yalnız tablo dosyası alır; RAW'a OCR tablosunun CSV'si girer, belgenin
+        sha256'sı ve OCR modeli katalog açıklamasında ve kartta taşınır. Belge bayt bayt izinli
+        kökte saklanır ki kanıt zinciri geriye doğru izlenebilsin."""
+        if self.ocr is None:
+            raise OcrUnavailable("PDF/görsel belge OCR istemcisi olmadan okunamaz (VISION_MODEL yapılandırılmamış).")
+        content, media, outcome = read_bytes_for_profiling(
+            params.locator, allowed_roots=[self.allowed_root], session=self.session
+        )
+        if content is None or not outcome.ok:
+            return None, outcome, None, params.locator
+        doc = ocr_document(content, media, client=self.ocr, url=params.locator.split("?")[0])
+        page = extract_ocr_page(params.locator, doc)
+        if not page.tables:
+            raise OcrUnavailable(f"Belgede OCR tablo bulamadı ({len(doc.pages)} sayfa okundu). {doc.note()}")
+        idx = params.table_index if params.table_index is not None else max(
+            range(len(page.tables)), key=lambda i: page.tables[i].shape[0] * page.tables[i].shape[1])
+        if idx < 0 or idx >= len(page.tables):
+            raise OcrUnavailable(f"table_index {idx} yok; belgede {len(page.tables)} tablo var.")
+        table = page.tables[idx]
+        page_no = doc.tables[idx][0] if idx < len(doc.tables) else "?"
+        stem = f"ocr_{doc.sha256[:12]}"
+        self.allowed_root.mkdir(parents=True, exist_ok=True)
+        suffix = Path(params.locator.split("?")[0]).suffix.lower() or ".bin"
+        (self.allowed_root / f"{stem}{suffix}").write_bytes(content)
+        csv_path = self.allowed_root / f"{stem}_p{page_no}_t{idx}.csv"
+        table.to_csv(csv_path, index=False)
+        note = (f"Belge {params.locator} (sha256 {doc.sha256}) OCR ile okundu: model {doc.model}, sayfa {page_no}, "
+                f"tablo #{idx} ({len(table)}×{len(table.columns)}); sayılar doğrulanmadı, kaynağın kendisiyle "
+                f"karşılaştırılmalı. Belge kopyası: {stem}{suffix}.")
+        # OCR tablosu sayıya çevrilmiş DataFrame; profilci metin hücre bekler.
+        frame = table.astype(str).where(table.notna(), "")
+        return frame, outcome, note, str(csv_path)
 
     # ------------------------------------------------------------------ hooks
     def _user_text(self) -> str:
@@ -171,15 +216,23 @@ class IngestFromUrlTool(Tool):
         constraint = detect_source_constraint(question or params.locator)
 
         # 1. erişim + danışma okuması
+        doc_note: str | None = None          # PDF/görselse OCR provenance satırı
+        cli_locator = params.locator          # CLI'a giden dosya: belgeyse OCR'dan yazılan CSV
         try:
-            frame, outcome = read_table_for_profiling(
-                params.locator, allowed_roots=[self.allowed_root], session=self.session
-            )
+            if is_document("", params.locator.split("?")[0]):
+                frame, outcome, doc_note, cli_locator = self._read_document(params)
+            else:
+                frame, outcome = read_table_for_profiling(
+                    params.locator, allowed_roots=[self.allowed_root], session=self.session
+                )
         except ReadRefused as exc:
             return ToolResult.fail(
                 "ACCESS_BLOCKED", f"Kaynak okunamadı: {exc}",
                 hint="Dosyayı izinli klasöre koy ya da http(s) bir adres ver.", layer="access",
             )
+        except OcrUnavailable as exc:
+            return ToolResult.fail("TOOL_FAILED", str(exc), layer="harness", retryable=False,
+                                   hint="Kullanıcıya belgenin OCR olmadan okunamadığını söyle; CSV/XLSX isteyebilirsin.")
         decision = decide(outcome, constraint)
         if not outcome.ok or frame is None:
             err = to_tool_error(outcome, decision)
@@ -244,6 +297,7 @@ class IngestFromUrlTool(Tool):
             f"eklendi. Eşleme ve anlam veriden önerildi; ölçüm tipi {semantics.measure_type!r} "
             f"({next(e.reason for e in semantics.evidence if e.field == 'measure_type')}). "
             "Kullanılabilmesi için bir insanın onaylayıp kataloğa alması gerekir."
+            + (f" {doc_note}" if doc_note else "")
         )
         # Süreçteki BÜTÜN okuyucular kapanmalı, yalnız bu adaptör değil: DuckDB aynı
         # süreçteki salt-okunur bağlantıları tek örnekte paylaşır ve dosya kilidi son
@@ -253,7 +307,7 @@ class IngestFromUrlTool(Tool):
         release_connections(getattr(self.lakehouse, "db_path", None))
         try:
             out = self.cli.ingest_file(
-                locator=params.locator, dataset_id=f"{self.dataset_prefix}_{key}",
+                locator=cli_locator, dataset_id=f"{self.dataset_prefix}_{key}",
                 mapping=mapping, semantics=semantics, name=catalog_name, description=description,
                 allowed_root=self.allowed_root,
             )
@@ -277,7 +331,8 @@ class IngestFromUrlTool(Tool):
         card = [
             f"EKLENDİ: {series_id} — {params.name}",
             f"katalog adı: {catalog_name}",
-            f"kaynak: {params.locator}",
+            f"kaynak: {params.locator}" + (f" → OCR tablosu {Path(cli_locator).name}" if doc_note else ""),
+            *([f"OCR: {doc_note}"] if doc_note else []),
             f"satır: {report.rows_mapped} eşlendi, {report.rows_null_value} boş değer korundu"
             + (f"; yazılan {out.rows_written}, değişmeyen {out.rows_unchanged}" if out.rows_written is not None else ""),
             f"katman: adhoc (taslak) — Silver'a ve Gold'a girmez; bir insan onaylayınca kataloğa alınır",

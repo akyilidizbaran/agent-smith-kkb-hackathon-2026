@@ -28,6 +28,8 @@ from ..web.fetch import FetchRefused, RobotsCache
 from ..web.search import TavilySearch
 
 WEB_PROMPT_RULES = """
+PDF ve görsel adresleri (.pdf, .png, .jpg) de web_url ile açılır: sayfalar OCR ile okunur, tablolar \
+listelenir. OCR bir okumadır, doğrulama değildir: cevapta "görüntüden OCR ile okundu, doğrulanmadı" de.
 
 DIŞ KAYNAK KURALI (web):
 Kullanıcı bir adres/site verdiyse ("şu sayfadan", "bu linkten", URL) web_url ile o adresi oku; \
@@ -45,6 +47,16 @@ Web araması bu ortamda KAPALI (arama anahtarı yok). Kullanıcı internette ara
 bir adres vermesini iste; adres verirse web_url ile okuyabilirsin."""
 
 _YEAR = re.compile(r"\b(19|20)\d{2}\b")
+
+
+def _plain(frame) -> str:
+    """Kart tablosu: bilimsel gösterim yok (ölçüldü: 93.824.682.381 kartta 9.38e+10 çıkıyordu, model
+    sayıyı yazamıyordu); ondalık gerekiyorsa en çok 2 basamak."""
+    def fmt(v: float) -> str:
+        if v != v:
+            return "NaN"
+        return f"{v:.2f}".rstrip("0").rstrip(".") if abs(v) < 1e15 else f"{v:.6g}"
+    return frame.to_string(index=False, float_format=fmt)
 
 
 class WebUrlParams(BaseModel):
@@ -72,8 +84,9 @@ class WebUrlTool(Tool):
     def __init__(
         self, workspace: AnalysisWorkspace, *, allowed_local_root: Path | None = None,
         registry: object | None = None, session: Any = None, robots: RobotsCache | None = None,
-        environ: dict[str, str] | None = None, allow_private: bool = False,
+        environ: dict[str, str] | None = None, allow_private: bool = False, ocr: Any = None,
     ) -> None:
+        self.ocr = ocr            # PDF/görsel için OCR istemcisi (ADR-0041); yoksa belge okunamaz denir
         self.workspace = workspace
         self.allowed_local_root = Path(allowed_local_root) if allowed_local_root else None
         self._registry = registry
@@ -111,7 +124,7 @@ class WebUrlTool(Tool):
             result = crawl(
                 params.url, budget=budget, keywords=keywords, session=self.session, robots=self.robots,
                 allowed_local_roots=[self.allowed_local_root] if self.allowed_local_root else [],
-                environ=self.environ, allow_private=self.allow_private,
+                environ=self.environ, allow_private=self.allow_private, ocr=self.ocr,
             )
         except FetchRefused as exc:
             return ToolResult.fail(
@@ -123,7 +136,8 @@ class WebUrlTool(Tool):
             "start_url": params.url,
             "used": None,
             "visited": [{"url": p.url, "status": p.fetch.http_status, "sha256": p.fetch.sha256,
-                         "fetched_at": p.fetch.fetched_at.isoformat(), "title": (p.page.title if p.page else "")}
+                         "fetched_at": p.fetch.fetched_at.isoformat(), "title": (p.page.title if p.page else ""),
+                         **({"ocr": p.page.ocr} if p.page and p.page.ocr else {})}
                         for p in result.pages],
             "blocked": [{"url": p.url, "status": p.fetch.outcome.status, "reason": p.fetch.outcome.reason}
                         for p in result.blocked],
@@ -160,7 +174,8 @@ class WebUrlTool(Tool):
                 row_count=len(table),
                 warnings=[f"Kaynak web sayfası; içerik sha256 {page.fetch.sha256[:12]}…, çekiliş "
                           f"{page.fetch.fetched_at:%Y-%m-%d %H:%M} UTC, HTTP {page.fetch.http_status}. "
-                          "Birimler sayfanın kendi beyanı; katalog doğrulaması yok."],
+                          "Birimler sayfanın kendi beyanı; katalog doğrulaması yok."]
+                         + ([page.page.notes[0]] if page.page.ocr and page.page.notes else []),  # type: ignore[union-attr]
             )
             self.workspace.set_table(table, description=params.purpose, provenance=prov)
             self.workspace.title = params.purpose
@@ -168,11 +183,13 @@ class WebUrlTool(Tool):
             content = [
                 f"TABLO YÜKLENDİ: #{params.table_index} ({len(table)} satır, {len(table.columns)} sütun) — {page.url}",
                 f"Sütunlar: {', '.join(map(str, table.columns))}",
-                table.head(10).to_string(index=False),
+                _plain(table.head(10)),
                 f"Kaynak: {page.page.title or page.url} | sha256 {page.fetch.sha256[:12]}… | çekiliş {page.fetch.fetched_at:%Y-%m-%d %H:%M} UTC",
                 *[f"NOT: {n}" for n in page.page.notes],  # type: ignore[union-attr]
                 self._year_note(question, [page]),
-                "YAPACAĞIN: sayıları bu tablodan ver; birimi sayfanın yazdığı gibi aktar.",
+                ("YAPACAĞIN: sayıları bu tablodan ver; birimi belgenin yazdığı gibi aktar; kullanıcıya bunun "
+                 "OCR ile görüntüden okunduğunu ve doğrulanmadığını söyle." if page.page.ocr else  # type: ignore[union-attr]
+                 "YAPACAĞIN: sayıları bu tablodan ver; birimi sayfanın yazdığı gibi aktar."),
             ]
             return ToolResult(content="\n".join(l for l in content if l), data=table,
                               provenance=prov, artifacts={"web": web_artifact})
@@ -187,7 +204,7 @@ class WebUrlTool(Tool):
             for t in p.page.tables:  # type: ignore[union-attr]
                 cols = ", ".join(map(str, t.columns))[:160]
                 lines.append(f"TABLO #{index} ({p.url}): {len(t)}×{len(t.columns)} — {cols}")
-                lines.append(t.head(3).to_string(index=False)[:400])
+                lines.append(_plain(t.head(3))[:400])
                 index += 1
         if index == 0:
             lines.append("TABLO: yok (sayfada tablo bulunamadı)")

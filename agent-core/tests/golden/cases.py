@@ -422,3 +422,30 @@ CASES += [
         max_steps_used=8,
     ),
 ]
+
+
+
+# --- Görüntü/PDF girişi (ADR-0041): demo slaytındaki "Altın İşlemleri PDF'inden değer çıkarma". ---
+# Fikstür yerel (Borsa İstanbul PDF'leri, 10 Eyl çekildi); OCR canlı (MIA Unlimited-OCR), ağ yalnız ona.
+CASES += [
+    GoldenCase(
+        id="G18a_pdf_altin_ithalat",
+        question=f"Şu belgeden 2025 Ocak ayı altın ithalatını söyle: {_fixture('ith_au.pdf')}",
+        why="PDF → sayfa PNG → OCR → HTML tablo → profilci dilbilgisi (Türkçe binlik/ondalık) → aktif tablo. "
+        "Düz yıl×ay tablosu; 2025 Ocak = 9.654,00 kg. Cevap 'OCR ile okundu, doğrulanmadı' demeli.",
+        table_checks=[("yıl×ay tablosu yüklendi (≥ 12 kolon, ≥ 20 satır)", lambda df: len(df.columns) >= 12 and len(df) >= 20)],
+        must_use_tools=["web_url"],
+        answer_must_contain_any=["9.654", "9654"],
+        max_steps_used=5,
+    ),
+    GoldenCase(
+        id="G18b_pdf_altin_islem",
+        question=f"Şu belgeden 2026 Ocak ayında TL cinsinden altın işlem hacmini söyle: {_fixture('kmp_au.pdf')}",
+        why="Çok satırlı başlık (TL/USD/EUR × hacim/miktar/işlem sayısı, colspan/rowspan): ızgara açılır, başlıklar "
+        "'TL | Hacim/Volume (TL)' olur. 2026 Ocak TL hacmi 93.824.682.381. Kart bilimsel gösterim yazmaz.",
+        table_checks=[("çok kolonlu işlem tablosu yüklendi (≥ 9 kolon)", lambda df: len(df.columns) >= 9)],
+        must_use_tools=["web_url"],
+        answer_must_contain_any=["93.824.682.381", "93824682381", "93,824,682,381"],
+        max_steps_used=5,
+    ),
+]

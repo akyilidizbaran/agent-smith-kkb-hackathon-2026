@@ -117,7 +117,9 @@ def _media_type(resp: Any, url: str) -> str:
         return ctype.split(";")[0].strip().lower()
     suffix = Path(urlparse(url).path).suffix.lower()
     return {".csv": "text/csv", ".json": "application/json", ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            ".xls": "application/vnd.ms-excel", ".html": "text/html", ".htm": "text/html"}.get(suffix, "application/octet-stream")
+            ".xls": "application/vnd.ms-excel", ".html": "text/html", ".htm": "text/html",
+            ".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".webp": "image/webp"}.get(suffix, "application/octet-stream")
 
 
 def fetch_url(

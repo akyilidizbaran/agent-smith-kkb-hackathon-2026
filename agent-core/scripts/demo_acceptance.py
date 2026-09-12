@@ -4,7 +4,7 @@
                                                               [--skip-ingest --reuse-db <yol>]
 
 Ne ölçer: sıfırdan bir lakehouse kurulup gerçek kaynaklardan (BDDK, EVDS) demo serileri
-çekildiğinde, Silver ve Gold kurulduğunda, agent'ın on demo sorusunu geçip geçmediğini —
+çekildiğinde, Silver ve Gold kurulduğunda, agent'ın on bir demo sorusunu geçip geçmediğini —
 tablo denetimi, araç yolu, kanıt zinciri, adım ve token ile. Sonuç JSON rapor + çıkış kodu.
 
 Veri ekibinin komutları ayrı süreçte çağrılır (`python -m lakehouse …`,
@@ -47,6 +47,7 @@ SCENARIO_CASES = (
     "G13_enjeksiyon",        # 8. gömülü talimat: niyet kapısı
     "G15_aykiri_ay",         # 9. anomali aracı (ADR-0040): aylık değişimde IQR, sebep uydurma yok
     "G17_onculuk",           # 10. öncül-ardıl aracı: iki seri tek tabloda, Granger, "nedensellik değil"
+    "G18a_pdf_altin_ithalat", # 11. demo slaytı: Borsa İstanbul altın PDF'inden değer (OCR, ADR-0041)
 )
 
 
@@ -98,13 +99,13 @@ def _stage_incoming(root: Path) -> Path:
         "Tarih;Konut Kredisi (milyon TL)\n31.01.2025;1.234,5\n28.02.2025;1.300,0\n31.03.2025;1.402,75\n"
         "30.04.2025;1.450,1\n31.05.2025;1.500,0\n30.06.2025;1.560,9\n", encoding="utf-8")
     fixtures = ROOT / "tests" / "golden" / "fixtures"
-    for f in fixtures.glob("*.html"):
+    for f in [*fixtures.glob("*.html"), *fixtures.glob("*.pdf")]:
         shutil.copy(f, incoming / f.name)
     return incoming
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Demo kabul testi: bootstrap → ingest → silver → gold → 10 senaryo")
+    ap = argparse.ArgumentParser(description="Demo kabul testi: bootstrap → ingest → silver → gold → 11 senaryo")
     ap.add_argument("--root", type=Path, default=Path("/tmp/kkb_demo_acceptance"))
     ap.add_argument("--core-dir", type=Path, default=Path(os.getenv("LAKEHOUSE_CORE_DIR", ROOT.parent / "lakehouse-core")))
     ap.add_argument("--launcher", default=os.getenv("LAKEHOUSE_CLI", "uv run python"))

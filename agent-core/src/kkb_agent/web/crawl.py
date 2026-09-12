@@ -99,6 +99,7 @@ def crawl(
     environ: Mapping[str, str] | None = None,
     fetcher: Callable[..., FetchResult] = fetch_url,
     allow_private: bool = False,
+    ocr: Any = None,
 ) -> CrawlResult:
     budget = budget.clamp()
     robots = robots or RobotsCache()
@@ -126,7 +127,7 @@ def crawl(
         if not fetched.ok:
             result.blocked.append(VisitedPage(url=url, depth=depth, fetch=fetched, page=None, score=score))
             continue
-        page = extract_page(fetched.content, fetched.media_type, fetched.final_url or url)
+        page = extract_page(fetched.content, fetched.media_type, fetched.final_url or url, ocr=ocr)
         result.pages.append(VisitedPage(url=url, depth=depth, fetch=fetched, page=page, score=score))
         if depth >= budget.max_depth:
             continue

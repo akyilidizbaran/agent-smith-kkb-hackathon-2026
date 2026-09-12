@@ -46,6 +46,25 @@ def _from_web(c: ColumnEvidence) -> bool:
     return any(str(src).startswith("web") for src in c.sources)
 
 
+def _text_cells_as_numbers(table: pd.DataFrame) -> dict[str, pd.Series]:
+    """Metin kolonlarında tek sayı taşıyan hücreler → float serisi (Türkçe binlik/ondalık dilbilgisi)."""
+    out: dict[str, pd.Series] = {}
+    for col in table.columns:
+        if pd.api.types.is_numeric_dtype(table[col]) or pd.api.types.is_datetime64_any_dtype(table[col]):
+            continue
+        values = []
+        any_number = False
+        for v in table[col].tolist():
+            nums = numbers_in(str(v)) if isinstance(v, str) and v.strip() else []
+            if len(nums) == 1:
+                values.append(nums[0]); any_number = True
+            else:
+                values.append(float("nan"))
+        if any_number:
+            out[str(col)] = pd.Series(values, index=table.index, dtype="float64")
+    return out
+
+
 def _time_column(table: pd.DataFrame) -> str | None:
     datelike = [str(c) for c in table.columns if _is_datelike(table[c])]
     for name in _DATE_PREFERENCE:
@@ -92,8 +111,14 @@ class EvidenceBuilder:
     # ------------------------------------------------------------------ halkalar
     def _match_numbers(self, answer: str, table: pd.DataFrame, time_col: str | None,
                        previous: list[pd.DataFrame] | None = None,
-                       peeks: list[tuple[str, pd.DataFrame]] | None = None) -> list[NumberEvidence]:
+                       peeks: list[tuple[str, pd.DataFrame]] | None = None,
+                       question: str = "") -> list[NumberEvidence]:
         numeric_cols = [c for c in table.columns if pd.api.types.is_numeric_dtype(table[c])]
+        # Soruda geçen sayı (yıl, dönem) cevapta yankılanır; anlatı doğrulamayla aynı kural.
+        asked = {n for _, n in _number_texts(question or "")}
+        # Metin kalmış hücreler (sayı biçimi belirsiz: "13.837") de sayıdır; Türkçe dilbilgisiyle
+        # okunup karşılaştırılır (ölçüldü, G18b: model kartı aynen yazdı, panel "tabloda yok" dedi).
+        text_parsed = _text_cells_as_numbers(table)
         out: list[NumberEvidence] = []
         seen: set[str] = set()
         for text, number in _number_texts(answer):
@@ -101,6 +126,10 @@ class EvidenceBuilder:
                 continue
             seen.add(text)
             ev = NumberEvidence(number=number, text=text)
+            if number in asked:
+                ev.matched, ev.column, ev.row_key = True, "(soruda geçiyor)", text
+                out.append(ev)
+                continue
             # yıl/ay gibi tarih parçaları sayı değildir: dönem kolonunun yılı ile eşleşiyorsa geç
             if time_col is not None and float(number).is_integer() and 1900 <= number <= 2100:
                 years = {d.year for d in table[time_col].map(_as_date).dropna()}
@@ -123,6 +152,14 @@ class EvidenceBuilder:
                     ev.matched, ev.column, ev.row_index = True, str(col), idx
                     ev.row_key = _key_text(table.loc[idx, time_col]) if time_col else str(idx)
                     break
+            if not ev.matched:
+                for col, series in text_parsed.items():
+                    hits = series[(series - number).abs() <= max(abs(number) * self.tolerance, 1e-9)]
+                    if not hits.empty:
+                        idx = int(hits.index[0])
+                        ev.matched, ev.column, ev.row_index = True, col, idx
+                        ev.row_key = (_key_text(table.loc[idx, time_col]) if time_col else str(idx)) + " (metin hücre)"
+                        break
             if not ev.matched:
                 # Önceki tablo sürümleri: sayı, tablo bakış moduyla ya da kırpılmadan önce üretilmiş
                 # olabilir (ölçüldü: 24 satırlık nüfus tablosu sonradan 5 satıra kırpıldı; cevaptaki
@@ -279,7 +316,8 @@ class EvidenceBuilder:
                 v = workspace.web_pages.get(u)
                 if v:
                     entry = {"url": u, "sha256": v.get("sha256"), "fetched_at": v.get("fetched_at"),
-                             "status": v.get("status"), "title": v.get("title")}
+                             "status": v.get("status"), "title": v.get("title"),
+                             **({"ocr": v.get("ocr")} if v.get("ocr") else {})}
                     if entry not in panel.web_sources:
                         panel.web_sources.append(entry)
         for art in artifacts:
@@ -288,7 +326,8 @@ class EvidenceBuilder:
             used = art.get("used")
             for v in art.get("visited", []):
                 entry = {"url": v.get("url"), "sha256": v.get("sha256"), "fetched_at": v.get("fetched_at"),
-                         "status": v.get("status"), "title": v.get("title")}
+                         "status": v.get("status"), "title": v.get("title"),
+                         **({"ocr": v.get("ocr")} if v.get("ocr") else {})}
                 if used and v.get("url") == used:
                     if entry not in panel.web_sources:
                         panel.web_sources.append(entry)
@@ -313,7 +352,7 @@ class EvidenceBuilder:
         panel.table_rows = len(table)
         time_col = _time_column(table)
         panel.numbers = self._match_numbers(answer, table, time_col, previous=workspace.previous_tables(),
-                                            peeks=workspace.peeks())
+                                            peeks=workspace.peeks(), question=question)
         panel.columns = self._columns(workspace, table)
         panel.observations, panel.artifacts = self._observations(table, panel.columns, time_col, panel.gaps)
 

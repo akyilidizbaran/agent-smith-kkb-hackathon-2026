@@ -26,7 +26,7 @@ Beklenen, yalnızca analiz yapan bir sistem değil; **uçtan uca akıl yürüten
 
 ```
    Açık veri kaynakları                    Doğal dilde soru
-   BDDK · EVDS · URL · dosya                      │
+   BDDK · EVDS · URL · dosya · PDF/görsel         │
             │                                     ▼
             ▼                          ┌────────────────────────┐
    ┌──────────────────┐                │   Agentic Engine       │

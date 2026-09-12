@@ -9,6 +9,8 @@ kullanılmaz — ölçüldü, TCMB'nin "31.51"ini 3151 yapıyordu. Doğrudan ver
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -31,8 +33,9 @@ class PageContent:
     tables: list[pd.DataFrame] = field(default_factory=list)
     links: list[tuple[str, str]] = field(default_factory=list)   # (metin, mutlak href) — aynı alan adı
     data_links: list[tuple[str, str]] = field(default_factory=list)
-    kind: str = "html"   # html | data | text
+    kind: str = "html"   # html | data | text | ocr | document
     notes: list[str] = field(default_factory=list)   # sayı biçimi belirsizlikleri vb.
+    ocr: dict[str, Any] | None = None                # {"model", "pages", "sha256", "truncated"} — OCR ile okunduysa
 
     def table_previews(self, max_rows: int = 3) -> list[str]:
         out = []
@@ -52,9 +55,53 @@ def _clean_text(text: str) -> str:
 _PCT = re.compile(r"^\s*%\s*|\s*%\s*$")
 
 
+_PLACEHOLDER = re.compile(r"^(?:[-–—]+|n\.?a\.?|n/a|\.{3}|…|x)$", re.I)
+
+
 def _clean_cell(text: str) -> str:
-    """Hücre metni: NBSP ve baştaki/sondaki yüzde işareti atılır; sayı dilbilgisi dokunmaz."""
-    return _PCT.sub("", str(text).replace("\xa0", " ")).strip()
+    """Hücre metni: NBSP ve baştaki/sondaki yüzde işareti atılır; sayı dilbilgisi dokunmaz.
+    "-", "n.a.", "…" gibi yer tutucular boş değerdir (ölçüldü: altın ithalat tablosunda tek "-"
+    hücresi altı ay kolonunu metin bıraktı)."""
+    cleaned = _PCT.sub("", str(text).replace("\xa0", " ")).strip()
+    return "" if _PLACEHOLDER.match(cleaned) else cleaned
+
+
+def _span(cell: Any, attr: str) -> int:
+    try:
+        return max(1, int(str(cell.get(attr) or "1").strip()))
+    except ValueError:
+        return 1
+
+
+def _grid_rows(table: Any) -> list[tuple[list[str], bool]]:
+    """`<tr>`'leri colspan/rowspan açılmış hücre ızgarasına çevirir: (değerler, hepsi <th> mi).
+
+    Ölçüldü (Borsa İstanbul altın işlem tablosu, OCR): `<td rowspan=2>AY/MONTH</td><td colspan=3>TL</td>…`
+    açılmadan üst başlık ('TL', 'USD', 'EUR') yanlış kolonlara kayıyordu. Yayılan hücrenin değeri
+    kapladığı her kolona yazılır (pandas.read_html ile aynı davranış)."""
+    pending: dict[tuple[int, int], str] = {}   # (satır, kolon) → rowspan ile inen değer
+    rows: list[tuple[list[str], bool]] = []
+    for r, tr in enumerate(table.xpath(".//tr")):
+        cells = tr.xpath("./th|./td")
+        values: list[str] = []
+        c = 0
+        for cell in cells:
+            while (r, c) in pending:
+                values.append(pending.pop((r, c)))
+                c += 1
+            text = _clean_cell(cell.text_content())
+            cs, rs = _span(cell, "colspan"), _span(cell, "rowspan")
+            for k in range(cs):
+                values.append(text)
+                for dr in range(1, rs):
+                    pending[(r + dr, c + k)] = text
+            c += cs
+        while (r, c) in pending:
+            values.append(pending.pop((r, c)))
+            c += 1
+        if values:
+            rows.append((values, bool(cells) and all(x.tag == "th" for x in cells)))
+    return rows
 
 
 def _string_tables(doc: Any) -> list[pd.DataFrame]:
@@ -63,12 +110,8 @@ def _string_tables(doc: Any) -> list[pd.DataFrame]:
     for table in doc.xpath("//table"):
         rows: list[list[str]] = []
         header: list[str] | None = None
-        for tr in table.xpath(".//tr"):
-            cells = tr.xpath("./th|./td")
-            if not cells:
-                continue
-            values = [_clean_cell(c.text_content()) for c in cells]
-            if header is None and all(c.tag == "th" for c in cells):
+        for values, all_th in _grid_rows(table):
+            if header is None and all_th:
                 header = values
                 continue
             rows.append(values)
@@ -123,9 +166,89 @@ def convert_numbers(frame: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     return out, notes
 
 
-def extract_page(content: bytes, media_type: str, url: str) -> PageContent:
+_DIGIT = re.compile(r"\d")
+
+
+def promote_header_rows(frame: pd.DataFrame, max_rows: int = 2) -> pd.DataFrame:
+    """OCR tabloları başlığı `<th>` ile değil ilk satır(lar)da `<td>` ile verir (ölçüldü: Borsa
+    İstanbul altın tabloları 'sütun_n' ve ilk satır 'Yıl / Year, Oca./Jan., …'). Kolon adları
+    zaten anlamlıysa dokunulmaz; aksi hâlde hiç rakam içermeyen ilk en çok `max_rows` satır
+    başlık olur, çok satırlı başlık ' | ' ile birleşir. Sayı içeren satır asla başlık olmaz."""
+    if frame.empty or not all(str(c).startswith("sütun_") for c in frame.columns):
+        return frame
+    header_rows: list[list[str]] = []
+    body = frame
+    while len(header_rows) < max_rows and len(body) > 1:
+        cells = [str(v).strip() for v in body.iloc[0].tolist()]
+        if not any(cells) or any(_DIGIT.search(c) for c in cells):
+            break
+        header_rows.append(cells)
+        body = body.iloc[1:]
+    if not header_rows:
+        return frame
+    # Birleşik (colspan) başlık hücreleri sağa doğru boş kalır: her başlık satırında soldaki
+    # dolu hücre boşlara taşınır ("TL | Hacim", "TL | Miktar", "USD | Hacim").
+    filled: list[list[str]] = []
+    for row in header_rows:
+        last = ""
+        out_row = []
+        for cell in row:
+            last = cell or last
+            out_row.append(last)
+        filled.append(out_row)
+    names: list[str] = []
+    for j in range(len(frame.columns)):
+        parts = [row[j] for row in filled if row[j]]
+        name = " | ".join(dict.fromkeys(parts)) or f"sütun_{j + 1}"
+        while name in names:
+            name += "_"
+        names.append(name)
+    out = body.reset_index(drop=True)
+    out.columns = names
+    return out
+
+
+def extract_ocr_page(url: str, doc: Any) -> PageContent:
+    """OCR belgesi (vision.ocr.OcrDocument) → sayfa içeriği: tablolar aynı profilci dilbilgisiyle
+    sayıya çevrilir; her tablo 'görüntüden okundu, doğrulanmadı' notunu taşır."""
+    from lxml import html as lh
+
+    tables: list[pd.DataFrame] = []
+    notes: list[str] = [doc.note()]
+    html_blocks = [html for _, html in doc.tables]
+    if html_blocks:
+        try:
+            frag = lh.fromstring("<html><body>" + "".join(html_blocks) + "</body></html>")
+            for raw in _string_tables(frag):
+                converted, table_notes = convert_numbers(promote_header_rows(raw))
+                tables.append(converted)
+                notes.extend(table_notes)
+        except Exception as exc:  # noqa: BLE001 — OCR HTML bozuksa tablo yok, metin var
+            notes.append(f"OCR tablosu ayrıştırılamadı: {exc}")
+    text = "\n".join(p.prose for p in doc.pages if p.prose)[:20000]
+    title = Path(urlparse(url).path).name or url
+    return PageContent(url=url, title=title, text=text, tables=tables, kind="ocr", notes=notes,
+                       ocr={"model": doc.model, "pages": [p.page_no for p in doc.pages], "sha256": doc.sha256,
+                            "truncated": doc.truncated, "total_pages": doc.total_pages})
+
+
+def extract_page(content: bytes, media_type: str, url: str, *, ocr: Any = None) -> PageContent:
     kind = media_type.split(";")[0].strip().lower()
     path = urlparse(url).path.lower()
+    from ..vision.ocr import is_document, ocr_document
+
+    if is_document(kind, url):
+        # PDF/görsel: tablo yalnız OCR ile çıkar; istemci yoksa "okunamadı" (uydurma yok).
+        if ocr is None:
+            return PageContent(url=url, title=Path(path).name, kind="document",
+                               text="(PDF/görsel belge; OCR istemcisi yapılandırılmamış — VISION_MODEL yok)",
+                               notes=["PDF/görsel belge OCR olmadan okunamaz."])
+        try:
+            doc = ocr_document(content, kind, client=ocr, url=url)
+        except Exception as exc:  # noqa: BLE001 — servis hatası sayfa notuna, uydurma yok
+            return PageContent(url=url, title=Path(path).name, kind="document",
+                               text=f"(PDF/görsel belge; OCR başarısız: {exc})", notes=[f"OCR başarısız: {exc}"])
+        return extract_ocr_page(url, doc)
     if kind in ("text/csv", "application/json", "application/vnd.ms-excel",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") or path.endswith(DATA_SUFFIXES):
         try:

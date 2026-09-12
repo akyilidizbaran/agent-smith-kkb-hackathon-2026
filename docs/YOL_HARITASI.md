@@ -58,6 +58,8 @@ Architect ve yeni araçların üstüne oturacağı ortak katman. Önce bu, çün
 
 | D6 ✅ | **Analitik ailesi** (ADR-0040, 12 Eyl): `anomaly_detect`, `change_points`, `lead_lag` — LLM yok, aktif tablo üzerinde, sentetik testli; yarışmanın asgari üç aracı | harness: analitik istendiyse araç zorunlu; grafik aykırı halkası; golden G15–G17 | sıradaki: görüntü/PDF girişi (D7), veri genişliği (D8), arayüz (D9) |
 
+| D7 ✅ | **Görüntü ve PDF girişi** (ADR-0041, 13 Eyl): `web_url` ve `ingest_from_url` PDF/görseli MIA OCR ile okur; Borsa İstanbul altın PDF'leri (demo slaytı) 2 tablo doğru | colspan/rowspan ızgarası, `<td>` başlık terfisi, "OCR ile okundu, doğrulanmadı" | golden G18a/G18b; kabul 11 senaryo |
+
 Stretch (zaman kalırsa): `clarify` (EVPI, L10-01), katkı ayrıştırması (il bazında waterfall), çapraz kaynak mutabakat fonksiyonu.
 
 ## Faz E — Kapanış (19–20 Eylül)

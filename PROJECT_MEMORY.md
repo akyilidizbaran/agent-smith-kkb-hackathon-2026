@@ -112,14 +112,21 @@ Kullanıcı: "anomali ve nedensellik araçlarının bulunmaması çok kötü gö
 - Canlı doğrulama: "BDDK haftalık bülten konut kredileri toplam" → 3 sonuç, ilki bddk.org.tr/bultenhaftalik (0,87). `web_search` artık kayıtlı: gerçek DB'de 19 araç.
 - Tavily `SKILL.md` okundu; CLI kurulumu (`curl | bash`), `tvly login`, Claude Code'a global skill ekleme **uygulanmadı** (REST + httpx yeterli; dış betik çalıştırma yok). Alternatif ücretsiz sağlayıcılar (Google Programmable Search 100/gün, Brave 2.000/ay) `SearchClient` sözleşmesine ikinci adaptör olarak eklenebilir; demo için Tavily yeter.
 
+### 2.13 Görüntü ve PDF girişi (13 Eylül, ADR-0041)
+Demo slaytı "Altın İşlemleri PDF'inden değer çıkarma" istiyor; ADR-0022 OCR'ı ölçmüştü, kod yoktu.
+- `vision/ocr.py`: `OcrClient` (MIA Unlimited-OCR, rehber istemi + `vllm_xargs`, Bearer), `pdf_pages_to_png` (pypdfium2, 2×, en çok 5 sayfa), `ocr_document` (sayfa sayfa, ilk `<|det|>` öncesi atılır), `is_document`. `web_url` ve `ingest_from_url` PDF/PNG/JPG'yi bu yoldan alır; araç sayısı değişmedi (19).
+- HTML tablo hattı genelleşti: colspan/rowspan ızgarası (`_grid_rows`), `<td>` başlık satırlarının kolon adı olması (`promote_header_rows`, çok satırlı "TL | Hacim"), "-"/"n.a." yer tutucular boş, kart tablosu bilimsel gösterim yazmaz.
+- Kanıt: sayfa notu + provenance uyarısı "görüntüden OCR ile okundu, doğrulanmadı"; zincir URL + belge sha256 + zaman + OCR bilgisi; ingest'te OCR tablosu CSV olarak izinli köke, belge kopyası yanına, sha256/sayfa/model katalog açıklamasında. `VISION_MODEL` yoksa "okunamaz", uydurma yok.
+- Ölçüm: `ith_au.pdf` 5,8 s, 32×14 tablo 14/14 sayısal, 2025 Ocak 9.654,00 kg; `kmp_au.pdf` 1,9 s, 13×11, "TL | Hacim/Volume (TL)" 2026 Ocak 93.824.682.381. İlk denemede tek "-" hücresi altı kolonu metin bırakmış, colspan başlıkları kaydırmıştı; ikisi de ölçülüp düzeltildi. Testler 287 → 297. Golden G18a **2/2** (26 s, 2 adım), G18b ilk 0/2 → kanıt paneli düzeltmesi (sorudaki sayı yankı, metin hücre sayı) → **2/2** (21 s). Kabul senaryoları 10 → 11 (G18a); mevcut DB'de **11/11**, kanıt zinciri 11/11. `.env.example`'a `VISION_MODEL`.
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 287 |
+| Agent birim testi | 297 |
 | Lakehouse testi (r3) | 1083 |
-| ADR | 40 |
-| Golden vakası | 19: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 10 senaryo 10/10 |
+| ADR | 41 |
+| Golden vakası | 21: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3, G18a/b 2/2; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 11 senaryo 11/11 |
 | Araç sayısı (gerçek DB'de) | 19: lakehouse ×4, workspace ×4 (query dâhil), analitik ×3 (anomaly_detect, change_points, lead_lag), ingest, promote_draft, gold ×3, chart, web_url, web_search (Tavily anahtarı .env'de) |
 | Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu (iş yapan araç/tablo varken susar), istenen yetenek zorunluluğu (grafik, analitik), frekans uyuşmazlığı (kabadan ince yok), grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, GOLD_REQUIRED, niyet kapısı, beyan kapısı, adım sınırı, reasoning temizliği |
 
@@ -135,7 +142,7 @@ Kullanıcı → AnalyticsAgent (tek harness; roller: retrieve/execute/validate/n
    │    ingest_from_url  (Architect yazma yolu, ayrı süreç CLI, yalnız adhoc+draft; beyan kapısı)
    │    promote_draft    (Architect ikinci kapı: kullanıcı onayıyla taslak → aktif + Silver)
    │    gold_align/decompose/join  (GoldCapable, gold-run salt okunur ayrı süreç)
-   │    chart  (spec → lint → render), web_url / web_search (erişim sözleşmesi)
+   │    chart  (spec → lint → render), web_url / web_search (erişim sözleşmesi; PDF/görsel → vision/ocr.py)
    ├─ Guard'lar (bkz. §3) + grounding + kanıt paneli (EvidenceBuilder, cevaptan sonra)
    └─ Adaptörler: SilverLakehouse (veri ekibinin şeması, sertleştirilmiş salt okunur DuckDB),
                   DuckDBLakehouse (seed)

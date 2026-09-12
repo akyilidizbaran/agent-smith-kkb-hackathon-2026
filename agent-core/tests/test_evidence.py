@@ -230,3 +230,24 @@ def test_satir_sayisi_ve_isaret_yazimi_zinciri_kirmaz() -> None:
     assert m["40"].matched and m["40"].column == "(satır sayısı)"
     assert m["2,31"].matched and m["2,31"].row_key.startswith("işaret")
     assert m["65"].matched and panel.complete, panel.gaps
+
+
+def test_sorudaki_yil_ve_metin_kalmis_hucre_sayi_sayilir() -> None:
+    """Ölçüldü (G18b): '2026' soruda, '13.837' ve '1017' biçimi belirsiz diye metin kalmış hücreler."""
+    class Silverish:
+        def evidence_for_observations(self, *a, **k): return []
+        def evidence_for_artifacts(self, *a, **k): return {}
+    ws = AnalysisWorkspace()
+    url = "https://x/kmp_au.pdf"
+    ws.set_table(pd.DataFrame({"AY/MONTH": ["Ocak / January", "Şubat / February"], "TL | Hacim": [93824682381.0, 1.0],
+                               "TL | Miktar": ["13.837", "9.100"], "İşlem": ["1017", "900"]}), description="pdf",
+                 provenance=QueryProvenance(sql=f"web_url {url} tablo#0", dataset_ids=[], sources=["web — kmp_au.pdf"], source_urls=[url]))
+    ws.remember_web({"used": url, "visited": [{"url": url, "sha256": "ab" * 32, "fetched_at": "t", "status": 200, "ocr": {"model": "ocr", "pages": [1]}}]})
+    panel = EvidenceBuilder(Silverish()).build("2026 Ocak TL altın işlem hacmi kaç?",
+                                               "2026 Ocak: hacim 93.824.682.381 TL, miktar 13.837 kg, 1.017 işlem (OCR ile okundu).", ws, [], artifacts=[])
+    m = {n.text: n for n in panel.numbers}
+    assert m["2026"].matched and m["2026"].column == "(soruda geçiyor)"
+    assert m["13.837"].matched and m["13.837"].column == "TL | Miktar" and "metin hücre" in m["13.837"].row_key
+    assert m["1.017"].matched and m["93.824.682.381"].matched
+    assert panel.complete, panel.gaps
+    assert panel.web_sources[0]["ocr"]["model"] == "ocr"

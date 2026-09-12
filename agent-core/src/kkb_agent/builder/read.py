@@ -68,6 +68,54 @@ def _private_host(host: str) -> bool:
     return False
 
 
+def read_bytes_for_profiling(
+    locator: str,
+    *,
+    allowed_roots: Iterable[Path],
+    max_bytes: int = MAX_BYTES_DEFAULT,
+    session: Any = None,
+    environ: dict[str, str] | None = None,
+) -> tuple[bytes | None, str, AccessOutcome]:
+    """(içerik, medya türü, erişim sonucu) — tablo dosyası da PDF/görsel de aynı kurallarla okunur."""
+
+    parsed = urlparse(locator)
+    if parsed.scheme in ("http", "https"):
+        if _private_host(parsed.hostname or ""):
+            raise ReadRefused("özel/loopback adreslere erişim yok")
+        if session is None:
+            from ..web.session import default_session
+            session = default_session()
+        try:
+            resp = session.get(locator, timeout=30, allow_redirects=True, stream=True)
+        except Exception:  # noqa: BLE001
+            return None, "", classify_access(locator, http_status=None, environ=environ)
+        chunks, size = [], 0
+        for chunk in resp.iter_content(65536):
+            size += len(chunk)
+            if size > max_bytes:
+                resp.close()
+                raise ReadRefused(f"kaynak {max_bytes} bayt sınırını aşıyor")
+            chunks.append(chunk)
+        content = b"".join(chunks)
+        outcome = classify_access(
+            locator, http_status=resp.status_code, final_url=getattr(resp, "url", None),
+            body_excerpt=content[:4096].decode("utf-8", errors="ignore"), environ=environ,
+        )
+        headers = getattr(resp, "headers", {}) or {}
+        media = str(headers.get("Content-Type") or headers.get("content-type") or "").split(";")[0].strip().lower()
+        return (content if outcome.ok else None), media, outcome
+    if parsed.scheme not in ("", "file"):
+        raise ReadRefused(f"desteklenmeyen şema: {parsed.scheme}")
+    path = Path(parsed.path if parsed.scheme == "file" else locator)
+    if not _under(path, allowed_roots):
+        raise ReadRefused(f"'{path}' izinli kökün altında değil")
+    if not path.is_file():
+        return None, "", classify_access(str(path), http_status=404, environ=environ)
+    if path.stat().st_size > max_bytes:
+        raise ReadRefused(f"dosya {max_bytes} bayt sınırını aşıyor")
+    return path.read_bytes(), "", classify_access(str(path), http_status=200, environ=environ)
+
+
 def read_table_for_profiling(
     locator: str,
     *,
@@ -118,4 +166,4 @@ def read_table_for_profiling(
     return frame, classify_access(str(path), http_status=200, environ=environ)
 
 
-__all__ = ["MAX_BYTES_DEFAULT", "ReadRefused", "read_table_for_profiling"]
+__all__ = ["MAX_BYTES_DEFAULT", "ReadRefused", "read_bytes_for_profiling", "read_table_for_profiling"]

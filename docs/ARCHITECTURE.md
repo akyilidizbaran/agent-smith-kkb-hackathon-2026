@@ -747,6 +747,17 @@ henüz çekilmemiş"i ayırır; kısmi isabet ya da boş arama ikinci kezde tekr
 döner (döngü kırılır). Ön-yükleme seçimi de bu dizinden geçer.
 
 
+### Görüntü ve PDF girişi — `vision/ocr.py` (ADR-0041) — YAZILDI
+
+`web_url` ve `ingest_from_url` PDF/PNG/JPG belgeyi de alır: sayfa → PNG (pypdfium2, 2×, en çok
+5 sayfa) → MIA `Unlimited-OCR` (rehberdeki istem ve `vllm_xargs`, ilk `<|det|>` öncesi atılır,
+ADR-0022) → HTML `<table>` → colspan/rowspan açılmış ızgara → `<td>` başlık satırları kolon adı
+(çok satırlı başlık "TL | Hacim") → profilci sayı dilbilgisi. Kanıt zinciri belgenin
+sha256'sında biter; tablo "görüntüden OCR ile okundu, doğrulanmadı" notunu taşır ve model bunu
+söyler. Ingest'te OCR tablosu izinli köke CSV olarak yazılır ve veri ekibinin CLI'ına o gider;
+belgenin kendisi yanına kopyalanır, sha256'sı ve OCR modeli katalog açıklamasında. `VISION_MODEL`
+yoksa belge "OCR olmadan okunamaz" der, uydurmaz.
+
 ### Architect'in ikinci kapısı — `tools/promote.py` (`promote_draft`, ADR-0039) — YAZILDI
 
 Taslak → aktif yalnız kullanıcı onayıyla: metinde onay ifadesi ("onaylıyorum", "kataloğa al",

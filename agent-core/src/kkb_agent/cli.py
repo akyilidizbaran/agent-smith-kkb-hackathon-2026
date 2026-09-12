@@ -41,6 +41,7 @@ from .tools.promote import PromoteDraftTool
 from .tools.gold import GOLD_PROMPT_RULES, GoldAlignTool, GoldDecomposeTool, GoldJoinTool
 from .tools.chart import CHART_PROMPT_RULES, ChartTool
 from .tools.workspace_query import WorkspaceQueryTool
+from .vision.ocr import OcrClient
 from .tools.analytics import ANALYTICS_PROMPT_RULES, AnomalyDetectTool, ChangePointsTool, LeadLagTool
 from .tools.web import (
     WEB_PROMPT_RULES, WEB_SEARCH_PROMPT_RULES, WEB_SEARCH_UNAVAILABLE_RULES, WebSearchTool, WebUrlTool,
@@ -108,6 +109,9 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
     )
 
     registry = ToolRegistry(profile)
+    # Görüntü/PDF girişi (ADR-0041): OCR istemcisi yalnız VISION_MODEL varsa; yoksa belgeler "okunamadı" der.
+    ocr = OcrClient(base_url=settings.llm_base_url, api_key=settings.llm_api_key, model=settings.vision_model) \
+        if settings.vision_model else None
     gold_cli = GoldCLI(
         core_dir=settings.lakehouse_core_dir, database=settings.lakehouse_path, launcher=settings.lakehouse_cli,
     )
@@ -139,7 +143,7 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
     if isinstance(lakehouse, SilverLakehouse) and cli.available:
         settings.ingest_allowed_root.mkdir(parents=True, exist_ok=True)
         registry.register(
-            IngestFromUrlTool(lakehouse, cli, allowed_root=settings.ingest_allowed_root, registry=registry)
+            IngestFromUrlTool(lakehouse, cli, allowed_root=settings.ingest_allowed_root, registry=registry, ocr=ocr)
         )
         registry.register(PromoteDraftTool(lakehouse, cli, registry=registry))
         system_prompt_extra = ARCHITECT_PROMPT_RULES
@@ -151,7 +155,7 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
     system_prompt = SYSTEM_PROMPT + CHART_PROMPT_RULES + WORKSPACE_QUERY_RULES + ANALYTICS_PROMPT_RULES
     # Dış kaynak (ADR-0034): web_url her zaman; web_search yalnız arama anahtarı varsa.
     settings.ingest_allowed_root.mkdir(parents=True, exist_ok=True)
-    registry.register(WebUrlTool(workspace, allowed_local_root=settings.ingest_allowed_root, registry=registry))
+    registry.register(WebUrlTool(workspace, allowed_local_root=settings.ingest_allowed_root, registry=registry, ocr=ocr))
     system_prompt += WEB_PROMPT_RULES
     search = TavilySearch()
     if search.available:
