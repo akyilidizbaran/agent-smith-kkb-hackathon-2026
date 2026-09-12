@@ -279,3 +279,41 @@ def test_gold_varken_donem_toplamasi_sqlde_reddedilir() -> None:
     assert with_gold.check_policy(with_gold.Params(sql=plain, purpose="x")) is None
     without = LakehouseQueryTool(Lake(), AnalysisWorkspace(), None, gold_available=False)
     assert without.check_policy(without.Params(sql=sql, purpose="x")) is None
+
+
+def test_aylik_soruya_ceyreklik_tablo_okunmaz_incesi_serbest() -> None:
+    """Ölçüldü (G16): model 'aylık ... büyüme hızı' sorusuna hazır çeyreklik Gold tablosunu okudu."""
+    from datetime import date
+    from types import SimpleNamespace
+    from kkb_agent.contracts.catalog import ColumnRole, ColumnSpec, Coverage, DatasetSpec, Frequency
+
+    def spec(ds_id: str, freq: Frequency) -> DatasetSpec:
+        return DatasetSpec(dataset_id=ds_id, name=ds_id, description="d", source="s", frequency=freq,
+                           time_column="observation_date", grain=["observation_date"],
+                           columns=[ColumnSpec(name="observation_date", role=ColumnRole.TIME, dtype="DATE", description="d"),
+                                    ColumnSpec(name="value", role=ColumnRole.MEASURE, dtype="DOUBLE", description="v")],
+                           coverage=Coverage(start=date(2021, 1, 31), end=date(2026, 6, 30)))
+
+    aylik, ceyreklik, haftalik = spec("bddk_monthly:1534_Toplam", Frequency.MONTHLY), spec("gold.konut_kredisi_ceyreklik", Frequency.QUARTERLY), spec("bddk_weekly:5690_3", Frequency.WEEKLY)
+
+    class Lake(StubLakehouse):
+        def __init__(self): super().__init__(pd.DataFrame())
+        def list_datasets(self): return [aylik, ceyreklik, haftalik]
+        def search_datasets(self, q): return [ceyreklik, aylik, haftalik]
+
+    def tool(question: str) -> LakehouseQueryTool:
+        return LakehouseQueryTool(Lake(), AnalysisWorkspace(), SimpleNamespace(active_question=question, user_text=question, sanctioned_locators=set()))
+
+    t = tool("Aylık konut kredisi bakiyesinin büyüme hızı 2021'den bu yana ne zaman rejim değiştirdi?")
+    err = t.check_policy(t.Params(sql="SELECT period_end, value FROM gold.konut_kredisi_ceyreklik WHERE EXTRACT(year FROM period_end) >= 2021", purpose="x"))
+    assert err is not None and err.error_code == "FREQUENCY_MISMATCH" and err.is_retryable
+    assert "bddk_monthly:1534_Toplam" in err.candidates and "çeyreklik" in err.message
+    # aylık seri okunuyorsa sorun yok
+    assert t.check_policy(t.Params(sql="SELECT observation_date, value FROM silver.fact_observation WHERE series_id = 'bddk_monthly:1534_Toplam' AND observation_date >= '2021-01-01'", purpose="x")) is None
+    # inceden kabaya serbest: aylık soruya haftalık seri (Gold'un işi), çeyreklik soruya aylık seri
+    assert t.check_policy(t.Params(sql="SELECT * FROM silver.fact_observation WHERE series_id = 'bddk_weekly:5690_3' AND observation_date >= '2021-01-01'", purpose="x")) is None
+    t2 = tool("Çeyreklik konut kredisi bakiyesi 2021'den bu yana")
+    assert t2.check_policy(t2.Params(sql="SELECT * FROM silver.fact_observation WHERE series_id = 'bddk_monthly:1534_Toplam' AND observation_date >= '2021-01-01'", purpose="x")) is None
+    # iki frekans sözcüğü: guard susar
+    t3 = tool("Haftalık faizi aylık göster, 2021'den bu yana")
+    assert t3.check_policy(t3.Params(sql="SELECT * FROM gold.konut_kredisi_ceyreklik WHERE period_end >= '2021-01-01'", purpose="x")) is None

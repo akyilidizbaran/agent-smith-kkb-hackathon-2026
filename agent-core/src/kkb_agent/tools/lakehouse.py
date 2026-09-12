@@ -15,7 +15,7 @@ import re
 
 from pydantic import BaseModel, Field
 
-from ..contracts.catalog import ColumnRole
+from ..contracts.catalog import Frequency, ColumnRole
 from ..contracts.lakehouse import LakehouseClient, LakehouseError
 from ..domain import kisa_terim
 from ..core.errors import ToolError
@@ -270,6 +270,9 @@ class LakehouseQueryTool(Tool):
                      "ya da 'quarterly', period_from/period_to ile dönem. Seri doğrulanmamışsa kullanıcının "
                      "onayı gerekir. Yıllık için gold_align aylık sonucu üzerinde workspace_query kullan.",
             )
+        uyusmazlik = self._frekans_uyusmazligi(params.sql)
+        if uyusmazlik:
+            return uyusmazlik
         eksik_donem = self._atlanmis_donem_filtresi(params.sql)
         if eksik_donem:
             yil = eksik_donem.split(",")[0].strip()
@@ -277,11 +280,29 @@ class LakehouseQueryTool(Tool):
                 error_code="MISSING_PERIOD_FILTER",
                 message=f"Sorguda dönem filtresi yok. Kullanıcı {eksik_donem} dönemini sordu ama "
                         f"sorgun tablonun tamamını getiriyor.",
-                hint=f"Sorguya dönem kısıtını ekleyip tekrar çalıştır, ör. "
-                     f"WHERE EXTRACT(year FROM <dönem_kolonu>) = {yil}",
+                hint=f"Sorguya dönem kısıtını ekleyip tekrar çalıştır, ör. {self._donem_ipucu(yil)}",
                 layer="policy",
             )
         return None
+
+    _ARALIK_SONRASI = re.compile(r"(19\d{2}|20\d{2})\s*'?\s*(?:den|dan|ten|tan)\s+(?:bu yana|beri|itibaren|sonra|günümüze|bugüne)|"
+                                 r"(19\d{2}|20\d{2})\s+(?:başından|sonrası|ve sonrası)", re.I)
+    _ARALIK_ONCESI = re.compile(r"(19\d{2}|20\d{2})\s*'?\s*(?:a|e|ya|ye)\s+kadar|(19\d{2}|20\d{2})\s+(?:öncesi|sonuna kadar)", re.I)
+
+    def _donem_ipucu(self, yil: str) -> str:
+        """"2021'den bu yana" tek yıl değil, aralıktır. Ölçüldü (G16): ipucu '= 2021' deyince model
+        yalnız 2021'i çekti, 12 satırla kırılma aradı. Sorunun ifadesine göre >= / <= / BETWEEN."""
+        soru = getattr(self._registry, "active_question", "") or ""
+        yillar = sorted(set(re.findall(r"\b(19\d{2}|20\d{2})\b", soru)))
+        if len(yillar) >= 2:
+            return f"WHERE EXTRACT(year FROM <dönem_kolonu>) BETWEEN {yillar[0]} AND {yillar[-1]}"
+        m = self._ARALIK_SONRASI.search(soru)
+        if m and (m.group(1) or m.group(2)) == yil:
+            return f"WHERE EXTRACT(year FROM <dönem_kolonu>) >= {yil}  (soru '{yil}'den bu yana' diyor: aralık, tek yıl değil)"
+        m = self._ARALIK_ONCESI.search(soru)
+        if m and (m.group(1) or m.group(2)) == yil:
+            return f"WHERE EXTRACT(year FROM <dönem_kolonu>) <= {yil}"
+        return f"WHERE EXTRACT(year FROM <dönem_kolonu>) = {yil}"
 
     def run(self, params: QueryParams) -> ToolResult:
         # SQL guard sınır doğrulayıcıda çalıştı (UNSAFE_SQL orada); buraya gelen bir
@@ -350,6 +371,57 @@ class LakehouseQueryTool(Tool):
     def _is_period_aggregation(self, sql: str) -> bool:
         text = sql.lower()
         return bool(self._PERIOD_AGG.search(text) and self._AGG_FN.search(text) and "group by" in text)
+
+    _FREKANS_SOZ = (
+        ("günlük", Frequency.DAILY), ("gunluk", Frequency.DAILY),
+        ("haftalık", Frequency.WEEKLY), ("haftalik", Frequency.WEEKLY),
+        ("aylık", Frequency.MONTHLY), ("aylik", Frequency.MONTHLY),
+        ("çeyreklik", Frequency.QUARTERLY), ("ceyreklik", Frequency.QUARTERLY),
+        ("yıllık", Frequency.YEARLY), ("yillik", Frequency.YEARLY),
+    )
+    _FREKANS_SIRA = {Frequency.DAILY: 0, Frequency.WEEKLY: 1, Frequency.MONTHLY: 2,
+                     Frequency.QUARTERLY: 3, Frequency.YEARLY: 4}
+
+    def _frekans_uyusmazligi(self, sql: str) -> ToolError | None:
+        """Soru tek bir frekans söylüyor (aylık) ve sorgunun okuduğu her kaynak ondan KABA ise
+        (çeyreklik, yıllık) sorgu çalışmaz: kabadan ince üretilemez. İnceden kaba (haftalıktan aylık)
+        serbesttir, o Gold'un işi. Ölçüldü (G16): model "aylık ... büyüme hızı" sorusuna hazır
+        çeyreklik Gold tablosunu okudu, 22 satırla kırılma aradı; cevap tutarlı ama soruya değil."""
+        soru = (getattr(self._registry, "active_question", "") or "").lower()
+        istenen = {f for w, f in self._FREKANS_SOZ if re.search(rf"\b{w}", soru)}
+        if len(istenen) != 1:
+            return None
+        hedef = next(iter(istenen))
+        try:
+            specs = list(self.lakehouse.list_datasets())
+        except Exception:  # noqa: BLE001 — katalog okunamıyorsa guard susar
+            return None
+        okunan = [sp for sp in specs if re.search(rf"(?<![\w.]){re.escape(sp.dataset_id)}(?![\w])", sql)]
+        if not okunan:
+            return None
+        kaba = [sp for sp in okunan
+                if sp.frequency in self._FREKANS_SIRA and self._FREKANS_SIRA[sp.frequency] > self._FREKANS_SIRA[hedef]]
+        if len(kaba) != len(okunan):
+            return None
+        ad = {Frequency.DAILY: "günlük", Frequency.WEEKLY: "haftalık", Frequency.MONTHLY: "aylık",
+              Frequency.QUARTERLY: "çeyreklik", Frequency.YEARLY: "yıllık"}
+        adaylar: list[str] = []
+        try:
+            for sp in self.lakehouse.search_datasets(soru):
+                if sp.frequency == hedef and sp.dataset_id not in adaylar:
+                    adaylar.append(sp.dataset_id)
+                if len(adaylar) >= 5:
+                    break
+        except Exception:  # noqa: BLE001
+            adaylar = []
+        okunan_metin = ", ".join(f"{sp.dataset_id} ({ad.get(sp.frequency, sp.frequency)})" for sp in kaba)
+        return ToolError(
+            error_code="FREQUENCY_MISMATCH", layer="policy", retryable=True, candidates=adaylar,
+            message=f"Kullanıcı {ad[hedef]} seri sordu; sorgu {okunan_metin} okuyor. "
+                    f"{ad[kaba[0].frequency].capitalize()} kaynaktan {ad[hedef]} seri üretilemez.",
+            hint=(f"{ad[hedef].capitalize()} frekanslı seriyi sorgula: " + ", ".join(adaylar)) if adaylar
+                 else f"lakehouse_search ile {ad[hedef]} frekanslı seriyi bul ve onu sorgula.",
+        )
 
     def _atlanmis_donem_filtresi(self, sql: str) -> str | None:
         """Soruda bir yıl geçiyor ama sorguda geçmiyorsa bunu bildirir.

@@ -23,9 +23,11 @@ from __future__ import annotations
 
 import re
 
+# Sayı bir tanımlayıcının parçasıysa (bddk_weekly:5690_3, TP.KTF12) sayı değildir: iki yanda da
+# sözcük karakteri olamaz (ölçüldü, G17: seri kimliğindeki 5690 "tabloda yok" sayıldı).
 _NUM_RE = re.compile(
-    r"(?<![\w.,])[-+]?\d{1,3}(?:\.\d{3})+(?:,\d+)?(?!\d)"   # Türkçe binlik (+ opsiyonel ondalık)
-    r"|(?<![\w.,])[-+]?\d+(?:[.,]\d+)?"                   # düz sayı; ayraç ondalıktır
+    r"(?<![\w.,])[-+]?\d{1,3}(?:\.\d{3})+(?:,\d+)?(?!\w)"   # Türkçe binlik (+ opsiyonel ondalık)
+    r"|(?<![\w.,])[-+]?\d+(?:[.,]\d+)?(?!\w)"              # düz sayı; ayraç ondalıktır
 )
 
 
@@ -35,7 +37,10 @@ def numbers_in(text: str) -> list[float]:
         raw = m.group(0)
         if "," in raw:
             raw = raw.replace(".", "").replace(",", ".")
-        elif raw.count(".") > 1 or re.fullmatch(r"[-+]?\d{1,3}(\.\d{3})+", raw):
+        elif raw.count(".") > 1 or (
+            re.fullmatch(r"[-+]?\d{1,3}(\.\d{3})+", raw) and not re.fullmatch(r"[-+]?0\.\d{3}", raw)
+        ):
+            # "0.263" binlik değil ondalıktır (korelasyon katsayısı; ölçüldü, G17).
             raw = raw.replace(".", "")
         try:
             out.append(float(raw))

@@ -56,6 +56,8 @@ Architect ve yeni araçların üstüne oturacağı ortak katman. Önce bu, çün
 
 | D5 ✅ | **İki uçtan uca deney** (ADR-0039, 12 Eyl): Architect finans dışı veriyi taslak → onay (`promote_draft`) → Silver → Gold → grafik; Analist web tablosunu `workspace_query` ile sohbette (DB parmak izi değişmedi) | terfi kapısı, beyan kapısı, `GOLD_REQUIRED`, bakış modu, kanıt zinciri sohbet-içi | her katman ayrı süreçte doğrulandı; kanıt zinciri tam |
 
+| D6 ✅ | **Analitik ailesi** (ADR-0040, 12 Eyl): `anomaly_detect`, `change_points`, `lead_lag` — LLM yok, aktif tablo üzerinde, sentetik testli; yarışmanın asgari üç aracı | harness: analitik istendiyse araç zorunlu; grafik aykırı halkası; golden G15–G17 | sıradaki: görüntü/PDF girişi (D7), veri genişliği (D8), arayüz (D9) |
+
 Stretch (zaman kalırsa): `clarify` (EVPI, L10-01), katkı ayrıştırması (il bazında waterfall), çapraz kaynak mutabakat fonksiyonu.
 
 ## Faz E — Kapanış (19–20 Eylül)

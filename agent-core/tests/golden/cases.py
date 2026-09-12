@@ -382,3 +382,43 @@ CASES: list[GoldenCase] = [
         max_steps_used=8,
     ),
 ]
+
+
+# --- Analitik ailesi (ADR-0040): tespit araçta, anlatı modelde; gerçek demo DB üzerinde koşar. ---
+CASES += [
+    GoldenCase(
+        id="G15_aykiri_ay",
+        question="2021 başından 2026 Haziran'a kadar aylık konut kredisi bakiyesinde olağandışı artış görülen aylar hangileri?",
+        why="Anomali aracı: trendli stok seride düzey değil aylık yüzde değişim üzerinde IQR (ölçüldü: düzeyde "
+        "iki uç 'aykırı' çıkıyordu). Model aracı çağırmadan aykırılık iddiası yazamaz (harness geri gönderir), "
+        "sebep uyduramaz (nedensellik filtresi).",
+        table_checks=[("aykırılık sütunu eklendi", lambda df: any(str(c).endswith("_anomali") for c in df.columns)),
+                      ("aylık seri bozulmadı (≥ 60 satır)", lambda df: len(df) >= 60)],
+        must_use_tools=["anomaly_detect"],
+        answer_must_contain_any=["2023"],
+        max_steps_used=6,
+    ),
+    GoldenCase(
+        id="G16_kirilma",
+        question="Aylık konut kredisi bakiyesinin büyüme hızı 2021'den bu yana ne zaman rejim değiştirdi? Kırılma noktalarını bul.",
+        why="Kırılma aracı: ikili bölütleme, büyüme hızı (yüzde değişim) rejimleri; tabloya <sütun>_rejim eklenir, "
+        "satır sayısı değişmez.",
+        table_checks=[("rejim sütunu eklendi", lambda df: any(str(c).endswith("_rejim") for c in df.columns)),
+                      ("aylık seri bozulmadı (≥ 60 satır)", lambda df: len(df) >= 60)],
+        must_use_tools=["change_points"],
+        answer_must_contain_any=["2023", "2024"],
+        max_steps_used=6,
+    ),
+    GoldenCase(
+        id="G17_onculuk",
+        question="2024 başından 2026 Haziran'a kadar haftalık konut kredisi faizi, haftalık konut kredisi bakiyesine "
+        "öncülük ediyor mu? Gecikmeli ilişkiye bak.",
+        why="Öncül-ardıl aracı: iki seri aynı tabloda (workspace_add_column ya da gold_join), gecikmeli korelasyon + "
+        "Granger; kart 'nedensellik değil' der, model 'neden oldu' yazamaz.",
+        table_checks=[("iki sayısal seri aynı tabloda", lambda df: len(df.select_dtypes("number").columns) >= 2)],
+        must_use_tools=["lead_lag"],
+        answer_must_contain_any=["öncü", "gecikme", "korelasyon", "birlikte hareket"],
+        answer_must_not_contain=["neden oldu", "yol açtı"],
+        max_steps_used=8,
+    ),
+]

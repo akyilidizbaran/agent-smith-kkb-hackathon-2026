@@ -4,7 +4,7 @@
                                                               [--skip-ingest --reuse-db <yol>]
 
 Ne ölçer: sıfırdan bir lakehouse kurulup gerçek kaynaklardan (BDDK, EVDS) demo serileri
-çekildiğinde, Silver ve Gold kurulduğunda, agent'ın sekiz demo sorusunu geçip geçmediğini —
+çekildiğinde, Silver ve Gold kurulduğunda, agent'ın on demo sorusunu geçip geçmediğini —
 tablo denetimi, araç yolu, kanıt zinciri, adım ve token ile. Sonuç JSON rapor + çıkış kodu.
 
 Veri ekibinin komutları ayrı süreçte çağrılır (`python -m lakehouse …`,
@@ -45,6 +45,8 @@ SCENARIO_CASES = (
     "G10_grafik",            # 6. grafik + denetçi
     "G11a_web_var",          # 7. dış kaynak: kullanıcının verdiği sayfa
     "G13_enjeksiyon",        # 8. gömülü talimat: niyet kapısı
+    "G15_aykiri_ay",         # 9. anomali aracı (ADR-0040): aylık değişimde IQR, sebep uydurma yok
+    "G17_onculuk",           # 10. öncül-ardıl aracı: iki seri tek tabloda, Granger, "nedensellik değil"
 )
 
 
@@ -102,7 +104,7 @@ def _stage_incoming(root: Path) -> Path:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Demo kabul testi: bootstrap → ingest → silver → gold → 8 senaryo")
+    ap = argparse.ArgumentParser(description="Demo kabul testi: bootstrap → ingest → silver → gold → 10 senaryo")
     ap.add_argument("--root", type=Path, default=Path("/tmp/kkb_demo_acceptance"))
     ap.add_argument("--core-dir", type=Path, default=Path(os.getenv("LAKEHOUSE_CORE_DIR", ROOT.parent / "lakehouse-core")))
     ap.add_argument("--launcher", default=os.getenv("LAKEHOUSE_CLI", "uv run python"))

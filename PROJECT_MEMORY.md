@@ -98,16 +98,24 @@ Kullanıcının isteği: main itilmeyecek, dal silinmeyecek; Architect finans d�
 - **Harness**: grafik istendi ama `chart` çağrılmadıysa bir kez geri; grafik kartı çizilen satırları taşır; "önce veriyi çek" uyarısı terfi/grafik/ingest sonrası ya da tablo hazırken verilmez; nedensellik filtresi "etkisiyle / nedeniyle" (ölçüldü: sığınmacı cümlesi geçmişti); grafik başlığında 2000.0 → 2000.
 - **Ölçüm** — Deney 1 (Melbourne günlük min. sıcaklık, 3.650 gün): 5 tur, taslak → onay → aktif → Gold aylık (rıza) → grafik; ayrı süreçte `meta.series active/derived/manual/°C/index/avg/daily`, adhoc 3.650 = silver 3.650, artifact HTTP 200 + RAW 67.921 bayt, Bronze parquet, `gold-run` 1985'te 12 ay (Ocak 14,22, Temmuz 6,14; 31'er gözlem); kanıt zinciri tam 13/13 · 365 gözlem → 1 artifact; 20–56 bin prompt token/tur. Deney 2 (OWID Türkiye nüfusu): 3 tur, 24 satır tablo, %33,39 (65.425.957 → 87.270.502), en hızlı 2015 (+1.978.068), çizgi grafiği 6/6; kanıt zinciri üç turda tam; DB parmak izi (sayımlar + dosya listeleri + sha256) ayrı süreçte önce/sonra **fark yok**; 44–60 bin token/tur. Testler 252 → 270. Kabul senaryoları mevcut DB'de 7/8 (G9 anlatı aritmetiği kalıntısı).
 
+### 2.11 Analitik ailesi — aykırılık, kırılma, öncül-ardıl (12 Eylül, ADR-0040)
+Kullanıcı: "anomali ve nedensellik araçlarının bulunmaması çok kötü görüntü"; yarışmanın asgari araç listesinde üçü adıyla var. Görünürlük katmanı en sona, veri ekibinin işleri gerekirse bize.
+- `analytics/methods.py` (numpy + scipy, LLM yok): `detect_anomalies` (IQR / z-skoru; Spearman rho ≥ 0.8 ise dönemlik yüzde değişim tabanı), `detect_change_points` (ikili bölütleme, ceza 2·log(n)·σ², σ birinci farkların MAD'ı), `lead_lag` (gecikmeli Pearson −k..+k, iki yönlü Granger F-testi). Sentetik testler: sıçrama, trend uçları aykırı değil, adım 50'de, saf gürültüde kırılma yok, gecikme 2 ve Granger yönü.
+- `tools/analytics.py`: `anomaly_detect` (`<sütun>_anomali`, `_skor`, `_degisim_yuzde`), `change_points` (`<sütun>_rejim`), `lead_lag` (tablo değişmez, kart). Sütunlar "türetilmiş:" provenance; kart tabloları kanıt paneli için not edilir; grafik `_anomali` sütununu halka ile işaretler; kart "NEDENSELLİK DEĞİLDİR" der.
+- Harness: grafik kuralı genelleştirildi (`_REQUESTED_CAPABILITIES`): aykırılık/kırılma/öncülük soruldu, araç çağrılmadan cevap yazıldıysa bir kez geri. Analitik kartları veri üreten araç sayılır.
+- Golden ilk koşu 0/6 ve üç kaçak: kanıt paneli kart sayılarını (k, n, r, p) tanımıyordu → kart parametreleri not edilir, satır sayısı ve işareti düşmüş sayı eşleşir, tanımlayıcı rakamı (`5690_3`) ve "0.263" doğru ayrışır; dönem ipucu "2021'den bu yana"yı "= 2021" diyordu → `>=`/`<=`/`BETWEEN`; model "aylık" soruya çeyreklik Gold tablosunu okudu → `FREQUENCY_MISMATCH` (kabadan ince üretilemez; inceden kaba serbest).
+- Ölçüm (demo DB, aylık konut 66 ay): aykırı 2023-03 (+6,49 %) ve 2023-05 (+5,42 %); rejimler 2021-02→2023-02 %1,15/ay, 2023-03→08 %3,34, 2023-09→2024-09 %0,31, 2024-10→ %2,62; haftalık faiz → konut bakiyesi: gecikme +8 hafta r=−0,28, Granger p=0,003 (ters yön p=0,19). İlk ceza kalibrasyonu (3·log(n), serinin MAD'ı) gerçek seride hiç rejim bulamadı → ölçülüp değiştirildi. Testler 270 → 287. README'deki boş vaatler (anomali, nedensellik) kapandı; ARCHITECTURE "planlı" → "yazıldı". Golden G15–G17 üç koşu 0/6 → 1/6 → **9/9 kararlı** (2 / 4 / 3 adım, 47–60k token); G16'da model önce çeyreklik Gold tablosunu deniyor, guard aylık seriye çeviriyor. Kabul senaryoları 8 → 10 (G15, G17); mevcut DB'de **10/10** (G9 dâhil, kanıt zinciri 10/10 tam, 1–4 adım, 23–72k token).
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 270 |
+| Agent birim testi | 287 |
 | Lakehouse testi (r3) | 1083 |
-| ADR | 39 |
-| Golden vakası | 16: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3; G9 4/5. Demo kabul sıfırdan 8/8 (12 Eyl akşam tekrar: 7/8, G9) |
-| Araç sayısı (gerçek DB'de) | 15: lakehouse ×4, workspace ×4 (query dâhil), ingest, promote_draft, gold ×3, chart, web_url (+ web_search anahtarla) |
-| Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu (iş yapan araç/tablo varken susar), grafik istendiyse grafik, grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, GOLD_REQUIRED, niyet kapısı, beyan kapısı, adım sınırı, reasoning temizliği |
+| ADR | 40 |
+| Golden vakası | 19: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 10 senaryo 10/10 |
+| Araç sayısı (gerçek DB'de) | 18: lakehouse ×4, workspace ×4 (query dâhil), analitik ×3 (anomaly_detect, change_points, lead_lag), ingest, promote_draft, gold ×3, chart, web_url (+ web_search anahtarla) |
+| Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu (iş yapan araç/tablo varken susar), istenen yetenek zorunluluğu (grafik, analitik), frekans uyuşmazlığı (kabadan ince yok), grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, GOLD_REQUIRED, niyet kapısı, beyan kapısı, adım sınırı, reasoning temizliği |
 
 ## 4. Mimari, tek bakışta
 
@@ -117,6 +125,7 @@ Kullanıcı → AnalyticsAgent (tek harness; roller: retrieve/execute/validate/n
    ├─ Araçlar (registry; alan profili katalogdan)
    │    lakehouse_search/describe/distinct_values/query   ← LakehouseClient sözleşmesi
    │    workspace_add_column/compute_column/show/query     ← AnalysisWorkspace (query: bakış/kırpma, DB'ye dokunmaz)
+   │    anomaly_detect/change_points/lead_lag             ← analytics/methods.py (LLM yok, ADR-0040)
    │    ingest_from_url  (Architect yazma yolu, ayrı süreç CLI, yalnız adhoc+draft; beyan kapısı)
    │    promote_draft    (Architect ikinci kapı: kullanıcı onayıyla taslak → aktif + Silver)
    │    gold_align/decompose/join  (GoldCapable, gold-run salt okunur ayrı süreç)
@@ -176,3 +185,4 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
 - Sohbet-içi SQL aracı sonucu tabloyu ezerse model bir sonraki turda küçülmüş tabloyla yanlış dönem için cevap verir; varsayılan bakış modu olmalı.
 - Kanıt panelinde `sources` listesi "web — başlık" biçiminde; `"web" in sources` liste üyeliği sessizce yanlış. DuckDB aynı dosyaya aynı süreçte farklı yapılandırmayla ikinci bağlantı açtırmaz; doğrulama ayrı süreçte.
 - Model grafik sonrası tabloyu "doğrulamak" için sorgu üstüne sorgu atar; kart çizilen satırları taşıyıp "araç çağırmayı bırak" demeli; grafik istenip çizilmediyse harness geri göndermeli.
+- Trendli seride aykırılık düzeyde değil değişimde aranır (uçlar sahte aykırı); kırılma cezası serinin kendi MAD'ıyla değil birinci farkların MAD'ıyla ölçeklenmeli (gerçek seride hiç rejim bulunamıyordu). Yöntemi gerçek seride ölçmeden kabul etme.

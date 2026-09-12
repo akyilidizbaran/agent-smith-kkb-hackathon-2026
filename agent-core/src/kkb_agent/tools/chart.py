@@ -217,7 +217,9 @@ class ChartTool(Tool):
         assert table is not None
         x = None if params.chart_type == "map" else self._x_column(params, table)
         units, levels, sources, labels = self._column_semantics(list(params.y_columns))
-        quality = next((c for c in table.columns if str(c).endswith("quality_flag")), None)
+        # quality_flag ≠ ok gibi, anomaly_detect'in <sütun>_anomali kolonu da halka ile işaretlenir (ADR-0040).
+        quality = next((c for c in table.columns if str(c).endswith("quality_flag")), None) \
+            or next((c for c in table.columns if str(c).endswith("_anomali")), None)
         intent = ChartIntent(
             kind=params.chart_type, x=x, y=tuple(params.y_columns), title=params.title,
             unit_labels=units, labels=labels,

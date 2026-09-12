@@ -110,6 +110,11 @@ class EvidenceBuilder:
                     continue
             if float(number).is_integer() and 1 <= number <= 31 and len(str(text)) <= 2:
                 continue  # gün/ay numarası ya da sıra sayısı; anlatı doğrulama da bunları saymaz
+            # Satır sayısı da araç çıktısındandır ("124 hafta", "66 ay"): tablo ya da önceki sürüm.
+            if float(number).is_integer() and int(number) in {len(table), *(len(o) for o in (previous or []))}:
+                ev.matched, ev.column, ev.row_key = True, "(satır sayısı)", f"{int(number)} satır"
+                out.append(ev)
+                continue
             for col in numeric_cols:
                 series = table[col]
                 hits = series[(series - number).abs() <= max(abs(number) * self.tolerance, 1e-9)]
@@ -145,6 +150,19 @@ class EvidenceBuilder:
                             found = True
                             break
                     if found:
+                        break
+            if not ev.matched and number != 0:
+                # İşaret yazımı: model "−2,31" (Unicode eksi) ya da "%-2,31" yazınca ayrıştırıcı
+                # işareti düşürür; değer tabloda ters işaretle varsa sayı yine araçtandır (ölçüldü, G15/G17).
+                frames = [table, *(previous or []), *[f for _, f in (peeks or [])]]
+                for frame in frames:
+                    hit_col = next(
+                        (str(c) for c in frame.columns if pd.api.types.is_numeric_dtype(frame[c])
+                         and not frame[c][(frame[c] + number).abs() <= max(abs(number) * self.tolerance, 1e-9)].empty),
+                        None,
+                    )
+                    if hit_col:
+                        ev.matched, ev.column, ev.row_key = True, hit_col, "işaret yazımı (−)"
                         break
             out.append(ev)
         return out

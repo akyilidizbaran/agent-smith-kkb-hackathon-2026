@@ -310,3 +310,35 @@ def test_grafik_cizildikten_sonra_veri_cekilmedi_uyarisi_verilmez() -> None:
     answer = agent.ask("bunun grafiğini çiz")
     assert answer.text == "Grafik hazır." and not any("geri gönderildi" in (s.thought or "") for s in answer.steps)
     assert tool.calls == 0 and len(answer.steps) == 2
+
+
+class _AnomParams(BaseModel):
+    column: str = "deger"
+
+
+class _FakeAnomaly(Tool):
+    name = "anomaly_detect"
+    description = "sahte analitik"
+    Params = _AnomParams
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def run(self, params: _AnomParams) -> ToolResult:
+        self.calls += 1
+        return ToolResult(content="AYKIRILIK: 1 aykırı dönem, 2025-03, skor 2.1")
+
+
+def test_aykirilik_soruldu_analitik_arac_cagrilmadan_cevap_bir_kez_geri_gonderilir() -> None:
+    tool, anom = _CountingTool(), _FakeAnomaly()
+    registry = ToolRegistry(); registry.register(tool); registry.register(anom)
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[_call(1)]),
+        LLMResponse(content="Değer 100, aykırı ay yok.", tool_calls=[]),      # araçsız iddia → geri
+        LLMResponse(content="", tool_calls=[ToolCall(id="a", name="anomaly_detect", arguments={"column": "deger"})]),
+        LLMResponse(content="Bir aykırı dönem var: 2025-03, skor 2.1.", tool_calls=[]),
+    ])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=10)
+    answer = agent.ask("2025'te değerde aykırı ay var mı?")
+    assert anom.calls == 1 and any("analitik istendi" in (s.thought or "") for s in answer.steps)
+    assert answer.text.startswith("Bir aykırı dönem var")

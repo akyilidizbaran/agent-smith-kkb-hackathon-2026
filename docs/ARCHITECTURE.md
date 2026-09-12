@@ -418,22 +418,26 @@ ifade reddedilir.
 
 ---
 
-## 7. Planlı araçlar
+## 7. Araç aileleri (analitik yazıldı; web, grafik, ingest aşağıda ve §15'te)
 
-### Analitik ailesi — `tools/analytics.py` (LLM YOK)
+### Analitik ailesi — `tools/analytics.py` + `analytics/methods.py` (LLM YOK, ADR-0040) — YAZILDI
 
-Literatürün tutarlı bulgusu: tek LLM sayısal girdi üzerinde sınırlı kontrol sağlar.
-İstatistik tespit eder, LLM açıklar.
+Yarışmanın asgari araç listesindeki üç ad (Anomali, Change Detection, Causality). Literatürün
+tutarlı bulgusu ve bizim ölçümümüz (ADR-0027): model sayısal girdi üzerinde kendi aritmetiğini
+yapınca uydurur. İstatistik tespit eder, model kartı anlatır.
 
 | Araç | Yöntem | Döner |
 |---|---|---|
-| `anomaly_detect(column, method?)` | IQR / z-score / IsolationForest, workspace tablosu üzerinde | işaretli satırlar + `is_anomaly` sütunu |
-| `change_points(column)` | ruptures (PELT/Binseg) ensemble | kırılma dönemleri + güven |
-| `correlate(col_a, col_b, lag?)` | Pearson/Spearman + Granger | katsayı, p-değeri, yön uyarısı |
+| `anomaly_detect(column, method=iqr|zscore, basis=auto|level|change)` | Tukey çiti (k=1.5) ya da z-skoru (|z|>3); trendli seride (Spearman rho ≥ 0.8) dönemlik yüzde değişim üzerinde | `<sütun>_anomali` ('ok'/'aykırı'), `<sütun>_skor` (+ `_degisim_yuzde`); kartta aykırı dönemler |
+| `change_points(column, basis, max_breaks, min_size)` | ikili bölütleme, parçalı sabit ortalama, ceza 2·log(n)·σ² (σ birinci farkların MAD'ı) | `<sütun>_rejim` (1..k); kartta kırılma tarihleri ve rejim ortalamaları |
+| `lead_lag(column_a, column_b, max_lag, basis)` | gecikmeli Pearson (−k..+k; +k: A önce) + iki yönlü Granger F-testi (OLS, scipy F) | tablo değişmez; kartta en güçlü gecikme, r, gecikme tablosu, Granger F/p/n |
 
-Hepsi `AnalysisWorkspace.table` üzerinde çalışır; hangi veri olduğu umurlarında değil.
-Sentetik seriyle test edilir. LLM yalnız çıktıyı yorumlar ve `web_search` ile bağlar —
-transkriptteki *"o dönemde dünya piyasalarında ne olmuş"* akışı.
+Hepsi `AnalysisWorkspace.table` üzerinde; hangi veri olduğu umurlarında değil; sentetik seriyle
+test edilir. Sonuç sütunları "türetilmiş:" provenance taşır (kanıt zinciri kopmaz), kart sayıları
+kanıt paneli için not edilir. Grafik `_anomali` sütununu `quality_flag` gibi halka ile işaretler.
+"Causality" dürüst: kart "öncülük, nedensellik değil" der; anlatı guard'ı "neden oldu" cümlesini
+yine geri çevirir. Kullanıcı aykırılık/kırılma/öncülük sorup model aracı çağırmadan cevap yazarsa
+harness bir kez geri gönderir (grafik kuralıyla aynı mekanizma).
 
 ### Web ailesi — `tools/web.py`
 

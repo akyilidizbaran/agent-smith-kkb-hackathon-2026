@@ -42,6 +42,9 @@ ErrorCode = Literal[
     # Frekans dönüşümü SQL'de değil Gold'da (ADR-0031/0039): AVG/SUM ile ay/çeyrek gruplayan
     # sorgu, gold_* araçları kayıtlıyken reddedilir; model doğru aracı çağırarak onarır.
     "GOLD_REQUIRED",
+    # Sorudaki frekans kaynaktan ince (aylık soruya çeyreklik tablo): üretilemez, doğru seri seçilir.
+    # Ölçüldü (G16): model "aylık" soruya hazır çeyreklik Gold tablosunu okudu (ADR-0040).
+    "FREQUENCY_MISMATCH",
     # Niyet kapısı (ADR-0037): kaynak kullanıcının mesajından gelmedi ya da yazma isteği yok.
     # Araç çıktısındaki bir talimat modeli yönlendirmiş olabilir; kullanıcıya sorulur.
     "INTENT_REQUIRED",

@@ -25,4 +25,4 @@ def test_komut_plani_sirali_ve_yollari_tasir(tmp_path: Path) -> None:
 def test_senaryo_kimlikleri_golden_da_var() -> None:
     ids = {c.id for c in CASES}
     assert set(SCENARIO_CASES) <= ids
-    assert len(SCENARIO_CASES) == 8
+    assert len(SCENARIO_CASES) == 10

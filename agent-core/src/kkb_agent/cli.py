@@ -41,6 +41,7 @@ from .tools.promote import PromoteDraftTool
 from .tools.gold import GOLD_PROMPT_RULES, GoldAlignTool, GoldDecomposeTool, GoldJoinTool
 from .tools.chart import CHART_PROMPT_RULES, ChartTool
 from .tools.workspace_query import WorkspaceQueryTool
+from .tools.analytics import ANALYTICS_PROMPT_RULES, AnomalyDetectTool, ChangePointsTool, LeadLagTool
 from .tools.web import (
     WEB_PROMPT_RULES, WEB_SEARCH_PROMPT_RULES, WEB_SEARCH_UNAVAILABLE_RULES, WebSearchTool, WebUrlTool,
 )
@@ -121,6 +122,10 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
             WorkspaceComputeColumnTool(workspace),
             WorkspaceShowTool(workspace),
             WorkspaceQueryTool(workspace),
+            # Analitik ailesi (ADR-0040): LLM yok, her adaptörde; veri ne olursa olsun aynı.
+            AnomalyDetectTool(workspace),
+            ChangePointsTool(workspace),
+            LeadLagTool(workspace),
         ]
     )
     # Architect'e açılan tek kapı. Yalnız veri ekibinin şeması ve CLI'ı varsa: seed
@@ -143,7 +148,7 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
     registry.register(
         ChartTool(lakehouse, workspace, chart_dir=settings.chart_dir, geo_dir=settings.geo_dir)
     )
-    system_prompt = SYSTEM_PROMPT + CHART_PROMPT_RULES + WORKSPACE_QUERY_RULES
+    system_prompt = SYSTEM_PROMPT + CHART_PROMPT_RULES + WORKSPACE_QUERY_RULES + ANALYTICS_PROMPT_RULES
     # Dış kaynak (ADR-0034): web_url her zaman; web_search yalnız arama anahtarı varsa.
     settings.ingest_allowed_root.mkdir(parents=True, exist_ok=True)
     registry.register(WebUrlTool(workspace, allowed_local_root=settings.ingest_allowed_root, registry=registry))

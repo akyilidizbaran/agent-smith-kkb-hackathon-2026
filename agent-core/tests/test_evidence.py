@@ -213,3 +213,20 @@ def test_bakis_sorgusu_sayisi_ve_onceki_turun_web_sayfasi_zinciri_tamamlar() -> 
     assert m["3,08"].matched and m["3,08"].row_key.startswith("bakış sorgusu")
     assert panel.web_sources and panel.web_sources[0]["sha256"] == "ab" * 32
     assert panel.complete, panel.gaps
+
+
+def test_satir_sayisi_ve_isaret_yazimi_zinciri_kirmaz() -> None:
+    """Ölçüldü (G15/G17): "124 hafta" satır sayısıdır; "−2,31" Unicode eksiyle yazılınca işaret düşer."""
+    class Silverish:
+        def evidence_for_observations(self, *a, **k): return []
+        def evidence_for_artifacts(self, *a, **k): return {}
+    ws = AnalysisWorkspace()
+    ws.set_table(pd.DataFrame({"year": [2000.0 + i for i in range(40)], "pop": [65.0 + i for i in range(40)]}), description="web",
+                 provenance=QueryProvenance(sql="web_url https://x/p.csv tablo#0", dataset_ids=[], sources=["web — p"], source_urls=["https://x/p.csv"]))
+    ws.remember_web({"used": "https://x/p.csv", "visited": [{"url": "https://x/p.csv", "sha256": "ab" * 32, "fetched_at": "t", "status": 200}]})
+    ws.note_peek("anomaly parametreler", pd.DataFrame({"alt_sinir": [-2.31], "n": [65]}))
+    panel = EvidenceBuilder(Silverish()).build("soru", "40 satır var; alt sınır −2,31; 65 gözlem.", ws, [], artifacts=[])
+    m = {n.text: n for n in panel.numbers}
+    assert m["40"].matched and m["40"].column == "(satır sayısı)"
+    assert m["2,31"].matched and m["2,31"].row_key.startswith("işaret")
+    assert m["65"].matched and panel.complete, panel.gaps

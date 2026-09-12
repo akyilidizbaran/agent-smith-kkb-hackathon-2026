@@ -36,9 +36,9 @@ Beklenen, yalnızca analiz yapan bir sistem değil; **uçtan uca akıl yürüten
    │  Bronze  parquet │                │ Araçlar:               │
    │  Silver  canonic │◀──────────────▶│  lakehouse             │
    │  Gold    analiz  │   Contract     │  web search / URL      │
-   │  Meta    catalog │                │  anomali               │
-   └──────────────────┘                │  nedensellik           │
-                                       │  değişim tespiti       │
+   │  Meta    catalog │                │  anomali · kırılma     │
+   └──────────────────┘                │  öncül-ardıl (Granger) │
+                                       │  grafik · ingest       │
                                        └───────────┬────────────┘
                                                    ▼
                                      Tablo · grafik · rapor + KAYNAK
