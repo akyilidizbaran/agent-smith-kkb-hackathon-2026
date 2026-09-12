@@ -237,16 +237,37 @@ def _run_one(
     return fail_count == 0
 
 
-def main() -> int:
-    _require_repo_root_cwd()
+def _parse_args(argv: list[str] | None = None):
+    """Optional overrides. Defaults keep the historical behaviour: repo-local data/ paths and
+    every active series. ``--only`` runs a subset (comma-separated series ids); the demo
+    acceptance script uses it to land five series instead of the whole catalog."""
+    import argparse
 
-    trusted = bootstrap_database()
-    raw_storage = RawStorage()
-    parquet_storage = ParquetStorage()
+    parser = argparse.ArgumentParser(description="Catalog-driven real ingestion (manual utility).")
+    parser.add_argument("--database", type=Path, default=None, help="DuckDB path (default: data/lakehouse.duckdb)")
+    parser.add_argument("--data-root", type=Path, default=None, help="root containing raw/ and bronze/ (default: data)")
+    parser.add_argument("--only", default=None, help="comma-separated series ids; default: every active series")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    _require_repo_root_cwd()
+    args = _parse_args(argv)
+    data_root = args.data_root or Path("data")
+
+    trusted = bootstrap_database(args.database or (data_root / "lakehouse.duckdb"))
+    raw_storage = RawStorage(data_root / "raw")
+    parquet_storage = ParquetStorage(data_root / "bronze")
     artifact_repository = ArtifactRepository(trusted)
     session = requests.Session()
 
     series = _load_active_series(trusted)
+    if args.only:
+        wanted = {sid.strip() for sid in args.only.split(",") if sid.strip()}
+        series = [row for row in series if row.series_id in wanted]
+        missing = wanted - {row.series_id for row in series}
+        if missing:
+            print(f"WARNING: --only listed series not active in the catalog: {', '.join(sorted(missing))}")
     print(f"Katalogda {len(series)} aktif seri bulundu.")
 
     outcomes: dict[str, bool] = {}
