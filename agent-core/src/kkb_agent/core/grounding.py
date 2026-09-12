@@ -68,7 +68,10 @@ def grounding_check(question: str, answer: str, tool_texts: list[str], tolerance
     return "OK" if not missing else "MISS:" + ", ".join(dict.fromkeys(missing))
 
 
-_CAUSAL = re.compile(r"\b(neden oldu|yol açtı|sebep oldu|kaynaklandı|sayesinde|yüzünden)\b", re.I)
+# Ölçüldü (Deney 2): "Suriyeli sığınmacıların etkisiyle artış hızlanmış" veride olmayan bir
+# sebep; "etkisiyle" ve "nedeniyle" listede yoktu, cümle geçti. Sonuç bağlacı olan
+# "dolayısıyla" bilerek dışarıda (toplam/sonuç anlatımında meşru).
+_CAUSAL = re.compile(r"\b(neden oldu|yol açtı|sebep oldu|kaynaklandı|sayesinde|yüzünden|etkisiyle|nedeniyle)\b", re.I)
 
 
 def causal_language(answer: str) -> list[str]:

@@ -26,6 +26,9 @@ from ..domain import DomainProfile
 from ..llm.base import ChatMessage, LLMClient, ToolCall
 from .errors import ToolError
 from .grounding import causal_language, grounding_check
+
+# Kullanıcının grafik isteği (Türkçe çekimli: grafiği, grafiğini, çiz, çizer misin, görselleştir).
+_CHART_ASK = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
 from .registry import ToolRegistry
 from .tool import ToolResult
 from .workspace import AnalysisWorkspace
@@ -191,6 +194,9 @@ class AnalyticsAgent:
     ikinci denemede argümanı düzeltiyor), üç tane fazla cömert: ölçümde döngü ikinci
     tekrardan sonra kendiliğinden çıkmıyordu."""
 
+    #: Veri getirmez ama cevabın konusu olan işi yapar: bunlardan sonra "önce veriyi çek" uyarısı anlamsız.
+    ACTING_TOOLS = frozenset({"promote_draft", "chart", "web_search"})  # ingest ve web_url zaten veri sayılır
+
     DATA_PRODUCING_TOOLS = frozenset(
         {
             "lakehouse_query",
@@ -203,6 +209,7 @@ class AnalyticsAgent:
             "gold_join",
             # Sayfa içeriği de araç çıktısıdır; tablo yüklenmese bile cevap oradan verilebilir (ADR-0034).
             "web_url",
+            "workspace_query",
             # Ingest kartı da bir cevaptır: "bu dosyayı ekle" isteğinde sorgu gerekmez.
             "ingest_from_url",
         }
@@ -275,6 +282,9 @@ class AnalyticsAgent:
         produced_data = False   # veri getiren bir araç başarıyla çalıştı mı?
         artifacts: list[dict[str, Any]] = []  # grafik vb. (ADR-0032)
         nudged = False          # "önce veriyi çek" uyarısı bir kez verilir
+        acted = False           # bu turda veri getirmeyen ama iş yapan bir araç başarıyla çalıştı (terfi, grafik, ingest)
+        chart_nudged = False    # "grafik istendi, chart çağrılmadı" uyarısı bir kez verilir
+        wants_chart = self.registry.get("chart") is not None and bool(_CHART_ASK.search(question))
         seen: set[tuple[str, str]] = set()   # (araç, argüman) — döngü kilidi
         duplicates = 0                       # kilidin kaç kez devreye girdiği
         terminal: ToolError | None = None    # tekrar denemeyle çözülmeyen hata
@@ -294,7 +304,10 @@ class AnalyticsAgent:
                 # Model bazen kataloğu okuyup veriyi hiç çekmeden cevap yazmaya
                 # kalkıyor; ölçümde G5 her denemede 3 adımda burada duruyordu.
                 # Cevabı reddetmiyoruz, bir kez geri gönderip veriyi çektiriyoruz.
-                if not produced_data and not nudged:
+                # Ölçüldü (Deney 1): terfi ya da grafik sonrası da "veri çekilmedi" diye geri
+                # gönderiyordu; model tabloyu yeniden gösterip aynı cevabı yazdı (fazla adım).
+                # Bu turda iş yapan bir araç çalıştıysa ya da tablo önceki turdan hazırsa uyarı yok.
+                if not produced_data and not nudged and not acted and not self.workspace.has_table:
                     nudged = True
                     steps.append(
                         AgentStep(
@@ -313,6 +326,32 @@ class AnalyticsAgent:
                             "katalogu inceledin. Katalog bilgisi cevap DEĞİLDİR. "
                             "Kullanıcının sorusunu cevaplayan sayıları lakehouse_query ile "
                             "çek, sonra cevabını yaz.",
+                        )
+                    )
+                    continue
+
+                # Kullanıcı grafik istedi, model tabloyu "doğrulamak" için sorgu üstüne sorgu
+                # atıp grafiksiz cevap yazdı (ölçüldü, Deney 2 tur 3). Bir kez geri gönderilir;
+                # aktif tablo varsa chart çağrısı bir adımdır.
+                if wants_chart and not any(a.get("png_path") or a.get("spec_path") for a in artifacts) \
+                        and not chart_nudged and produced_data:
+                    chart_nudged = True
+                    steps.append(
+                        AgentStep(
+                            index=i,
+                            role="validate",
+                            thought="grafik istendi, chart çağrılmadan cevap denendi — geri gönderildi",
+                            ok=False,
+                            duration_ms=(time.perf_counter() - started) * 1000,
+                        )
+                    )
+                    messages.append(ChatMessage(role="assistant", content=response.content))
+                    messages.append(
+                        ChatMessage(
+                            role="user",
+                            content="Kullanıcı grafik istedi ama chart aracını çağırmadın. Veri hazır; "
+                            "başka sorgu çalıştırma, chart aracını (chart_type, x_column, y_columns, title) "
+                            "çağır ve sonra cevabını yaz.",
                         )
                     )
                     continue
@@ -439,10 +478,13 @@ class AnalyticsAgent:
                     tool_texts.append(result.content)
                 if result.ok and call.name in self.DATA_PRODUCING_TOOLS:
                     produced_data = True
+                elif result.ok and call.name in self.ACTING_TOOLS:
+                    acted = True
                 if result.ok and result.artifacts.get("chart"):
                     artifacts.append(result.artifacts["chart"])
                 if result.artifacts.get("web"):   # erişilemeyen sayfa da kanıt paneline girer
                     artifacts.append({"kind": "web", **result.artifacts["web"]})
+                    self.workspace.remember_web(result.artifacts["web"])  # sonraki turların zinciri için
                 if result.error is not None and not result.error.is_retryable:
                     terminal = result.error
                 log.info("adım %d: %s -> %s", i, call.name, "ok" if result.ok else "HATA")

@@ -41,6 +41,11 @@ def _is_datelike(series: pd.Series) -> bool:
     return not values.empty and all(hasattr(v, "year") for v in values.head(20))
 
 
+def _from_web(c: ColumnEvidence) -> bool:
+    """web_url kaynağı 'web — <başlık>' diye yazar; kırpılmış tablo bunu olduğu gibi taşır."""
+    return any(str(src).startswith("web") for src in c.sources)
+
+
 def _time_column(table: pd.DataFrame) -> str | None:
     datelike = [str(c) for c in table.columns if _is_datelike(table[c])]
     for name in _DATE_PREFERENCE:
@@ -85,7 +90,9 @@ class EvidenceBuilder:
         self.max_rows = max_rows
 
     # ------------------------------------------------------------------ halkalar
-    def _match_numbers(self, answer: str, table: pd.DataFrame, time_col: str | None) -> list[NumberEvidence]:
+    def _match_numbers(self, answer: str, table: pd.DataFrame, time_col: str | None,
+                       previous: list[pd.DataFrame] | None = None,
+                       peeks: list[tuple[str, pd.DataFrame]] | None = None) -> list[NumberEvidence]:
         numeric_cols = [c for c in table.columns if pd.api.types.is_numeric_dtype(table[c])]
         out: list[NumberEvidence] = []
         seen: set[str] = set()
@@ -111,6 +118,34 @@ class EvidenceBuilder:
                     ev.matched, ev.column, ev.row_index = True, str(col), idx
                     ev.row_key = _key_text(table.loc[idx, time_col]) if time_col else str(idx)
                     break
+            if not ev.matched:
+                # Önceki tablo sürümleri: sayı, tablo bakış moduyla ya da kırpılmadan önce üretilmiş
+                # olabilir (ölçüldü: 24 satırlık nüfus tablosu sonradan 5 satıra kırpıldı; cevaptaki
+                # 72 sayının 45'i "tabloda yok" görünüyordu). Araç çıktısından gelen sayı sayıdır.
+                for depth, old in enumerate(previous or [], start=1):
+                    found = False
+                    for col in [c for c in old.columns if pd.api.types.is_numeric_dtype(old[c])]:
+                        series = old[col]
+                        hits = series[(series - number).abs() <= max(abs(number) * self.tolerance, 1e-9)]
+                        if not hits.empty:
+                            ev.matched, ev.column, ev.row_key = True, str(col), f"önceki tablo (-{depth})"
+                            found = True
+                            break
+                    if found:
+                        break
+            if not ev.matched:
+                # Bakış sorgusu sonuçları (aktif tabloyu değiştirmeyen özetler: toplam yüzde, en yüksek yıl).
+                for sql, frame in (peeks or []):
+                    found = False
+                    for col in [c for c in frame.columns if pd.api.types.is_numeric_dtype(frame[c])]:
+                        series = frame[col]
+                        hits = series[(series - number).abs() <= max(abs(number) * self.tolerance, 1e-9)]
+                        if not hits.empty:
+                            ev.matched, ev.column, ev.row_key = True, str(col), f"bakış sorgusu: {sql[:80]}"
+                            found = True
+                            break
+                    if found:
+                        break
             out.append(ev)
         return out
 
@@ -171,12 +206,20 @@ class EvidenceBuilder:
                 gaps.append("Gold satırları artifact listesi taşıyor ama hiçbiri çözülemedi")
             return observations, artifacts
 
-        # Web tablosu: zincir sayfanın baytlarında biter (URL + sha256 + zaman); gözlem aranmaz.
-        if columns and all((c.sql or "").startswith("web_url ") for c in columns):
-            return [], {}
         # Türetilmiş kolonlar (formül) zinciri kırmaz: kaynak kolonlar üzerinden devam eder.
         columns = [c for c in columns if not (c.sql or "").startswith("türetilmiş:")]
         if not columns:
+            return [], {}
+        # Web tablosu: zincir sayfanın baytlarında biter (URL + sha256 + zaman); gözlem aranmaz.
+        # workspace_query ile kırpılmış web tablosu da web tablosudur: kaynak kolonların provenance'ı
+        # taşınır (sources=web, dataset_ids boş). Ölçüldü: kırpma ve türetilmiş kolon sonrası zincir
+        # yanlışlıkla "dönem kolonu yok" diye kopuk görünüyordu.
+        def _web_col(c: ColumnEvidence) -> bool:
+            sql = c.sql or ""
+            return sql.startswith("web_url ") or (
+                sql.startswith("workspace_query:") and not c.dataset_ids and _from_web(c)
+            )
+        if all(_web_col(c) for c in columns):
             return [], {}
 
         # Silver sorgusu: dönem + provenance'taki seri(ler).
@@ -206,8 +249,21 @@ class EvidenceBuilder:
         return observations, artifacts
 
     @staticmethod
-    def _web(panel: EvidencePanel, artifacts: list[dict[str, Any]]) -> None:
-        """Kullanılan sayfa kaynak; taranıp kullanılmayan ve erişilemeyen sayfalar panelde."""
+    def _web(panel: EvidencePanel, artifacts: list[dict[str, Any]], workspace: AnalysisWorkspace | None = None) -> None:
+        """Kullanılan sayfa kaynak; taranıp kullanılmayan ve erişilemeyen sayfalar panelde.
+        Sayfa önceki turda çekildiyse (tablo hâlâ o sayfadan) workspace'in hatırladığı sha256+zaman kullanılır."""
+        if workspace is not None and not any(a.get("kind") == "web" for a in artifacts):
+            urls: list[str] = []
+            for c in panel.columns:
+                if _from_web(c):
+                    urls.extend(u for u in c.source_urls if u not in urls)
+            for u in urls:
+                v = workspace.web_pages.get(u)
+                if v:
+                    entry = {"url": u, "sha256": v.get("sha256"), "fetched_at": v.get("fetched_at"),
+                             "status": v.get("status"), "title": v.get("title")}
+                    if entry not in panel.web_sources:
+                        panel.web_sources.append(entry)
         for art in artifacts:
             if art.get("kind") != "web":
                 continue
@@ -238,7 +294,8 @@ class EvidenceBuilder:
             return panel
         panel.table_rows = len(table)
         time_col = _time_column(table)
-        panel.numbers = self._match_numbers(answer, table, time_col)
+        panel.numbers = self._match_numbers(answer, table, time_col, previous=workspace.previous_tables(),
+                                            peeks=workspace.peeks())
         panel.columns = self._columns(workspace, table)
         panel.observations, panel.artifacts = self._observations(table, panel.columns, time_col, panel.gaps)
 
@@ -252,7 +309,7 @@ class EvidenceBuilder:
         panel.consulted_unused = consulted
         panel.chart_paths = [str(a.get("png_path") or a.get("spec_path")) for a in (artifacts or [])
                              if a and a.get("kind") != "web"]
-        self._web(panel, artifacts or [])
+        self._web(panel, artifacts or [], workspace)
         unmatched = [n.text for n in panel.numbers if not n.matched]
         if unmatched:
             panel.gaps.append("tabloda bulunmayan sayılar: " + ", ".join(unmatched[:8]))

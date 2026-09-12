@@ -39,7 +39,8 @@ REASON_TR: dict[str, str] = {
                                     "(haftalık/günlük birikimli seri çözülmez: tatil haftası "
                                     "kayması ile boşluk ayırt edilemez).",
     "UNVERIFIED_SEMANTICS": "Serinin anlamı (ölçüm tipi/birim) katalogda doğrulanmamış; otomatik "
-                            "dönüşüm yapılmaz. Ham gözlemler lakehouse_query ile dönüşümsüz gösterilebilir.",
+                            "dönüşüm yapılmaz. Kullanıcı 'doğrulanmamış olsa da kullan' derse aynı çağrı "
+                            "onayla yapılır; yoksa ham gözlemler lakehouse_query ile gösterilir.",
     "INACTIVE_SERIES": "Seri taslak ya da kullanımdan kaldırılmış; Gold hesapları yalnız onaylı "
                        "seriye uygulanır. Taslak seri ham hâliyle lakehouse_query ile gösterilebilir.",
     "UNSUPPORTED_MEASURE_TYPE": "Bu ölçüm tipi (oran/adet/bilinmeyen) için güvenli bir birleştirme "
@@ -58,7 +59,7 @@ REASON_TR: dict[str, str] = {
 _ALTERNATIVE_TR: dict[str, str] = {
     "NOT_DECOMPOSABLE": "Kullanıcı dönem değerleri istiyorsa gold_align ile istenen döneme indirge.",
     "DECOMPOSITION_REQUIRED": "Önce gold_decompose çağır; sonucu olduğu gibi göster.",
-    "UNVERIFIED_SEMANTICS": "Kullanıcı yine de isterse ham gözlemleri lakehouse_query ile göster ve doğrulanmadığını söyle.",
+    "UNVERIFIED_SEMANTICS": "Kullanıcıya sor: 'doğrulanmamış olsa da kullanayım mı?'; onay verirse aynı aracı yeniden çağır.",
     "INACTIVE_SERIES": "Ham gözlemleri lakehouse_query ile göster ve taslak olduğunu söyle.",
     "UPSAMPLING_REFUSED": "Kaynağın kendi frekansında göster.",
 }
@@ -76,6 +77,18 @@ Kural (son değer / toplam / ortalama) katalogdan gelir, sen seçemezsin. Araç 
 sebebini kullanıcıya sade Türkçeyle söyle; sayı üretme, SQL ile aynı işi yapmaya kalkma.
 Hazır Gold tabloları (kimliği gold. ile başlar) lakehouse_search'te görünür; onlar zaten \
 hesaplanmıştır, lakehouse_query ile doğrudan sorgulanır."""
+
+_CONSENT = re.compile(
+    r"(doğrulanmamış\s+olsa\s+da|dogrulanmamis\s+olsa\s+da|yine\s+de\s+kullan|onaylıyorum|onayliyorum|"
+    r"kabul\s+ediyorum|riski\s+kabul)", re.I,
+)
+
+
+def unverified_consent(user_text: str) -> bool:
+    """Sözleşme: doğrulanmamış semantiği kullanma kararı insanındır, agent aktarır (ADR-0031).
+    Kullanıcı metninde açık rıza yoksa bayrak açılmaz."""
+    return bool(_CONSENT.search(user_text or ""))
+
 
 _DROP_FROM_WORKSPACE = frozenset({
     "vintage_id_list", "run_id_list", "source_frequency", "target_frequency",
@@ -151,9 +164,14 @@ class _GoldTool(Tool):
     role = "execute"
     function: str
 
-    def __init__(self, lakehouse: GoldCapable, workspace: AnalysisWorkspace) -> None:
+    def __init__(self, lakehouse: GoldCapable, workspace: AnalysisWorkspace, *, registry: object | None = None) -> None:
         self.lakehouse = lakehouse
         self.workspace = workspace
+        self._registry = registry
+
+    def _consent(self) -> bool:
+        reg = self._registry
+        return unverified_consent(getattr(reg, "user_text", None) or getattr(reg, "active_question", "") or "")
 
     # ---- sınır doğrulayıcı kancaları
     def _series_ids(self, params: BaseModel) -> list[str]:
@@ -240,6 +258,8 @@ class _GoldTool(Tool):
         ]
         if len(view) > preview_rows:
             lines.append(f"... ({len(view) - preview_rows} satır daha; tamamı analiz tablosunda)")
+        if self._consent() and any("DOĞRULANMAMIŞ" in w for w in result.provenance.warnings):
+            lines.append("NOT: seri semantiği doğrulanmamış; kullanıcının açık onayıyla kullanıldı — cevapta söyle.")
         lines.append("Kanıt: her satırda source_observation_dates ve artifact_sha256_list (kaynak gözlem → RAW).")
         lines.append(f"Kaynak: {result.provenance.summary()}")
         return ToolResult(content="\n".join(lines), data=view, provenance=result.provenance)
@@ -277,7 +297,7 @@ class GoldAlignTool(_GoldTool):
     Params = GoldAlignParams
 
     def _call(self, params: GoldAlignParams) -> QueryResult:
-        return self.lakehouse.gold_align(params.series_id, params.target_frequency)
+        return self.lakehouse.gold_align(params.series_id, params.target_frequency, allow_unverified=self._consent())
 
     def _headline(self, params: GoldAlignParams) -> str:
         return f"Gold align: {params.series_id} → {params.target_frequency}"
@@ -296,7 +316,7 @@ class GoldDecomposeTool(_GoldTool):
     Params = GoldDecomposeParams
 
     def _call(self, params: GoldDecomposeParams) -> QueryResult:
-        return self.lakehouse.gold_decompose(params.series_id)
+        return self.lakehouse.gold_decompose(params.series_id, allow_unverified=self._consent())
 
     def _headline(self, params: GoldDecomposeParams) -> str:
         return f"Gold decompose: {params.series_id}"
@@ -315,13 +335,13 @@ class GoldJoinTool(_GoldTool):
     Params = GoldJoinParams
 
     def _call(self, params: GoldJoinParams) -> QueryResult:
-        return self.lakehouse.gold_join(list(params.series_ids), params.target_frequency)
+        return self.lakehouse.gold_join(list(params.series_ids), params.target_frequency, allow_unverified=self._consent())
 
     def _headline(self, params: GoldJoinParams) -> str:
         return f"Gold join: {' + '.join(params.series_ids)} → {params.target_frequency}"
 
 
 __all__ = [
-    "GOLD_PROMPT_RULES", "REASON_TR", "GoldAlignTool", "GoldDecomposeTool", "GoldJoinTool",
+    "GOLD_PROMPT_RULES", "REASON_TR", "unverified_consent", "GoldAlignTool", "GoldDecomposeTool", "GoldJoinTool",
     "parse_period", "workspace_view",
 ]

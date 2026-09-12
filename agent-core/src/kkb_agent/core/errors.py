@@ -39,6 +39,9 @@ ErrorCode = Literal[
     # (stok seride decompose, doğrulanmamış semantik, üst örnekleme...). Kural
     # kataloğun, seçim modelin değil (ADR-0031).
     "GOLD_REFUSED",
+    # Frekans dönüşümü SQL'de değil Gold'da (ADR-0031/0039): AVG/SUM ile ay/çeyrek gruplayan
+    # sorgu, gold_* araçları kayıtlıyken reddedilir; model doğru aracı çağırarak onarır.
+    "GOLD_REQUIRED",
     # Niyet kapısı (ADR-0037): kaynak kullanıcının mesajından gelmedi ya da yazma isteği yok.
     # Araç çıktısındaki bir talimat modeli yönlendirmiş olabilir; kullanıcıya sorulur.
     "INTENT_REQUIRED",

@@ -88,16 +88,26 @@
 
 - **D4** Demo kabul betiği (ADR-0038): `scripts/demo_acceptance.py` tek komut: bootstrap → canlı ingest (5 seri, `--only`) → silver → gold → 8 senaryo (G1, G2, G14, G8, G9, G10, G11a, G13) golden koşucusuyla; JSON rapor + çıkış kodu. Sıfırdan ölçüm: ingest 26 s, Silver 684 satır, Gold 3 tablo, **8/8 senaryo, kanıt zinciri 8/8**. Güvenlik kilidi: katalog betiği `--only` tanımıyorsa filtresiz canlı ingest reddedilir (ölçüldü: bir kez 1.620 seriyi çekmeye başladı, durduruldu). Veri ekibi betiğine `--database/--data-root/--only` eklendi (r3 `c07f73a`). G14: gerçek DB'de "tabloyu bozmadan" Gold faiz sütunu, 3/3.
 
+### 2.10 İki uçtan uca deney — Architect'in ikinci kapısı, sohbette kalan analiz (12 Eylül, ADR-0039)
+Kullanıcının isteği: main itilmeyecek, dal silinmeyecek; Architect finans dışı bir veriyi yalnız agent'la Bronze → Silver → Gold'dan geçirsin, Analist başka bir veriyi yalnız sohbette işlesin (DB'ye yazmadan), çıktılar alınabiliyor mu bakılsın.
+- **Terfi** (veri ekibi r3 `46b9c8b` + agent `promote_draft`): taslak → aktif yalnız kullanıcı "onaylıyorum / kataloğa al" deyince ve seri anahtarı mesajda geçince; `semantic_source=manual`, güven `derived` kalır; satırlar adhoc → Silver, provenance korunur; Silver yeniden kurulumu terfi edilmişleri her yolda ekler.
+- **Beyan edilen anlam**: `ingest_from_url` `unit/measure_type/default_agg/frequency`; kullanıcı metninde geçmeyen beyan yok sayılır ve sorulur (ölçüldü: model `°C`/`stock` uydurdu).
+- **Gold rızası + `GOLD_REQUIRED`**: `gold_*` `allow_unverified` ancak "doğrulanmamış olsa da kullan" ile; `lakehouse_query` dönem toplayan/ortalayan SQL'i `gold_*` kayıtlıyken reddeder (ölçüldü: model AVG … GROUP BY ay yazdı).
+- **`workspace_query`**: aktif tablo `t`, sertleştirilmiş bellek-içi DuckDB; varsayılan bakış modu (tablo değişmez, sonuç kanıt için not edilir), `as_active_table=true` kırpma (ölçüldü: her sorgu tabloyu ezince 24 satır → 5 → 1, yanlış dönem, grafik düştü).
+- **Kanıt zinciri**: sayı önceki tablo sürümünde / bakış sorgusunda olabilir; kırpılmış web tablosu ve türetilmiş kolon web zincirini bozmaz ("web — başlık" ön eki); sayfa önceki turdan hatırlanır (`workspace.web_pages`).
+- **Harness**: grafik istendi ama `chart` çağrılmadıysa bir kez geri; grafik kartı çizilen satırları taşır; "önce veriyi çek" uyarısı terfi/grafik/ingest sonrası ya da tablo hazırken verilmez; nedensellik filtresi "etkisiyle / nedeniyle" (ölçüldü: sığınmacı cümlesi geçmişti); grafik başlığında 2000.0 → 2000.
+- **Ölçüm** — Deney 1 (Melbourne günlük min. sıcaklık, 3.650 gün): 5 tur, taslak → onay → aktif → Gold aylık (rıza) → grafik; ayrı süreçte `meta.series active/derived/manual/°C/index/avg/daily`, adhoc 3.650 = silver 3.650, artifact HTTP 200 + RAW 67.921 bayt, Bronze parquet, `gold-run` 1985'te 12 ay (Ocak 14,22, Temmuz 6,14; 31'er gözlem); kanıt zinciri tam 13/13 · 365 gözlem → 1 artifact; 20–56 bin prompt token/tur. Deney 2 (OWID Türkiye nüfusu): 3 tur, 24 satır tablo, %33,39 (65.425.957 → 87.270.502), en hızlı 2015 (+1.978.068), çizgi grafiği 6/6; kanıt zinciri üç turda tam; DB parmak izi (sayımlar + dosya listeleri + sha256) ayrı süreçte önce/sonra **fark yok**; 44–60 bin token/tur. Testler 252 → 270. Kabul senaryoları mevcut DB'de 7/8 (G9 anlatı aritmetiği kalıntısı).
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 252 |
+| Agent birim testi | 270 |
 | Lakehouse testi (r3) | 1083 |
-| ADR | 38 |
-| Golden vakası | 16: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3; G9 4/5. Demo kabul sıfırdan 8/8 |
-| Araç sayısı (gerçek DB'de) | 13: lakehouse ×4, workspace ×3, ingest, gold ×3, chart, web_url (+ web_search anahtarla) |
-| Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu, grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, adım sınırı, reasoning temizliği |
+| ADR | 39 |
+| Golden vakası | 16: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3; G9 4/5. Demo kabul sıfırdan 8/8 (12 Eyl akşam tekrar: 7/8, G9) |
+| Araç sayısı (gerçek DB'de) | 15: lakehouse ×4, workspace ×4 (query dâhil), ingest, promote_draft, gold ×3, chart, web_url (+ web_search anahtarla) |
+| Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu (iş yapan araç/tablo varken susar), grafik istendiyse grafik, grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, GOLD_REQUIRED, niyet kapısı, beyan kapısı, adım sınırı, reasoning temizliği |
 
 ## 4. Mimari, tek bakışta
 
@@ -106,8 +116,9 @@ Kullanıcı → AnalyticsAgent (tek harness; roller: retrieve/execute/validate/n
    ├─ BoundaryValidator: şema → SQL guard → referans → politika → çalıştır
    ├─ Araçlar (registry; alan profili katalogdan)
    │    lakehouse_search/describe/distinct_values/query   ← LakehouseClient sözleşmesi
-   │    workspace_add_column/compute_column/show           ← AnalysisWorkspace
-   │    ingest_from_url  (Architect yazma yolu, ayrı süreç CLI, yalnız adhoc+draft)
+   │    workspace_add_column/compute_column/show/query     ← AnalysisWorkspace (query: bakış/kırpma, DB'ye dokunmaz)
+   │    ingest_from_url  (Architect yazma yolu, ayrı süreç CLI, yalnız adhoc+draft; beyan kapısı)
+   │    promote_draft    (Architect ikinci kapı: kullanıcı onayıyla taslak → aktif + Silver)
    │    gold_align/decompose/join  (GoldCapable, gold-run salt okunur ayrı süreç)
    │    chart  (spec → lint → render), web_url / web_search (erişim sözleşmesi)
    ├─ Guard'lar (bkz. §3) + grounding + kanıt paneli (EvidenceBuilder, cevaptan sonra)
@@ -115,7 +126,7 @@ Kullanıcı → AnalyticsAgent (tek harness; roller: retrieve/execute/validate/n
                   DuckDBLakehouse (seed)
 Veri ekibi: RAW (içerik adresli) → Bronze (parquet) → Silver (fact_observation + meta.series)
             → Gold (fonksiyonlar + kataloglanmış metrik tabloları), CLI: bootstrap/ingest/
-            ingest-file/silver/gold/gold-run
+            ingest-file/promote-draft/silver/gold/gold-run
 ```
 
 ## 5. Açık işler ve sıradaki adımlar
@@ -126,6 +137,8 @@ Veri ekibi: RAW (içerik adresli) → Bronze (parquet) → Silver (fact_observat
 3. ~~D3 kararlılık + güçlendirme~~ ✅ (ADR-0037).
 4. ~~D4 demo kabul betiği~~ ✅ (ADR-0038).
 5. **E** main'e birleştirme. Prova yapıldı (yerel, itilmedi): agent-engine main'in üstüne merge commit; r3 **bağımsız tarihçe** (ortak ata yok) → `--allow-unrelated-histories`, yalnız README.md ve .gitignore çakışıyor (birleştirildi: README agent metni + depo haritası). Gizli bilgi taraması iki dalda temiz; `.env/.duckdb/.parquet` izlenmiyor. Silinebilir dallar: r3'e tamamen dâhil 13 lakehouse dalı; dâhil olmayan 4 dal (busra/agent-v3 → A4 kararı; lakehouse-main-ready, lakehouse-source-access, source-access-bddk-weekly → yalnız eski docs commit'leri). **Push ve dal silme kullanıcı onayı bekliyor.**
+
+**ADR-0039 sonrası açık:** G9 anlatı aritmetiği (fark isteyen sorularda hazır fark kolonu / decompose); `web_url` liste + yükleme iki çağrı; web tablolarında birim yok ("birim belirtilmemiş" başlığı).
 
 **Karar ve dış bağımlılık:** A4 motor yakınsaması (Büşra ile); 81 il sınır dosyası (kaynak + lisans, kullanıcı onayı); Tavily anahtarı; isteğe bağlı `build_gold` aracı (jüri dosyasını Gold'a taşıyan akış, bugün "insan onayı gerek" diye kesiliyor, doğru davranış).
 
@@ -159,3 +172,7 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
 - Vega alan adında `.` iç içe erişimdir; DuckDB tek yazar kabul eder ve dosya kilidi son okuyucu kapanana kadar kalır; pandas `thousands="."` tahmini yüz kat hata üretir; sahte oturumla geçen test canlı yolu açmaz (`requests` yoktu).
 - Model dosya yolunu ve taranan sayfaları cevaba gömüyor; bunlar kanıt paneline ve CLI satırına, cevaba değil.
 - Kullanıcı yanlış öncül verirse (stok seriyi "birikimli" sanmak) araç reddi cevaba yansımalı; model düzeltti.
+- Model beyan edilmemiş semantiği (birim, ölçüm tipi) uydurur; beyan **kullanıcı metninde** aranır, araç parametresine güvenilmez (ADR-0039).
+- Sohbet-içi SQL aracı sonucu tabloyu ezerse model bir sonraki turda küçülmüş tabloyla yanlış dönem için cevap verir; varsayılan bakış modu olmalı.
+- Kanıt panelinde `sources` listesi "web — başlık" biçiminde; `"web" in sources` liste üyeliği sessizce yanlış. DuckDB aynı dosyaya aynı süreçte farklı yapılandırmayla ikinci bağlantı açtırmaz; doğrulama ayrı süreçte.
+- Model grafik sonrası tabloyu "doğrulamak" için sorgu üstüne sorgu atar; kart çizilen satırları taşıyıp "araç çağırmayı bırak" demeli; grafik istenip çizilmediyse harness geri göndermeli.

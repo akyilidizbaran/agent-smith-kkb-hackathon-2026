@@ -165,14 +165,14 @@ class GoldCapable(Protocol):
     sunmadığında `gold_*` araçları kayıt edilmez.
     """
 
-    def gold_align(self, series_id: str, target_frequency: str) -> QueryResult:
+    def gold_align(self, series_id: str, target_frequency: str, *, allow_unverified: bool = False) -> QueryResult:
         """Bir seriyi aylık/çeyreklik takvim dönemine indirger (stok→son, akım→toplam, oran→katalog)."""
         ...
 
-    def gold_decompose(self, series_id: str) -> QueryResult:
+    def gold_decompose(self, series_id: str, *, allow_unverified: bool = False) -> QueryResult:
         """Birikimli (YTD/kümülatif) seriyi dönem akımlarına çözer; birikimli değilse reddeder."""
         ...
 
-    def gold_join(self, series_ids: list[str], target_frequency: str) -> QueryResult:
+    def gold_join(self, series_ids: list[str], target_frequency: str, *, allow_unverified: bool = False) -> QueryResult:
         """Birden çok seriyi kendi kurallarıyla hizalayıp tek dönem ekseninde birleştirir (dış)."""
         ...

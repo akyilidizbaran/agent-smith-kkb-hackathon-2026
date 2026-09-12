@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -41,12 +41,76 @@ class IngestParams(BaseModel):
         description="Seri anahtarı (harf, rakam, alt çizgi). Boşsa dosya adından türetilir.",
     )
     description: str | None = Field(default=None, description="Bir cümlelik açıklama; boşsa üretilir.")
+    # Kullanıcının beyan ettiği anlam: veriden çıkarılamayan alanlar buradan dolar. Model
+    # uydurmaz, kullanıcının söylediğini aktarır; kartta "kullanıcı beyanı" diye yazılır.
+    unit: str | None = Field(default=None, description="Kullanıcı söylediyse birim, ör. '°C', 'kişi', 'milyon TL'")
+    measure_type: Literal["stock", "flow_periodic", "flow_ytd", "flow_cumulative", "rate", "ratio", "index", "count"] | None = Field(
+        default=None, description="Kullanıcı söylediyse ölçüm tipi (stok/akım/oran/endeks/adet)")
+    default_agg: Literal["avg", "sum", "min", "max", "first", "last"] | None = Field(
+        default=None, description="Kullanıcı söylediyse frekans indirgeme kuralı (ör. aylık ortalama → avg)")
+    frequency: Literal["daily", "business_daily", "weekly", "biweekly", "monthly", "quarterly", "semiannual", "yearly"] | None = Field(
+        default=None, description="Kullanıcı söylediyse frekans")
+    date_format: str | None = Field(default=None, description="Kullanıcı söylediyse tarih biçimi, ör. '%d/%m/%Y' (belirsiz gün/ay için)")
 
 
 def _slug(text: str) -> str:
     tr = str.maketrans("çğıöşüÇĞİÖŞÜ ", "cgiosuCGIOSU_")
     s = re.sub(r"[^A-Za-z0-9_]+", "_", text.translate(tr)).strip("_").lower()
     return s or "seri"
+
+
+_MEASURE_WORDS = {
+    "stock": ("stok", "bakiye", "stock"), "flow_periodic": ("akım", "akim", "dönemlik", "flow"),
+    "flow_ytd": ("yıl başından", "ytd", "birikimli"), "flow_cumulative": ("kümülatif", "kumulatif", "cumulative"),
+    "rate": ("oran", "faiz", "yüzde", "rate", "%"), "ratio": ("rasyo", "ratio"),
+    "index": ("endeks", "index", "seviye"), "count": ("adet", "sayı", "sayi", "count"),
+}
+_AGG_WORDS = {"avg": ("ortalama", "avg", "average"), "sum": ("toplam", "sum"), "min": ("minimum", "en düşük", "min"),
+              "max": ("maksimum", "en yüksek", "max"), "first": ("ilk", "first"), "last": ("son", "last", "dönem sonu")}
+
+
+def undeclared(params: IngestParams, user_text: str) -> list[str]:
+    """Modelin doldurduğu beyan alanlarından kullanıcı metninde karşılığı OLMAYANLAR.
+
+    Ölçüldü: model ilk turda birimi ('°C') ve ölçüm tipini ('stock') kendisi uydurup yazdı;
+    kullanıcı henüz bir şey söylememişti. Beyan kullanıcının sözüdür: birim metinde geçmeli,
+    ölçüm tipi ve kural için anahtar sözcük geçmeli. Aksi hâlde alan yok sayılır ve sorulur."""
+    text = (user_text or "").lower()
+    bad: list[str] = []
+    if params.unit and params.unit.lower() not in text:
+        bad.append(f"unit={params.unit!r}")
+    if params.measure_type and not any(w in text for w in _MEASURE_WORDS.get(params.measure_type, ())):
+        bad.append(f"measure_type={params.measure_type!r}")
+    if params.default_agg and not any(w in text for w in _AGG_WORDS.get(params.default_agg, ())):
+        bad.append(f"default_agg={params.default_agg!r}")
+    if params.frequency and params.frequency.lower() not in text and not any(
+            w in text for w in {"daily": ("günlük",), "weekly": ("haftalık",), "monthly": ("aylık",),
+                                "quarterly": ("çeyreklik",), "yearly": ("yıllık",)}.get(params.frequency, ())):
+        bad.append(f"frequency={params.frequency!r}")
+    return bad
+
+
+def _apply_declared(mapping, semantics, params: IngestParams):
+    """Kullanıcı beyanı öneriyi tamamlar ya da geçersiz kılar; her alan kanıt satırıyla."""
+    from dataclasses import replace
+    from ..builder.profile import Evidence
+
+    sem_updates: dict[str, Any] = {}
+    sem_evidence = list(semantics.evidence)
+    for field_name in ("unit", "measure_type", "default_agg", "frequency"):
+        value = getattr(params, field_name)
+        if value is None:
+            continue
+        sem_updates[field_name] = value
+        sem_evidence = [e for e in sem_evidence if e.field != field_name]
+        sem_evidence.append(Evidence(field_name, value, "kullanıcı beyanı (sohbette söylendi, model aktardı)", "strong"))
+    if sem_updates:
+        semantics = replace(semantics, **sem_updates, evidence=tuple(sem_evidence))
+    if params.date_format:
+        map_evidence = [e for e in mapping.evidence if e.field != "date_format"]
+        map_evidence.append(Evidence("date_format", params.date_format, "kullanıcı beyanı", "strong"))
+        mapping = replace(mapping, date_format=params.date_format, evidence=tuple(map_evidence))
+    return mapping, semantics
 
 
 class IngestFromUrlTool(Tool):
@@ -126,6 +190,12 @@ class IngestFromUrlTool(Tool):
         series_id = f"adhoc:{key}"
         profile = profile_table(frame)
         mapping, semantics = propose(profile, frame, series_id=series_id)
+        invented = undeclared(params, self._user_text())
+        if invented:
+            # Kullanıcının söylemediği beyan yok sayılır; alan boş kalır ve aşağıda sorulur.
+            params = params.model_copy(update={k.split("=")[0]: None for k in invented})
+        if mapping is not None and semantics is not None:
+            mapping, semantics = _apply_declared(mapping, semantics, params)
         if mapping is None or semantics is None:
             return ToolResult.fail(
                 "TOOL_FAILED",
@@ -146,6 +216,9 @@ class IngestFromUrlTool(Tool):
             asks += [f"{c.name}: {c.detail}" for c in report.failures]
         if semantics.unit is None:
             asks.append("birim: veriden çıkarılamıyor; kaynağın birimi nedir (ör. milyon TL, %, adet)?")
+        if invented:
+            asks.append("beyan kullanıcıdan gelmeli: " + ", ".join(invented) +
+                        " kullanıcı mesajında geçmiyor (model uydurmuş olabilir); kullanıcıya sor")
         if asks:
             lines = ["EKLENMEDİ — önce kullanıcıya sorulmalı:"] + [f"  - {a}" for a in asks]
             lines.append("\nÖNERİ (kanıtıyla):")

@@ -246,12 +246,16 @@ class ChartTool(Tool):
         files = render_chart(spec, out_dir=self.chart_dir)
 
         y_desc = ", ".join(f"{c} ({units.get(c)})" for c in params.y_columns)
+        shown_cols = [c for c in ([x] if x else []) + list(params.y_columns) if c in table.columns]
         card = [
             f"GRAFİK: {spec['title']['text'] if isinstance(spec.get('title'), dict) else params.title}",
             report.render().splitlines()[0] + f" | tür: {params.chart_type} | x: {x or params.province_column} | y: {y_desc} | {len(table)} satır",
             *report.render().splitlines()[1:],
             *files.lines(),
-            "YAPACAĞIN: cevapta grafiği tek cümleyle tanıt ve dosya yolunu ver; sayıları yine tablodan aktar.",
+            # Çizilen satırlar burada: model sayıları yeniden sorgulamaya kalkmasın (ölçüldü: grafik
+            # sonrası 8 fazla adım, sırf tabloyu "doğrulamak" için).
+            "Çizilen veri (ilk 12 satır):\n" + table[shown_cols].head(12).to_string(index=False),
+            "YAPACAĞIN: ARAÇ ÇAĞIRMAYI BIRAK; cevapta grafiği tek cümleyle tanıt, sayıları yukarıdaki tablodan ver.",
         ]
         artifact = {
             "kind": params.chart_type, "title": intent.title,

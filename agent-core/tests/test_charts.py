@@ -250,3 +250,9 @@ def test_noktali_kolon_adi_vega_icin_guvenli_hale_gelir() -> None:
     assert spec["usermeta"]["fields"]["evds:TP_KTF12::value"] == "evds:TP.KTF12::value"
     assert "yüzde" in spec["encoding"]["y"]["title"]
     assert lint_spec(spec, frame, intent).ok
+
+
+def test_donem_etiketi_tam_sayili_float_yili_tam_sayi_yazar() -> None:
+    from kkb_agent.charts.spec import period_label
+    assert period_label(pd.DataFrame({"year": [2000.0, 2023.0]}), "year") == "2000 → 2023"
+    assert period_label(pd.DataFrame({"v": [1.5, 2.5]}), "v") == "1.5 → 2.5"

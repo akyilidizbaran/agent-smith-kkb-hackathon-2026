@@ -54,6 +54,8 @@ Architect ve yeni araçların üstüne oturacağı ortak katman. Önce bu, çün
 | D3 ✅ | **Golden genişletme + kararlılık + güçlendirme** (ADR-0037, 12 Eyl; 15 vaka × 5: 14 kararlı, G9 4/5 anlatı aritmetiği) | G8–G11 eklendi; `--repeat 5`; hata sınıfı ve rol başına adım raporu | tüm vakalar %100 kararlı |
 | D4 ✅ | **Demo kabul testi (commit'li)** (ADR-0038, 12 Eyl; sıfırdan 8/8, canlı ingest 26 s) | `scripts/demo_acceptance.py`: bootstrap → ingest → silver → gold → 8 senaryo sorusu; tek komut | yeşil |
 
+| D5 ✅ | **İki uçtan uca deney** (ADR-0039, 12 Eyl): Architect finans dışı veriyi taslak → onay (`promote_draft`) → Silver → Gold → grafik; Analist web tablosunu `workspace_query` ile sohbette (DB parmak izi değişmedi) | terfi kapısı, beyan kapısı, `GOLD_REQUIRED`, bakış modu, kanıt zinciri sohbet-içi | her katman ayrı süreçte doğrulandı; kanıt zinciri tam |
+
 Stretch (zaman kalırsa): `clarify` (EVPI, L10-01), katkı ayrıştırması (il bazında waterfall), çapraz kaynak mutabakat fonksiyonu.
 
 ## Faz E — Kapanış (19–20 Eylül)

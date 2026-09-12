@@ -252,3 +252,61 @@ def test_kanit_paneli_cevaba_ilistirilir_ve_hata_cevabi_dusurmez() -> None:
     agent2 = AnalyticsAgent(llm=_ScriptedLLM([LLMResponse(content="Cevap.", tool_calls=[])]),
                             registry=registry, workspace=AnalysisWorkspace(), max_steps=3, evidence=Broken())
     assert agent2.ask("soru").text
+
+
+class _ChartParams(BaseModel):
+    chart_type: str = "line"
+
+
+class _FakeChart(Tool):
+    name = "chart"
+    role = "narrate"
+    description = "sahte grafik"
+    Params = _ChartParams
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def run(self, params: _ChartParams) -> ToolResult:
+        self.calls += 1
+        return ToolResult(content="GRAFİK: çizildi", artifacts={"chart": {"png_path": "/tmp/x.png", "kind": "chart"}})
+
+
+def test_grafik_istendi_chart_cagrilmadan_cevap_bir_kez_geri_gonderilir() -> None:
+    """Ölçüldü (Deney 2, tur 3): model tabloyu doğrulamak için sorgular atıp grafiksiz cevap yazdı."""
+    tool, chart = _CountingTool(), _FakeChart()
+    registry = ToolRegistry(); registry.register(tool); registry.register(chart)
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[_call(1)]),
+        LLMResponse(content="Değer 100.", tool_calls=[]),                       # grafiksiz cevap → geri
+        LLMResponse(content="", tool_calls=[ToolCall(id="g", name="chart", arguments={"chart_type": "line"})]),
+        LLMResponse(content="Grafik çizildi, değer 100.", tool_calls=[]),
+    ])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=10)
+    answer = agent.ask("2025 değerinin grafiğini çiz")
+    assert chart.calls == 1 and any("grafik istendi" in (s.thought or "") for s in answer.steps)
+    assert answer.artifacts and answer.artifacts[0]["png_path"] == "/tmp/x.png"
+    assert "Grafik çizildi" in answer.text
+
+
+def test_grafik_istenmediyse_chart_zorlanmaz() -> None:
+    tool, chart = _CountingTool(), _FakeChart()
+    registry = ToolRegistry(); registry.register(tool); registry.register(chart)
+    llm = _ScriptedLLM([LLMResponse(content="", tool_calls=[_call(1)]), LLMResponse(content="Değer 100.", tool_calls=[])])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=10)
+    answer = agent.ask("2025 değeri kaç?")
+    assert chart.calls == 0 and answer.text == "Değer 100." and len(answer.steps) == 2
+
+
+def test_grafik_cizildikten_sonra_veri_cekilmedi_uyarisi_verilmez() -> None:
+    """Ölçüldü (Deney 1, tur 5): chart sonrası cevap 'veri çekilmedi' diye geri gönderiliyordu."""
+    tool, chart = _CountingTool(), _FakeChart()
+    registry = ToolRegistry(); registry.register(tool); registry.register(chart)
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[ToolCall(id="g", name="chart", arguments={"chart_type": "line"})]),
+        LLMResponse(content="Grafik hazır.", tool_calls=[]),
+    ])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=10)
+    answer = agent.ask("bunun grafiğini çiz")
+    assert answer.text == "Grafik hazır." and not any("geri gönderildi" in (s.thought or "") for s in answer.steps)
+    assert tool.calls == 0 and len(answer.steps) == 2

@@ -404,6 +404,7 @@ sonuç workspace'e gider, modele 10 satır.
 | `workspace_add_column(dataset_id, key_column, value_column, column_name, join_on, filter_column?, filter_value?, purpose)` | Lakehouse'tan bir ölçümü çekip mevcut tabloya hizalar |
 | `workspace_compute_column(expression, column_name, purpose)` | Mevcut sütunlardan DuckDB ifadesiyle yeni sütun hesaplar |
 | `workspace_show(max_rows)` | Tablonun güncel hali + işlem geçmişi |
+| `workspace_query(sql, purpose, as_active_table=false)` — `tools/workspace_query.py` (ADR-0039) | Aktif tablo `t` üzerinde SELECT, sertleştirilmiş bellek-içi DuckDB; veri havuzuna dokunmaz. Varsayılan bakış modu (tablo değişmez, sonuç kanıt için not edilir); `as_active_table=true` kırpma |
 
 **`add_column` neden SQL almıyor:** Serbest SQL alan sürümde model, eklemek istediği yeni
 sütunun adını SELECT listesine var olan kolon gibi yazdı, hatadan çıkamadı ve
@@ -740,6 +741,23 @@ arama kartı bunu yazar. Yüklenmemiş seriler ayrı dizinde: arama "yok" ile "k
 henüz çekilmemiş"i ayırır; kısmi isabet ya da boş arama ikinci kezde tekrar denenmez hataya
 döner (döngü kırılır). Ön-yükleme seçimi de bu dizinden geçer.
 
+
+### Architect'in ikinci kapısı — `tools/promote.py` (`promote_draft`, ADR-0039) — YAZILDI
+
+Taslak → aktif yalnız kullanıcı onayıyla: metinde onay ifadesi ("onaylıyorum", "kataloğa al",
+"yayınla") **ve** seri anahtarı geçmeli; yalnız `adhoc` + TASLAK notlu seri; yazma ayrı süreçte
+veri ekibinin `promote-draft` komutuyla (okuyucu kapat → yaz → yeniden aç). `semantic_source`
+`manual`, güven `derived` kalır: Gold bu seriyi ancak kullanıcı "doğrulanmamış olsa da kullan"
+derse birleştirir (`unverified_consent` → `allow_unverified`). `ingest_from_url` artık
+`unit/measure_type/default_agg/frequency` beyanı alır; kullanıcı metninde geçmeyen beyan yok
+sayılır ve sorulur (`undeclared`). `lakehouse_query` dönem toplayan/ortalayan SQL'i `gold_*`
+kayıtlıyken `GOLD_REQUIRED` ile reddeder; kural katalogdan gelir, model aracı seçer.
+
+Kanıt paneli sohbette kalan analiz için genişledi: sayı önceki tablo sürümünde ya da bakış
+sorgusunda aranır; kırpılmış web tablosu ve türetilmiş kolon web zincirini bozmaz; sayfa
+önceki turdan hatırlanır (`workspace.web_pages`). Harness: grafik istendiyse `chart`
+çağrılmadan cevap bir kez geri gider; "önce veriyi çek" uyarısı terfi/grafik/ingest sonrası
+ya da tablo hazırken verilmez.
 
 ### Güvenlik sınırı — niyet kapısı `core/intent.py` (ADR-0037) — YAZILDI
 

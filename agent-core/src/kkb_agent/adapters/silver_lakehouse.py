@@ -693,7 +693,8 @@ class SilverLakehouse:
         return sql + f" ORDER BY {key_column}"
 
     # ---------- Gold çağrıları (GoldCapable, ADR-0031) ----------
-    def _gold_call(self, function: str, series_ids: list[str], target_frequency: str | None) -> QueryResult:
+    def _gold_call(self, function: str, series_ids: list[str], target_frequency: str | None,
+                   *, allow_unverified: bool = False) -> QueryResult:
         if self.gold is None:
             raise LakehouseError(
                 "Bu lakehouse Gold çağrısı sunmuyor: veri ekibinin `gold-run` komutu bu ortamda yok."
@@ -707,7 +708,8 @@ class SilverLakehouse:
             self.get_dataset(sid)  # yüklenmemiş/olmayan seri burada anlaşılır sebeple durur
         started = time.perf_counter()
         out: GoldRunOutcome = self.gold.run(
-            function=function, series_ids=list(series_ids), target_frequency=target_frequency
+            function=function, series_ids=list(series_ids), target_frequency=target_frequency,
+            allow_unverified_semantics=allow_unverified,
         )
         duration = (time.perf_counter() - started) * 1000
         if out.status == "refused":
@@ -736,6 +738,8 @@ class SilverLakehouse:
         args = ", ".join(f"'{s}'" for s in series_ids)
         if target_frequency:
             args += f", target_frequency='{target_frequency}'"
+        if allow_unverified:
+            args += ", allow_unverified_semantics=True (kullanıcı onayı)"
         return QueryResult(
             data=frame,
             provenance=QueryProvenance(
@@ -845,14 +849,14 @@ class SilverLakehouse:
             ))
         return out
 
-    def gold_align(self, series_id: str, target_frequency: str) -> QueryResult:
-        return self._gold_call("align_frequency", [series_id], target_frequency)
+    def gold_align(self, series_id: str, target_frequency: str, *, allow_unverified: bool = False) -> QueryResult:
+        return self._gold_call("align_frequency", [series_id], target_frequency, allow_unverified=allow_unverified)
 
-    def gold_decompose(self, series_id: str) -> QueryResult:
-        return self._gold_call("decompose_cumulative", [series_id], None)
+    def gold_decompose(self, series_id: str, *, allow_unverified: bool = False) -> QueryResult:
+        return self._gold_call("decompose_cumulative", [series_id], None, allow_unverified=allow_unverified)
 
-    def gold_join(self, series_ids: list[str], target_frequency: str) -> QueryResult:
-        return self._gold_call("join_on_period", list(series_ids), target_frequency)
+    def gold_join(self, series_ids: list[str], target_frequency: str, *, allow_unverified: bool = False) -> QueryResult:
+        return self._gold_call("join_on_period", list(series_ids), target_frequency, allow_unverified=allow_unverified)
 
     def health(self) -> dict[str, Any]:
         n_obs = self._conn().execute(f"SELECT count(*) FROM {SILVER_RELATION}").fetchone()[0]

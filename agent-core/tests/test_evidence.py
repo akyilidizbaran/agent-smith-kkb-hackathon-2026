@@ -175,3 +175,41 @@ def test_turetilmis_kolon_zinciri_kirmaz_provenanssiz_kolon_sebep_yazar(lake: Si
     ws.add_column("sebepsiz", ws.table["bakiye"] * 2, description="provenanssız")
     panel2 = EvidenceBuilder(lake).build("soru", "Şubat'ta 110 milyon TL.", ws, [])
     assert not panel2.complete and any("'sebepsiz' kolonunun provenance kaydı yok" in g for g in panel2.gaps)
+
+
+def test_onceki_tablo_surumundeki_sayi_zinciri_kirmaz() -> None:
+    class Silverish:
+        def evidence_for_observations(self, *a, **k): return []
+        def evidence_for_artifacts(self, *a, **k): return {}
+    ws = AnalysisWorkspace()
+    prov = QueryProvenance(sql="web_url https://x.example/p.csv tablo#0", dataset_ids=[], sources=["web"], source_urls=["https://x.example/p.csv"])
+    ws.set_table(pd.DataFrame({"year": [2000.0, 2001.0, 2002.0], "pop": [65.0, 66.0, 67.0]}), description="tam", provenance=prov)
+    ws.set_table(pd.DataFrame({"year": [2002.0], "pop": [67.0]}), description="kırpılmış",
+                 provenance=QueryProvenance(sql="workspace_query: SELECT * FROM t WHERE year >= 2002", dataset_ids=[], sources=["web"], source_urls=["https://x.example/p.csv"]))
+    panel = EvidenceBuilder(Silverish()).build("soru", "2000'de 65, 2002'de 67 milyon.", ws, [],
+                                               artifacts=[{"kind": "web", "used": "https://x.example/p.csv",
+                                                           "visited": [{"url": "https://x.example/p.csv", "sha256": "ab" * 32, "fetched_at": "t", "status": 200}]}])
+    m = {n.text: n for n in panel.numbers}
+    assert m["65"].matched and m["65"].row_key == "önceki tablo (-1)" and m["67"].matched
+    assert panel.complete, panel.gaps
+
+
+def test_bakis_sorgusu_sayisi_ve_onceki_turun_web_sayfasi_zinciri_tamamlar() -> None:
+    """Ölçüldü (Deney 2): toplam yüzde bakış sorgusundan geldi, sayfa önceki turda çekilmişti;
+    panel 'tabloda bulunmayan sayı' ve '0 artifact' diyordu. Türetilmiş kolon da web zincirini bozmaz."""
+    class Silverish:
+        def evidence_for_observations(self, *a, **k): return []
+        def evidence_for_artifacts(self, *a, **k): return {}
+    ws = AnalysisWorkspace()
+    url = "https://x.example/p.csv"
+    ws.set_table(pd.DataFrame({"year": [2000.0, 2001.0, 2002.0], "pop": [65.0, 66.0, 67.0]}), description="web",
+                 provenance=QueryProvenance(sql=f"web_url {url} tablo#0", dataset_ids=[], sources=["web — p.csv"], source_urls=[url]))
+    ws.remember_web({"used": url, "visited": [{"url": url, "sha256": "ab" * 32, "fetched_at": "2026-09-12T20:14:00Z", "status": 200}]})
+    ws.add_column("artis", pd.Series([0.0, 1.0, 2.0]), description="türetilmiş",
+                  provenance=QueryProvenance(sql="türetilmiş: pop - 65", dataset_ids=[], sources=["web — p.csv"], source_urls=[url]))
+    ws.note_peek("SELECT (max(pop)-min(pop))/min(pop)*100 AS yuzde FROM t", pd.DataFrame({"yuzde": [3.0769]}))
+    panel = EvidenceBuilder(Silverish()).build("soru", "2000'den 2002'ye nüfus 65'ten 67'ye, %3,08 arttı.", ws, [], artifacts=[])
+    m = {n.text: n for n in panel.numbers}
+    assert m["3,08"].matched and m["3,08"].row_key.startswith("bakış sorgusu")
+    assert panel.web_sources and panel.web_sources[0]["sha256"] == "ab" * 32
+    assert panel.complete, panel.gaps

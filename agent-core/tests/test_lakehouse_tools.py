@@ -259,3 +259,23 @@ def test_kismi_eslesen_aramalar_ikinci_kezde_durur() -> None:
     second = tool.validate_and_run({"query": "taşıt kredisi bakiyesi"})
     assert not second.ok and second.error.error_code == "DATASET_NOT_FOUND" and not second.error.is_retryable
     assert second.error.candidates == ["bddk_monthly:tasit"]
+
+
+
+def test_gold_varken_donem_toplamasi_sqlde_reddedilir() -> None:
+    """ADR-0039: ay/çeyrek kutusuna AVG/SUM alan sorgu Gold'a yönlendirilir; Gold yoksa serbest."""
+    from kkb_agent.tools.lakehouse import LakehouseQueryTool
+
+    class Lake:
+        def get_dataset(self, *a, **k):
+            raise LookupError
+
+    sql = "SELECT strftime(observation_date, '%Y-%m') AS ay, AVG(value) FROM silver.fact_observation WHERE observation_date >= '1985-01-01' GROUP BY 1"
+    with_gold = LakehouseQueryTool(Lake(), AnalysisWorkspace(), None, gold_available=True)
+    r = with_gold.validate_and_run({"sql": sql, "purpose": "aylık ortalama"})
+    assert not r.ok and r.error.error_code == "GOLD_REQUIRED" and r.error.is_retryable and "gold_align" in r.content
+
+    plain = "SELECT observation_date, value FROM silver.fact_observation WHERE observation_date >= '1985-01-01'"
+    assert with_gold.check_policy(with_gold.Params(sql=plain, purpose="x")) is None
+    without = LakehouseQueryTool(Lake(), AnalysisWorkspace(), None, gold_available=False)
+    assert without.check_policy(without.Params(sql=sql, purpose="x")) is None

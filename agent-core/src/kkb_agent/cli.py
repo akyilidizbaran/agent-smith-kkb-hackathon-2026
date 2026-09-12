@@ -37,12 +37,33 @@ from .tools.lakehouse import (
 )
 from .builder.ingest import LakehouseCLI
 from .tools.ingest import IngestFromUrlTool
+from .tools.promote import PromoteDraftTool
 from .tools.gold import GOLD_PROMPT_RULES, GoldAlignTool, GoldDecomposeTool, GoldJoinTool
 from .tools.chart import CHART_PROMPT_RULES, ChartTool
+from .tools.workspace_query import WorkspaceQueryTool
 from .tools.web import (
     WEB_PROMPT_RULES, WEB_SEARCH_PROMPT_RULES, WEB_SEARCH_UNAVAILABLE_RULES, WebSearchTool, WebUrlTool,
 )
 from .web.search import TavilySearch
+
+
+WORKSPACE_QUERY_RULES = """
+
+SOHBETTE KALAN ANALİZ:
+web_url ile yüklenen ya da elde olan aktif tabloyu satır filtrelemek, sıralamak, gruplayıp toplamak \
+için workspace_query kullan (tablo adı `t`); veri havuzuna yazmaz. Varsayılan BAKIŞ modudur, aktif \
+tablo değişmez; kullanıcının bundan sonra üzerinde çalışacağı tabloyu üretiyorsan (ör. yıl aralığına \
+kırpma) as_active_table=true ver. Özet, toplam, "en yüksek hangisi" gibi sorular için bakış modu yeter."""
+
+ARCHITECT_PROMPT_RULES = """
+
+ARCHITECT AKIŞI (yeni veri):
+1) Kullanıcı bir dosya/adres verip 'ekle' derse ingest_from_url → TASLAK seri (adhoc). Araç birim ya da \
+ölçüm tipini soruyorsa kullanıcıya sor; kullanıcı söyleyince aynı aracı unit/measure_type/default_agg \
+alanlarıyla yeniden çağır, uydurma. 2) Taslak sorgulanabilir ama Gold'a giremez. Kullanıcı 'onaylıyorum, \
+kataloğa al' derse promote_draft → aktif seri, Silver'a kopyalanır. 3) Onaylanmış seri de doğrulanmamış \
+sayılır: gold_* araçları reddederse kullanıcıya 'doğrulanmamış olsa da kullanayım mı' diye sor; \
+'doğrulanmamış olsa da kullan' derse aynı aracı yeniden çağır."""
 
 
 def open_lakehouse(path, *, gold: GoldCLI | None = None) -> SilverLakehouse | DuckDBLakehouse:
@@ -66,6 +87,7 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
     settings = load_settings()
     # Veri ekibinin Silver şeması varsa ona bağlan; yoksa kendi BDDK seed'imize.
     # Gerçek Lakehouse geldiğinde değişen tek şey LAKEHOUSE_PATH olur.
+    system_prompt_extra = ""
     # Salt-okunur Gold çağrısı veri ekibinin `gold-run` komutuyla (ADR-0031); CLI yoksa
     # adaptör hazır gold.* tablolarını yine gösterir, gold_* araçları kayıt edilmez.
     gold = GoldCLI(
@@ -85,15 +107,20 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
     )
 
     registry = ToolRegistry(profile)
+    gold_cli = GoldCLI(
+        core_dir=settings.lakehouse_core_dir, database=settings.lakehouse_path, launcher=settings.lakehouse_cli,
+    )
+    gold_on = isinstance(lakehouse, SilverLakehouse) and gold_cli.available
     registry.register_all(
         [
             LakehouseSearchTool(lakehouse),
             LakehouseDescribeTool(lakehouse),
             LakehouseDistinctValuesTool(lakehouse),
-            LakehouseQueryTool(lakehouse, workspace, registry),
+            LakehouseQueryTool(lakehouse, workspace, registry, gold_available=gold_on),
             WorkspaceAddColumnTool(lakehouse, workspace),
             WorkspaceComputeColumnTool(workspace),
             WorkspaceShowTool(workspace),
+            WorkspaceQueryTool(workspace),
         ]
     )
     # Architect'e açılan tek kapı. Yalnız veri ekibinin şeması ve CLI'ı varsa: seed
@@ -109,12 +136,14 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
         registry.register(
             IngestFromUrlTool(lakehouse, cli, allowed_root=settings.ingest_allowed_root, registry=registry)
         )
+        registry.register(PromoteDraftTool(lakehouse, cli, registry=registry))
+        system_prompt_extra = ARCHITECT_PROMPT_RULES
 
     # Grafik her adaptörde var: veri aktif tablodan gelir, kural araçta (ADR-0032).
     registry.register(
         ChartTool(lakehouse, workspace, chart_dir=settings.chart_dir, geo_dir=settings.geo_dir)
     )
-    system_prompt = SYSTEM_PROMPT + CHART_PROMPT_RULES
+    system_prompt = SYSTEM_PROMPT + CHART_PROMPT_RULES + WORKSPACE_QUERY_RULES
     # Dış kaynak (ADR-0034): web_url her zaman; web_search yalnız arama anahtarı varsa.
     settings.ingest_allowed_root.mkdir(parents=True, exist_ok=True)
     registry.register(WebUrlTool(workspace, allowed_local_root=settings.ingest_allowed_root, registry=registry))
@@ -128,13 +157,14 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
     if isinstance(lakehouse, GoldCapable) and getattr(lakehouse, "gold", None) is not None:
         registry.register_all(
             [
-                GoldAlignTool(lakehouse, workspace),
-                GoldDecomposeTool(lakehouse, workspace),
-                GoldJoinTool(lakehouse, workspace),
+                GoldAlignTool(lakehouse, workspace, registry=registry),
+                GoldDecomposeTool(lakehouse, workspace, registry=registry),
+                GoldJoinTool(lakehouse, workspace, registry=registry),
             ]
         )
         # Kural prompt'a yalnız araçlar varken girer: olmayan aracı öğütlemek UNKNOWN_TOOL üretir.
         system_prompt = system_prompt + GOLD_PROMPT_RULES
+    system_prompt = system_prompt + system_prompt_extra
 
     llm = OpenAICompatClient(
         base_url=settings.llm_base_url,

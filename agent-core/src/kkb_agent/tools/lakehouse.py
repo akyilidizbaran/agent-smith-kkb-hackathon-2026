@@ -224,16 +224,27 @@ class LakehouseQueryTool(Tool):
     )
     Params = QueryParams
 
+    #: Ay/çeyrek/yıl kutusuna toplama/ortalama: frekans dönüşümüdür, kural kataloğundur.
+    _PERIOD_AGG = re.compile(
+        r"(strftime\s*\([^)]*%Y-%m|date_trunc\s*\(\s*'(month|quarter|year)'|extract\s*\(\s*(month|quarter|year)\b|"
+        r"year\s*\(|month\s*\(|quarter\s*\()", re.I,
+    )
+    _AGG_FN = re.compile(r"\b(avg|sum|mean|min|max)\s*\(", re.I)
+
     def __init__(
         self,
         lakehouse: LakehouseClient,
         workspace: AnalysisWorkspace,
         registry: object | None = None,
+        *,
+        gold_available: bool = False,
     ) -> None:
         self.lakehouse = lakehouse
         self.workspace = workspace
         # Sorulan soruya erişim: atlanan dönem kısıtını yakalamak için.
         self._registry = registry
+        # Gold araçları kayıtlıysa ay/çeyrek toplaması SQL'de yapılmaz (ADR-0039).
+        self.gold_available = gold_available
 
     def check_policy(self, params: QueryParams) -> ToolError | None:
         """Sorgu çalışmadan önce reddet: uyarı olarak eklendiğinde model onu okuyup
@@ -246,6 +257,18 @@ class LakehouseQueryTool(Tool):
                 hint="Bu dönem için sorgu çalıştırma. Kullanıcıya verinin hangi tarihe "
                      "kadar yayımlandığını söyle; istersen mevcut son dönemi teklif et.",
                 layer="data",
+            )
+        if self.gold_available and self._is_period_aggregation(params.sql):
+            # Ölçüldü: onaylanmış sıcaklık serisinde model "aylık ortalama"yı SQL'de AVG ile aldı;
+            # katalogdaki kural (index → avg) ile örtüştüğü için sayı doğru çıktı ama kanıt zinciri
+            # koptu (gözlem izi yok) ve kural stok olsaydı sessizce yanlış olurdu. Seçenek bırakılmaz.
+            return ToolError(
+                error_code="GOLD_REQUIRED", layer="policy", retryable=True,
+                message="Bu sorgu dönemleri (ay/çeyrek/yıl) toplayıp ortalıyor; frekans dönüşümü SQL'de değil "
+                        "Gold'da yapılır, kural katalogdan gelir.",
+                hint="gold_align (tek seri) ya da gold_join (birden çok seri) çağır: target_frequency='monthly' "
+                     "ya da 'quarterly', period_from/period_to ile dönem. Seri doğrulanmamışsa kullanıcının "
+                     "onayı gerekir. Yıllık için gold_align aylık sonucu üzerinde workspace_query kullan.",
             )
         eksik_donem = self._atlanmis_donem_filtresi(params.sql)
         if eksik_donem:
@@ -323,6 +346,10 @@ class LakehouseQueryTool(Tool):
             content += "\nBirimler: " + ", ".join(units)
         content += f"\nKaynak: {result.provenance.summary()}"
         return ToolResult(content=content, data=df, provenance=result.provenance)
+
+    def _is_period_aggregation(self, sql: str) -> bool:
+        text = sql.lower()
+        return bool(self._PERIOD_AGG.search(text) and self._AGG_FN.search(text) and "group by" in text)
 
     def _atlanmis_donem_filtresi(self, sql: str) -> str | None:
         """Soruda bir yıl geçiyor ama sorguda geçmiyorsa bunu bildirir.

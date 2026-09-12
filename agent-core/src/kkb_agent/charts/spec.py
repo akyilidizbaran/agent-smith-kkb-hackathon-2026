@@ -117,7 +117,14 @@ def period_label(frame: pd.DataFrame, x: str | None) -> str:
         return ""
     xs = frame[x].dropna()
     lo, hi = xs.min(), xs.max()
-    return f"{_json_safe(lo)} → {_json_safe(hi)}"
+
+    def _fmt(v):
+        # Yıl kolonu web tablosundan float gelir (2000.0); başlıkta 2000 yazılır.
+        if isinstance(v, float) and v.is_integer():
+            return str(int(v))
+        return _json_safe(v)
+
+    return f"{_fmt(lo)} → {_fmt(hi)}"
 
 
 def chart_title(intent: ChartIntent) -> str:
