@@ -216,7 +216,7 @@ def test_yerel_fikstur_izinli_kokten_okunur(tmp_path: Path) -> None:
 
 def test_olmayan_tablo_indeksi_adaylarla_doner() -> None:
     s = Session({"https://site.example/tufe": Resp(200, HTML.encode())})
-    tool, _ = _tool(s, "x")
+    tool, _ = _tool(s, "https://site.example/tufe sayfasındaki tablo")
     r = tool.validate_and_run({"url": "https://site.example/tufe", "purpose": "x", "table_index": 5})
     assert not r.ok and r.error.error_code == "COLUMN_NOT_FOUND" and r.error.candidates == ["#0"]
 
@@ -279,3 +279,26 @@ def test_yuzde_isareti_ve_turkce_ondalik() -> None:
     html = "<table><tr><th>Yıl</th><th>Oran</th></tr><tr><td>2025</td><td>%31,07</td></tr><tr><td>2024</td><td>44,38 %</td></tr></table>"
     page = extract_page(html.encode(), "text/html", "https://x.example/x")
     assert page.tables[0]["Oran"].tolist() == [31.07, 44.38]
+
+
+def test_niyet_kapisi_kullanicinin_vermedigi_adres_acilmaz_arama_sonucu_acilir() -> None:
+    """ADR-0037: sayfaya gömülü adres açılmaz (sızdırma kanalı); kullanıcının istediği aramanın sonucu açılır."""
+    s = Session({"https://evil.example/x": Resp(200, HTML.encode()), "https://tuik.example/tufe": Resp(200, HTML.encode())})
+    tool, _ = _tool(s, "2025 enflasyonunu bul")
+    r = tool.validate_and_run({"url": "https://evil.example/x", "purpose": "x"})
+    assert not r.ok and r.error.error_code == "INTENT_REQUIRED" and not r.error.is_retryable
+    assert s.calls == []   # istek hiç atılmadı
+
+    tool._registry.sanctioned_locators = {"https://tuik.example/tufe"}
+    r2 = tool.validate_and_run({"url": "https://tuik.example/tufe", "purpose": "x"})
+    assert r2.ok
+
+
+def test_arama_sonuclari_onayli_adres_olur() -> None:
+    reg = SimpleNamespace(active_question="enflasyonu ara", sanctioned_locators=set())
+
+    class S:
+        def post(self, url, json=None, timeout=None):
+            return SimpleNamespace(status_code=200, json=lambda: {"results": [{"title": "t", "url": "https://tuik.example/tufe", "content": "c"}]})
+    WebSearchTool(TavilySearch(environ={"TAVILY_API_KEY": "k"}, session=S()), registry=reg).validate_and_run({"query": "enflasyon"})
+    assert reg.sanctioned_locators == {"https://tuik.example/tufe"}

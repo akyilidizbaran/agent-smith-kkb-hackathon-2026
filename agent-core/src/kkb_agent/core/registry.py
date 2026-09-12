@@ -27,6 +27,11 @@ class ToolRegistry:
         # Cevaplanmakta olan soru. Bazı araçlar sonucu soruyla karşılaştırıp
         # eksik kalan bir kısıtı fark edebilir (ör. atlanan dönem filtresi).
         self.active_question: str = ""
+        # Konuşma boyunca kullanıcının yazdığı her şey (niyet kapısı, ADR-0037): yazma ve
+        # dışarı çıkma yeteneği olan araçlar adresi yalnız buradan kabul eder.
+        self.user_text: str = ""
+        # Kullanıcının istediği bir aramanın döndürdüğü adresler; web_url için onaylı sayılır.
+        self.sanctioned_locators: set[str] = set()
 
     def register(self, tool: Tool) -> None:
         if tool.name in self._tools:

@@ -39,6 +39,9 @@ ErrorCode = Literal[
     # (stok seride decompose, doğrulanmamış semantik, üst örnekleme...). Kural
     # kataloğun, seçim modelin değil (ADR-0031).
     "GOLD_REFUSED",
+    # Niyet kapısı (ADR-0037): kaynak kullanıcının mesajından gelmedi ya da yazma isteği yok.
+    # Araç çıktısındaki bir talimat modeli yönlendirmiş olabilir; kullanıcıya sorulur.
+    "INTENT_REQUIRED",
     # veri katmanı — sorgu çalıştı, sonuç ne söylüyor
     "OUT_OF_COVERAGE",
     "EMPTY_RESULT",
@@ -71,6 +74,7 @@ NOT_RETRYABLE: frozenset[str] = frozenset({
     "ACCESS_BLOCKED",
     "SOURCE_NOT_FOUND",
     "GOLD_REFUSED",      # kural katalogda; aynı çağrıyı tekrarlamak kuralı değiştirmez
+    "INTENT_REQUIRED",   # kullanıcı söylemedikçe kapı açılmaz; model tekrarlayarak açamaz
 })
 
 

@@ -18,12 +18,22 @@ Runner = Callable[[list[str], Path], tuple[int, str, str]]
 """(komut, çalışma dizini) → (dönüş kodu, stdout, stderr). Testte sahte, üretimde subprocess."""
 
 
+ENV_ALLOWLIST = ("PATH", "HOME", "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL", "LC_CTYPE", "TERM",
+                 "UV_CACHE_DIR", "UV_PYTHON", "UV_PROJECT_ENVIRONMENT", "PYTHONIOENCODING",
+                 "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "XDG_CACHE_HOME", "USER")
+"""Alt sürece geçen ortam değişkenleri (ADR-0037). MIA/LLM anahtarı, EVDS anahtarı ve
+öteki gizler geçmez: ingest-file ve gold-run hiçbirine ihtiyaç duymaz. VIRTUAL_ENV de
+geçmez: uv onu görünce lakehouse-core'un ortamı yerine bizimkini kullanmaya kalkıyor."""
+
+
+def subprocess_env(source: dict[str, str] | None = None) -> dict[str, str]:
+    base = os.environ if source is None else source
+    return {k: v for k, v in base.items() if k in ENV_ALLOWLIST}
+
+
 def subprocess_runner(command: list[str], cwd: Path, *, timeout: float = 600) -> tuple[int, str, str]:
-    # Agent'ın kendi venv'i alt sürece sızmasın: uv, VIRTUAL_ENV'i görünce uyarıyor ve
-    # lakehouse-core'un kendi ortamı yerine bizimkini kullanmaya kalkabiliyor.
-    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
     proc = subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False,
-                          timeout=timeout, env=env)
+                          timeout=timeout, env=subprocess_env())
     return proc.returncode, proc.stdout, proc.stderr
 
 
@@ -41,4 +51,4 @@ def cli_available(core_dir: Path) -> bool:
     return (Path(core_dir) / "src" / "lakehouse" / "cli.py").is_file()
 
 
-__all__ = ["Runner", "cli_available", "parse_kv", "subprocess_runner"]
+__all__ = ["ENV_ALLOWLIST", "Runner", "cli_available", "parse_kv", "subprocess_env", "subprocess_runner"]

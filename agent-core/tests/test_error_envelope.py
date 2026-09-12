@@ -63,7 +63,7 @@ def test_not_retryable_kumesi_beklendigi_gibi() -> None:
     assert NOT_RETRYABLE == {
         "OUT_OF_COVERAGE", "UNSAFE_SQL",
         "NEEDS_CREDENTIAL", "ACCESS_BLOCKED", "SOURCE_NOT_FOUND",
-        "GOLD_REFUSED",
+        "GOLD_REFUSED", "INTENT_REQUIRED",
     }
     # UNKNOWN_TOOL tekrar denenebilir: ad uyduran model aday listesiyle düzeltir (ADR-0036).
 

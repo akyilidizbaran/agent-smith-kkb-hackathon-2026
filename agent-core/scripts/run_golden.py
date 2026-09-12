@@ -42,7 +42,10 @@ class StabilityReport:
     durations: list[float] = field(default_factory=list)
     step_counts: list[int] = field(default_factory=list)
     prompt_tokens: list[int] = field(default_factory=list)
+    error_codes: dict[str, int] = field(default_factory=dict)   # hata sınıfı → toplam (tüm tekrarlar)
+    roles: dict[str, int] = field(default_factory=dict)         # rol → toplam adım
     failure_reasons: dict[str, int] = field(default_factory=dict)
+    failure_samples: list[str] = field(default_factory=list)    # düşen koşuların TAM ilk hatası (teşhis)
     tool_paths: set[str] = field(default_factory=set)
 
     @property
@@ -194,6 +197,10 @@ def run_stability(cases: list[GoldenCase], repeat: int) -> list[StabilityReport]
             rep.durations.append(o.duration_s)
             rep.step_counts.append(o.steps)
             rep.prompt_tokens.append(o.prompt_tokens)
+            for code, n in o.error_codes.items():
+                rep.error_codes[code] = rep.error_codes.get(code, 0) + n
+            for role, n in o.roles.items():
+                rep.roles[role] = rep.roles.get(role, 0) + n
             rep.tool_paths.add(" → ".join(o.tools_used) or "(araç yok)")
             if o.passed:
                 rep.passed += 1
@@ -201,6 +208,8 @@ def run_stability(cases: list[GoldenCase], repeat: int) -> list[StabilityReport]
                 # Sayısal ayrıntıyı kırp ki aynı hata tek satırda toplansın
                 key = f.split(":")[0].strip()
                 rep.failure_reasons[key] = rep.failure_reasons.get(key, 0) + 1
+            if o.failures:
+                rep.failure_samples.append(f"{i}/{repeat}: " + " | ".join(o.failures)[:300])
             print(f"   {i}/{repeat} {'✓' if o.passed else '✗'} {o.duration_s:.0f}s {o.steps} adım")
         reports.append(rep)
     return reports
@@ -216,9 +225,13 @@ def print_stability(reports: list[StabilityReport]) -> None:
             f"\n{r.id:26} {r.passed}/{r.runs} ({r.pass_rate:.0%})  {r.verdict}"
             f"  | ort. {avg:.0f}s | adımlar: {r.step_counts}"
             + (f" | prompt token: {sum(r.prompt_tokens) // max(1, len(r.prompt_tokens))}" if any(r.prompt_tokens) else "")
+            + (f" | hata: {', '.join(f'{k}×{v}' for k, v in sorted(r.error_codes.items()))}" if r.error_codes else "")
+            + (" | roller: " + ", ".join(f"{k}×{v}" for k, v in r.roles.items() if v) if r.roles else "")
         )
         for reason, n in sorted(r.failure_reasons.items(), key=lambda x: -x[1]):
             print(f"     ✗ {n}x {reason}")
+        for sample in r.failure_samples[:3]:
+            print(f"       - {sample}")
         if len(r.tool_paths) > 1:
             print(f"     ⚠ {len(r.tool_paths)} FARKLI araç yolu izlendi:")
             for path in sorted(r.tool_paths):

@@ -67,7 +67,15 @@ def env(tmp_path: Path):
     cli = LakehouseCLI(core_dir=tmp_path / "lakehouse-core", database=tmp_path / "lh.duckdb",
                        data_root=tmp_path, runner=runner)
     lake = SpyLakehouse()
-    tool = IngestFromUrlTool(lake, cli, allowed_root=incoming)
+    # Niyet kapısı (ADR-0037): adres ve yazma isteği kullanıcı metninde olmalı.
+    from types import SimpleNamespace
+    registry = SimpleNamespace(
+        active_question="",
+        user_text="Şu dosyaları taslak seri olarak ekle: konut.csv belirsiz.csv birimsiz.csv "
+                  "disarida.csv https://www.spglobal.com/x",
+        sanctioned_locators=set(),
+    )
+    tool = IngestFromUrlTool(lake, cli, allowed_root=incoming, registry=registry)
     return tool, lake, runner, incoming, tmp_path
 
 
@@ -160,10 +168,25 @@ def test_cli_hatasi_okuyucuyu_yine_de_geri_acar(env) -> None:
 
 
 def test_cli_yoksa_politikada_durur(tmp_path: Path) -> None:
+    from types import SimpleNamespace
     cli = LakehouseCLI(core_dir=tmp_path / "yok", database=tmp_path / "x", data_root=tmp_path, runner=FakeRunner())
-    tool = IngestFromUrlTool(SpyLakehouse(), cli, allowed_root=tmp_path)
+    reg = SimpleNamespace(active_question="x.csv dosyasını ekle", user_text="x.csv dosyasını ekle", sanctioned_locators=set())
+    tool = IngestFromUrlTool(SpyLakehouse(), cli, allowed_root=tmp_path, registry=reg)
     r = tool.validate_and_run({"locator": "x.csv", "name": "x"})
     assert not r.ok and r.error.error_code == "TOOL_FAILED" and r.error.layer == "policy"
+
+
+def test_niyet_kapisi_kullanicinin_vermedigi_kaynak_ve_istenmemis_yazma(env) -> None:
+    """ADR-0037: sayfaya gömülü 'şu adresi ingest et' talimatı kapıyı açamaz; yazma isteği yoksa da."""
+    tool, lake, runner, incoming, _ = env
+    r = tool.validate_and_run({"locator": "https://evil.example/tufe.csv", "name": "x"})
+    assert not r.ok and r.error.error_code == "INTENT_REQUIRED" and not r.error.is_retryable
+    assert "kullanıcının mesajında geçmiyor" in r.content and runner.calls == [] and lake.events == []
+
+    tool._registry.user_text = "Şu dosyada ne var: konut.csv"   # adres var, yazma isteği yok
+    r2 = tool.validate_and_run({"locator": str(incoming / "konut.csv"), "name": "x"})
+    assert not r2.ok and r2.error.error_code == "INTENT_REQUIRED" and "açıkça istemedi" in r2.content
+    assert runner.calls == []
 
 
 def test_katalog_kaydi_kullanicinin_adindan_bagimsiz_deterministik(env) -> None:
