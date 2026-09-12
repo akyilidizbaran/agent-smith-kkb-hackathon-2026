@@ -10,13 +10,20 @@ from typing import Any, Iterator
 
 from ..domain import DomainProfile
 from .tool import Tool, ToolResult
+from .validator import BoundaryValidator
 
 
 class ToolRegistry:
-    def __init__(self, profile: DomainProfile | None = None) -> None:
+    def __init__(
+        self,
+        profile: DomainProfile | None = None,
+        validator: BoundaryValidator | None = None,
+    ) -> None:
         self._tools: dict[str, Tool] = {}
         # Araç açıklamaları modele gönderilmeden önce bu profille doldurulur.
         self.profile = profile or DomainProfile.generic()
+        # Her çağrı aynı boru hattından: şema → SQL guard → referans → politika → run.
+        self.validator = validator or BoundaryValidator()
         # Cevaplanmakta olan soru. Bazı araçlar sonucu soruyla karşılaştırıp
         # eksik kalan bir kısıtı fark edebilir (ör. atlanan dönem filtresi).
         self.active_question: str = ""
@@ -55,7 +62,7 @@ class ToolRegistry:
                 candidates=self.names(),
                 layer="schema",
             )
-        return tool.validate_and_run(args)
+        return self.validator.validate_and_run(tool, args)
 
     def __iter__(self) -> Iterator[Tool]:
         return iter(self._tools.values())

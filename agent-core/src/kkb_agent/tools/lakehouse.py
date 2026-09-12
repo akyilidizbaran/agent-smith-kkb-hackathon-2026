@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from ..contracts.catalog import ColumnRole
 from ..contracts.lakehouse import LakehouseClient, LakehouseError
 from ..domain import kisa_terim
+from ..core.errors import ToolError
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
 
@@ -30,6 +31,7 @@ class SearchParams(BaseModel):
 
 class LakehouseSearchTool(Tool):
     name = "lakehouse_search"
+    role = "retrieve"
     description = (
         "Veri havuzunda hangi tabloların bulunduğunu keşfeder. Bir soruyu cevaplamadan ÖNCE "
         "hangi verinin mevcut olduğunu öğrenmek için bunu kullan. Tablo adlarını ve ne "
@@ -86,12 +88,31 @@ class LakehouseSearchTool(Tool):
         return sql
 
 
+def _dataset_missing(lakehouse: LakehouseClient, dataset_id: str) -> ToolError | None:
+    """Kimlik katalogda yoksa referans hatası; adaylar en yakın 8, tüm katalog değil.
+
+    Eski hâli bütün kataloğu aday olarak listeliyordu — 4 tabloda faydalı, 1620 seride
+    hata mesajının kendisi hataya dönüşüyor (ADR-0026 dersi). Adaylar aramadan gelir.
+    """
+    try:
+        lakehouse.get_dataset(dataset_id)
+    except LakehouseError as exc:
+        near = [s.dataset_id for s in lakehouse.search_datasets(dataset_id, limit=8)]
+        return ToolError(
+            error_code="DATASET_NOT_FOUND", message=str(exc),
+            hint="lakehouse_search ile doğru kimliği bul.",
+            candidates=near, layer="reference",
+        )
+    return None
+
+
 class DescribeParams(BaseModel):
     dataset_id: str = Field(description="lakehouse_search'ten dönen tablo kimliği")
 
 
 class LakehouseDescribeTool(Tool):
     name = "lakehouse_describe"
+    role = "retrieve"
     description = (
         "Bir tablonun kolonlarını, birimlerini, kümülatif olup olmadığını ve örnek satırlarını "
         "gösterir. SQL yazmadan ÖNCE mutlaka çağır: kolon adlarını ve birimleri buradan öğren."
@@ -101,17 +122,12 @@ class LakehouseDescribeTool(Tool):
     def __init__(self, lakehouse: LakehouseClient) -> None:
         self.lakehouse = lakehouse
 
+    def validate_refs(self, params: DescribeParams) -> ToolError | None:
+        return _dataset_missing(self.lakehouse, params.dataset_id)
+
     def run(self, params: DescribeParams) -> ToolResult:
-        try:
-            spec = self.lakehouse.get_dataset(params.dataset_id)
-            sample = self.lakehouse.preview(params.dataset_id, n=5)
-        except LakehouseError as exc:
-            return ToolResult.fail(
-                "DATASET_NOT_FOUND", str(exc),
-                hint="lakehouse_search ile doğru kimliği bul.",
-                candidates=[s.dataset_id for s in self.lakehouse.list_datasets()],
-                layer="reference",
-            )
+        spec = self.lakehouse.get_dataset(params.dataset_id)
+        sample = self.lakehouse.preview(params.dataset_id, n=5)
 
         content = spec.to_prompt_card()
         content += "\n\nÖrnek satırlar:\n" + sample.data.to_string(index=False)
@@ -155,14 +171,14 @@ class LakehouseQueryTool(Tool):
         # Sorulan soruya erişim: atlanan dönem kısıtını yakalamak için.
         self._registry = registry
 
-    def run(self, params: QueryParams) -> ToolResult:
-        # Sorgu çalışmadan önce reddet: uyarı olarak eklendiğinde model onu
-        # okuyup yine de cevaba geçiyordu (ölçüldü: 0/2). Kapsam kontrolünde
-        # işe yarayan kalıp bu — modele seçenek bırakmamak (ADR-0010).
+    def check_policy(self, params: QueryParams) -> ToolError | None:
+        """Sorgu çalışmadan önce reddet: uyarı olarak eklendiğinde model onu okuyup
+        yine de cevaba geçiyordu (ölçüldü: 0/2). Kapsam kontrolünde işe yarayan kalıp
+        bu — modele seçenek bırakmamak (ADR-0010). Mesajlar ADR-0017'deki gibi."""
         kapsam_disi_soru = self._soru_kapsam_disi()
         if kapsam_disi_soru:
-            return ToolResult.fail(
-                "OUT_OF_COVERAGE", kapsam_disi_soru,
+            return ToolError(
+                error_code="OUT_OF_COVERAGE", message=kapsam_disi_soru,
                 hint="Bu dönem için sorgu çalıştırma. Kullanıcıya verinin hangi tarihe "
                      "kadar yayımlandığını söyle; istersen mevcut son dönemi teklif et.",
                 layer="data",
@@ -170,27 +186,27 @@ class LakehouseQueryTool(Tool):
         eksik_donem = self._atlanmis_donem_filtresi(params.sql)
         if eksik_donem:
             yil = eksik_donem.split(",")[0].strip()
-            return ToolResult.fail(
-                "MISSING_PERIOD_FILTER",
-                f"Sorguda dönem filtresi yok. Kullanıcı {eksik_donem} dönemini sordu ama "
-                f"sorgun tablonun tamamını getiriyor.",
+            return ToolError(
+                error_code="MISSING_PERIOD_FILTER",
+                message=f"Sorguda dönem filtresi yok. Kullanıcı {eksik_donem} dönemini sordu ama "
+                        f"sorgun tablonun tamamını getiriyor.",
                 hint=f"Sorguya dönem kısıtını ekleyip tekrar çalıştır, ör. "
                      f"WHERE EXTRACT(year FROM <dönem_kolonu>) = {yil}",
                 layer="policy",
             )
+        return None
+
+    def run(self, params: QueryParams) -> ToolResult:
+        # SQL guard sınır doğrulayıcıda çalıştı (UNSAFE_SQL orada); buraya gelen bir
+        # hata artık çalışma hatasıdır ve tekrar denemeyle çözülebilir.
         try:
             result = self.lakehouse.execute_sql(params.sql)
         except LakehouseError as exc:
-            # Hata modele geri döner; harness'ın onarım döngüsü devreye girer.
-            # Politika ihlali (guard) ile çalışma hatası ayrılır: ilki tekrar
-            # denemeyle çözülmez, ikincisi çözülebilir.
-            msg = str(exc)
-            unsafe = any(k in msg for k in ("izin veril", "kullanılamaz", "Tek bir sorgu"))
             return ToolResult.fail(
-                "UNSAFE_SQL" if unsafe else "SQL_FAILED", msg,
-                hint=None if unsafe else "SQL'i düzeltip tekrar dene; kolon adlarını "
-                                         "lakehouse_describe çıktısıyla karşılaştır.",
-                layer="policy" if unsafe else "data",
+                "SQL_FAILED", str(exc),
+                hint="SQL'i düzeltip tekrar dene; kolon adlarını lakehouse_describe "
+                     "çıktısıyla karşılaştır.",
+                layer="data",
             )
 
         if result.is_empty:
@@ -375,6 +391,7 @@ class LakehouseDistinctValuesTool(Tool):
     """
 
     name = "lakehouse_distinct_values"
+    role = "retrieve"
     description = (
         "Bir kırılım kolonundaki GERÇEK değerleri listeler. Bir kalemi/kategoriyi filtrelemeden "
         "ÖNCE mutlaka bunu çağır — değer adını asla tahmin etme. Alt toplam satırlarını da "
@@ -385,26 +402,24 @@ class LakehouseDistinctValuesTool(Tool):
     def __init__(self, lakehouse: LakehouseClient) -> None:
         self.lakehouse = lakehouse
 
-    def run(self, params: DistinctValuesParams) -> ToolResult:
-        try:
-            spec = self.lakehouse.get_dataset(params.dataset_id)
-        except LakehouseError as exc:
-            return ToolResult.fail(
-                "DATASET_NOT_FOUND", str(exc),
-                hint="lakehouse_search ile doğru kimliği bul.",
-                candidates=[s.dataset_id for s in self.lakehouse.list_datasets()],
-                layer="reference",
-            )
-
+    def validate_refs(self, params: DistinctValuesParams) -> ToolError | None:
+        missing = _dataset_missing(self.lakehouse, params.dataset_id)
+        if missing:
+            return missing
+        spec = self.lakehouse.get_dataset(params.dataset_id)
         if spec.column(params.column) is None:
-            return ToolResult.fail(
-                "COLUMN_NOT_FOUND",
-                f"'{params.column}' kolonu {params.dataset_id} tablosunda yok. "
-                f"Mevcut kolonlar: {', '.join(c.name for c in spec.columns)}",
+            return ToolError(
+                error_code="COLUMN_NOT_FOUND",
+                message=f"'{params.column}' kolonu {params.dataset_id} tablosunda yok. "
+                        f"Mevcut kolonlar: {', '.join(c.name for c in spec.columns)}",
                 hint="Kırılım kolonlarından birini seç.",
                 candidates=[c.name for c in spec.columns],
                 layer="reference",
             )
+        return None
+
+    def run(self, params: DistinctValuesParams) -> ToolResult:
+        spec = self.lakehouse.get_dataset(params.dataset_id)
 
         col = params.column
         # Alt toplam bayrağı varsa birlikte göster: mükerrer sayımı önleyen sinyal.

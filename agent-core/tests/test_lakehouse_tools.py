@@ -178,11 +178,11 @@ def test_sorudaki_ay_kapsam_disiysa_sorgu_hic_calismaz() -> None:
     """
     tool = _ay_araci("2026 Ağustos konut kredisi bakiyesi kaç?")
 
-    result = tool.run(
-        LakehouseQueryTool.Params(
-            sql="SELECT donem, toplam FROM t WHERE EXTRACT(year FROM donem)=2026",
-            purpose="2026 aylık",
-        )
+    # Kapsam kontrolü artık sınır doğrulayıcıda (check_policy); run doğrulanmış
+    # parametre varsayar. Test, modelin gördüğü yolu izler: validate_and_run.
+    result = tool.validate_and_run(
+        {"sql": "SELECT donem, toplam FROM t WHERE EXTRACT(year FROM donem)=2026",
+         "purpose": "2026 aylık"}
     )
 
     assert not result.ok
@@ -203,11 +203,8 @@ def test_kapsamdaki_ay_ve_donemsiz_sorular_engellenmez(question: str) -> None:
     """Kontrol yalnız hiçbir serinin veremeyeceği dönemde tetiklenmeli."""
     tool = _ay_araci(question)
 
-    result = tool.run(
-        LakehouseQueryTool.Params(
-            sql="SELECT donem, toplam FROM t WHERE EXTRACT(year FROM donem)=2026",
-            purpose="x",
-        )
+    result = tool.validate_and_run(
+        {"sql": "SELECT donem, toplam FROM t WHERE EXTRACT(year FROM donem)=2026", "purpose": "x"}
     )
 
     assert result.ok or (result.error and result.error.error_code != "OUT_OF_COVERAGE")

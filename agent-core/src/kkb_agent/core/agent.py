@@ -104,6 +104,9 @@ class AgentStep:
     """
 
     index: int
+    #: retrieve | execute | validate | narrate — mantıksal rol, ayrı agent değil.
+    #: Planner LLM'in kendisi: hangi aracı seçtiği bu adımların sırasında okunur.
+    role: str = ""
     thought: str = ""
     tool_name: str | None = None
     tool_args: dict[str, Any] = field(default_factory=dict)
@@ -154,15 +157,16 @@ class AgentAnswer:
         lines = []
         for s in self.steps:
             mark = "✓" if s.ok else "✗"
+            role = f"[{s.role}] " if s.role else ""
             if s.tool_name:
                 code = f" {s.error_code}" if s.error_code else ""
                 lines.append(
-                    f"{mark}{code} [{s.index}] {s.tool_name}"
+                    f"{mark}{code} {role}[{s.index}] {s.tool_name}"
                     f"({json.dumps(s.tool_args, ensure_ascii=False)[:110]})"
                     f" → {s.result_summary[:150]} ({s.duration_ms:.0f}ms)"
                 )
             elif s.thought:
-                lines.append(f"  [{s.index}] düşünce: {s.thought[:160]}")
+                lines.append(f"  {role}[{s.index}] düşünce: {s.thought[:160]}")
         return "\n".join(lines)
 
 
@@ -242,6 +246,7 @@ class AnalyticsAgent:
                     steps.append(
                         AgentStep(
                             index=i,
+                            role="validate",
                             thought="veri çekilmeden cevap denendi — geri gönderildi",
                             ok=False,
                             duration_ms=(time.perf_counter() - started) * 1000,
@@ -276,6 +281,7 @@ class AnalyticsAgent:
                         steps.append(
                             AgentStep(
                                 index=i,
+                                role="validate",
                                 thought=f"grounding: {grounding}",
                                 ok=False,
                                 duration_ms=(time.perf_counter() - started) * 1000,
@@ -310,6 +316,7 @@ class AnalyticsAgent:
                 steps.append(
                     AgentStep(
                         index=i,
+                        role="narrate",
                         thought="nihai cevap",
                         result_summary=answer_text[:200],
                         duration_ms=(time.perf_counter() - started) * 1000,
@@ -356,9 +363,17 @@ class AnalyticsAgent:
                     seen.add(signature)
                     result = self.registry.execute(call.name, call.arguments)
                 elapsed = (time.perf_counter() - started) * 1000
+                # Rol: doğrulayıcıda takılan çağrı 'validate', çalışan çağrı aracın rolü.
+                rejected_before_run = (
+                    result.error is not None
+                    and result.error.layer in ("schema", "reference", "policy", "access")
+                )
+                tool_obj = self.registry.get(call.name)
                 steps.append(
                     AgentStep(
                         index=i,
+                        role="validate" if rejected_before_run else
+                             (getattr(tool_obj, "role", "execute") if tool_obj else "validate"),
                         tool_name=call.name,
                         tool_args=call.arguments,
                         result_summary=result.content[:300],

@@ -269,6 +269,22 @@ Araçların kayıt defteri. `register`, `schemas(profile)`, `describe()` (JSON m
 **Planlı:** `Tool.group` alanı ve `subset(groups)` — alt-agent'a daraltılmış kayıt
 defteri, ileride tool retrieval.
 
+### 5.2b `BoundaryValidator` — her araç çağrısı aynı boru hattından
+
+`core/validator.py`. Sıra: **şema → SQL guard → referans → politika → run** (ADR-0029).
+Araç yalnız `validate_refs` ve `check_policy` hook'larını yazar; sırayı ve hataya
+sarmayı doğrulayıcı bilir. `sql` alanı taşıyan her araç guard'dan geçer — araçtan
+bağımsız, adaptörün kendi guard'ına ek (savunma derinliği, ADR-0020).
+
+Mentörün sorduğu dört rol burada **rol** olarak tutuluyor, agent olarak değil:
+
+| rol | nerede |
+|---|---|
+| Planner | LLM'in kendisi; hangi aracı seçtiği izdeki adım sırasında okunur |
+| Retriever | `lakehouse_search / describe / distinct_values` (`Tool.role = "retrieve"`) |
+| Validator | `core/validator.py` + döngüdeki guard'lar; izde `[validate]` |
+| Narrator | son tur; anlatı doğrulama ve nedensellik filtresinden geçer; izde `[narrate]` |
+
 ### 5.3 `AnalysisWorkspace` — konuşma boyunca yaşayan tablo
 
 Örnek senaryo: *"tabloyu göster → tabloyu bozmadan enflasyondan arındır → bu tabloyu hiç

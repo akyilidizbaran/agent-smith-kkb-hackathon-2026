@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from ..adapters.duckdb_lakehouse import hardened_connection
 from ..contracts.lakehouse import LakehouseClient, LakehouseError
+from ..core.errors import ToolError
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
 
@@ -87,46 +88,37 @@ class WorkspaceAddColumnTool(Tool):
         self.lakehouse = lakehouse
         self.workspace = workspace
 
-    def run(self, params: AddColumnParams) -> ToolResult:
+    def validate_refs(self, params: AddColumnParams) -> ToolError | None:
         if not self.workspace.has_table:
-            return ToolResult.fail(
-                "NO_ACTIVE_TABLE",
-                "Ortada bir analiz tablosu yok.",
+            return ToolError(
+                error_code="NO_ACTIVE_TABLE",
+                message="Ortada bir analiz tablosu yok.",
                 hint="Önce lakehouse_query ile tabloyu oluştur.",
                 layer="workspace",
             )
         table = self.workspace.table
         assert table is not None
-
         if params.join_on not in table.columns:
-            return ToolResult.fail(
-                "COLUMN_NOT_FOUND",
-                f"'{params.join_on}' kolonu analiz tablosunda yok. "
-                f"Mevcut kolonlar: {', '.join(table.columns)}",
+            return ToolError(
+                error_code="COLUMN_NOT_FOUND",
+                message=f"'{params.join_on}' kolonu analiz tablosunda yok. "
+                        f"Mevcut kolonlar: {', '.join(table.columns)}",
                 hint="join_on, analiz tablosundaki eşleştirme kolonudur.",
                 candidates=list(table.columns),
                 layer="workspace",
             )
         if params.column_name in table.columns:
-            return ToolResult.fail(
-                "COLUMN_EXISTS",
-                f"'{params.column_name}' zaten tabloda var.",
+            return ToolError(
+                error_code="COLUMN_EXISTS",
+                message=f"'{params.column_name}' zaten tabloda var.",
                 hint="Farklı bir ad seç.",
                 candidates=list(table.columns),
                 layer="workspace",
             )
-
-        # SQL'i adaptör üretir: fiziksel yerleşim (tablo adı mı, uzun formatlı
-        # tablodaki seri mi) aracın bilgisi değildir. Kolon doğrulaması da orada,
-        # katalogdan yapılır — model var olmayan bir kolon uyduramaz.
+        # Kaynak kolonlarını adaptör katalogdan doğrular — model var olmayan bir kolon
+        # uyduramaz. Burada yalnız doğrulanır; SQL run'da yeniden üretilir (ucuz).
         try:
-            sql = self.lakehouse.series_sql(
-                params.dataset_id,
-                key_column=params.key_column,
-                value_column=params.value_column,
-                filter_column=params.filter_column,
-                filter_value=params.filter_value,
-            )
+            self._series_sql(params)
         except LakehouseError as exc:
             ipucu = ""
             if params.value_column == params.column_name:
@@ -134,11 +126,28 @@ class WorkspaceAddColumnTool(Tool):
                     f" '{params.column_name}' senin eklemek istediğin YENİ sütunun adı; "
                     "value_column'a kaynakta var olan bir ölçüm kolonu yaz."
                 )
-            return ToolResult.fail(
-                "COLUMN_NOT_FOUND", f"{exc}{ipucu}",
+            return ToolError(
+                error_code="COLUMN_NOT_FOUND", message=f"{exc}{ipucu}",
                 hint="Kaynakta var olan bir ölçüm kolonu seç.",
                 layer="reference",
             )
+        return None
+
+    def _series_sql(self, params: AddColumnParams) -> str:
+        """SQL'i adaptör üretir: fiziksel yerleşim (tablo adı mı, uzun formatlı
+        tablodaki seri mi) aracın bilgisi değildir (ADR-0024)."""
+        return self.lakehouse.series_sql(
+            params.dataset_id,
+            key_column=params.key_column,
+            value_column=params.value_column,
+            filter_column=params.filter_column,
+            filter_value=params.filter_value,
+        )
+
+    def run(self, params: AddColumnParams) -> ToolResult:
+        table = self.workspace.table
+        assert table is not None
+        sql = self._series_sql(params)
 
         try:
             result = self.lakehouse.execute_sql(sql)
@@ -238,28 +247,36 @@ class WorkspaceComputeColumnTool(Tool):
     def __init__(self, workspace: AnalysisWorkspace) -> None:
         self.workspace = workspace
 
-    def run(self, params: ComputeColumnParams) -> ToolResult:
+    def validate_refs(self, params: ComputeColumnParams) -> ToolError | None:
         if not self.workspace.has_table:
-            return ToolResult.fail(
-                "NO_ACTIVE_TABLE",
-                "Ortada bir analiz tablosu yok.",
+            return ToolError(
+                error_code="NO_ACTIVE_TABLE",
+                message="Ortada bir analiz tablosu yok.",
                 hint="Önce lakehouse_query ile tabloyu oluştur.",
                 layer="workspace",
-            )
-        if _UNSAFE.search(params.expression):
-            return ToolResult.fail(
-                "UNSAFE_SQL",
-                "İfade yalnızca hesap içerebilir; veri değiştiren veya dosya okuyan "
-                "ifadelere izin verilmez.",
-                layer="policy",
             )
         table = self.workspace.table
         assert table is not None
         if params.column_name in table.columns:
-            return ToolResult.fail(
-                "COLUMN_EXISTS", f"'{params.column_name}' zaten tabloda var.",
+            return ToolError(
+                error_code="COLUMN_EXISTS", message=f"'{params.column_name}' zaten tabloda var.",
                 hint="Farklı bir ad seç.", candidates=list(table.columns), layer="workspace",
             )
+        return None
+
+    def check_policy(self, params: ComputeColumnParams) -> ToolError | None:
+        if _UNSAFE.search(params.expression):
+            return ToolError(
+                error_code="UNSAFE_SQL",
+                message="İfade yalnızca hesap içerebilir; veri değiştiren veya dosya okuyan "
+                        "ifadelere izin verilmez.",
+                layer="policy", retryable=False,
+            )
+        return None
+
+    def run(self, params: ComputeColumnParams) -> ToolResult:
+        table = self.workspace.table
+        assert table is not None
 
         # Adaptörle aynı sınırlar: dış dosya/ağ erişimi kapalı, yapılandırma kilitli.
         con = hardened_connection()
@@ -308,6 +325,7 @@ class ShowParams(BaseModel):
 
 class WorkspaceShowTool(Tool):
     name = "workspace_show"
+    role = "retrieve"
     description = (
         "Üzerinde çalışılan analiz tablosunun güncel halini ve ona uygulanan işlem geçmişini "
         "gösterir. Kullanıcı 'tabloyu göster' dediğinde veya tablonun son durumundan emin "

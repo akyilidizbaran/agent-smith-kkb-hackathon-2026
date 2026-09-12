@@ -68,6 +68,7 @@ class CaseOutcome:
     tool_errors: int = 0
     error_codes: dict[str, int] = field(default_factory=dict)
     grounding: str = ""
+    roles: dict[str, int] = field(default_factory=dict)
     failures: list[str] = field(default_factory=list)
     answer_preview: str = ""
 
@@ -132,6 +133,7 @@ def run_case(case: GoldenCase) -> CaseOutcome:
         tool_errors=errors,
         error_codes=codes,
         grounding=answer.grounding,
+        roles={r: sum(1 for s in steps if s.role == r) for r in ("retrieve", "execute", "validate", "narrate")},
         failures=failures,
         answer_preview=answer.text[:200].replace("\n", " "),
     )
@@ -264,6 +266,12 @@ def main() -> None:
     if all_codes:
         print("HATA SINIFLARI: " + ", ".join(
             f"{k}×{v}" for k, v in sorted(all_codes.items(), key=lambda x: -x[1])))
+    roles: dict[str, int] = {}
+    for o in outcomes:
+        for k, v in o.roles.items():
+            roles[k] = roles.get(k, 0) + v
+    if roles:
+        print("ROLLER: " + ", ".join(f"{k}×{v}" for k, v in roles.items() if v))
     measured = [o for o in outcomes if o.grounding]
     if measured:
         clean = sum(1 for o in measured if o.grounding == "OK")

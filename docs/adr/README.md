@@ -53,3 +53,4 @@ sıfırdan başlatmamak için kayıt tutulur.
 | [0026](0026-kataloglu-seri-ile-sorgulanabilir-seri-ayrimi.md) | Kataloglu seri ile sorgulanabilir seri ayrı şeylerdir | Kabul edildi |
 | [0027](0027-anlati-dogrulama-grounding-guard.md) | Anlatı doğrulama: cevaptaki her sayı araç çıktısında olmalı | Kabul edildi |
 | [0028](0028-erisim-politikasi-ve-geri-cekilme-sozlesmesi.md) | Erişim politikası ve geri çekilme sözleşmesi: dört sonuç sınıfı, kaynak sadakati, sessiz geçiş yok | Kabul edildi |
+| [0029](0029-sinir-dogrulayici-ve-roller.md) | Sınır doğrulayıcı tek modülde (şema → SQL guard → referans → politika); roller izde | Kabul edildi |
