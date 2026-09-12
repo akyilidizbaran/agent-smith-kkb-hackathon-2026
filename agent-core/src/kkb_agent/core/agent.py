@@ -185,6 +185,10 @@ class AnalyticsAgent:
             "workspace_add_column",
             "workspace_compute_column",
             "workspace_show",
+            # Gold araçları hesaplanmış tabloyu workspace'e koyar (ADR-0031).
+            "gold_align",
+            "gold_decompose",
+            "gold_join",
             # Ingest kartı da bir cevaptır: "bu dosyayı ekle" isteğinde sorgu gerekmez.
             "ingest_from_url",
         }

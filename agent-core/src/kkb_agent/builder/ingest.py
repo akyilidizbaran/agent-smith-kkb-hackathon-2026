@@ -8,29 +8,21 @@ sözleşmesi, aynı provenance. Biz yalnız 15 alanı doldurup çağırırız ve
 
 Mentörün jüri sorusu ("yarın REST API / DB / stream verirsek?") burada da aynı
 cevabı alır: yeni kaynak türü onların tarafında bir connector; bu dosya değişmez.
+
+Alt süreç tesisatı (`Runner`, `subprocess_runner`, `parse_kv`) `adapters/lakehouse_cli.py`'da;
+salt-okunur Gold çağrısı (`adapters/gold_cli.py`) aynı tesisatı kullanır.
 """
 
 from __future__ import annotations
 
-import os
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
+from ..adapters.lakehouse_cli import Runner, cli_available, parse_kv, subprocess_runner
 from .profile import MappingProposal, SemanticsProposal
 
-Runner = Callable[[list[str], Path], tuple[int, str, str]]
-"""(komut, çalışma dizini) → (dönüş kodu, stdout, stderr). Testte sahte, üretimde subprocess."""
-
-
-def _subprocess_runner(command: list[str], cwd: Path) -> tuple[int, str, str]:
-    # Agent'ın kendi venv'i alt sürece sızmasın: uv, VIRTUAL_ENV'i görünce uyarıyor ve
-    # lakehouse-core'un kendi ortamı yerine bizimkini kullanmaya kalkabiliyor.
-    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
-    proc = subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False,
-                          timeout=600, env=env)
-    return proc.returncode, proc.stdout, proc.stderr
+_subprocess_runner = subprocess_runner  # geriye dönük ad
+_parse_kv = parse_kv
 
 
 @dataclass(frozen=True)
@@ -80,7 +72,7 @@ class LakehouseCLI:
 
     @property
     def available(self) -> bool:
-        return (self.core_dir / "src" / "lakehouse" / "cli.py").is_file()
+        return cli_available(self.core_dir)
 
     def ingest_file_command(
         self, *, locator: str, dataset_id: str, mapping: MappingProposal, semantics: SemanticsProposal,

@@ -35,6 +35,10 @@ ErrorCode = Literal[
     # politika katmanı — izin veriliyor mu
     "UNSAFE_SQL",
     "MISSING_PERIOD_FILTER",
+    # Gold katmanının semantik reddi: katalog kuralı bu dönüşümü güvenli bulmuyor
+    # (stok seride decompose, doğrulanmamış semantik, üst örnekleme...). Kural
+    # kataloğun, seçim modelin değil (ADR-0031).
+    "GOLD_REFUSED",
     # veri katmanı — sorgu çalıştı, sonuç ne söylüyor
     "OUT_OF_COVERAGE",
     "EMPTY_RESULT",
@@ -64,6 +68,7 @@ NOT_RETRYABLE: frozenset[str] = frozenset({
     "NEEDS_CREDENTIAL",
     "ACCESS_BLOCKED",
     "SOURCE_NOT_FOUND",
+    "GOLD_REFUSED",      # kural katalogda; aynı çağrıyı tekrarlamak kuralı değiştirmez
 })
 
 

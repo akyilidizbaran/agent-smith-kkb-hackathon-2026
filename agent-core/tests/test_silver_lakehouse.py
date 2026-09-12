@@ -339,3 +339,109 @@ def test_adhoc_iliskisi_olmayan_veritabani_yine_yuklenir(lake: SilverLakehouse) 
     """Seed/test veritabanlarında adhoc şeması yok; adaptör buna takılmamalı."""
     assert lake.health()["adhoc_observations"] == 0
     assert lake.health()["draft_series"] == 0
+
+
+# ---------- Gold tabloları (ADR-0031) ----------
+
+GOLD_DDL = """
+CREATE SCHEMA gold;
+CREATE TABLE meta.gold_build (
+    build_id VARCHAR NOT NULL, metric_id VARCHAR NOT NULL, function VARCHAR NOT NULL,
+    series_ids VARCHAR[] NOT NULL, target_frequency VARCHAR, name_tr VARCHAR NOT NULL,
+    description VARCHAR NOT NULL, aliases VARCHAR[], tags VARCHAR[],
+    allow_unverified_semantics BOOLEAN NOT NULL, status VARCHAR NOT NULL, row_count BIGINT,
+    refusal_reason VARCHAR, refusal_message VARCHAR, catalog_content_sha256 VARCHAR NOT NULL,
+    silver_fingerprint VARCHAR NOT NULL, silver_row_count BIGINT NOT NULL,
+    is_current BOOLEAN NOT NULL, built_at TIMESTAMPTZ NOT NULL);
+CREATE TABLE gold.konut_ceyreklik (
+    series_id VARCHAR, entity_id VARCHAR, period_start DATE, period_end DATE, value DOUBLE,
+    quality_flag VARCHAR, measure_type VARCHAR, unit VARCHAR, aggregation VARCHAR,
+    source_frequency VARCHAR, target_frequency VARCHAR, observations INTEGER,
+    missing_observations INTEGER, warned_observations INTEGER,
+    source_observation_dates DATE[], artifact_sha256_list VARCHAR[], vintage_id_list VARCHAR[],
+    run_id_list VARCHAR[], gold_metric_id VARCHAR, gold_function VARCHAR, gold_build_id VARCHAR,
+    gold_built_at TIMESTAMPTZ, gold_catalog_content_sha256 VARCHAR, silver_fingerprint VARCHAR);
+"""
+
+
+def _gold_fixture(tmp_path: Path, *, stale: bool = False) -> SilverLakehouse:
+    from kkb_agent.adapters.silver_lakehouse import SILVER_FINGERPRINT_SQL
+
+    db = tmp_path / "lh.duckdb"
+    con = duckdb.connect(str(db))
+    con.execute(DDL); con.execute(GOLD_DDL)
+    _series(con, "bddk_monthly:konut", aliases=["konut kredisi"], name_tr="Konut Kredisi")
+    for i, v in enumerate([100.0, 110.0, 121.0], start=1):
+        _obs(con, "bddk_monthly:konut", date(2025, i, 28), v)
+    fp = con.execute(SILVER_FINGERPRINT_SQL).fetchone()[0]
+    con.execute(
+        "INSERT INTO gold.konut_ceyreklik VALUES ('bddk_monthly:konut', NULL, '2025-01-01', '2025-03-31', 121.0, 'ok',"
+        " 'stock', 'TRY_mn', 'last', 'monthly', 'quarterly', 3, 0, 0, ['2025-01-28','2025-02-28','2025-03-28'],"
+        " ['sha'], ['vin'], ['run'], 'konut_ceyreklik', 'align_frequency', 'b1', now(), 'c1', ?)", [fp],
+    )
+    con.execute(
+        "INSERT INTO meta.gold_build VALUES ('b1', 'konut_ceyreklik', 'align_frequency', ['bddk_monthly:konut'],"
+        " 'quarterly', 'Konut kredisi çeyreklik', 'Çeyrek sonu bakiyesi', ['çeyreklik konut kredisi'],"
+        " ['gold'], false, 'built', 1, NULL, NULL, 'c1', ?, 3, true, now())", [fp],
+    )
+    # Defterde 'refused' olan metrik ve defterde olup diskte olmayan tablo listelenmez.
+    con.execute(
+        "INSERT INTO meta.gold_build VALUES ('b1', 'konut_akim', 'decompose_cumulative', ['bddk_monthly:konut'],"
+        " NULL, 'x', 'y', [], [], false, 'refused', NULL, 'NOT_DECOMPOSABLE', 'stock', 'c2', ?, 3, true, now())", [fp],
+    )
+    con.execute(
+        "INSERT INTO meta.gold_build VALUES ('b1', 'yarim_kalan', 'align_frequency', ['bddk_monthly:konut'],"
+        " 'monthly', 'x', 'y', [], [], false, 'built', 1, NULL, NULL, 'c3', ?, 3, true, now())", [fp],
+    )
+    if stale:
+        con.execute("UPDATE silver.fact_observation SET value = value + 1 WHERE observation_date = '2025-03-28'")
+    con.close()
+    return SilverLakehouse(db)
+
+
+def test_kurulmus_gold_tablosu_defterden_dataset_olarak_gorunur(tmp_path: Path) -> None:
+    lake = _gold_fixture(tmp_path)
+    ids = {s.dataset_id for s in lake.list_datasets()}
+    assert ids == {"bddk_monthly:konut", "gold.konut_ceyreklik"}  # refused ve yarım kalan yok
+
+    spec = lake.get_dataset("gold.konut_ceyreklik")
+    assert spec.source == "gold" and spec.time_column == "period_end"
+    assert spec.frequency is Frequency.QUARTERLY
+    value = next(c for c in spec.columns if c.name == "value")
+    assert value.unit == "milyon TL" and value.unit_multiplier == 1_000_000.0
+    assert value.semantic_type is SemanticType.STOCK and "çeyreklik konut kredisi" in value.aliases
+    assert any(n.startswith("GOLD TABLOSU (align_frequency)") and "stok → dönemin son gözlemi" in n for n in spec.notes)
+    assert not any("BAYAT" in n for n in spec.notes)
+    assert spec.coverage.start == date(2025, 1, 1) and spec.coverage.end == date(2025, 3, 31)
+
+    # Arama alias'tan bulur; kimlik gerçek tablo adı → SQL FROM'a yazılır, ipucu gerekmez.
+    assert [s.dataset_id for s in lake.search_datasets("çeyreklik konut kredisi")][0] == "gold.konut_ceyreklik"
+    sql = lake.series_sql("gold.konut_ceyreklik", key_column="period_end", value_column="value")
+    assert sql == 'SELECT "period_end", "value" FROM gold.konut_ceyreklik ORDER BY "period_end"'
+    assert lake.execute_sql(sql).data["value"].tolist() == [121.0]
+    preview = lake.preview("gold.konut_ceyreklik")
+    assert "artifact_sha256_list" not in preview.data.columns and "value" in preview.data.columns
+    h = lake.health()
+    assert h["gold_tables"] == 1 and h["stale_gold_tables"] == 0 and h["queryable_series"] == 1
+    assert h["gold_run_available"] is False
+
+
+def test_silver_degisince_gold_tablosu_bayat_diye_isaretlenir(tmp_path: Path) -> None:
+    lake = _gold_fixture(tmp_path, stale=True)
+    spec = lake.get_dataset("gold.konut_ceyreklik")
+    assert any("BAYAT" in n for n in spec.notes)
+    assert spec.coverage.known_gaps == ["BAYAT: Silver sonradan değişti"]
+    assert lake.health()["stale_gold_tables"] == 1
+    # Uyarı sorgu sonucuna da taşınır: model tabloyu bayat bilerek anlatır.
+    r = lake.execute_sql("SELECT value FROM gold.konut_ceyreklik")
+    assert any("BAYAT" in w for w in r.provenance.warnings)
+
+
+def test_gold_defteri_olmayan_veritabani_yine_yuklenir(lake: SilverLakehouse) -> None:
+    assert lake.health()["gold_tables"] == 0
+    assert not any(s.dataset_id.startswith("gold.") for s in lake.list_datasets())
+
+
+def test_gold_cagrisi_cli_yokken_anlasilir_sebeple_durur(lake: SilverLakehouse) -> None:
+    with pytest.raises(LakehouseError, match="gold-run"):
+        lake.gold_align("bddk_monthly:konut", "quarterly")

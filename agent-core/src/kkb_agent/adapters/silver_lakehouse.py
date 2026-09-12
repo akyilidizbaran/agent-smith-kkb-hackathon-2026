@@ -36,11 +36,76 @@ from ..contracts.catalog import (
     Frequency,
     SemanticType,
 )
-from ..contracts.lakehouse import LakehouseError, QueryProvenance, QueryResult
+from ..contracts.lakehouse import GoldRefused, LakehouseError, QueryProvenance, QueryResult
 from .duckdb_lakehouse import guard_sql, hardened_connection, register_reader
+from .gold_cli import GoldCLI, GoldRunOutcome
 
 SILVER_RELATION = "silver.fact_observation"
 ADHOC_RELATION = "adhoc.fact_observation"
+GOLD_BUILD_TABLE = "meta.gold_build"
+GOLD_SCHEMA = "gold"
+"""Gold tabloları (`python -m lakehouse gold`, ADR-0031): kataloglanmış bir fonksiyon
+çağrısının Silver'dan kurulmuş önbelleği. Hangi tablonun hangi metrik olduğunu ve hangi
+Silver'dan kurulduğunu `meta.gold_build` söyler; adaptör tabloyu değil, defteri okur."""
+
+SILVER_FINGERPRINT_SQL = """
+SELECT coalesce(md5(string_agg(
+           series_id || '|' || coalesce(entity_id, '') || '|' || observation_date
+           || '|' || coalesce(value::VARCHAR, '') || '|' || quality_flag
+           || '|' || artifact_sha256,
+           ','
+           ORDER BY series_id, entity_id, observation_date, artifact_sha256
+       )), 'empty')
+FROM silver.fact_observation
+"""
+"""Veri ekibinin `lakehouse.gold.build.silver_fingerprint` tanımının birebir kopyası —
+sözleşmenin parçası. Gold tablosu kurulurken kaydedilen parmak iziyle canlı parmak izi
+farklıysa tablo BAYATTIR: Silver sonradan yeniden kurulmuş, Gold kurulmamıştır."""
+
+_GOLD_MEASURE_BASES = frozenset({"value", "cumulative_value", "previous_cumulative_value", "raw_change"})
+_GOLD_TIME_BASES = frozenset({"period_start", "period_end"})
+_GOLD_DIMENSION_BASES = frozenset({"series_id", "entity_id"})
+_GOLD_COLUMN_NOTES = {
+    "period_end": "Dönem sonu — satırın etiketi",
+    "period_start": "Dönem başı",
+    "value": "Dönemin hesaplanmış değeri (kural katalogdan)",
+    "cumulative_value": "Kaynağın birikimli okuması (dokunulmamış)",
+    "previous_cumulative_value": "Bir önceki dönemin birikimli okuması (taban)",
+    "raw_change": "İki okuma farkı; dönem akımı olarak yazılmadıysa burada durur",
+    "quality_flag": "ok | partial_period | boundary_missing | missing_value | source_warning",
+    "decomposition_flag": "ok | no_prior_base | unattributable_year_start | spans_multiple_periods | negative_change | missing_value",
+    "observations": "Döneme giren kaynak gözlem sayısı",
+    "missing_observations": "Dönemde eksik gelen gözlem sayısı",
+    "warned_observations": "Parser uyarısı taşıyan gözlem sayısı",
+    "source_observation_dates": "Döneme giren kaynak gözlem tarihleri (kanıt)",
+    "artifact_sha256_list": "Katkıda bulunan RAW artifact özetleri (kanıt zinciri)",
+    "vintage_id_list": "Katkıda bulunan Silver sürümleri",
+    "run_id_list": "Katkıda bulunan ingest koşuları",
+    "contributing_series": "Bu dönemde yayımlayan seriler",
+    "absent_series": "Bu dönemde yayımlamayan seriler",
+    "is_complete_period": "Tüm seriler bu dönemde yayımladı mı",
+    "aggregation": "Uygulanan kural (last/sum/avg/identity)",
+    "measure_type": "Kaynak serinin ölçüm tipi (katalogdan)",
+    "unit": "Kaynak serinin birim kodu (katalogdan)",
+    "source_frequency": "Kaynak frekansı",
+    "target_frequency": "Hedef dönem",
+    "contributor_count": "Satıra giren okuma sayısı (1: tek okuma, 2: fark)",
+    "previous_observation_date": "Taban okumanın tarihi",
+    "artifact_sha256": "Bu okumanın RAW artifact özeti (kanıt)",
+    "previous_artifact_sha256": "Taban okumanın RAW artifact özeti (kanıt)",
+    "vintage_id": "Bu okumanın Silver sürümü",
+    "previous_vintage_id": "Taban okumanın Silver sürümü",
+    "run_id": "Bu okumanın ingest koşusu",
+    "previous_run_id": "Taban okumanın ingest koşusu",
+    "series_id": "Kaynak seri kimliği",
+    "entity_id": "Varlık (il, banka grubu); tek varlıklı seride NULL",
+}
+_GOLD_RULE_TR = {
+    "stock": "stok → dönemin son gözlemi (last)",
+    "flow_periodic": "akım → dönem toplamı (sum)",
+    "flow_ytd": "yıl başından birikimli → önce çözülür",
+    "flow_cumulative": "kuruluştan birikimli → önce çözülür",
+}
 """Aynı kolonlar, aynı anlam; yalnız şema adı verinin nereden geldiğini söyler (veri
 ekibinin DDL notu). Küratörlü ve taslak veri ayrı ilişkilerde durur ki karışmasın —
 ama Analist ikisini de okur; taslak olan `status='draft'` notuyla gelir."""
@@ -84,13 +149,16 @@ _FREQUENCY: dict[str, Frequency] = {
 class SilverLakehouse:
     """`meta.series` + `silver.fact_observation` üzerinde LakehouseClient."""
 
-    def __init__(self, db_path: str | Path) -> None:
+    def __init__(self, db_path: str | Path, *, gold: GoldCLI | None = None) -> None:
         self.db_path = Path(db_path)
         if not self.db_path.exists():
             raise LakehouseError(
                 f"Lakehouse bulunamadı: {self.db_path}. Veri ekibinin ingestion'ı çalıştırılmalı "
                 "ya da geliştirme için `python scripts/dev_seed_silver.py`."
             )
+        # Salt-okunur Gold çağrısı (gold-run). Yoksa gold_* araçları kayıt edilmez; hazır
+        # gold.* tabloları yine görünür — onlar defterden okunur, CLI gerektirmez.
+        self.gold = gold
         self._con = hardened_connection(self.db_path)
         register_reader(self.db_path, self)
         self._require_relations()
@@ -141,6 +209,8 @@ class SilverLakehouse:
                 )
         # adhoc isteğe bağlı: seed/test veritabanlarında olmayabilir.
         self._has_adhoc = ADHOC_RELATION in found
+        # Gold defteri de isteğe bağlı: `python -m lakehouse gold` hiç koşmadıysa yoktur.
+        self._has_gold_ledger = GOLD_BUILD_TABLE in found
 
     def _load_catalog(self) -> dict[str, DatasetSpec]:
         """Kataloğu yükler ve yüklenmemiş serileri ayırır.
@@ -195,10 +265,168 @@ class SilverLakehouse:
                 catalog[series_id] = self._to_spec(row, n)
             else:
                 self._uningested[series_id] = name_tr
+        catalog.update(self._load_gold_catalog(catalog))
         return catalog
 
     def _relation_for(self, series_id: str) -> str:
         return self._relation_by_series.get(series_id, SILVER_RELATION)
+
+    # ---------- Gold tabloları (ADR-0031) ----------
+    def _is_gold(self, dataset_id: str) -> bool:
+        return dataset_id in getattr(self, "_gold_meta", {})
+
+    def _silver_fingerprint(self) -> str:
+        return str(self._conn().execute(SILVER_FINGERPRINT_SQL).fetchone()[0])
+
+    def _load_gold_catalog(self, series_catalog: dict[str, DatasetSpec]) -> dict[str, DatasetSpec]:
+        """`meta.gold_build`'de güncel ve `built` olan her metrik bir DatasetSpec.
+
+        Tablo değil defter okunur: tablonun hangi fonksiyonun, hangi serilerin, hangi
+        Silver'ın ürünü olduğunu yalnız defter bilir. Defterde olup diskte olmayan tablo
+        (yarım kalmış bir kurulum) listelenmez; defterde olmayan `gold.*` tablosu da
+        listelenmez — kim kurduğu belli olmayan bir tablo modele gösterilmez.
+        """
+        self._gold_meta: dict[str, dict[str, Any]] = {}
+        if not getattr(self, "_has_gold_ledger", False):
+            return {}
+        rows = self._conn().execute(
+            f"""
+            SELECT metric_id, function, series_ids, target_frequency, name_tr, description,
+                   aliases, tags, allow_unverified_semantics, row_count, silver_fingerprint,
+                   built_at::VARCHAR, build_id
+            FROM {GOLD_BUILD_TABLE}
+            WHERE is_current AND status = 'built'
+            ORDER BY metric_id
+            """
+        ).fetchall()
+        if not rows:
+            return {}
+        tables = {
+            r[0] for r in self._conn().execute(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = ?",
+                [GOLD_SCHEMA],
+            ).fetchall()
+        }
+        live = self._silver_fingerprint()
+        out: dict[str, DatasetSpec] = {}
+        for row in rows:
+            metric_id = row[0]
+            if metric_id not in tables:
+                continue
+            spec = self._gold_spec(row, stale=row[10] != live, series_catalog=series_catalog)
+            out[spec.dataset_id] = spec
+        return out
+
+    def _gold_spec(self, row: tuple, *, stale: bool, series_catalog: dict[str, DatasetSpec]) -> DatasetSpec:
+        (metric_id, function, series_ids, target, name_tr, description, aliases, tags,
+         allow_unverified, row_count, fingerprint, built_at, build_id) = row
+        series_ids = list(series_ids or [])
+        table = f"{GOLD_SCHEMA}.{metric_id}"
+        dataset_id = table
+
+        # Serilerin kural ve birimleri: hangi kolonun ne olduğu ancak katalogla anlaşılır.
+        semantics: dict[str, dict[str, Any]] = {}
+        for sid, unit, mt, agg, freq, name in self._conn().execute(
+            "SELECT series_id, unit, measure_type, default_agg, frequency, name_tr "
+            "FROM meta.series WHERE series_id IN (SELECT unnest(?))", [series_ids],
+        ).fetchall():
+            semantics[sid] = {"unit": unit, "measure_type": mt, "default_agg": agg,
+                              "frequency": freq, "name": name}
+
+        def rule_of(sid: str) -> str:
+            sem = semantics.get(sid, {})
+            mt, agg = sem.get("measure_type"), sem.get("default_agg")
+            if mt in _GOLD_RULE_TR:
+                return _GOLD_RULE_TR[mt]
+            return f"{mt} → katalog kuralı {agg}" if agg else f"{mt}"
+
+        described = self._conn().execute(f"DESCRIBE {table}").fetchall()
+        columns: list[ColumnSpec] = []
+        for col_name, dtype, *_ in described:
+            base = col_name.rsplit("::", 1)[-1]
+            key_series = col_name.split("::", 1)[0].split("@", 1)[0] if "::" in col_name else (series_ids[0] if series_ids else "")
+            sem = semantics.get(key_series, {})
+            if base in _GOLD_MEASURE_BASES:
+                unit_label, multiplier = _UNIT.get(sem.get("unit") or "", (sem.get("unit") or "birimsiz", 1.0))
+                semantic_type, cumulative = _MEASURE_TYPE.get(
+                    sem.get("measure_type") or "", (SemanticType.STOCK, CumulativeKind.NONE)
+                )
+                if function == "decompose_cumulative" and base == "value":
+                    semantic_type, cumulative = SemanticType.FLOW, CumulativeKind.NONE
+                columns.append(ColumnSpec(
+                    name=col_name, role=ColumnRole.MEASURE, dtype=dtype,
+                    description=f"{_GOLD_COLUMN_NOTES.get(base, base)} — {sem.get('name', key_series)}; {rule_of(key_series)}",
+                    semantic_type=semantic_type, cumulative=cumulative,
+                    unit=unit_label, unit_multiplier=multiplier, aliases=list(aliases or []),
+                ))
+            elif base in _GOLD_TIME_BASES and "::" not in col_name:
+                columns.append(ColumnSpec(
+                    name=col_name, role=ColumnRole.TIME, dtype=dtype,
+                    description=_GOLD_COLUMN_NOTES[base],
+                    aliases=["dönem", "tarih", "çeyrek", "ay"] if base == "period_end" else [],
+                ))
+            elif base in _GOLD_DIMENSION_BASES:
+                columns.append(ColumnSpec(name=col_name, role=ColumnRole.DIMENSION, dtype=dtype,
+                                          description=_GOLD_COLUMN_NOTES[base]))
+            else:
+                note = _GOLD_COLUMN_NOTES.get(base, "Kurulum kaydı" if base.startswith("gold_") or base == "silver_fingerprint" else base)
+                columns.append(ColumnSpec(name=col_name, role=ColumnRole.METADATA, dtype=dtype, description=note))
+
+        start, end, n = self._conn().execute(
+            f"SELECT min(period_start), max(period_end), count(*) FROM {table}"
+        ).fetchone()
+        source_freq = semantics.get(series_ids[0], {}).get("frequency") if series_ids else None
+        frequency = _FREQUENCY.get(target or source_freq or "", Frequency.IRREGULAR)
+
+        rules = "; ".join(f"{sid}: {rule_of(sid)}" for sid in series_ids)
+        notes = [
+            f"GOLD TABLOSU ({function}): {', '.join(series_ids)} → "
+            f"{target or 'kaynak frekansı'}. Kural katalogdan — {rules}. Değerler hesaplanmış "
+            "dönem değerleridir: yeniden toplama/ortalama alma, doğrudan göster.",
+            "Her satır kendi kanıtını taşır: source_observation_dates ve artifact_sha256_list "
+            f"(kaynak gözlemler → RAW). Kurulum: {build_id[:8]} @ {built_at[:19]}.",
+        ]
+        if function == "join_on_period":
+            notes.append("Dış birleştirme: is_complete_period=false olan dönemde bir seri yayımlamamıştır; "
+                         "o hücre boş kalır, sıfır değildir.")
+        if allow_unverified:
+            notes.append("Doğrulanmamış semantikle kurulmuş (insan onayı katalogda yazılı); cevapta belirt.")
+        if stale:
+            notes.append(
+                "⚠ BAYAT: Silver bu tablo kurulduktan sonra değişti (parmak izi farklı). "
+                "`python -m lakehouse gold` yeniden çalıştırılmalı; cevapta tablonun önceki "
+                "Silver'dan geldiğini söyle."
+            )
+        measure_cols = [c.name for c in columns if c.role is ColumnRole.MEASURE]
+        first_measure = measure_cols[0] if measure_cols else "value"
+        notes.append(
+            f'Fiziksel sorgu: SELECT period_end, "{first_measure}" FROM {table} ORDER BY period_end'
+        )
+        self._gold_meta[dataset_id] = {
+            "metric_id": metric_id, "function": function, "series_ids": series_ids,
+            "target_frequency": target, "stale": stale, "build_id": build_id,
+            "list_columns": [c for c, d, *_ in described if d.endswith("[]")],
+        }
+        grain = ["period_end"] if function == "join_on_period" else ["series_id", "entity_id", "period_end"]
+        return DatasetSpec(
+            dataset_id=dataset_id,
+            name=name_tr,
+            description=description,
+            source="gold",
+            source_url=None,
+            source_detail=f"{table} — {function}({', '.join(series_ids)}) kurulum {build_id[:8]}",
+            frequency=frequency,
+            time_column="period_end",
+            grain=grain,
+            columns=columns,
+            coverage=Coverage(
+                start=start or date(1900, 1, 1), end=end or date(1900, 1, 1), row_count=int(n),
+                known_gaps=["BAYAT: Silver sonradan değişti"] if stale else [],
+            ),
+            tags=list(tags or []) + ["gold"],
+            notes=notes,
+            last_refreshed=None,
+        )
 
     def _to_spec(self, row: tuple, row_count: int | None) -> DatasetSpec:
         (series_id, source_id, native_code, dataset_id, name_tr, description, aliases, tags,
@@ -374,6 +602,16 @@ class SilverLakehouse:
 
     def preview(self, dataset_id: str, n: int = 5) -> QueryResult:
         self.get_dataset(dataset_id)
+        if self._is_gold(dataset_id):
+            meta = self._gold_meta[dataset_id]
+            skip = set(meta["list_columns"]) | {
+                "gold_metric_id", "gold_function", "gold_build_id", "gold_built_at",
+                "gold_catalog_content_sha256", "silver_fingerprint",
+            }
+            cols = [c.name for c in self._catalog[dataset_id].columns
+                    if c.name not in skip and not c.name.endswith(("::unit", "::measure_type", "::aggregation", "::series_id"))]
+            quoted = ", ".join(f'"{c}"' for c in cols)
+            return self.execute_sql(f"SELECT {quoted} FROM {dataset_id} ORDER BY period_end LIMIT {int(n)}")
         return self.execute_sql(
             f"SELECT observation_date, value, quality_flag FROM {self._relation_for(dataset_id)} "
             f"WHERE series_id = '{dataset_id}' ORDER BY observation_date LIMIT {int(n)}"
@@ -397,6 +635,13 @@ class SilverLakehouse:
                 raise LakehouseError(
                     f"{field}='{name}' bu seride yok. Mevcut kolonlar: {', '.join(sorted(valid))}"
                 )
+        if self._is_gold(dataset_id):
+            # Gold tablosu gerçek bir tablo: kimlik FROM'a yazılır, kolon adları tırnaklı
+            # (join tablosunda '<seri>@<varlık>::value' gibi adlar var).
+            sql = f'SELECT "{key_column}", "{value_column}" FROM {dataset_id}'
+            if filter_column and filter_value is not None:
+                sql += f" WHERE \"{filter_column}\" = '{filter_value.replace(chr(39), chr(39) * 2)}'"
+            return sql + f' ORDER BY "{key_column}"'
         sid = dataset_id.replace("'", "''")
         sql = (
             f"SELECT {key_column}, {value_column} FROM {self._relation_for(dataset_id)} "
@@ -405,6 +650,72 @@ class SilverLakehouse:
         if filter_column and filter_value is not None:
             sql += f" AND {filter_column} = '{filter_value.replace(chr(39), chr(39) * 2)}'"
         return sql + f" ORDER BY {key_column}"
+
+    # ---------- Gold çağrıları (GoldCapable, ADR-0031) ----------
+    def _gold_call(self, function: str, series_ids: list[str], target_frequency: str | None) -> QueryResult:
+        if self.gold is None:
+            raise LakehouseError(
+                "Bu lakehouse Gold çağrısı sunmuyor: veri ekibinin `gold-run` komutu bu ortamda yok."
+            )
+        for sid in series_ids:
+            if self._is_gold(sid):
+                raise LakehouseError(
+                    f"'{sid}' bir seri değil, hazır bir Gold tablosu; onu lakehouse_query ile "
+                    "doğrudan sorgula. Gold araçları seri kimliği ister."
+                )
+            self.get_dataset(sid)  # yüklenmemiş/olmayan seri burada anlaşılır sebeple durur
+        started = time.perf_counter()
+        out: GoldRunOutcome = self.gold.run(
+            function=function, series_ids=list(series_ids), target_frequency=target_frequency
+        )
+        duration = (time.perf_counter() - started) * 1000
+        if out.status == "refused":
+            raise GoldRefused(out.reason or "REFUSED", out.message or "", series_id=out.series_id)
+        if not out.ok or out.frame is None:
+            raise LakehouseError(f"Gold çağrısı başarısız: {out.message or out.status}")
+
+        frame = out.frame
+        specs = [self._catalog[s] for s in series_ids if s in self._catalog]
+        warnings: list[str] = []
+        for column in frame.columns:
+            base = str(column).rsplit("::", 1)[-1]
+            if base in ("quality_flag", "decomposition_flag"):
+                counts = frame[column].astype(str).value_counts()
+                flagged = {k: int(v) for k, v in counts.items() if k not in ("ok", "None", "nan")}
+                if flagged:
+                    warnings.append(
+                        f"{column}: " + ", ".join(f"{k}×{v}" for k, v in sorted(flagged.items()))
+                    )
+        if "is_complete_period" in frame.columns:
+            incomplete = int((~frame["is_complete_period"].astype(bool)).sum())
+            if incomplete:
+                warnings.append(f"{incomplete} dönemde en az bir seri yayımlamamış (hücre boş, sıfır değil).")
+        for spec in specs:
+            warnings.extend(n for n in spec.notes if not n.startswith("Fiziksel sorgu"))
+        args = ", ".join(f"'{s}'" for s in series_ids)
+        if target_frequency:
+            args += f", target_frequency='{target_frequency}'"
+        return QueryResult(
+            data=frame,
+            provenance=QueryProvenance(
+                sql=f"gold-run {function}({args})",
+                dataset_ids=list(series_ids),
+                sources=[f"{s.source} — {s.name}" for s in specs] + [f"gold — {function}"],
+                source_urls=[s.source_url for s in specs if s.source_url],
+                row_count=len(frame),
+                duration_ms=duration,
+                warnings=warnings,
+            ),
+        )
+
+    def gold_align(self, series_id: str, target_frequency: str) -> QueryResult:
+        return self._gold_call("align_frequency", [series_id], target_frequency)
+
+    def gold_decompose(self, series_id: str) -> QueryResult:
+        return self._gold_call("decompose_cumulative", [series_id], None)
+
+    def gold_join(self, series_ids: list[str], target_frequency: str) -> QueryResult:
+        return self._gold_call("join_on_period", list(series_ids), target_frequency)
 
     def health(self) -> dict[str, Any]:
         n_obs = self._conn().execute(f"SELECT count(*) FROM {SILVER_RELATION}").fetchone()[0]
@@ -418,13 +729,16 @@ class SilverLakehouse:
             "ok": True,
             "db_path": str(self.db_path),
             "relation": SILVER_RELATION,
-            "queryable_series": len(self._catalog),
-            "catalogued_series": len(self._catalog) + len(self._uningested),
+            "queryable_series": len(self._catalog) - len(self._gold_meta),
+            "catalogued_series": len(self._catalog) - len(self._gold_meta) + len(self._uningested),
             "uningested_series": len(self._uningested),
             "observations": n_obs,
             "adhoc_observations": n_adhoc,
             "draft_series": sum(1 for sid, rel in self._relation_by_series.items()
                                 if rel == ADHOC_RELATION and sid in self._catalog),
+            "gold_tables": len(self._gold_meta),
+            "stale_gold_tables": sum(1 for m in self._gold_meta.values() if m["stale"]),
+            "gold_run_available": self.gold is not None,
             # Sayı önce, örnek sonra: 1600 kimliği ekrana dökmek teşhis değil gürültüdür.
             "unverified_series": (
                 f"{len(unverified)} seri"

@@ -111,6 +111,12 @@ def run_case(case: GoldenCase) -> CaseOutcome:
     for needed in case.must_use_tools:
         if needed not in tools:
             failures.append(f"'{needed}' aracı hiç kullanılmadı (kullanılanlar: {', '.join(tools)})")
+    for label, check in case.tool_path_checks:
+        try:
+            if not check(steps):
+                failures.append(f"araç yolu kontrolü başarısız: {label} (kullanılanlar: {', '.join(tools)})")
+        except Exception as exc:
+            failures.append(f"araç yolu kontrolü hata verdi ({label}): {exc}")
 
     low = answer.text.lower()
     for needle in case.answer_must_contain:

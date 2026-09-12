@@ -57,10 +57,13 @@ def test_not_retryable_kumesi_beklendigi_gibi() -> None:
 
     ADR-0028 üç erişim kodu ekledi — aynı kaynağı aynı biçimde tekrar istemek sonucu
     değiştirmez; alternatif kaynak ayrı bir çağrıdır ve kararı harness verir.
+    ADR-0031 GOLD_REFUSED ekledi — kural katalogda yazılı; aynı çağrıyı tekrarlamak
+    kuralı değiştirmez, kullanıcıya sebebi söylemek gerekir.
     """
     assert NOT_RETRYABLE == {
         "OUT_OF_COVERAGE", "UNSAFE_SQL", "UNKNOWN_TOOL",
         "NEEDS_CREDENTIAL", "ACCESS_BLOCKED", "SOURCE_NOT_FOUND",
+        "GOLD_REFUSED",
     }
 
 

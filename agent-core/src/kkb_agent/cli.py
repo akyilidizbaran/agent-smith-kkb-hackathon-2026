@@ -13,10 +13,11 @@ import logging
 import sys
 
 from .adapters.duckdb_lakehouse import DuckDBLakehouse
+from .adapters.gold_cli import GoldCLI
 from .adapters.silver_lakehouse import SilverLakehouse
-from .contracts.lakehouse import LakehouseError
+from .contracts.lakehouse import GoldCapable, LakehouseError
 from .config import load_settings
-from .core.agent import AnalyticsAgent
+from .core.agent import SYSTEM_PROMPT, AnalyticsAgent
 from .core.registry import ToolRegistry
 from .core.workspace import AnalysisWorkspace
 from .domain import DomainProfile
@@ -34,9 +35,10 @@ from .tools.lakehouse import (
 )
 from .builder.ingest import LakehouseCLI
 from .tools.ingest import IngestFromUrlTool
+from .tools.gold import GOLD_PROMPT_RULES, GoldAlignTool, GoldDecomposeTool, GoldJoinTool
 
 
-def open_lakehouse(path) -> SilverLakehouse | DuckDBLakehouse:
+def open_lakehouse(path, *, gold: GoldCLI | None = None) -> SilverLakehouse | DuckDBLakehouse:
     """Veritabanının şemasına göre adaptörü seçer.
 
     Şemayı ayrı bir bağlantı açarak yoklamıyoruz: DuckDB aynı dosyaya farklı
@@ -45,7 +47,7 @@ def open_lakehouse(path) -> SilverLakehouse | DuckDBLakehouse:
     kurmayı deniyoruz; beklenen ilişkiler yoksa kendi seed adaptörümüze düşüyoruz.
     """
     try:
-        return SilverLakehouse(path)
+        return SilverLakehouse(path, gold=gold)
     except LakehouseError as exc:
         if "meta.series" not in str(exc) and "silver.fact_observation" not in str(exc):
             raise
@@ -57,7 +59,14 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
     settings = load_settings()
     # Veri ekibinin Silver şeması varsa ona bağlan; yoksa kendi BDDK seed'imize.
     # Gerçek Lakehouse geldiğinde değişen tek şey LAKEHOUSE_PATH olur.
-    lakehouse = open_lakehouse(settings.lakehouse_path)
+    # Salt-okunur Gold çağrısı veri ekibinin `gold-run` komutuyla (ADR-0031); CLI yoksa
+    # adaptör hazır gold.* tablolarını yine gösterir, gold_* araçları kayıt edilmez.
+    gold = GoldCLI(
+        core_dir=settings.lakehouse_core_dir,
+        database=settings.lakehouse_path,
+        launcher=settings.lakehouse_cli,
+    )
+    lakehouse = open_lakehouse(settings.lakehouse_path, gold=gold if gold.available else None)
     workspace = AnalysisWorkspace()
 
     # Alan profili katalogdan deterministik olarak türetilir; üslup tercihleri
@@ -94,6 +103,18 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
             IngestFromUrlTool(lakehouse, cli, allowed_root=settings.ingest_allowed_root, registry=registry)
         )
 
+    system_prompt = SYSTEM_PROMPT
+    if isinstance(lakehouse, GoldCapable) and getattr(lakehouse, "gold", None) is not None:
+        registry.register_all(
+            [
+                GoldAlignTool(lakehouse, workspace),
+                GoldDecomposeTool(lakehouse, workspace),
+                GoldJoinTool(lakehouse, workspace),
+            ]
+        )
+        # Kural prompt'a yalnız araçlar varken girer: olmayan aracı öğütlemek UNKNOWN_TOOL üretir.
+        system_prompt = SYSTEM_PROMPT + GOLD_PROMPT_RULES
+
     llm = OpenAICompatClient(
         base_url=settings.llm_base_url,
         api_key=settings.llm_api_key,
@@ -106,7 +127,8 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
         file=sys.stderr,
     )
     return AnalyticsAgent(
-        llm, registry, workspace=workspace, max_steps=max_steps, profile=profile
+        llm, registry, workspace=workspace, max_steps=max_steps, profile=profile,
+        system_prompt=system_prompt,
     )
 
 

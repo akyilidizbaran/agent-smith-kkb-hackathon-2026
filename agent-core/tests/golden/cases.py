@@ -32,6 +32,10 @@ class GoldenCase:
     answer_must_not_contain: list[str] = field(default_factory=list)
     # Doğru aracı seçti mi? Sonuç doğru olsa bile yanlış yoldan gelinmiş olabilir.
     must_use_tools: list[str] = field(default_factory=list)
+    # Araç yolu üzerinde denetim: (ad, adım listesi → bool). Birden çok meşru yol varsa
+    # (ör. Gold: hazır tabloyu sorgulamak da fonksiyonu çağırmak da doğru) tek araç adı
+    # dayatmak vakayı yanlışlıkla düşürür — ölçüldü, G9 0/3 böyle kaldı.
+    tool_path_checks: list[tuple[str, Callable[[list], bool]]] = field(default_factory=list)
     expect_no_table: bool = False
     #: Araç adımı üst sınırı. Amacı kaçak döngüyü yakalamak, cimrilik değil.
     #:
@@ -189,5 +193,43 @@ CASES: list[GoldenCase] = [
         # cevapta aranan şey serinin TASLAK olduğunun söylenmesi.
         answer_must_contain=["taslak"],
         max_steps_used=12,
+    ),
+    GoldenCase(
+        id="G9_gold_ceyreklik_ve_red",
+        question="Konut kredisi bakiyesini 2025 yılı için çeyreklik olarak göster.",
+        follow_up=(
+            "Bu seriyi yıl başından itibaren birikimli kabul edip çeyreklik akımlara ayrıştır."
+        ),
+        why="Gold'un hayata dönüşü (ADR-0031). İlk tur: frekans dönüşümü SQL'de değil, katalog "
+        "kurallı gold_align ile yapılmalı (stok → çeyreğin son ayı); 2025 = 4 çeyrek, Q4 = "
+        "678.970 milyon TL (BDDK Aralık 2025). İkinci tur kullanıcının YANLIŞ öncülünü ölçer: "
+        "seri birikimli değil, stok. Gold NOT_DECOMPOSABLE ile reddeder; agent fark alıp sayı "
+        "üretmek yerine reddi ve sebebini söylemeli, ilk turun tablosu bozulmamalı. Ön koşul: "
+        "LAKEHOUSE_CORE_DIR ayarlı (gold-run), gerçek veritabanı; aksi hâlde gold_* araçları "
+        "kayıtlı olmaz ve vaka 'araç hiç kullanılmadı' ile kalır.",
+        table_checks=[
+            ("4 çeyrek (2025)", _rows(4)),
+            ("dönem kolonu var", _has_time_column),
+            ("2025 Q4 = 678.970 milyon TL", _value_near(678_970)),
+        ],
+        must_use_tools=["gold_decompose"],
+        # İlk tur için iki meşru yol var ve ikisi de Gold'dur: gold_align çağrısı ya da
+        # `python -m lakehouse gold` ile kurulmuş gold.* tablosunu SQL ile sorgulamak.
+        # Ölçüldü: model hazır tabloyu buldu (arama → describe → query), 4 satır doğru;
+        # yalnız gold_align'ı şart koşan ilk sürüm 0/3 kalmıştı.
+        tool_path_checks=[
+            (
+                "çeyreklik değerler Gold'dan geldi (gold_align ya da gold.* tablosu), SQL ile toplanmadı",
+                lambda steps: any(s.tool_name == "gold_align" and s.ok for s in steps)
+                or any(
+                    s.tool_name == "lakehouse_query" and s.ok
+                    and "from gold." in str(s.tool_args.get("sql", "")).lower()
+                    for s in steps
+                ),
+            ),
+        ],
+        # Reddin cevaba yansıması: kullanıcı 'birikimli' dedi, cevap bunu düzeltmeli.
+        answer_must_contain=["birikimli"],
+        max_steps_used=10,
     ),
 ]

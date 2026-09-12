@@ -64,6 +64,22 @@ class LakehouseError(Exception):
     kendini onarabilmeli (SQL'i düzeltip yeniden denemeli)."""
 
 
+class GoldRefused(LakehouseError):
+    """Gold katmanı dönüşümü SEBEBİYLE reddetti; bu bir hata değil, bir karar.
+
+    `reason` veri ekibinin kapalı sözlüğünden gelir (NOT_DECOMPOSABLE, UPSAMPLING_REFUSED,
+    UNVERIFIED_SEMANTICS, INACTIVE_SERIES, NO_OBSERVATIONS ...). Aynı çağrıyı tekrarlamak
+    sonucu değiştirmez; kullanıcıya sebebi söylemek gerekir.
+    """
+
+    def __init__(self, reason: str, message: str, *, series_id: str | None = None) -> None:
+        self.reason = reason
+        self.series_id = series_id
+        self.detail = message
+        where = f" [{series_id}]" if series_id else ""
+        super().__init__(f"{reason}{where}: {message}")
+
+
 @runtime_checkable
 class LakehouseClient(Protocol):
     """Veri ekibinin sağlaması gereken arayüz.
@@ -135,4 +151,28 @@ class LakehouseClient(Protocol):
     def reload(self) -> None:
         """Bağlantıyı yeniden aç ve kataloğu yeniden oku. Ingest'ten sonra yeni draft
         seri ve yeni gözlemler ancak böyle görünür."""
+        ...
+
+
+@runtime_checkable
+class GoldCapable(Protocol):
+    """Gold dönüşümlerini sunan lakehouse'lar için ek sözleşme (ADR-0031).
+
+    Üç çağrı da salt-okunurdur ve kuralı KATALOGDAN alır: çağıran yalnız seriyi ve hedef
+    dönemi seçer, sayıların nasıl birleşeceğini seçemez. Dönüşüm güvenli değilse
+    `GoldRefused` yükselir; sonuç `QueryResult` olarak, satır başına provenance
+    listeleriyle döner. `LakehouseClient`'tan ayrı tutuluyor: seed adaptörü bunu sunmaz ve
+    sunmadığında `gold_*` araçları kayıt edilmez.
+    """
+
+    def gold_align(self, series_id: str, target_frequency: str) -> QueryResult:
+        """Bir seriyi aylık/çeyreklik takvim dönemine indirger (stok→son, akım→toplam, oran→katalog)."""
+        ...
+
+    def gold_decompose(self, series_id: str) -> QueryResult:
+        """Birikimli (YTD/kümülatif) seriyi dönem akımlarına çözer; birikimli değilse reddeder."""
+        ...
+
+    def gold_join(self, series_ids: list[str], target_frequency: str) -> QueryResult:
+        """Birden çok seriyi kendi kurallarıyla hizalayıp tek dönem ekseninde birleştirir (dış)."""
         ...

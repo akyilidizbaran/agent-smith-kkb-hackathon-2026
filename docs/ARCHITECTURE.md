@@ -1,6 +1,6 @@
 # Agentic Analytics Engine — Mimari
 
-> **Durum:** 10 Eylül 2026 · Golden 7/7 · 22 birim testi · 19 ADR
+> **Durum:** 12 Eylül 2026 · Golden 9 vaka (seed 7/7, gerçek DB G8 3/3, G9 3/3) · 174 birim testi · 31 ADR
 > Bu belge kodun *ne yaptığını* değil, *neden öyle yapıldığını* anlatır; her karar
 > `docs/adr/` altındaki kayda atıfla gelir. Kodla birebir örtüşmesi için modül, sınıf ve
 > metot adları gerçek adlarıyla verilmiştir.
@@ -643,3 +643,27 @@ kaldırıldı — vLLM reddediyordu).
 - Gerçek Lakehouse'a bağlı değil; kendi seed'iyle çalışıyor. Veri ekibinin
   `silver.fact_observation` + `meta.series`'i hazır; adaptör yazılacak.
 - Golden set kapsamı dar: tek kaynak, kredi kalemleri.
+
+### Gold — `tools/gold.py` (`gold_align / gold_decompose / gold_join`, ADR-0031) — YAZILDI
+
+Frekans dönüşümü SQL'de değil, katalog kurallı fonksiyonda. "Çeyreklik göster", "aylığa
+indir", "iki seriyi aynı dönemde karşılaştır", "kümülatifi çöz" isteklerinde model
+`AVG(value)` yazamaz; kural (`stok → son`, `akım → toplam`, `oran → katalog`) `meta.series`'ten
+gelir, fonksiyon ya sonucu verir ya da sebebiyle reddeder (`GOLD_REFUSED`, tekrar denenmez).
+
+```
+gold_align(series_id, target_frequency, period_from?, period_to?)   → aktif tablo
+gold_decompose(series_id, ...)                                       → akımlar + decomposition_flag
+gold_join(series_ids[2..6], target_frequency, ...)                   → '<seri>::value' kolonları
+```
+
+- Çağrı veri ekibinin `python -m lakehouse gold-run` komutuyla, ayrı süreçte, salt-okunur
+  (0,3 s); agent paketi import etmez (ADR-0024). Sonuç JSON belgesi → DataFrame; kanıt
+  kolonları (`source_observation_dates`, `artifact_sha256_list`) tabloda kalır.
+- Hazır tablolar: `python -m lakehouse gold` `catalog/gold/*.yml`'deki metrikleri
+  `gold.<metric_id>` olarak kurar; adaptör `meta.gold_build` defterinden okur, her satırda
+  kurulum kimliği + Silver parmak izi; Silver değişmişse **BAYAT** notu. Model hazır tabloyu
+  bulursa SQL ile sorgular — o da Gold'dur (G9 böyle geçti).
+- Sözleşme: `GoldCapable` (`contracts/lakehouse.py`), `LakehouseClient`'tan ayrı; seed
+  adaptörü sunmaz → araçlar kayıt edilmez, Gold kuralı prompt'a girmez.
+

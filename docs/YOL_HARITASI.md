@@ -35,7 +35,7 @@ Architect ve yeni araçların üstüne oturacağı ortak katman. Önce bu, çün
 |---|---|---|---|
 | B1 | **Profilci + doğrulayıcı, LLM'siz** | `profile_tabular()` (tip, null, kardinalite, monotonluk, tarih/ayraç adayları); `verify_mapping()` (kolon var mı, tarih %100 ayrışıyor mu, değer sayısal mı, satır sayısı korunuyor mu, series_id çakışması) | birim testler, gerçek CSV/XLSX fixture'larıyla |
 | B2 | **Architect rolü** | ayrı registry (`fetch · profile · propose · verify · register_draft · build_silver · build_gold`), yazar bağlantı, `kapat → yaz → yeniden aç` (`LakehouseClient.reload()`); `SubAgentTool`; Analist'te tek araç `ingest_from_url(url\|dosya, bütçe)` → yapısal sonuç (draft seri + provenance + reddedilenler) | golden'a **G8 ingest vakası**: jüri CSV'si → `adhoc.fact_observation` draft; curated'a sızma yok; belge kartı üretildi |
-| B3 | **Gold hayata dönsün** | `python -m lakehouse gold` (adlandırılmış metrik tabloları, provenance sütunlarıyla); adaptörde `gold.*` tabloları dataset olarak görünür; `gold_align / gold_decompose / gold_join` araçları | golden **G9**: "çeyreklik göster" → Gold'dan; stok seride `decompose` reddi görünür |
+| B3 ✅ | **Gold hayata dönsün** (ADR-0031, 12 Eyl) | `python -m lakehouse gold` (adlandırılmış metrik tabloları, provenance sütunlarıyla); adaptörde `gold.*` tabloları dataset olarak görünür; `gold_align / gold_decompose / gold_join` araçları | golden **G9**: "çeyreklik göster" → Gold'dan; stok seride `decompose` reddi görünür |
 
 ## Faz C — Görünür güven (16–18 Eylül) · demo 3. soru + dış kaynak
 
