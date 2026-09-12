@@ -61,10 +61,11 @@ def test_not_retryable_kumesi_beklendigi_gibi() -> None:
     kuralı değiştirmez, kullanıcıya sebebi söylemek gerekir.
     """
     assert NOT_RETRYABLE == {
-        "OUT_OF_COVERAGE", "UNSAFE_SQL", "UNKNOWN_TOOL",
+        "OUT_OF_COVERAGE", "UNSAFE_SQL",
         "NEEDS_CREDENTIAL", "ACCESS_BLOCKED", "SOURCE_NOT_FOUND",
         "GOLD_REFUSED",
     }
+    # UNKNOWN_TOOL tekrar denenebilir: ad uyduran model aday listesiyle düzeltir (ADR-0036).
 
 
 def test_bilinmeyen_arac_aday_listeler() -> None:
@@ -72,7 +73,10 @@ def test_bilinmeyen_arac_aday_listeler() -> None:
 
     r = ToolRegistry().execute("olmayan_arac", {})
     assert r.error.error_code == "UNKNOWN_TOOL"
-    assert not r.error.is_retryable
+    # Tekrar denenebilir (ADR-0036): on üç araçla model ara sıra ad uyduruyor; aday listesiyle
+    # bir sonraki tur düzeltiyor. Ölçüldü: tekrar denenmez sayılınca araçsız son tura düşüp
+    # veri çekmeden cevap yazdı (G11a, gerçek DB).
+    assert r.error.is_retryable
 
 
 def test_gecersiz_argumanlar_sema_katmani() -> None:

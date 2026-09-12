@@ -174,6 +174,10 @@ class EvidenceBuilder:
         # Web tablosu: zincir sayfanın baytlarında biter (URL + sha256 + zaman); gözlem aranmaz.
         if columns and all((c.sql or "").startswith("web_url ") for c in columns):
             return [], {}
+        # Türetilmiş kolonlar (formül) zinciri kırmaz: kaynak kolonlar üzerinden devam eder.
+        columns = [c for c in columns if not (c.sql or "").startswith("türetilmiş:")]
+        if not columns:
+            return [], {}
 
         # Silver sorgusu: dönem + provenance'taki seri(ler).
         if time_col is None:
@@ -252,6 +256,9 @@ class EvidenceBuilder:
         unmatched = [n.text for n in panel.numbers if not n.matched]
         if unmatched:
             panel.gaps.append("tabloda bulunmayan sayılar: " + ", ".join(unmatched[:8]))
+        for c in panel.columns:
+            if c.sql is None:
+                panel.gaps.append(f"'{c.column}' kolonunun provenance kaydı yok")
         if panel.supports_artifacts:
             incomplete = [o for o in panel.observations if not o.complete]
             if incomplete:

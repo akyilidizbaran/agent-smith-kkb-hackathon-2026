@@ -335,4 +335,17 @@ CASES: list[GoldenCase] = [
         answer_must_contain_any=["erişemedim", "ulaşamadım", "erişilemedi", "ulaşılamadı", "erişilemiyor", "açılamadı"],
         max_steps_used=4,
     ),
+    GoldenCase(
+        id="G12_yuklenmemis_seri",
+        question="2025 yılında taşıt kredisi bakiyesini aylık olarak göster.",
+        why="D2 (ADR-0036): seri katalogda tanımlı ama bu veri havuzuna çekilmemiş. Ölçülen açık: "
+        "arama boş dönünce model on kez farklı sözcükle arayıp bütçeyi yakıyordu. Arama artık "
+        "'var ama henüz yüklenmemiş' der ve tekrar denenmez; agent bunu kullanıcıya söyler, "
+        "konut serisini taşıt diye kullanmaz, sayı üretmez. Gerçek DB (seed'de taşıt yüklü, vaka orada anlamsız).",
+        expect_no_table=True,
+        must_use_tools=["lakehouse_search"],
+        answer_must_contain_any=["yüklenme", "çekilme", "henüz", "bulunm", "yer alm"],
+        answer_must_not_contain=["678.970", "523.455"],
+        max_steps_used=4,
+    ),
 ]

@@ -50,7 +50,7 @@ Architect ve yeni araçların üstüne oturacağı ortak katman. Önce bu, çün
 | # | iş | çıktı | ölçüm |
 |---|---|---|---|
 | D1 ✅ | **Sınırlı ön-yükleme** (ADR-0035, 12 Eyl; seed 7,0 → 3,3 adım, gerçek DB 3,0 → 1,6) | kataloğun tamamı değil, Retriever'ın seçtiği k seri prompt'a; bütçe token'la sınırlı (ADR-0013) | tur sayısı: hedef V3'ün 2,9'una yaklaşmak; gerçek katalogda ≤ 6.000 token |
-| D2 | **BM25 `LexicalIndex`** (sözleşmenin arkasına) | sorgulanabilir seri eşiği aşınca devreye girer; mentör: serbest | retrieval isabet ölçümü |
+| D2 ✅ | **BM25 `LexicalIndex`** (ADR-0036, 12 Eyl; G12 0/3 → 3/3, 125k → 25k token) | sorgulanabilir seri eşiği aşınca devreye girer; mentör: serbest | retrieval isabet ölçümü |
 | D3 | **Golden genişletme + kararlılık** | G8–G11 eklendi; `--repeat 5`; hata sınıfı ve rol başına adım raporu | tüm vakalar %100 kararlı |
 | D4 | **Demo kabul testi (commit'li)** | `scripts/demo_acceptance.py`: bootstrap → ingest → silver → gold → 8 senaryo sorusu; tek komut | yeşil |
 

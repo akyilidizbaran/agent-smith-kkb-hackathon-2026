@@ -22,7 +22,7 @@ import pandas as pd
 from pydantic import BaseModel, Field
 
 from ..adapters.duckdb_lakehouse import hardened_connection
-from ..contracts.lakehouse import LakehouseClient, LakehouseError
+from ..contracts.lakehouse import QueryProvenance, LakehouseClient, LakehouseError
 from ..core.errors import ToolError
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
@@ -302,10 +302,18 @@ class WorkspaceComputeColumnTool(Tool):
                 layer="data",
             )
 
+        # Türetilmiş kolonun provenance'ı ifadenin kendisidir: kanıt zinciri (ADR-0033) "bu
+        # kolon hangi kolonlardan, hangi formülle" sorusuna oradan cevap verir. Ölçüldü:
+        # provenance'sız kolon zinciri sebepsiz "eksik" gösteriyordu.
         self.workspace.add_column(
             params.column_name,
             pd.Series(out.iloc[:, 0].to_numpy(), index=table.index),
             description=f"{params.purpose} [formül: {params.expression}]",
+            provenance=QueryProvenance(
+                sql=f"türetilmiş: {params.expression}",
+                dataset_ids=[],
+                sources=[f"türetilmiş sütun — mevcut kolonlardan: {params.expression}"],
+            ),
         )
         updated = self.workspace.table
         assert updated is not None

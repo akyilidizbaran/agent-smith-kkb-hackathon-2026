@@ -62,7 +62,9 @@ ErrorCode = Literal[
 NOT_RETRYABLE: frozenset[str] = frozenset({
     "OUT_OF_COVERAGE",   # veri yok; kaç kez sorulursa sorulsun yok
     "UNSAFE_SQL",        # politika; farklı yazımı denemek sınırı aşma girişimi olur
-    "UNKNOWN_TOOL",      # var olmayan araç
+    # UNKNOWN_TOOL burada DEĞİL: on üç araçla model ara sıra ad uyduruyor ("workspace");
+    # aday listesiyle bir sonraki tur düzeltiyor. Ölçüldü: tekrar denenmez sayılınca
+    # araçsız son tura düşüp veri çekmeden cevap yazdı (G11a, gerçek DB).
     # Aynı kaynağı aynı biçimde tekrar istemek sonucu değiştirmez; alternatif
     # kaynak ayrı bir çağrıdır ve kararı harness verir (access_policy.decide).
     "NEEDS_CREDENTIAL",

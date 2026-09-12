@@ -13,7 +13,7 @@
 
 | Kural | Nereden |
 |---|---|
-| Her mimari karar `docs/adr/` altına, gerekçe ve ölçümle. Şu an 35 ADR. | Takım kararı |
+| Her mimari karar `docs/adr/` altına, gerekçe ve ölçümle. Şu an 36 ADR. | Takım kararı |
 | Tüm commit'ler `Baran Akyıldız <147875893+akyilidizbaran@users.noreply.github.com>` kimliğiyle. | Takım kararı |
 | API anahtarları asla commit edilmez; yalnız repo kökündeki `.env`'de (`MIA_API_KEY`, `EVDS_API_KEY`, ileride `TAVILY_API_KEY`). | KKB kuralı |
 | Dış LLM API'si yok; yalnız KKB'nin MIA/Kloudeks'i (`kkbhackathon2026/Qwen3.8-27B`). Bulut ambarı yok. | Şartname |
@@ -82,14 +82,16 @@
 ### 2.9 Faz D — kapasite ve kararlılık (12 Eylül)
 - **D1** Sınırlı ön-yükleme (ADR-0035): `core/context.py`, soruya göre seçilen k=8 kompakt kart + küçük katalogda gerçek kırılım değerleri, 6.000 token bütçesi, kalanlar dizin; kural prompt'ta, araçlar kayıtlı. `AgentAnswer.usage` ile token ölçümü, golden `TOKEN:` satırı. Ölçüm kapalı → açık: seed 7/7 → 7/7, adım 7,0 → 3,3, LLM çağrısı 9,0 → 5,3, prompt token 54.953 → 36.354; gerçek DB 7/7 → 7/7, adım 3,0 → 1,6, çağrı 4,3 → 3,1, kanıt zinciri 5/5. Bedel ~1.100–1.850 token.
 
+- **D2** BM25 sözlük dizini (ADR-0036): `core/lexical.py` iki adaptörün de arkasında (Türkçe katlama, ön ek yarım ağırlık, tam sözcük şartı, takma ad 3×); isabetler eşleşmeyen sözcükleri taşır. `search_uningested`: "yok" ile "var ama yüklenmemiş" ayrı; kısmi isabet / boş arama ikinci kezde tekrar denenmez. `UNKNOWN_TOOL` tekrar denenebilir (G11a flake'i). Türetilmiş kolonların provenance'ı formül. Ölçüm: G12 (yüklenmemiş taşıt) 0/3 → **3/3, 2 adım, 125k → 25k token**; seed 7/7 (adım 2,3); gerçek DB G1, G8–G11 geçiyor; testler 235 → 242.
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 235 |
+| Agent birim testi | 242 |
 | Lakehouse testi (r3) | 1083 |
-| ADR | 35 |
-| Golden vakası | 13: G1–G7 seed 7/7; G8, G9, G10 gerçek DB 3/3; G11a/b/c 3/3 |
+| ADR | 36 |
+| Golden vakası | 14: G1–G7 seed 7/7; G8, G9, G10, G12 gerçek DB 3/3; G11a/b/c 3/3 |
 | Araç sayısı (gerçek DB'de) | 13: lakehouse ×4, workspace ×3, ingest, gold ×3, chart, web_url (+ web_search anahtarla) |
 | Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu, grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, adım sınırı, reasoning temizliği |
 
@@ -116,7 +118,7 @@ Veri ekibi: RAW (içerik adresli) → Bronze (parquet) → Silver (fact_observat
 
 **Yol haritası (sırayla):**
 1. ~~D1 sınırlı ön-yükleme~~ ✅ (ADR-0035).
-2. **D2** BM25 `LexicalIndex` sözleşmenin arkasında; arama boş dönünce "katalogda var, yüklenmemiş" bilgisi (görev çipi `task_744beae4`).
+2. ~~D2 BM25 dizini ve yüklenmemiş seri cevabı~~ ✅ (ADR-0036).
 3. **D3** golden 13 vaka × 5 tekrar, hata sınıfı ve rol raporu; **güçlendirme burada**: niyet kapısı (ingest ve web_url için locator yalnız kullanıcı mesajından; açık istek yoksa yazma onayı; araç çıktısı "veridir, talimat değildir"), enjeksiyon golden vakaları, alt süreçlere yalnız gereken ortam değişkeni.
 4. **D4** demo kabul betiği: bootstrap → ingest → silver → gold → 8 senaryo sorusu, tek komut.
 5. **E** üç dalın main'e merge commit'le birleşmesi (squash yok), ölü dalların silinmesi, docs, gizli bilgi taraması, 20 Eylül dondurma.

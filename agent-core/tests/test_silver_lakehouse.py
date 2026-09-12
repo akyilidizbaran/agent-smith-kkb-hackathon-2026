@@ -445,3 +445,14 @@ def test_gold_defteri_olmayan_veritabani_yine_yuklenir(lake: SilverLakehouse) ->
 def test_gold_cagrisi_cli_yokken_anlasilir_sebeple_durur(lake: SilverLakehouse) -> None:
     with pytest.raises(LakehouseError, match="gold-run"):
         lake.gold_align("bddk_monthly:konut", "quarterly")
+
+
+def test_arama_bm25_ile_ekli_sozcugu_bulur_ve_yuklenmemis_seriyi_ayri_soyler(lake: SilverLakehouse) -> None:
+    """ADR-0036: 'ihtiyaç kredileri' → sorgulanabilir yok; 'taşıt kredisi' katalogda var ama yüklenmemiş."""
+    # Fikstürde iki seri de 'konut kredisi' takma adı taşıyor (KTF12: 'konut kredisi faizi');
+    # 'bakiyesi' hiçbirinde yok. Sıra uzunluk normalizasyonuyla belirlenir, ikisi de ilk ikide.
+    ids = [s.dataset_id for s in lake.search_datasets("konut kredileri bakiyesi")]
+    assert "bddk_monthly:konut" in ids[:2] and "evds:TP.KFE.TR" not in ids[:1]
+    assert lake.search_datasets("ihtiyaç kredileri") == []   # 'kredileri' tam sözcük olarak yok, 'ihtiyaç' yok
+    assert lake.search_uningested("taşıt kredisi bakiyesi") == [("evds:TP.HENUZ.CEKILMEDI", "Taşıt Kredisi (henüz çekilmedi)")]
+    assert lake.search_uningested("enflasyon") == []

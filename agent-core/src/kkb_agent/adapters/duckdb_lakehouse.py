@@ -196,24 +196,33 @@ class DuckDBLakehouse:
         return spec
 
     def search_datasets(self, query: str, limit: int = 5) -> list[DatasetSpec]:
-        """Anahtar kelime tabanlı skorlama.
+        """BM25 sözlük dizini (ADR-0036); örnek değerler de dizinde.
 
-        Bilinçli olarak basit: embedding geldiğinde bu metot semantik/hibrit
-        aramaya geçer, arayüz aynı kalır, agent etkilenmez (ADR-0015).
+        Eşleşme yoksa küçük seed kataloğunda ilk N tablo döner: tek tablolu seed'de
+        "tablo bulunamadı" demek yanıltıcı olurdu. Silver adaptörü boş döner (ADR-0026).
         """
-        terms = [t for t in re.split(r"\W+", query.lower()) if len(t) > 2]
-        scored: list[tuple[int, DatasetSpec]] = []
-        for spec in self._catalog.values():
-            haystack = " ".join(
-                [spec.name, spec.description, " ".join(spec.tags)]
-                + [f"{c.name} {c.description} {' '.join(c.aliases)}" for c in spec.columns]
-                + [v for c in spec.columns for v in c.example_values]
-            ).lower()
-            score = sum(haystack.count(t) for t in terms)
-            if score:
-                scored.append((score, spec))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return [s for _, s in scored[:limit]] or list(self._catalog.values())[:limit]
+        from ..contracts.retrieval import Candidate
+        from ..core.lexical import Bm25Index, candidate_text
+
+        if getattr(self, "_bm25_for", None) is not id(self._catalog):
+            index = Bm25Index()
+            index.index([
+                Candidate(
+                    id=spec.dataset_id,
+                    text=candidate_text(
+                        name=spec.name, description=spec.description, tags=spec.tags,
+                        aliases=[a for c in spec.columns for a in c.aliases]
+                        + [f"{c.name} {c.description}" for c in spec.columns]
+                        + [v for c in spec.columns for v in c.example_values],
+                        dataset_id=spec.dataset_id,
+                    ),
+                )
+                for spec in self._catalog.values()
+            ])
+            self._bm25, self._bm25_for = index, id(self._catalog)
+        hits = self._bm25.search(query, k=limit)
+        found = [self._catalog[h.id] for h in hits if h.id in self._catalog]
+        return found or list(self._catalog.values())[:limit]
 
     # ---------- Sorgulama ----------
     def execute_sql(self, sql: str, *, max_rows: int = 10_000) -> QueryResult:

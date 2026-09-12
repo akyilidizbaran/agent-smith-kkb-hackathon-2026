@@ -38,6 +38,8 @@ from ..contracts.catalog import (
 )
 from ..contracts.evidence import ObservationEvidence
 from ..contracts.lakehouse import GoldRefused, LakehouseError, QueryProvenance, QueryResult
+from ..contracts.retrieval import Candidate
+from ..core.lexical import Bm25Index, candidate_text
 from .duckdb_lakehouse import guard_sql, hardened_connection, register_reader
 from .gold_cli import GoldCLI, GoldRunOutcome
 
@@ -543,25 +545,53 @@ class SilverLakehouse:
             f"{suffix} Doğru kimliği bulmak için lakehouse_search kullan."
         )
 
-    def search_datasets(self, query: str, limit: int = 5) -> list[DatasetSpec]:
-        """Anahtar kelime skorlaması; `aliases` en ağırlıklı alan.
+    # ---------- Arama: BM25 sözlük dizini (ADR-0036) ----------
+    def _index(self) -> Bm25Index:
+        """Sorgulanabilir katalog üzerinde BM25; katalog nesnesi değişince (reload) yeniden kurulur."""
+        if getattr(self, "_bm25_for", None) is not id(self._catalog):
+            index = Bm25Index()
+            index.index([
+                Candidate(
+                    id=spec.dataset_id,
+                    text=candidate_text(
+                        name=spec.name, description=spec.description, tags=spec.tags,
+                        aliases=[a for c in spec.columns for a in c.aliases], dataset_id=spec.dataset_id,
+                    ),
+                )
+                for spec in self._catalog.values()
+            ])
+            self._bm25 = index
+            self._bm25_for = id(self._catalog)
+        return self._bm25
 
-        Hibrit retrieval (BM25 + embedding + RRF) geldiğinde bu metot değişir,
-        arayüz aynı kalır (ADR-0021, contracts/retrieval.py).
+    def _uningested_index(self) -> Bm25Index:
+        if getattr(self, "_bm25_un_for", None) is not id(self._uningested):
+            index = Bm25Index()
+            index.index([Candidate(id=sid, text=candidate_text(name=name, description="", tags=(), aliases=(), dataset_id=sid))
+                         for sid, name in self._uningested.items()])
+            self._bm25_un = index
+            self._bm25_un_for = id(self._uningested)
+        return self._bm25_un
+
+    def search_datasets(self, query: str, limit: int = 5) -> list[DatasetSpec]:
+        """BM25 (Türkçe katlama + ön ek), takma adlar 3× ağırlıklı (ADR-0036).
+
+        Eşleşme yoksa boş döner (ADR-0026): 1.620 serilik katalogda alakasız bir seri
+        vermek modeli ondan cevap üretmeye davet eder. Yüklenmemiş seriler burada
+        değil; onlar için `search_uningested`.
         """
-        terms = [t for t in re.split(r"\W+", query.lower()) if len(t) > 2]
-        scored: list[tuple[int, DatasetSpec]] = []
-        for spec in self._catalog.values():
-            alias_text = " ".join(a for c in spec.columns for a in c.aliases).lower()
-            body = " ".join([spec.name, spec.description, " ".join(spec.tags)]).lower()
-            score = sum(3 * alias_text.count(t) + body.count(t) for t in terms)
-            if score:
-                scored.append((score, spec))
-        scored.sort(key=lambda x: (-x[0], x[1].dataset_id))
-        # Eşleşme yoksa boş dönüyoruz. Eskiden kataloğun ilk N serisi dönüyordu; dört
-        # tablolu bir seed'de zararsız bir kolaylıktı, 1620 serilik bir katalogda ise
-        # modele alakasız bir tablo verip onu o tablodan cevap üretmeye davet ediyor.
-        return [s for _, s in scored[:limit]]
+        hits = self._index().search(query, k=limit)
+        self.last_search_terms = {h.id: (h.meta.get("matched", []), h.meta.get("unmatched", [])) for h in hits}
+        return [self._catalog[h.id] for h in hits if h.id in self._catalog]
+
+    def search_uningested(self, query: str, limit: int = 5) -> list[tuple[str, str]]:
+        """Katalogda tanımlı ama bu veritabanında gözlemi olmayan serilerden soruya uyanlar.
+
+        Ölçüldü: arama boş dönünce model on kez farklı sözcükle aradı (G5/G6, gerçek DB).
+        "Yok" ile "var ama yüklenmemiş" aynı cevap değildir; ikincisi burada söylenir.
+        """
+        hits = self._uningested_index().search(query, k=limit)
+        return [(h.id, self._uningested.get(h.id, "")) for h in hits]
 
     # ---------- Sorgulama ----------
     def execute_sql(self, sql: str, *, max_rows: int = 10_000) -> QueryResult:

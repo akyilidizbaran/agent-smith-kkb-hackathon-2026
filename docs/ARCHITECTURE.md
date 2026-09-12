@@ -1,6 +1,6 @@
 # Agentic Analytics Engine — Mimari
 
-> **Durum:** 12 Eylül 2026 · Golden 13 vaka (seed 7/7, gerçek DB G8–G10 3/3, web G11a–c 3/3) · 235 birim testi · 35 ADR
+> **Durum:** 12 Eylül 2026 · Golden 14 vaka (seed 7/7, gerçek DB G8–G10 ve G12 3/3, web G11a–c 3/3) · 242 birim testi · 36 ADR
 > Bu belge kodun *ne yaptığını* değil, *neden öyle yapıldığını* anlatır; her karar
 > `docs/adr/` altındaki kayda atıfla gelir. Kodla birebir örtüşmesi için modül, sınıf ve
 > metot adları gerçek adlarıyla verilmiştir.
@@ -729,4 +729,14 @@ sonuna, 6.000 token bütçesiyle; kalanlar tek satırlık dizin. Keşif turları
 çıkar: seed 7,0 → 3,3 adım, gerçek DB 3,0 → 1,6; doğruluk aynı. Araçlar kayıtlı kalır.
 `AgentAnswer.usage` token ve çağrı sayısını taşır; golden `TOKEN:` satırı basar.
 `PRELOAD_BUDGET_TOKENS=0` kapatır.
+
+
+### Arama — `core/lexical.py` BM25 (ADR-0036) — YAZILDI
+
+Retrieval sözleşmesinin (`contracts/retrieval.py`) ilk gerçek uygulaması: saf Python BM25,
+Türkçe katlama, 5+ karakterlik ön ekler yarım ağırlıkla, en az bir tam sözcük eşleşmesi
+şart; takma adlar 3× ağırlıklı. Her isabet hangi sorgu sözcüklerinin eşleşMEdiğini taşır ve
+arama kartı bunu yazar. Yüklenmemiş seriler ayrı dizinde: arama "yok" ile "katalogda var ama
+henüz çekilmemiş"i ayırır; kısmi isabet ya da boş arama ikinci kezde tekrar denenmez hataya
+döner (döngü kırılır). Ön-yükleme seçimi de bu dizinden geçer.
 

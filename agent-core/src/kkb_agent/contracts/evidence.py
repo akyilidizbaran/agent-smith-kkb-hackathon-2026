@@ -109,6 +109,9 @@ class EvidencePanel:
             return False
         if any(c.sql is None for c in self.columns):
             return False
+        chained = [c for c in self.columns if not (c.sql or "").startswith("türetilmiş:")]
+        if self.columns and not chained:
+            return not self.gaps        # tablo yalnız türetilmiş kolonlardan oluşuyor (olağan dışı)
         if self.web_sources and not self.observations:
             return not self.gaps          # zincir web sayfasının baytlarında biter: URL + sha256 + zaman
         if self.supports_artifacts and (not self.observations or not all(o.complete for o in self.observations)):

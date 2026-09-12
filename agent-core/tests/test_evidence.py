@@ -159,3 +159,19 @@ def test_tablo_yoksa_panel_bunu_soyler() -> None:
     panel = EvidenceBuilder(object()).build("soru", "Veri 2021'de başlıyor.", AnalysisWorkspace(), [])
     assert panel.gaps == ["analiz tablosu yok"] and not panel.complete
     assert [n.text for n in panel.numbers] == ["2021"]
+
+
+def test_turetilmis_kolon_zinciri_kirmaz_provenanssiz_kolon_sebep_yazar(lake: SilverLakehouse) -> None:
+    ws = AnalysisWorkspace()
+    r = lake.execute_sql("SELECT observation_date, value AS bakiye FROM silver.fact_observation "
+                         "WHERE series_id = 'bddk_monthly:konut' AND observation_date < '2025-03-01' ORDER BY 1")
+    ws.set_table(r.data, description="ilk iki ay", provenance=r.provenance)
+    ws.add_column("degisim", ws.table["bakiye"].diff(), description="fark",
+                  provenance=QueryProvenance(sql="türetilmiş: bakiye - LAG(bakiye)", dataset_ids=[]))
+    panel = EvidenceBuilder(lake).build("soru", "Şubat'ta 110, fark 10 milyon TL.", ws, [])
+    assert panel.complete, panel.gaps
+    assert any("türetilmiş" in (c.sql or "") for c in panel.columns)
+
+    ws.add_column("sebepsiz", ws.table["bakiye"] * 2, description="provenanssız")
+    panel2 = EvidenceBuilder(lake).build("soru", "Şubat'ta 110 milyon TL.", ws, [])
+    assert not panel2.complete and any("'sebepsiz' kolonunun provenance kaydı yok" in g for g in panel2.gaps)

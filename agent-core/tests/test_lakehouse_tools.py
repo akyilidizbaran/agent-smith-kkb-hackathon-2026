@@ -208,3 +208,54 @@ def test_kapsamdaki_ay_ve_donemsiz_sorular_engellenmez(question: str) -> None:
     )
 
     assert result.ok or (result.error and result.error.error_code != "OUT_OF_COVERAGE")
+
+
+
+def test_arama_bos_donunce_yuklenmemis_seri_soylenir_ve_dongu_kirilir() -> None:
+    """Ölçüldü: gerçek DB'de olmayan seri için model on kez aradı. Yüklenmemiş seri varsa
+    ilk boş aramada, yoksa ikinci boş aramada tekrar denenmez hata döner."""
+    from kkb_agent.tools.lakehouse import LakehouseSearchTool
+
+    class Lake:
+        def __init__(self, pending):
+            self.pending = pending
+        def search_datasets(self, query, limit=5):
+            return []
+        def search_uningested(self, query, limit=5):
+            return self.pending
+
+    tool = LakehouseSearchTool(Lake([("evds:TP.X", "Taşıt Kredisi")]))
+    r = tool.validate_and_run({"query": "taşıt kredisi"})
+    assert not r.ok and r.error.error_code == "DATASET_NOT_FOUND" and not r.error.is_retryable
+    assert "HENÜZ YÜKLENMEMİŞ" in r.content and "evds:TP.X" in r.content and r.error.candidates == ["evds:TP.X"]
+
+    tool2 = LakehouseSearchTool(Lake([]))
+    first = tool2.validate_and_run({"query": "enflasyon"})
+    assert first.ok and "EN FAZLA bir kez daha" in first.content
+    second = tool2.validate_and_run({"query": "tüfe"})
+    assert not second.ok and second.error.error_code == "DATASET_NOT_FOUND" and not second.error.is_retryable
+
+
+def test_kismi_eslesen_aramalar_ikinci_kezde_durur() -> None:
+    """G12 ölçümü: her isabet 'taşıt' sözcüğünü karşılamıyor ve taşıt yüklenmemiş serilerde varsa
+    ikinci arama tekrar denenmez hata olur; model konutu taşıt diye kullanmaz."""
+    from datetime import date as _d
+    from kkb_agent.tools.lakehouse import LakehouseSearchTool
+
+    spec = SPEC.model_copy(update={"dataset_id": "bddk_monthly:konut", "name": "Konut Kredisi"})
+
+    class Lake:
+        last_search_terms = {"bddk_monthly:konut": (["kredisi"], ["tasit"])}
+        def search_datasets(self, query, limit=5):
+            return [spec]
+        def search_uningested(self, query, limit=5):
+            return [("bddk_monthly:tasit", "Tüketici Kredileri - Taşıt")]
+        def series_sql(self, *a, **k):
+            return "SELECT donem, deger FROM test_tablo"
+
+    tool = LakehouseSearchTool(Lake())
+    first = tool.validate_and_run({"query": "taşıt kredisi"})
+    assert first.ok and "EŞLEŞMEYEN: tasit" in first.content and "HENÜZ YÜKLENMEMİŞ" in first.content
+    second = tool.validate_and_run({"query": "taşıt kredisi bakiyesi"})
+    assert not second.ok and second.error.error_code == "DATASET_NOT_FOUND" and not second.error.is_retryable
+    assert second.error.candidates == ["bddk_monthly:tasit"]

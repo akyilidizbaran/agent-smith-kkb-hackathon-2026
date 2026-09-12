@@ -39,19 +39,56 @@ class LakehouseSearchTool(Tool):
     )
     Params = SearchParams
 
+    #: Üst üste kaç boş arama sonrası "bu yoldan sonuç çıkmaz" denir. Ölçüldü: gerçek
+    #: DB'de olmayan bir seri için model on kez farklı sözcükle aradı ve bütçeyi yaktı.
+    EMPTY_LIMIT = 2
+
+    #: Üst üste kaç "aranan seri yüklenmemiş" sonucundan sonra durulur. Ölçüldü (G12, gerçek
+    #: DB): üç arama üç kez konut serisini "taşıt eşleşmedi" notuyla döndürdü, model sonra
+    #: SQL ile keşfe girişti: 10 LLM çağrısı, 125 bin token, cevap yine "yüklenmemiş".
+    PENDING_LIMIT = 2
+
     def __init__(self, lakehouse: LakehouseClient) -> None:
         self.lakehouse = lakehouse
+        self._empty_streak = 0
+        self._pending_streak = 0
 
     def run(self, params: SearchParams) -> ToolResult:
         specs = self.lakehouse.search_datasets(params.query)
         if not specs:
-            return ToolResult(content="Bu konuyla ilgili tablo bulunamadı.", ok=True)
+            self._empty_streak += 1
+            search_un = getattr(self.lakehouse, "search_uningested", None)
+            pending = list(search_un(params.query, 5)) if callable(search_un) else []
+            lines = ["Bu konuyla ilgili SORGULANABİLİR seri yok."]
+            if pending:
+                lines.append("Katalogda tanımlı ama bu veri havuzuna HENÜZ YÜKLENMEMİŞ seriler:")
+                lines += [f"  - {sid} — {name}" for sid, name in pending]
+                lines.append("YAPACAĞIN: bu seriler için sorgu yazma; kullanıcıya verinin katalogda "
+                             "tanımlı ama henüz çekilmemiş olduğunu söyle. Yeniden arama yapma.")
+            else:
+                lines.append("YAPACAĞIN: soruyu farklı sözcüklerle EN FAZLA bir kez daha ara; yine yoksa "
+                             "kullanıcıya bu verinin havuzda bulunmadığını söyle.")
+            if self._empty_streak >= self.EMPTY_LIMIT or pending:
+                self._empty_streak = 0
+                return ToolResult.fail(
+                    "DATASET_NOT_FOUND", "\n".join(lines), layer="reference", retryable=False,
+                    candidates=[sid for sid, _ in pending],
+                )
+            return ToolResult(content="\n".join(lines), ok=True)
+        self._empty_streak = 0
+        terms = getattr(self.lakehouse, "last_search_terms", {}) or {}
         lines = ["Bulunan tablolar:"]
         for s in specs:
             lines.append(
                 f"- {s.dataset_id}: {s.name}. {s.description[:180]} "
                 f"[frekans: {s.frequency.value}, kapsam: {s.coverage.start}→{s.coverage.end}]"
             )
+            matched, unmatched = terms.get(s.dataset_id, ([], []))
+            if unmatched:
+                # Ölçüldü: "taşıt kredisi" araması konut serisini "kredisi" ile buluyor; hangi
+                # sözcüğün eşleşMEdiği yazılmazsa model konutu taşıt diye kullanabilir.
+                lines.append(f"    eşleşen: {', '.join(matched) or '—'} | EŞLEŞMEYEN: {', '.join(unmatched)} "
+                             "— bu seri sorunun tamamını karşılamıyor olabilir")
             # Kimlik ile fiziksel erişim kalıbı aynı şey olmak zorunda değil. Seed'de
             # dataset_id gerçekten tablo adı; Silver'da 'evds:TP.KTF12' bir tablo DEĞİL,
             # tek bir ilişkideki bir satır kümesinin kimliği. Bu satır olmadığında model
@@ -61,6 +98,33 @@ class LakehouseSearchTool(Tool):
             hint = self._access_sql(s)
             if hint:
                 lines.append(f"    '{s.dataset_id}' bir tablo adı DEĞİL. SQL'de şöyle eriş: {hint}")
+        # Sorunun eşleşmeyen sözcükleri yüklenmemiş bir seriyi işaret ediyorsa bunu da söyle:
+        # "yok" ile "var ama yüklenmemiş" aynı cevap değildir (ADR-0026).
+        unmatched_all = sorted({t for m, u in terms.values() for t in u})
+        every_hit_partial = bool(terms) and all(u for _, u in terms.values())
+        search_un = getattr(self.lakehouse, "search_uningested", None)
+        pending: list[tuple[str, str]] = []
+        if unmatched_all and callable(search_un):
+            pending = list(search_un(" ".join(unmatched_all), 5))
+        if pending and every_hit_partial:
+            # Aranan şeyin kendisi yüklenmemiş; bulunanlar yalnız ortak sözcükle geldi.
+            self._pending_streak += 1
+            lines.append("Katalogda tanımlı ama HENÜZ YÜKLENMEMİŞ ve soruya uyan seriler: "
+                         + "; ".join(f"{sid} — {name}" for sid, name in pending)
+                         + ". Yukarıdaki tablolar sorunun yalnız bir kısmıyla eşleşiyor; onları "
+                         "aranan serinin yerine KULLANMA. Kullanıcıya verinin henüz çekilmediğini söyle.")
+            if self._pending_streak >= self.PENDING_LIMIT:
+                self._pending_streak = 0
+                return ToolResult.fail(
+                    "DATASET_NOT_FOUND", "\n".join(lines), layer="reference", retryable=False,
+                    candidates=[sid for sid, _ in pending],
+                )
+        elif pending:
+            lines.append("Katalogda tanımlı ama HENÜZ YÜKLENMEMİŞ ve soruya uyan seriler: "
+                         + "; ".join(f"{sid} — {name}" for sid, name in pending)
+                         + ". Bunlar için sorgu yazma; kullanıcıya verinin henüz çekilmediğini söyle.")
+        else:
+            self._pending_streak = 0
         lines.append("\nSorgu yazmadan önce lakehouse_describe ile kolonları incele.")
         return ToolResult(content="\n".join(lines))
 
