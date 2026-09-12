@@ -164,3 +164,33 @@ def test_cli_yoksa_politikada_durur(tmp_path: Path) -> None:
     tool = IngestFromUrlTool(SpyLakehouse(), cli, allowed_root=tmp_path)
     r = tool.validate_and_run({"locator": "x.csv", "name": "x"})
     assert not r.ok and r.error.error_code == "TOOL_FAILED" and r.error.layer == "policy"
+
+
+def test_katalog_kaydi_kullanicinin_adindan_bagimsiz_deterministik(env) -> None:
+    """Ölçülen hata: model ikinci koşuda farklı 'name' verdi, veri ekibinin sözleşmesi
+    "aynı draft, farklı içerik" diye reddetti. Katalog kaydı dosya + öneriden türer;
+    kullanıcının adı yalnız karta girer."""
+    tool, _, runner, incoming, _ = env
+
+    r1 = tool.validate_and_run({"locator": str(incoming / "konut.csv"), "name": "Konut test verisi"})
+    r2 = tool.validate_and_run({"locator": str(incoming / "konut.csv"), "name": "Bambaşka bir ad"})
+
+    assert r1.ok and r2.ok
+    f1 = dict(zip(runner.calls[0][0], runner.calls[0][0][1:]))
+    f2 = dict(zip(runner.calls[1][0], runner.calls[1][0][1:]))
+    assert f1["--name"] == f2["--name"] == "konut — konut.csv (taslak)"
+    assert f1["--description"] == f2["--description"]
+    assert "Konut test verisi" in r1.content and "Bambaşka bir ad" in r2.content
+
+
+def test_farkli_icerikli_taslak_catismasi_kullaniciya_sorulur(env) -> None:
+    tool, lake, runner, incoming, _ = env
+    runner.code = 2
+    runner.stdout = ("status: failed\nerror: 'adhoc:konut' already exists as a draft with different "
+                     "content; delete or promote the existing draft before proposing a different one")
+
+    r = tool.validate_and_run({"locator": str(incoming / "konut.csv"), "name": "x"})
+
+    assert not r.ok and r.error.error_code == "TOOL_FAILED" and not r.error.is_retryable
+    assert "zaten var" in r.content and "series_key" in r.content
+    assert lake.events == ["close", "reload"]

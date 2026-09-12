@@ -110,7 +110,24 @@ Gerçek uçtan uca, gerçek CLI alt süreci, gerçek DuckDB: Türkçe yazımlı 
 başlıktan, frekans `monthly` (medyan 30 gün), ölçüm `stock` (zayıf, kartta söylendi) →
 `meta.series` satırı `derived / profiler / draft`, `adhoc.fact_observation` 6 satır,
 `run_id` ve `artifact_sha256` kartta → reload sonrası Analist 6 sorgulanabilir seri görüyor,
-`1.234,5` → `1234.50` doğru. Birim testleri 143 → 152; golden'a G8 (ingest + sorgu, iki turlu).
+`1.234,5` → `1234.50` doğru. Birim testleri 143 → 155; golden'a G8 (ingest + sorgu, iki turlu):
+**3/3 kararlı, 5 adım** — ingest → search → describe → query, ikinci turda taslak seri 6 satır.
+
+İlk ölçüm 2/3'tü ve izler iki şey öğretti:
+
+1. **Süreçteki eski okuyucular dosya kilidini tutuyor.** Golden koşucusu her tekrarda yeni
+   bir agent kurar; önceki agent'ın adaptörü açık kaldığı için Architect'in yazar alt
+   süreci `Conflicting lock is held` ile açılamadı. `close()` yalnız kendi bağlantısını
+   kapatıyordu. Çözüm: dosya başına okuyucu kaydı (`register_reader`), yazmadan önce
+   `release_connections(path)` hepsini bırakır; bırakılan adaptör dokunulunca yeniden
+   açar (`_conn()`). Gerçek DuckDB ile test edildi: iki okuyucu, biri kapalı → yazar
+   açılamaz; hepsi bırakılınca açılır; eski adaptör yeni satırı görür.
+2. **Katalog kaydı modelin metnine bağlıydı.** Model ikinci koşuda farklı bir `name` verdi,
+   veri ekibinin sözleşmesi "aynı draft, farklı içerik" diye reddetti — doğru davranış.
+   Kayıt artık dosya + öneriden türer; kullanıcının adı yalnız karta girer. Bu, geleceği
+   düzeltti; eski adla kaydedilmiş taslak veritabanında kaldı ve operatör silene kadar
+   her koşu çatışmaya düştü. Çatışma kullanıcıya soru olarak dönüyor (tekrar denenmez),
+   ve silme bir operatör işlemi — agent'ın yetkisi yok, olmamalı da.
 
 ## Açık kalan
 Alternatifler arasında seçim (üç sayısal kolondan hangisi, belirsiz tarih biçimi) bugün

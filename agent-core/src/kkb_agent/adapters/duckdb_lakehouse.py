@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 import duckdb
+import weakref
 import pandas as pd
 
 from ..contracts.catalog import DatasetSpec
@@ -49,6 +50,34 @@ _FORBIDDEN = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+
+
+# Aynı süreçte aynı dosyaya açılmış okuyucular. DuckDB, aynı yapılandırmadaki
+# bağlantıları tek veritabanı örneğinde paylaşır ve DOSYA KİLİDİ son bağlantı kapanana
+# kadar kalır. Ölçüldü: bir önceki agent örneğinin okuyucusu açık kaldığı için Architect'in
+# yazar alt süreci "Conflicting lock is held" ile açılamadı. Kapatan, yalnız kendi
+# bağlantısını değil süreçteki hepsini bırakmalı; bırakılan adaptör dokunulunca yeniden açar.
+_READERS: dict[str, "weakref.WeakSet[Any]"] = {}
+
+
+def register_reader(path: str | Path, adapter: Any) -> None:
+    """Bir adaptörü (close() bilen) bu dosyanın okuyucuları arasına kaydet."""
+    _READERS.setdefault(str(Path(path).resolve()), weakref.WeakSet()).add(adapter)
+
+
+def release_connections(path: str | Path | None) -> int:
+    """Bu dosyaya açık BÜTÜN okuyucuları kapat; kaçını kapattığını döndür.
+
+    Yazar alt süreç çalışmadan hemen önce çağrılır. Kapatılan adaptörler ölmez: bir
+    sonraki sorguda kendi bağlantılarını yeniden açarlar (`_conn()`)."""
+    if path is None:
+        return 0
+    n = 0
+    for adapter in list(_READERS.get(str(Path(path).resolve()), ())):
+        if getattr(adapter, "_con", None) is not None:
+            adapter.close()
+            n += 1
+    return n
 
 
 def hardened_connection(path: str | Path | None = None) -> duckdb.DuckDBPyConnection:
@@ -126,7 +155,15 @@ class DuckDBLakehouse:
                 f"Lakehouse bulunamadı: {self.db_path}. Önce `python scripts/dev_seed.py` çalıştırın."
             )
         self._con = hardened_connection(self.db_path)
+        register_reader(self.db_path, self)
         self._catalog: dict[str, DatasetSpec] = self._load_catalog()
+
+    def _conn(self) -> duckdb.DuckDBPyConnection:
+        """Bağlantı; dışarıdan bırakıldıysa aynı sertleştirmeyle yeniden açılır."""
+        if getattr(self, "_con", None) is None:
+            self._con = hardened_connection(self.db_path)
+            register_reader(self.db_path, self)
+        return self._con
 
     def close(self) -> None:
         con = getattr(self, "_con", None)
@@ -186,7 +223,7 @@ class DuckDBLakehouse:
         started = time.perf_counter()
         try:
             # Her sorgu kendi imlecinde; gerekçe silver_lakehouse.execute_sql'de.
-            df = self._con.cursor().execute(bounded).fetch_df()
+            df = self._conn().cursor().execute(bounded).fetch_df()
         except Exception as exc:
             raise LakehouseError(f"SQL çalıştırılamadı: {exc}") from exc
         duration = (time.perf_counter() - started) * 1000
@@ -240,7 +277,7 @@ class DuckDBLakehouse:
         return f"SELECT {key_column}, {value_column} FROM {dataset_id}{where}"
 
     def health(self) -> dict[str, Any]:
-        tables = self._con.execute("SHOW TABLES").fetch_df()
+        tables = self._conn().execute("SHOW TABLES").fetch_df()
         return {
             "ok": True,
             "db_path": str(self.db_path),

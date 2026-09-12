@@ -37,7 +37,7 @@ from ..contracts.catalog import (
     SemanticType,
 )
 from ..contracts.lakehouse import LakehouseError, QueryProvenance, QueryResult
-from .duckdb_lakehouse import guard_sql, hardened_connection
+from .duckdb_lakehouse import guard_sql, hardened_connection, register_reader
 
 SILVER_RELATION = "silver.fact_observation"
 ADHOC_RELATION = "adhoc.fact_observation"
@@ -92,8 +92,16 @@ class SilverLakehouse:
                 "ya da geliştirme için `python scripts/dev_seed_silver.py`."
             )
         self._con = hardened_connection(self.db_path)
+        register_reader(self.db_path, self)
         self._require_relations()
         self._catalog: dict[str, DatasetSpec] = self._load_catalog()
+
+    def _conn(self) -> duckdb.DuckDBPyConnection:
+        """Bağlantı; `release_connections` ile bırakıldıysa aynı sertleştirmeyle yeniden açılır."""
+        if getattr(self, "_con", None) is None:
+            self._con = hardened_connection(self.db_path)
+            register_reader(self.db_path, self)
+        return self._con
 
     # ---------- yaşam döngüsü ----------
     def close(self) -> None:
@@ -112,6 +120,7 @@ class SilverLakehouse:
         """
         self.close()
         self._con = hardened_connection(self.db_path)
+        register_reader(self.db_path, self)
         self._require_relations()
         self._catalog = self._load_catalog()
 
@@ -120,7 +129,7 @@ class SilverLakehouse:
         """Beklenen iki ilişki yoksa erken ve anlaşılır biçimde dur."""
         found = {
             f"{r[0]}.{r[1]}"
-            for r in self._con.execute(
+            for r in self._conn().execute(
                 "SELECT table_schema, table_name FROM information_schema.tables"
             ).fetchall()
         }
@@ -147,7 +156,7 @@ class SilverLakehouse:
         "yok" değil, "var ama henüz yüklenmemiş" denebiliyor. Bu iki cevap birbirinin
         yerine geçmez.
         """
-        rows = self._con.execute(
+        rows = self._conn().execute(
             """
             SELECT series_id, source_id, native_code, dataset_id, name_tr, description,
                    aliases, tags, frequency, week_anchor, unit, measure_type, default_agg,
@@ -159,7 +168,7 @@ class SilverLakehouse:
             """
         ).fetchall()
         counts = dict(
-            self._con.execute(
+            self._conn().execute(
                 f"SELECT series_id, count(*) FROM {SILVER_RELATION} GROUP BY 1"
             ).fetchall()
         )
@@ -169,7 +178,7 @@ class SilverLakehouse:
         self._relation_by_series: dict[str, str] = {}
         if getattr(self, "_has_adhoc", False):
             adhoc_counts = dict(
-                self._con.execute(
+                self._conn().execute(
                     f"SELECT series_id, count(*) FROM {ADHOC_RELATION} GROUP BY 1"
                 ).fetchall()
             )
@@ -327,7 +336,7 @@ class SilverLakehouse:
             # len()". Motor bir turda birden çok okuma aracını paralel çalıştırabildiği
             # için bu teorik bir durum değil. cursor() aynı veritabanını paylaşır,
             # sertleştirilmiş yapılandırma (read_only + kilitli config) korunur.
-            df = self._con.cursor().execute(bounded).fetch_df()
+            df = self._conn().cursor().execute(bounded).fetch_df()
         except Exception as exc:
             raise LakehouseError(f"SQL çalıştırılamadı: {exc}") from exc
         duration = (time.perf_counter() - started) * 1000
@@ -398,8 +407,8 @@ class SilverLakehouse:
         return sql + f" ORDER BY {key_column}"
 
     def health(self) -> dict[str, Any]:
-        n_obs = self._con.execute(f"SELECT count(*) FROM {SILVER_RELATION}").fetchone()[0]
-        n_adhoc = (self._con.execute(f"SELECT count(*) FROM {ADHOC_RELATION}").fetchone()[0]
+        n_obs = self._conn().execute(f"SELECT count(*) FROM {SILVER_RELATION}").fetchone()[0]
+        n_adhoc = (self._conn().execute(f"SELECT count(*) FROM {ADHOC_RELATION}").fetchone()[0]
                    if getattr(self, "_has_adhoc", False) else 0)
         unverified = sorted(
             s.dataset_id for s in self._catalog.values()

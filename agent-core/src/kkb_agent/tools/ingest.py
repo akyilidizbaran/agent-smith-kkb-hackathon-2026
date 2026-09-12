@@ -25,6 +25,7 @@ from ..builder.ingest import LakehouseCLI
 from ..builder.profile import profile_table, propose
 from ..builder.read import ReadRefused, read_table_for_profiling
 from ..builder.verify import verify_mapping
+from ..adapters.duckdb_lakehouse import release_connections
 from ..contracts.lakehouse import LakehouseClient
 from ..core.access_policy import decide, detect_source_constraint, render_for_model, to_tool_error
 from ..core.errors import ToolError
@@ -138,32 +139,51 @@ class IngestFromUrlTool(Tool):
                               artifacts={"proposal": mapping, "semantics": semantics, "report": report})
 
         # 4. yaz: okuyucuyu kapat → CLI → yeniden aç. DuckDB tek yazar kabul ediyor.
-        description = params.description or (
+        #
+        # Katalog kaydı DETERMİNİSTİK: aynı dosya + aynı öneri → bayt bayt aynı kayıt.
+        # Ölçüldü: model ikinci koşuda farklı bir 'name' verdi, veri ekibinin sözleşmesi
+        # "aynı draft farklı içerikle" diye reddetti (doğru davranış). Kullanıcının verdiği
+        # ad karta girer, kataloğa değil; katalog adı dosya ve seri anahtarından türer.
+        source_name = Path(params.locator.split("?")[0]).name
+        catalog_name = f"{key} — {source_name} (taslak)"
+        description = (
             f"Kullanıcının getirdiği kaynaktan ({params.locator}) Architect tarafından taslak olarak "
             f"eklendi. Eşleme ve anlam veriden önerildi; ölçüm tipi {semantics.measure_type!r} "
             f"({next(e.reason for e in semantics.evidence if e.field == 'measure_type')}). "
             "Kullanılabilmesi için bir insanın onaylayıp kataloğa alması gerekir."
         )
+        # Süreçteki BÜTÜN okuyucular kapanmalı, yalnız bu adaptör değil: DuckDB aynı
+        # süreçteki salt-okunur bağlantıları tek örnekte paylaşır ve dosya kilidi son
+        # bağlantı kapanana kadar kalır (ölçüldü: eski bir agent örneğinin bağlantısı
+        # yazar alt sürecin kilidini engelledi).
         self.lakehouse.close()
+        release_connections(getattr(self.lakehouse, "db_path", None))
         try:
             out = self.cli.ingest_file(
                 locator=params.locator, dataset_id=f"{self.dataset_prefix}_{key}",
-                mapping=mapping, semantics=semantics, name=params.name, description=description,
+                mapping=mapping, semantics=semantics, name=catalog_name, description=description,
                 allowed_root=self.allowed_root,
             )
         finally:
             self.lakehouse.reload()
 
         if not out.ok:
+            conflict = "already exists as a draft with different content" in (out.error or "")
             return ToolResult.fail(
-                "TOOL_FAILED", f"Ingest başarısız: {out.error or out.status}. {out.raw[-400:]}",
-                hint="Hata mesajı bir eşleme sorununu söylüyorsa kullanıcıya sor; tekrar deneme.",
+                "TOOL_FAILED",
+                (f"'{series_id}' adlı bir taslak zaten var ve içeriği bu dosyadan farklı; veri "
+                 "ekibinin sözleşmesi sessizce üstüne yazmaz." if conflict
+                 else f"Ingest başarısız: {out.error or out.status}. {out.raw[-400:]}"),
+                hint=("Kullanıcıya sor: başka bir series_key ile yeni taslak mı, yoksa mevcut taslak "
+                      "korunsun mu? Aynı çağrıyı tekrarlama." if conflict
+                      else "Hata mesajı bir eşleme sorununu söylüyorsa kullanıcıya sor; tekrar deneme."),
                 layer="harness", retryable=False,
             )
 
         # 5. belge kartı — kullanıcıya gidecek olan
         card = [
             f"EKLENDİ: {series_id} — {params.name}",
+            f"katalog adı: {catalog_name}",
             f"kaynak: {params.locator}",
             f"satır: {report.rows_mapped} eşlendi, {report.rows_null_value} boş değer korundu"
             + (f"; yazılan {out.rows_written}, değişmeyen {out.rows_unchanged}" if out.rows_written is not None else ""),

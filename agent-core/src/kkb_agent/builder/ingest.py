@@ -12,6 +12,7 @@ cevabı alır: yeni kaynak türü onların tarafında bir connector; bu dosya de
 
 from __future__ import annotations
 
+import os
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -24,7 +25,11 @@ Runner = Callable[[list[str], Path], tuple[int, str, str]]
 
 
 def _subprocess_runner(command: list[str], cwd: Path) -> tuple[int, str, str]:
-    proc = subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False, timeout=600)
+    # Agent'ın kendi venv'i alt sürece sızmasın: uv, VIRTUAL_ENV'i görünce uyarıyor ve
+    # lakehouse-core'un kendi ortamı yerine bizimkini kullanmaya kalkabiliyor.
+    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
+    proc = subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False,
+                          timeout=600, env=env)
     return proc.returncode, proc.stdout, proc.stderr
 
 

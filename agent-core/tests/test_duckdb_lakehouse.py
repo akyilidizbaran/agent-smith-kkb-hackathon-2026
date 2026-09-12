@@ -110,3 +110,28 @@ def test_satir_siniri_motorda_uygulanir(lakehouse: DuckDBLakehouse) -> None:
 def test_guard_sql_tek_ifade_zorunlu() -> None:
     with pytest.raises(LakehouseError, match="2 ifade"):
         guard_sql("SELECT 1; SELECT 2")
+
+
+def test_release_connections_butun_okuyuculari_birakir_ve_yazar_acilir(tmp_path) -> None:
+    """Ölçülen hata: eski bir agent örneğinin okuyucusu açık kaldı, Architect'in yazar alt
+    süreci "Conflicting lock is held" ile açılamadı. close() yalnız kendi bağlantısını
+    kapatıyordu; süreçteki HEPSİ bırakılmalı. Bırakılan adaptör dokunulunca yeniden açar."""
+    import duckdb
+    from kkb_agent.adapters.duckdb_lakehouse import DuckDBLakehouse, release_connections
+
+    db = tmp_path / "lh.duckdb"
+    con = duckdb.connect(str(db)); con.execute("CREATE TABLE t(x INT); INSERT INTO t VALUES (1)"); con.close()
+    (tmp_path / "catalog.json").write_text("[]", encoding="utf-8")
+
+    a = DuckDBLakehouse(db); b = DuckDBLakehouse(db)   # iki okuyucu, aynı süreç
+    a.close()                                           # yalnız birini kapatmak yetmez
+    with pytest.raises(Exception):
+        duckdb.connect(str(db)).close()                 # yazar hâlâ açılamaz (b tutuyor)
+
+    assert release_connections(db) == 1                 # kalan okuyucu bırakıldı
+    w = duckdb.connect(str(db)); w.execute("INSERT INTO t VALUES (2)"); w.close()   # yazar açıldı
+
+    # bırakılan adaptörler ölmedi: dokununca yeniden açar ve yeni satırı görür
+    assert b.execute_sql("SELECT count(*) AS n FROM t").data.iloc[0, 0] == 2
+    assert a.execute_sql("SELECT count(*) AS n FROM t").data.iloc[0, 0] == 2
+    assert release_connections(None) == 0
