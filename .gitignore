@@ -18,6 +18,7 @@ venv/
 
 # Veri (lakehouse çıktıları repoya girmez)
 data/
+incoming/          # Architect'in izinli yerel kökü: jüri dosyaları, golden fikstür kopyaları
 !data/.gitkeep
 *.duckdb
 *.duckdb.wal

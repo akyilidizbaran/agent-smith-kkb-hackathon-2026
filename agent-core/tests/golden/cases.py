@@ -110,7 +110,8 @@ def _value_near(expected: float, tol: float = 0.02) -> Callable[[pd.DataFrame], 
 
 
 _FIXTURE_DIR = pathlib.Path(__file__).resolve().parent / "fixtures"
-_INCOMING = pathlib.Path(os.getenv("INGEST_ALLOWED_ROOT", "incoming"))
+# Ayarlardaki varsayılanla aynı kök (config.ingest_allowed_root): repo kökünün yanında `incoming/`.
+_INCOMING = pathlib.Path(os.getenv("INGEST_ALLOWED_ROOT", pathlib.Path(__file__).resolve().parents[3] / "incoming"))
 
 
 def _fixture(name: str) -> str:
@@ -220,7 +221,7 @@ CASES: list[GoldenCase] = [
         id="G8_ingest_ve_sorgu",
         question=(
             "Şu dosyayı veri havuzuna taslak seri olarak ekle ve ne yaptığını belgele: "
-            + str(pathlib.Path(os.getenv("INGEST_ALLOWED_ROOT", "incoming")) / "konut_test.csv")
+            + str(_INCOMING / "konut_test.csv")
         ),
         follow_up="Şimdi eklediğin bu taslak seriyi aylık olarak tablo hâlinde göster.",
         why="Demo senaryosunun 2. sorusu: jüri yeni veri getirir, agent ingest eder VE belgeler, "
