@@ -40,6 +40,8 @@ from .ingestion.windowing import (
 )
 from .parsers.base import BaseParser
 from .parsers.evds import EvdsParser
+from .gold.build import GoldBuildReport, build_gold_tables
+from .gold.catalog import DEFAULT_GOLD_CATALOG_ROOT
 from .silver.build import SilverBuildReport, build_silver_snapshot
 from .storage.parquet import ParquetStorage
 from .storage.raw import RawStorage
@@ -271,6 +273,24 @@ def run_silver_build(
         return build_silver_snapshot(
             connection, bronze_root=Path(data_root) / "bronze"
         )
+    finally:
+        connection.close()
+
+
+def run_gold_build(
+    *, database: str | Path, catalog_root: str | Path = DEFAULT_GOLD_CATALOG_ROOT
+) -> GoldBuildReport:
+    """Materialize the reviewed Gold metrics from the current Silver snapshot.
+
+    Bootstrap first for the same reason ``run_silver_build`` does: the ``gold`` schema and
+    ``meta.gold_build`` come from the bootstrap SQL, and a database that predates them must
+    still be buildable. Run this after ``silver``; a Silver rebuild leaves every Gold table
+    behind until this runs again, and the recorded Silver fingerprint says so.
+    """
+
+    connection = bootstrap_database(database)
+    try:
+        return build_gold_tables(connection, catalog_root=Path(catalog_root))
     finally:
         connection.close()
 

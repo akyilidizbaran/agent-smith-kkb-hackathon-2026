@@ -136,6 +136,7 @@ def test_help_is_a_real_module_entrypoint() -> None:
     assert "bootstrap" in completed.stdout
     assert "ingest" in completed.stdout
     assert "ingest-file" in completed.stdout
+    assert "gold" in completed.stdout and "gold-run" in completed.stdout
     assert "--api-key" not in completed.stdout
     assert completed.stderr == ""
 
@@ -353,15 +354,8 @@ def test_ambiguous_generic_input_fails_through_production_parser(
     assert _read(tmp_path / "data" / "lakehouse.duckdb", "SELECT status FROM meta.run")[0][0] == "failed"
 
 
-def test_silver_command_publishes_bronze_into_the_trusted_query_surface(
-    tmp_path: Path, capsys: Any
-) -> None:
-    """The step that was missing between ``ingest`` and anything that reads Silver.
-
-    Without this command a complete, successful ingestion still left
-    ``silver.fact_observation`` empty, because the only callers of the snapshot operation were
-    tests. The command is what makes "source to agent" a path an operator can run.
-    """
+def _bronze_from_bddk_monthly_fixture(tmp_path: Path) -> tuple[Path, Path]:
+    """One real BDDK monthly artifact in Bronze; returns (database, data_root)."""
 
     from src.lakehouse.parsers.bddk_monthly import BddkMonthlyParser
     from src.lakehouse.storage.parquet import ParquetStorage
@@ -381,6 +375,20 @@ def test_silver_command_publishes_bronze_into_the_trusted_query_surface(
         metadata={"requested_kalem_sutun": ["1534?Toplam"]},
     )
     ParquetStorage(data_root / "bronze").write(BddkMonthlyParser().parse(asset))
+    return database, data_root
+
+
+def test_silver_command_publishes_bronze_into_the_trusted_query_surface(
+    tmp_path: Path, capsys: Any
+) -> None:
+    """The step that was missing between ``ingest`` and anything that reads Silver.
+
+    Without this command a complete, successful ingestion still left
+    ``silver.fact_observation`` empty, because the only callers of the snapshot operation were
+    tests. The command is what makes "source to agent" a path an operator can run.
+    """
+
+    database, data_root = _bronze_from_bddk_monthly_fixture(tmp_path)
 
     exit_code = main(["silver", "--database", str(database), "--data-root", str(data_root)])
     output = capsys.readouterr().out
@@ -393,3 +401,84 @@ def test_silver_command_publishes_bronze_into_the_trusted_query_surface(
     )[0][0]
     assert published > 0
     assert f"rows published         : {published}" in output
+
+
+def test_gold_command_caches_reviewed_metrics_and_records_the_rest_as_refused(
+    tmp_path: Path, capsys: Any
+) -> None:
+    """The committed metric catalog against a Silver holding only the BDDK monthly series.
+
+    One metric can be built (the quarterly housing-loan stock); the other two need series
+    this Silver does not hold, so the functions refuse them with ``NO_OBSERVATIONS``. The
+    refusal is a recorded outcome with a reason, not a silently missing table.
+    """
+
+    database, data_root = _bronze_from_bddk_monthly_fixture(tmp_path)
+    assert main(["silver", "--database", str(database), "--data-root", str(data_root)]) == 0
+    capsys.readouterr()
+
+    exit_code = main(["gold", "--database", str(database), "--data-root", str(data_root)])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "status: success" in output
+    assert "tables built           : 1" in output
+    assert "gold.konut_kredisi_ceyreklik" in output
+    assert "metrics refused        : 2" in output
+    assert "NO_OBSERVATIONS" in output
+    quarters = _read(database, "SELECT count(*) FROM gold.konut_kredisi_ceyreklik")[0][0]
+    assert quarters > 0
+    ledger = _read(
+        database,
+        "SELECT metric_id, status FROM meta.gold_build WHERE is_current ORDER BY metric_id",
+    )
+    assert ledger == [
+        ("konut_faizi_aylik", "refused"),
+        ("konut_kredisi_aylik_vs_haftalik", "refused"),
+        ("konut_kredisi_ceyreklik", "built"),
+    ]
+
+
+def test_gold_run_writes_one_call_as_json_and_exits_3_on_refusal(
+    tmp_path: Path, capsys: Any
+) -> None:
+    """The read-only single-call path an agent in another process uses."""
+
+    database, data_root = _bronze_from_bddk_monthly_fixture(tmp_path)
+    assert main(["silver", "--database", str(database), "--data-root", str(data_root)]) == 0
+    capsys.readouterr()
+    out = tmp_path / "gold" / "align.json"
+
+    exit_code = main([
+        "gold-run", "--database", str(database), "--function", "align_frequency",
+        "--series", "bddk_monthly:1534_Toplam", "--target", "quarterly", "--out", str(out),
+    ])
+    stdout = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "status: success" in stdout and "function: align_frequency" in stdout
+    document = json.loads(out.read_text(encoding="utf-8"))
+    assert document["function"] == "align_frequency"
+    assert "period_end" in document["columns"] and "artifact_sha256_list" in document["columns"]
+    assert len(document["rows"]) == int(_kv(stdout)["rows"])
+
+    refused = main([
+        "gold-run", "--database", str(database), "--function", "decompose_cumulative",
+        "--series", "bddk_monthly:1534_Toplam", "--out", str(tmp_path / "gold" / "dec.json"),
+    ])
+    stdout = capsys.readouterr().out
+    assert refused == 3
+    assert "status: refused" in stdout and "reason: NOT_DECOMPOSABLE" in stdout
+    assert not (tmp_path / "gold" / "dec.json").exists()
+
+    missing_target = main([
+        "gold-run", "--database", str(database), "--function", "align_frequency",
+        "--series", "bddk_monthly:1534_Toplam", "--out", str(tmp_path / "gold" / "x.json"),
+    ])
+    assert missing_target == 2
+    assert "--target is required" in capsys.readouterr().err
+
+
+def _kv(text: str) -> dict[str, str]:
+    pairs = (line.partition(":") for line in text.splitlines() if ":" in line)
+    return {key.strip(): value.strip() for key, _, value in pairs}
