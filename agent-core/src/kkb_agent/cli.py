@@ -18,6 +18,7 @@ from .adapters.silver_lakehouse import SilverLakehouse
 from .contracts.lakehouse import GoldCapable, LakehouseError
 from .config import load_settings
 from .core.agent import SYSTEM_PROMPT, AnalyticsAgent
+from .core.evidence import EvidenceBuilder
 from .core.registry import ToolRegistry
 from .core.workspace import AnalysisWorkspace
 from .domain import DomainProfile
@@ -133,7 +134,7 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
     )
     return AnalyticsAgent(
         llm, registry, workspace=workspace, max_steps=max_steps, profile=profile,
-        system_prompt=system_prompt,
+        system_prompt=system_prompt, evidence=EvidenceBuilder(lakehouse),
     )
 
 
@@ -141,6 +142,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="KKB Agentic Analytics Engine")
     parser.add_argument("question", nargs="*", help="Sorulacak soru")
     parser.add_argument("--trace", action="store_true", help="Araç çağrılarını göster")
+    parser.add_argument("--evidence", action="store_true",
+                        help="Kanıt panelini göster: sayı → SQL → gözlem → artifact → RAW/URL")
     parser.add_argument("--max-steps", type=int, default=10)
     parser.add_argument("--health", action="store_true", help="Lakehouse durumunu göster")
     parser.add_argument("--verbose", action="store_true")
@@ -177,6 +180,12 @@ def main() -> None:
         print(f"\n{result.text}\n")
         for art in result.artifacts:
             print(f"[grafik] {art.get('png_path') or art.get('spec_path')}")
+        if result.evidence is not None:
+            print(f"[kanıt] {result.evidence.summary()}")
+            if args.evidence:
+                print("\n--- kanıt paneli ---")
+                print(result.evidence.render())
+                print("---")
         if result.hit_step_limit:
             print("(uyarı: adım limitine ulaşıldı)", file=sys.stderr)
 

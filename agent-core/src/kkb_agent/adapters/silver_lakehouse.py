@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 import time
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +36,7 @@ from ..contracts.catalog import (
     Frequency,
     SemanticType,
 )
+from ..contracts.evidence import ObservationEvidence
 from ..contracts.lakehouse import GoldRefused, LakehouseError, QueryProvenance, QueryResult
 from .duckdb_lakehouse import guard_sql, hardened_connection, register_reader
 from .gold_cli import GoldCLI, GoldRunOutcome
@@ -144,6 +145,16 @@ _FREQUENCY: dict[str, Frequency] = {
     "semiannual": Frequency.QUARTERLY,
     "yearly": Frequency.YEARLY,
 }
+
+
+def _parse_ts(text: str | None) -> datetime | None:
+    """DuckDB TIMESTAMPTZ'yi VARCHAR olarak okuyoruz (pytz bağımlılığı yok); ISO'ya çevir."""
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(str(text).replace(" ", "T", 1))
+    except ValueError:
+        return None
 
 
 class SilverLakehouse:
@@ -707,6 +718,102 @@ class SilverLakehouse:
                 warnings=warnings,
             ),
         )
+
+    # ---------- Kanıt zinciri (EvidenceCapable, ADR-0033) ----------
+    def _bronze_path(self, artifact_sha256: str) -> str | None:
+        """Bronze parquet: `<data>/bronze/**/artifact_sha256=<sha>.parquet`. Yoksa None, uydurulmaz."""
+        root = self.db_path.parent / "bronze"
+        if not root.is_dir():
+            return None
+        matches = sorted(root.rglob(f"artifact_sha256={artifact_sha256}.parquet"))
+        return str(matches[0]) if matches else None
+
+    def evidence_for_artifacts(self, artifact_sha256s: list[str]) -> dict[str, dict[str, Any]]:
+        if not artifact_sha256s:
+            return {}
+        try:
+            rows = self._conn().cursor().execute(
+                """
+                SELECT artifact_sha256, source_id, dataset_id, locator, http_status,
+                       fetched_at::VARCHAR, raw_path
+                FROM meta.artifact WHERE artifact_sha256 IN (SELECT unnest(?))
+                """,
+                [list(artifact_sha256s)],
+            ).fetchall()
+        except Exception as exc:  # noqa: BLE001 — meta.artifact olmayan DB: iz yok, hata değil
+            raise LakehouseError(f"meta.artifact okunamadı: {exc}") from exc
+        out: dict[str, dict[str, Any]] = {}
+        for sha, source_id, dataset_id, locator, status, fetched, raw_path in rows:
+            out[sha] = {
+                "source_id": source_id, "dataset_id": dataset_id, "locator": locator,
+                "http_status": status, "fetched_at": _parse_ts(fetched), "raw_path": raw_path,
+                "bronze_path": self._bronze_path(sha),
+            }
+        for sha in artifact_sha256s:
+            out.setdefault(sha, {"locator": None, "fetched_at": None, "http_status": None,
+                                 "raw_path": None, "bronze_path": self._bronze_path(sha)})
+        return out
+
+    def evidence_for_observations(
+        self, series_id: str, observation_dates: list[date], *, entity_id: str | None = None
+    ) -> list[ObservationEvidence]:
+        if not observation_dates:
+            return []
+        if self._is_gold(series_id):
+            # Gold tablosu: satır kendi kanıtını taşır. İstenen dönem sonlarındaki satırların
+            # source_observation_dates'i alınır, katkıda bulunan Silver gözlemleri izlenir.
+            meta = self._gold_meta[series_id]
+            try:
+                rows = self._conn().cursor().execute(
+                    f'SELECT * FROM {series_id} WHERE period_end IN (SELECT unnest(?)::DATE)',
+                    [[d.isoformat() for d in observation_dates]],
+                ).fetch_df()
+            except Exception as exc:  # noqa: BLE001
+                raise LakehouseError(f"Gold satırları okunamadı: {exc}") from exc
+            out: list[ObservationEvidence] = []
+            date_cols = [c for c in rows.columns if str(c).rsplit("::", 1)[-1] == "source_observation_dates"]
+            for col in date_cols:
+                prefix = str(col).split("::", 1)[0].split("@", 1)[0] if "::" in str(col) else None
+                sids = [prefix] if prefix else list(meta["series_ids"])
+                dates = sorted({
+                    (d if isinstance(d, date) else date.fromisoformat(str(d)[:10]))
+                    for cell in rows[col].dropna() for d in (list(cell) if hasattr(cell, "__iter__") and not isinstance(cell, str) else [cell])
+                })
+                for sid in sids:
+                    out.extend(self.evidence_for_observations(sid, dates))
+            return out
+        relation = self._relation_for(series_id)
+        entity_clause = "AND entity_id = ?" if entity_id is not None else ""
+        params: list[Any] = [series_id, [d.isoformat() for d in observation_dates]]
+        if entity_id is not None:
+            params.append(entity_id)
+        try:
+            rows = self._conn().cursor().execute(
+                f"""
+                SELECT f.series_id, f.entity_id, f.observation_date, f.value, f.quality_flag,
+                       f.artifact_sha256, f.vintage_id, f.run_id,
+                       a.fetched_at::VARCHAR, a.locator, a.http_status, a.raw_path
+                FROM {relation} f
+                LEFT JOIN meta.artifact a ON a.artifact_sha256 = f.artifact_sha256
+                WHERE f.series_id = ?
+                  AND f.observation_date IN (SELECT unnest(?)::DATE)
+                  {entity_clause}
+                ORDER BY f.observation_date, f.entity_id
+                """,
+                params,
+            ).fetchall()
+        except Exception as exc:  # noqa: BLE001
+            raise LakehouseError(f"gözlem izi okunamadı: {exc}") from exc
+        out: list[ObservationEvidence] = []
+        for (sid, ent, obs_date, value, flag, sha, vintage, run_id, fetched, locator, status, raw_path) in rows:
+            out.append(ObservationEvidence(
+                series_id=sid, entity_id=ent, observation_date=obs_date,
+                value=None if value is None else float(value), quality_flag=str(flag),
+                artifact_sha256=str(sha), vintage_id=vintage, run_id=run_id,
+                fetched_at=_parse_ts(fetched), locator=locator, http_status=status,
+                raw_path=raw_path, bronze_path=self._bronze_path(str(sha)), relation=relation,
+            ))
+        return out
 
     def gold_align(self, series_id: str, target_frequency: str) -> QueryResult:
         return self._gold_call("align_frequency", [series_id], target_frequency)

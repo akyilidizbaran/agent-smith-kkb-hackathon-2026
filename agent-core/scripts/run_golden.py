@@ -69,6 +69,7 @@ class CaseOutcome:
     error_codes: dict[str, int] = field(default_factory=dict)
     grounding: str = ""
     roles: dict[str, int] = field(default_factory=dict)
+    evidence: str = "—"   # kanıt zinciri: tam | EKSİK: … | — (tablo yok / ölçülmedi)
     failures: list[str] = field(default_factory=list)
     answer_preview: str = ""
 
@@ -130,6 +131,21 @@ def run_case(case: GoldenCase) -> CaseOutcome:
     if tool_steps > case.max_steps_used:
         failures.append(f"çok fazla adım: {tool_steps} > {case.max_steps_used}")
 
+    # Kanıt zinciri (ADR-0033): tablo varsa her sayı bir hücrede, her kolonun SQL'i var ve
+    # adaptör artifact izi sunuyorsa her gözlem locator + fetched_at taşıyor. Seed
+    # adaptöründe artifact yoktur; zincir SQL'de biter ve bu bir eksik sayılmaz.
+    evidence = answer.evidence
+    evidence_state = "—"
+    if evidence is not None and not case.expect_no_table and table is not None and not table.empty:
+        if evidence.complete:
+            evidence_state = "tam"
+        elif not evidence.supports_artifacts and all("seed" in g for g in evidence.gaps):
+            evidence_state = "SQL'de biter (seed)"
+        else:
+            evidence_state = "EKSİK: " + "; ".join(evidence.gaps)[:160]
+        if not evidence.complete and evidence.supports_artifacts:
+            failures.append(f"kanıt zinciri eksik: {'; '.join(evidence.gaps)[:200]}")
+
     return CaseOutcome(
         id=case.id,
         passed=not failures,
@@ -140,6 +156,7 @@ def run_case(case: GoldenCase) -> CaseOutcome:
         error_codes=codes,
         grounding=answer.grounding,
         roles={r: sum(1 for s in steps if s.role == r) for r in ("retrieve", "execute", "validate", "narrate")},
+        evidence=evidence_state,
         failures=failures,
         answer_preview=answer.text[:200].replace("\n", " "),
     )
@@ -278,6 +295,17 @@ def main() -> None:
             roles[k] = roles.get(k, 0) + v
     if roles:
         print("ROLLER: " + ", ".join(f"{k}×{v}" for k, v in roles.items() if v))
+    chained = [o for o in outcomes if o.evidence != "—"]
+    if chained:
+        full = sum(1 for o in chained if o.evidence == "tam")
+        seed = sum(1 for o in chained if o.evidence.startswith("SQL'de biter"))
+        broken = [o for o in chained if o.evidence.startswith("EKSİK")]
+        line = f"KANIT ZİNCİRİ: {full}/{len(chained)} tam"
+        if seed:
+            line += f", {seed} SQL'de biter (seed adaptörü, artifact yok)"
+        if broken:
+            line += " | " + "; ".join(f"{o.id}: {o.evidence}" for o in broken)
+        print(line)
     measured = [o for o in outcomes if o.grounding]
     if measured:
         clean = sum(1 for o in measured if o.grounding == "OK")

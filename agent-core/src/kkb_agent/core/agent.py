@@ -129,6 +129,9 @@ class AgentAnswer:
     #: Araçların ürettiği çıktı dosyaları (grafik belirtimi/PNG; ADR-0032). CLI yolu basar,
     #: koşucular varlığını denetler. Metnin içine gömülmez: dosya yolu cevabın parçası değil.
     artifacts: list[dict[str, Any]] = field(default_factory=list)
+    #: Kanıt paneli (ADR-0033): cevaptaki sayı → hücre → SQL → gözlem → artifact → RAW/URL.
+    #: Cevap üretildikten SONRA kurulur; kurulamazsa None, cevap düşmez.
+    evidence: Any = None
 
     #: Motor-bağımsız koşucuların okuduğu özet. Alan, property DEĞİL: karşılaştırma
     #: koşucusu iki turlu vakalarda iki cevabın özetini birleştirip geri YAZIYOR
@@ -207,11 +210,14 @@ class AnalyticsAgent:
         max_steps: int = 10,
         system_prompt: str = SYSTEM_PROMPT,
         profile: DomainProfile | None = None,
+        evidence: Any = None,
     ) -> None:
         self.llm = llm
         self.registry = registry
         self.workspace = workspace or AnalysisWorkspace()
         self.max_steps = max_steps
+        # Kanıt paneli inşacısı (core/evidence.EvidenceBuilder); None ise panel kurulmaz.
+        self.evidence_builder = evidence
         # Alan bilgisi prompt'a koddan değil profilden girer (ADR-0012).
         # Profil verilmezse registry'ninki, o da yoksa nötr varsayılan kullanılır.
         self.profile = profile or registry.profile
@@ -224,7 +230,18 @@ class AnalyticsAgent:
 
     # ------------------------------------------------------------------
     def ask(self, question: str) -> AgentAnswer:
-        """Bir soruyu uçtan uca cevaplar."""
+        """Bir soruyu uçtan uca cevaplar; cevaba kanıt panelini iliştirir."""
+        answer = self._ask(question)
+        if self.evidence_builder is not None:
+            try:
+                answer.evidence = self.evidence_builder.build(
+                    question, answer.text, self.workspace, answer.steps, artifacts=answer.artifacts
+                )
+            except Exception as exc:  # noqa: BLE001 — panel cevabı asla düşürmez
+                log.warning("kanıt paneli kurulamadı: %s", exc)
+        return answer
+
+    def _ask(self, question: str) -> AgentAnswer:
         self.registry.active_question = question
         messages = self._build_messages(question)
         steps: list[AgentStep] = []

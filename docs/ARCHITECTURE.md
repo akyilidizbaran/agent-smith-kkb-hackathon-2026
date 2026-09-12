@@ -1,6 +1,6 @@
 # Agentic Analytics Engine — Mimari
 
-> **Durum:** 12 Eylül 2026 · Golden 10 vaka (seed 7/7, gerçek DB G8/G9/G10 3/3) · 201 birim testi · 32 ADR
+> **Durum:** 12 Eylül 2026 · Golden 10 vaka (seed 7/7, gerçek DB G8/G9/G10 3/3) · 208 birim testi · 33 ADR
 > Bu belge kodun *ne yaptığını* değil, *neden öyle yapıldığını* anlatır; her karar
 > `docs/adr/` altındaki kayda atıfla gelir. Kodla birebir örtüşmesi için modül, sınıf ve
 > metot adları gerçek adlarıyla verilmiştir.
@@ -684,4 +684,21 @@ Birim ve seri tipi workspace provenance → katalogdan; bilinmiyorsa "birim beli
 açıkça yazılır. Gold join kolonları önekten seriye bağlanır. Harita `assets/geo/
 tr_provinces.geojson` ister; yoksa politika katmanında durur. Çıktı `AgentAnswer.artifacts`
 ile CLI'a gider, dosya yolu cevaba yazılmaz.
+
+
+### Kanıt paneli — `core/evidence.py` + `contracts/evidence.py` (ADR-0033) — YAZILDI
+
+"Bu rakam nereden geliyor?" tek zincir olarak:
+
+```
+cevaptaki sayı → tablo hücresi → SQL (provenance) → Silver/adhoc satırı
+  → artifact_sha256 → Bronze parquet → RAW → kaynak URL + fetched_at + HTTP
+```
+
+Cevap kesinleştikten sonra kurulur (`AgentAnswer.evidence`), cevabı asla düşürmez. "Tam"
+ölçülebilir: her sayı bir hücrede, her kolonun SQL'i var, her gözlem locator+fetched_at
+taşıyor; eksikse `gaps` neresinin eksik olduğunu söyler. Gold tabloları katkıda bulunan
+Silver gözlemlerine çözülür. Danışılıp kullanılmayan seriler panelde, cevapta değil.
+CLI: her cevabın altında `[kanıt]` özeti, `--evidence` tam panel. Golden: `KANIT ZİNCİRİ
+n/m tam`; artifact izi olan adaptörde eksik zincir vakayı düşürür.
 

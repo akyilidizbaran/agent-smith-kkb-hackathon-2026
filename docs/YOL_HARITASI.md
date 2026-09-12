@@ -42,7 +42,7 @@ Architect ve yeni araçların üstüne oturacağı ortak katman. Önce bu, çün
 | # | iş | çıktı | ölçüm |
 |---|---|---|---|
 | C1 ✅ | **Grafik + denetçi** (ADR-0032, 12 Eyl; 81 il haritası aracı hazır, sınır dosyası ve 81 seri bekliyor) | `chart` (Vega-Lite → PNG); deterministik lint: stok için y=0, çift eksen yalnız istenirse, log etiketli, birim+dönem başlıkta, `quality_flag≠ok` işaretli; ilk grafik **81 il haritası** | golden **G10** grafik vakası; lint testleri |
-| C2 | **Kanıt paneli** | cevaptaki sayı → SQL → `silver` satırı → `artifact_sha256` → Bronze → RAW → kaynak URL + `fetched_at`; taranıp kullanılmayan sayfalar burada, cevapta değil | her golden vakasında zincir eksiksiz mi |
+| C2 ✅ | **Kanıt paneli** (ADR-0033, 12 Eyl) | cevaptaki sayı → SQL → `silver` satırı → `artifact_sha256` → Bronze → RAW → kaynak URL + `fetched_at`; taranıp kullanılmayan sayfalar burada, cevapta değil | her golden vakasında zincir eksiksiz mi |
 | C3 | **Web** | `web_search` (Tavily) + `web_url`: aynı alan adı, robots.txt, max derinlik + max sayfa + süre bütçesi, doğrudan veri linkleri önce; A1 sözleşmesinden geçer; kaynak sabitse ve yoksa **sorar** | golden **G11**: "şu URL'den 2025 enflasyonu" (var / yok / erişilemez üç hâli) |
 
 ## Faz D — Kapasite ve kararlılık (18–19 Eylül)

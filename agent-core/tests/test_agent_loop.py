@@ -226,3 +226,29 @@ def test_extra_yazilabilir_olmali() -> None:
 
     answer.extra = {"grounding": "OK | MISS:5", "error_codes": ["SQL_FAILED", "SQL_FAILED"]}
     assert answer.extra["grounding"] == "OK | MISS:5"
+
+
+def test_kanit_paneli_cevaba_ilistirilir_ve_hata_cevabi_dusurmez() -> None:
+    """ADR-0033: panel cevaptan SONRA kurulur; inşacı patlarsa cevap yine döner."""
+    from kkb_agent.core.evidence import EvidenceBuilder
+
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[_call(1)]),
+        LLMResponse(content="2025 yılında değer 100 idi.", tool_calls=[]),
+    ])
+    tool = _CountingTool()
+    registry = ToolRegistry()
+    registry.register(tool)
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=10,
+                           evidence=EvidenceBuilder(object()))
+    # _CountingTool workspace'e yazmıyor; tabloyu elle koyup paneli ölçelim
+    answer = agent.ask("2025'te değer?")
+    assert answer.evidence is not None and "analiz tablosu yok" in answer.evidence.gaps
+
+    class Broken:
+        def build(self, *a, **k):
+            raise RuntimeError("patladı")
+
+    agent2 = AnalyticsAgent(llm=_ScriptedLLM([LLMResponse(content="Cevap.", tool_calls=[])]),
+                            registry=registry, workspace=AnalysisWorkspace(), max_steps=3, evidence=Broken())
+    assert agent2.ask("soru").text
