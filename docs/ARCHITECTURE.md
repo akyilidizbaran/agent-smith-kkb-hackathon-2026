@@ -446,7 +446,7 @@ adayı.
 render eder) + PNG (yedek). Çizgi, çubuk, **çift eksen** (kredi + faiz), vurgulanmış
 dönemler (anomali çıktısı). Workspace tablosundan beslenir, kaynak notu otomatik eklenir.
 
-### Ingest alt-agent'ı — `tools/ingest.py` (`SubAgentTool`)
+### Ingest — `tools/ingest.py` (`ingest_from_url`, ADR-0030) — YAZILDI, deterministik; LLM'li alt-agent hâli planlı
 
 Jürinin sınayacağı yetenek: *"şu URL'den veriyi al, belgele, analiz et."*
 

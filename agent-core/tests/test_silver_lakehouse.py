@@ -279,3 +279,63 @@ def test_ayni_adaptor_es_zamanli_sorgulari_kaldirir(lake: SilverLakehouse) -> No
         results = [f.result() for f in [pool.submit(lake.execute_sql, sql) for _ in range(200)]]
 
     assert all(r.data.iloc[0, 0] == expected for r in results)
+
+
+ADHOC_DDL = """
+CREATE SCHEMA adhoc;
+CREATE TABLE adhoc.fact_observation AS SELECT * FROM silver.fact_observation WHERE 1=0;
+"""
+
+
+@pytest.fixture
+def lake_with_draft(tmp_path: Path) -> SilverLakehouse:
+    """Küratörlü bir seri + adhoc ilişkisinde yaşayan bir TASLAK seri."""
+    db = tmp_path / "lh.duckdb"
+    con = duckdb.connect(str(db))
+    con.execute(DDL); con.execute(ADHOC_DDL)
+    _series(con, "bddk_monthly:konut", aliases=["konut kredisi"], name_tr="Konut Kredisi")
+    _series(con, "adhoc:juri_dosyasi", source_id="adhoc", dataset_id="adhoc_juri_dosyasi",
+            semantic_confidence="derived", semantic_source="profiler", status="draft",
+            aliases=["jüri dosyası"], name_tr="Jüri dosyası (taslak)")
+    for i, v in enumerate([100.0, 110.0, 121.0], start=1):
+        _obs(con, "bddk_monthly:konut", date(2025, i, 28), v)
+    for i, v in enumerate([5.0, 6.0], start=1):
+        con.execute(
+            "INSERT INTO adhoc.fact_observation VALUES (?,NULL,?,NULL,?,?,'monthly','TRY_mn','stock','ok',"
+            "'adhoc','adhoc_juri_dosyasi','sha',now(),'v1','vin','run')",
+            ["adhoc:juri_dosyasi", date(2025, i, 28), date(2025, i, 28), v],
+        )
+    con.close()
+    return SilverLakehouse(db)
+
+
+def test_taslak_seri_ingestten_sonra_gorunur_ve_sorgulanir(lake_with_draft: SilverLakehouse) -> None:
+    """Ölçülen açık: ingest başarılıydı ama Analist 'yeni: []' görüyordu — gözlemler adhoc'ta.
+
+    Taslak seri katalogda görünür, notu taslak olduğunu söyler, fiziksel sorgusu ve
+    preview'u adhoc ilişkisine gider; küratörlü seri Silver'da kalır.
+    """
+    lake = lake_with_draft
+    ids = {s.dataset_id for s in lake.list_datasets()}
+    assert ids == {"bddk_monthly:konut", "adhoc:juri_dosyasi"}
+
+    draft = lake.get_dataset("adhoc:juri_dosyasi")
+    assert any("TASLAK" in n for n in draft.notes)
+    assert "adhoc.fact_observation" in draft.source_detail
+
+    sql = lake.series_sql("adhoc:juri_dosyasi", key_column="observation_date", value_column="value")
+    assert "FROM adhoc.fact_observation" in sql
+    assert "FROM silver.fact_observation" in lake.series_sql(
+        "bddk_monthly:konut", key_column="observation_date", value_column="value"
+    )
+    assert len(lake.preview("adhoc:juri_dosyasi").data) == 2
+    assert lake.execute_sql(sql).data["value"].tolist() == [5.0, 6.0]
+
+    h = lake.health()
+    assert h["draft_series"] == 1 and h["adhoc_observations"] == 2
+
+
+def test_adhoc_iliskisi_olmayan_veritabani_yine_yuklenir(lake: SilverLakehouse) -> None:
+    """Seed/test veritabanlarında adhoc şeması yok; adaptör buna takılmamalı."""
+    assert lake.health()["adhoc_observations"] == 0
+    assert lake.health()["draft_series"] == 0

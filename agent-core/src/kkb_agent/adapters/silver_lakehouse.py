@@ -40,6 +40,10 @@ from ..contracts.lakehouse import LakehouseError, QueryProvenance, QueryResult
 from .duckdb_lakehouse import guard_sql, hardened_connection
 
 SILVER_RELATION = "silver.fact_observation"
+ADHOC_RELATION = "adhoc.fact_observation"
+"""Aynı kolonlar, aynı anlam; yalnız şema adı verinin nereden geldiğini söyler (veri
+ekibinin DDL notu). Küratörlü ve taslak veri ayrı ilişkilerde durur ki karışmasın —
+ama Analist ikisini de okur; taslak olan `status='draft'` notuyla gelir."""
 
 # Veri ekibinin measure_type sözlüğü -> bizim SemanticType + CumulativeKind ikilisi.
 # Onlarınki daha iyi (kümülatiflik tipin içinde); çeviri burada tek noktada.
@@ -91,6 +95,26 @@ class SilverLakehouse:
         self._require_relations()
         self._catalog: dict[str, DatasetSpec] = self._load_catalog()
 
+    # ---------- yaşam döngüsü ----------
+    def close(self) -> None:
+        """Okuyucuyu bırak. Architect yazarken çağrılır; `reload()` ile geri gelir."""
+        con = getattr(self, "_con", None)
+        if con is not None:
+            con.close()
+            self._con = None  # type: ignore[assignment]
+
+    def reload(self) -> None:
+        """Sertleştirilmiş bağlantıyı yeniden aç, kataloğu yeniden oku.
+
+        Ingest'ten sonra `meta.series`'te yeni bir draft satır ve `adhoc`/`silver`'da
+        yeni gözlemler vardır; eski katalog nesnesi bunları bilmez. Aynı sertleştirme
+        (read_only, external access kapalı, config kilitli) yeniden uygulanır.
+        """
+        self.close()
+        self._con = hardened_connection(self.db_path)
+        self._require_relations()
+        self._catalog = self._load_catalog()
+
     # ---------- kurulum ----------
     def _require_relations(self) -> None:
         """Beklenen iki ilişki yoksa erken ve anlaşılır biçimde dur."""
@@ -106,6 +130,8 @@ class SilverLakehouse:
                     f"'{rel}' bulunamadı ({self.db_path}). Mevcut ilişkiler: "
                     f"{', '.join(sorted(found)) or '—'}"
                 )
+        # adhoc isteğe bağlı: seed/test veritabanlarında olmayabilir.
+        self._has_adhoc = ADHOC_RELATION in found
 
     def _load_catalog(self) -> dict[str, DatasetSpec]:
         """Kataloğu yükler ve yüklenmemiş serileri ayırır.
@@ -137,15 +163,33 @@ class SilverLakehouse:
                 f"SELECT series_id, count(*) FROM {SILVER_RELATION} GROUP BY 1"
             ).fetchall()
         )
+        # Taslak seriler adhoc ilişkisinde yaşar; ingest'ten hemen sonra Analist'in onları
+        # görmesi gerekir (ölçüldü: görmüyordu — "yeni: []"). Kaynağı 'adhoc' olan seri o
+        # ilişkiden sayılır ve sorgulanır; küratörlü olanlar Silver'dan.
+        self._relation_by_series: dict[str, str] = {}
+        if getattr(self, "_has_adhoc", False):
+            adhoc_counts = dict(
+                self._con.execute(
+                    f"SELECT series_id, count(*) FROM {ADHOC_RELATION} GROUP BY 1"
+                ).fetchall()
+            )
+        else:
+            adhoc_counts = {}
         catalog: dict[str, DatasetSpec] = {}
         self._uningested: dict[str, str] = {}
         for row in rows:
-            series_id, name_tr = row[0], row[4]
-            if counts.get(series_id):
-                catalog[series_id] = self._to_spec(row, counts[series_id])
+            series_id, source_id, name_tr = row[0], row[1], row[4]
+            relation = ADHOC_RELATION if source_id == "adhoc" else SILVER_RELATION
+            self._relation_by_series[series_id] = relation
+            n = adhoc_counts.get(series_id) if relation == ADHOC_RELATION else counts.get(series_id)
+            if n:
+                catalog[series_id] = self._to_spec(row, n)
             else:
                 self._uningested[series_id] = name_tr
         return catalog
+
+    def _relation_for(self, series_id: str) -> str:
+        return self._relation_by_series.get(series_id, SILVER_RELATION)
 
     def _to_spec(self, row: tuple, row_count: int | None) -> DatasetSpec:
         (series_id, source_id, native_code, dataset_id, name_tr, description, aliases, tags,
@@ -170,14 +214,19 @@ class SilverLakehouse:
         if measure_type == "unknown":
             notes.append("Ölçüm tipi bilinmiyor: hiçbir otomatik toplama/ortalama uygulanamaz.")
         if status == "draft":
-            notes.append("Taslak seri: kaynağı ya da eşlemesi henüz kesinleşmemiş.")
+            notes.append(
+                "TASLAK seri: kullanıcının getirdiği veriden makine tarafından önerildi, bir "
+                "insan onaylamadı. Sorgulanabilir; frekans dönüşümü ve Gold hesapları uygulanmaz. "
+                "Cevapta taslak olduğunu söyle."
+            )
         if week_anchor:
             notes.append(f"Haftalık seri, dönem çapası: {week_anchor}.")
         if default_agg:
             notes.append(f"Frekans indirgemede kullanılacak kural: {default_agg}.")
+        relation = ADHOC_RELATION if source_id == "adhoc" else SILVER_RELATION
         notes.append(
             "Fiziksel sorgu: "
-            f"SELECT observation_date, value FROM {SILVER_RELATION} "
+            f"SELECT observation_date, value FROM {relation} "
             f"WHERE series_id = '{series_id}'"
         )
 
@@ -187,7 +236,7 @@ class SilverLakehouse:
             description=description,
             source=source_id,
             source_url=metadata_url,
-            source_detail=f"{SILVER_RELATION} WHERE series_id = '{series_id}' (kaynak kodu: {native_code})",
+            source_detail=f"{relation} WHERE series_id = '{series_id}' (kaynak kodu: {native_code})",
             frequency=_FREQUENCY.get(frequency, Frequency.IRREGULAR),
             time_column="observation_date",
             grain=["observation_date"],
@@ -317,7 +366,7 @@ class SilverLakehouse:
     def preview(self, dataset_id: str, n: int = 5) -> QueryResult:
         self.get_dataset(dataset_id)
         return self.execute_sql(
-            f"SELECT observation_date, value, quality_flag FROM {SILVER_RELATION} "
+            f"SELECT observation_date, value, quality_flag FROM {self._relation_for(dataset_id)} "
             f"WHERE series_id = '{dataset_id}' ORDER BY observation_date LIMIT {int(n)}"
         )
 
@@ -341,7 +390,7 @@ class SilverLakehouse:
                 )
         sid = dataset_id.replace("'", "''")
         sql = (
-            f"SELECT {key_column}, {value_column} FROM {SILVER_RELATION} "
+            f"SELECT {key_column}, {value_column} FROM {self._relation_for(dataset_id)} "
             f"WHERE series_id = '{sid}'"
         )
         if filter_column and filter_value is not None:
@@ -350,6 +399,8 @@ class SilverLakehouse:
 
     def health(self) -> dict[str, Any]:
         n_obs = self._con.execute(f"SELECT count(*) FROM {SILVER_RELATION}").fetchone()[0]
+        n_adhoc = (self._con.execute(f"SELECT count(*) FROM {ADHOC_RELATION}").fetchone()[0]
+                   if getattr(self, "_has_adhoc", False) else 0)
         unverified = sorted(
             s.dataset_id for s in self._catalog.values()
             if any("DOĞRULANMAMIŞ" in n for n in s.notes)
@@ -362,6 +413,9 @@ class SilverLakehouse:
             "catalogued_series": len(self._catalog) + len(self._uningested),
             "uningested_series": len(self._uningested),
             "observations": n_obs,
+            "adhoc_observations": n_adhoc,
+            "draft_series": sum(1 for sid, rel in self._relation_by_series.items()
+                                if rel == ADHOC_RELATION and sid in self._catalog),
             # Sayı önce, örnek sonra: 1600 kimliği ekrana dökmek teşhis değil gürültüdür.
             "unverified_series": (
                 f"{len(unverified)} seri"

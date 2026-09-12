@@ -11,6 +11,9 @@ Beklenen değerler BDDK Aylık Bülten'den birebir doğrulanmıştır.
 
 from __future__ import annotations
 
+import os
+import pathlib
+
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -165,5 +168,26 @@ CASES: list[GoldenCase] = [
         must_use_tools=["workspace_add_column"],
         # 10 -> 13: aynı sebep (ölçülen en kötü hâl 13)
         max_steps_used=13,
+    ),
+    GoldenCase(
+        id="G8_ingest_ve_sorgu",
+        question=(
+            "Şu dosyayı veri havuzuna taslak seri olarak ekle ve ne yaptığını belgele: "
+            + str(pathlib.Path(os.getenv("INGEST_ALLOWED_ROOT", "incoming")) / "konut_test.csv")
+        ),
+        follow_up="Şimdi eklediğin bu taslak seriyi aylık olarak tablo hâlinde göster.",
+        why="Demo senaryosunun 2. sorusu: jüri yeni veri getirir, agent ingest eder VE belgeler, "
+        "sonra o veriyle çalışır. İlk tur Architect'e açılan tek kapıyı (ingest_from_url) ölçer: "
+        "eşleme veriden kanıtla önerildi mi, draft olarak yazıldı mı, kart run_id/SHA taşıyor mu. "
+        "İkinci tur, ingest'ten sonra okuyucunun yeniden açılıp taslak seriyi gördüğünü ölçer "
+        "(ölçülen açık: 'yeni: []'). Ön koşul: LAKEHOUSE_CORE_DIR ve INGEST_ALLOWED_ROOT ayarlı, "
+        "dosya izinli kökte; aksi hâlde araç kayıtlı olmaz ve vaka 'araç hiç kullanılmadı' ile kalır.",
+        table_checks=[("6 satır (dosyadaki altı ay)", _rows(6))],
+        must_use_tools=["ingest_from_url", "lakehouse_query"],
+        # İkinci turun cevabı tabloyu anlatır, seri kimliğini değil; ölçülen: model
+        # "`konut_test` taslak serisi" yazdı, 'adhoc:' yazmadı. Kimlik kartta (1. tur) var;
+        # cevapta aranan şey serinin TASLAK olduğunun söylenmesi.
+        answer_must_contain=["taslak"],
+        max_steps_used=12,
     ),
 ]

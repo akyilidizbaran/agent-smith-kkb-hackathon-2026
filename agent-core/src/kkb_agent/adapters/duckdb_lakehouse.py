@@ -128,6 +128,17 @@ class DuckDBLakehouse:
         self._con = hardened_connection(self.db_path)
         self._catalog: dict[str, DatasetSpec] = self._load_catalog()
 
+    def close(self) -> None:
+        con = getattr(self, "_con", None)
+        if con is not None:
+            con.close()
+            self._con = None  # type: ignore[assignment]
+
+    def reload(self) -> None:
+        self.close()
+        self._con = hardened_connection(self.db_path)
+        self._catalog = self._load_catalog()
+
     def _load_catalog(self) -> dict[str, DatasetSpec]:
         if not self.catalog_path.exists():
             return {}

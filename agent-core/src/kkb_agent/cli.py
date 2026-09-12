@@ -32,6 +32,8 @@ from .tools.lakehouse import (
     LakehouseQueryTool,
     LakehouseSearchTool,
 )
+from .builder.ingest import LakehouseCLI
+from .tools.ingest import IngestFromUrlTool
 
 
 def open_lakehouse(path) -> SilverLakehouse | DuckDBLakehouse:
@@ -78,6 +80,19 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
             WorkspaceShowTool(workspace),
         ]
     )
+    # Architect'e açılan tek kapı. Yalnız veri ekibinin şeması ve CLI'ı varsa: seed
+    # adaptöründe adhoc/draft sözleşmesi yok, kapı da yok.
+    cli = LakehouseCLI(
+        core_dir=settings.lakehouse_core_dir,
+        database=settings.lakehouse_path,
+        data_root=settings.lakehouse_path.parent,
+        launcher=settings.lakehouse_cli,
+    )
+    if isinstance(lakehouse, SilverLakehouse) and cli.available:
+        settings.ingest_allowed_root.mkdir(parents=True, exist_ok=True)
+        registry.register(
+            IngestFromUrlTool(lakehouse, cli, allowed_root=settings.ingest_allowed_root, registry=registry)
+        )
 
     llm = OpenAICompatClient(
         base_url=settings.llm_base_url,

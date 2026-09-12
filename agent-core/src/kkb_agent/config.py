@@ -28,6 +28,11 @@ class Settings:
     disable_thinking: bool
     domain_description: str | None
     domain_audience: str | None
+    # Architect: veri ekibinin CLI'ı hangi dizinde ve nasıl çalıştırılır. Agent
+    # lakehouse-core'u import etmez; ingest'i onların operatör yüzeyinden (CLI) ister.
+    lakehouse_core_dir: Path
+    lakehouse_cli: str          # ör. "uv run python" — core_dir içinde çalıştırılır
+    ingest_allowed_root: Path   # Architect'in okuyabileceği tek yerel kök
 
     @property
     def provider_label(self) -> str:
@@ -47,4 +52,7 @@ def load_settings() -> Settings:
         disable_thinking=os.getenv("LLM_DISABLE_THINKING", "true").lower() == "true",
         domain_description=os.getenv("DOMAIN_DESCRIPTION") or None,
         domain_audience=os.getenv("DOMAIN_AUDIENCE") or None,
+        lakehouse_core_dir=Path(os.getenv("LAKEHOUSE_CORE_DIR", PROJECT_ROOT.parent / "lakehouse-core")),
+        lakehouse_cli=os.getenv("LAKEHOUSE_CLI", "uv run python"),
+        ingest_allowed_root=Path(os.getenv("INGEST_ALLOWED_ROOT", PROJECT_ROOT.parent / "incoming")),
     )

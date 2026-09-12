@@ -124,3 +124,15 @@ class LakehouseClient(Protocol):
     def health(self) -> dict[str, Any]:
         """Bağlantı durumu, tablo sayısı, son yenilenme zamanı."""
         ...
+
+    # ---------- Yaşam döngüsü ----------
+    def close(self) -> None:
+        """Bağlantıyı bırak. DuckDB tek yazar kabul eder: Architect yazacaksa Analist'in
+        okuyucusu kapalı olmak zorunda (ölçüldü — aynı süreçten de başka süreçten de
+        yazar açılamıyor). Yazma bittikten sonra `reload()`."""
+        ...
+
+    def reload(self) -> None:
+        """Bağlantıyı yeniden aç ve kataloğu yeniden oku. Ingest'ten sonra yeni draft
+        seri ve yeni gözlemler ancak böyle görünür."""
+        ...
