@@ -36,6 +36,7 @@ from .tools.lakehouse import (
 from .builder.ingest import LakehouseCLI
 from .tools.ingest import IngestFromUrlTool
 from .tools.gold import GOLD_PROMPT_RULES, GoldAlignTool, GoldDecomposeTool, GoldJoinTool
+from .tools.chart import CHART_PROMPT_RULES, ChartTool
 
 
 def open_lakehouse(path, *, gold: GoldCLI | None = None) -> SilverLakehouse | DuckDBLakehouse:
@@ -103,7 +104,11 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
             IngestFromUrlTool(lakehouse, cli, allowed_root=settings.ingest_allowed_root, registry=registry)
         )
 
-    system_prompt = SYSTEM_PROMPT
+    # Grafik her adaptörde var: veri aktif tablodan gelir, kural araçta (ADR-0032).
+    registry.register(
+        ChartTool(lakehouse, workspace, chart_dir=settings.chart_dir, geo_dir=settings.geo_dir)
+    )
+    system_prompt = SYSTEM_PROMPT + CHART_PROMPT_RULES
     if isinstance(lakehouse, GoldCapable) and getattr(lakehouse, "gold", None) is not None:
         registry.register_all(
             [
@@ -113,7 +118,7 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
             ]
         )
         # Kural prompt'a yalnız araçlar varken girer: olmayan aracı öğütlemek UNKNOWN_TOOL üretir.
-        system_prompt = SYSTEM_PROMPT + GOLD_PROMPT_RULES
+        system_prompt = system_prompt + GOLD_PROMPT_RULES
 
     llm = OpenAICompatClient(
         base_url=settings.llm_base_url,
@@ -170,6 +175,8 @@ def main() -> None:
             print(result.trace_text())
             print("---")
         print(f"\n{result.text}\n")
+        for art in result.artifacts:
+            print(f"[grafik] {art.get('png_path') or art.get('spec_path')}")
         if result.hit_step_limit:
             print("(uyarı: adım limitine ulaşıldı)", file=sys.stderr)
 

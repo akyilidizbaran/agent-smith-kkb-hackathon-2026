@@ -56,3 +56,4 @@ sıfırdan başlatmamak için kayıt tutulur.
 | [0029](0029-sinir-dogrulayici-ve-roller.md) | Sınır doğrulayıcı tek modülde (şema → SQL guard → referans → politika); roller izde | Kabul edildi |
 | [0030](0030-architect-rolu-profilci-ve-dogrulayici.md) | Architect rolü: önce LLM'siz profilci ve doğrulayıcı; belirsizlikte tahmin yok | Kabul edildi |
 | [0031](0031-gold-hayata-dondu-metrik-tablolari-ve-gold-araclari.md) | Gold hayata döndü: kataloglanmış metrik tabloları (red defterli, parmak izli), salt-okunur `gold-run` sınırı, `gold_*` araçları | Kabul edildi |
+| [0032](0032-grafik-belirtim-veridir-deterministik-denetci.md) | Grafik: Vega-Lite belirtimi veridir, eksen/ölçek kararı araçta, deterministik denetçi geçmeden dosya yok; harita sınır dosyasına bağlı | Kabul edildi |

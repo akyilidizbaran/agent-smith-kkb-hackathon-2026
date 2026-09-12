@@ -76,6 +76,21 @@ def _rows(n: int) -> Callable[[pd.DataFrame], bool]:
     return lambda df: len(df) == n
 
 
+def _year_months(year: int, months: int, *, extra_rows: int = 0) -> Callable[[pd.DataFrame], bool]:
+    """Yılın `months` ayı tam mı, toplam satır en çok `months + extra_rows` mı? Tarih kolonu addan bağımsız."""
+
+    def check(df: pd.DataFrame) -> bool:
+        for c in df.columns:
+            col = df[c].dropna()
+            if col.empty or not col.map(lambda v: hasattr(v, "year")).all():
+                continue
+            in_year = int(col.map(lambda v: v.year == year).sum())
+            return in_year == months and len(df) <= months + extra_rows
+        return False
+
+    return check
+
+
 def _value_near(expected: float, tol: float = 0.02) -> Callable[[pd.DataFrame], bool]:
     """Tabloda beklenen değere yakın bir sayı var mı?"""
 
@@ -117,7 +132,10 @@ CASES: list[GoldenCase] = [
         "hesap yapıp 'aylık ortalama +1,5 milyon TL' gibi yanlış bir sonuç üretmişti.",
         table_checks=[
             ("değişim kolonu üretilmiş", lambda df: len(df.select_dtypes("number").columns) >= 2),
-            ("12 satır", _rows(12)),
+            # 12 ya da 13 satır: model aylık farkı SQL'de LAG ile alırken Aralık 2024'ü taban
+            # satırı olarak getiriyor (ölçüldü) — Ocak'ın değişimi ancak böyle hesaplanır ve
+            # bu, Ocak'ı NaN bırakan 12 satırlık yoldan DAHA doğrudur. 2025'in 12 ayı tam olmalı.
+            ("2025'in 12 ayı tam, en çok bir taban satırı", _year_months(2025, 12, extra_rows=1)),
         ],
         max_steps_used=8,
     ),
@@ -230,6 +248,27 @@ CASES: list[GoldenCase] = [
         ],
         # Reddin cevaba yansıması: kullanıcı 'birikimli' dedi, cevap bunu düzeltmeli.
         answer_must_contain=["birikimli"],
+        max_steps_used=10,
+    ),
+    GoldenCase(
+        id="G10_grafik",
+        question="2025 yılında konut kredisi bakiyesini aylık olarak göster ve çizgi grafiğini çiz.",
+        why="C1 (ADR-0032): grafik, veri tabloya geldikten sonra `chart` aracıyla üretilir; eksen "
+        "sıfırı, birim, dönem ve uyarılı gözlem işareti araçta kurala bağlı. Deterministik denetçi "
+        "geçmeden dosya yazılmaz. Tablo 12 satır kalmalı; model grafiği metinle çizmeye kalkmamalı.",
+        table_checks=[("12 satır", _rows(12)), ("dönem kolonu var", _has_time_column)],
+        must_use_tools=["lakehouse_query", "chart"],
+        tool_path_checks=[
+            (
+                "grafik denetçiden geçti (kart 'kural geçti' diyor)",
+                lambda steps: any(
+                    s.tool_name == "chart" and s.ok and "kural geçti" in s.result_summary for s in steps
+                ),
+            ),
+        ],
+        # 'grafik' değil 'grafi': Türkçe ek yumuşatıyor — ölçüldü, model "çizgi grafiği hazır"
+        # yazdı ve 'grafik' alt dizesi (k→ğ) eşleşmedi, vaka 0/3 düştü.
+        answer_must_contain=["grafi"],
         max_steps_used=10,
     ),
 ]

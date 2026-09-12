@@ -33,6 +33,9 @@ class Settings:
     lakehouse_core_dir: Path
     lakehouse_cli: str          # ör. "uv run python" — core_dir içinde çalıştırılır
     ingest_allowed_root: Path   # Architect'in okuyabileceği tek yerel kök
+    # Grafik: belirtim + PNG/SVG buraya yazılır; il sınırları (GeoJSON) buradan okunur.
+    chart_dir: Path
+    geo_dir: Path
 
     @property
     def provider_label(self) -> str:
@@ -55,4 +58,6 @@ def load_settings() -> Settings:
         lakehouse_core_dir=Path(os.getenv("LAKEHOUSE_CORE_DIR", PROJECT_ROOT.parent / "lakehouse-core")),
         lakehouse_cli=os.getenv("LAKEHOUSE_CLI", "uv run python"),
         ingest_allowed_root=Path(os.getenv("INGEST_ALLOWED_ROOT", PROJECT_ROOT.parent / "incoming")),
+        chart_dir=Path(os.getenv("CHART_DIR", PROJECT_ROOT / "data" / "charts")),
+        geo_dir=Path(os.getenv("GEO_DIR", PROJECT_ROOT / "assets" / "geo")),  # data/ gitignore'da; sınır dosyası lisansıyla repoya girer
     )

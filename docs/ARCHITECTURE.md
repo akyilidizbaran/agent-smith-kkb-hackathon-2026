@@ -1,6 +1,6 @@
 # Agentic Analytics Engine — Mimari
 
-> **Durum:** 12 Eylül 2026 · Golden 9 vaka (seed 7/7, gerçek DB G8 3/3, G9 3/3) · 174 birim testi · 31 ADR
+> **Durum:** 12 Eylül 2026 · Golden 10 vaka (seed 7/7, gerçek DB G8/G9/G10 3/3) · 201 birim testi · 32 ADR
 > Bu belge kodun *ne yaptığını* değil, *neden öyle yapıldığını* anlatır; her karar
 > `docs/adr/` altındaki kayda atıfla gelir. Kodla birebir örtüşmesi için modül, sınıf ve
 > metot adları gerçek adlarıyla verilmiştir.
@@ -666,4 +666,22 @@ gold_join(series_ids[2..6], target_frequency, ...)                   → '<seri>
   bulursa SQL ile sorgular — o da Gold'dur (G9 böyle geçti).
 - Sözleşme: `GoldCapable` (`contracts/lakehouse.py`), `LakehouseClient`'tan ayrı; seed
   adaptörü sunmaz → araçlar kayıt edilmez, Gold kuralı prompt'a girmez.
+
+
+### Grafik — `tools/chart.py` + `charts/` (ADR-0032) — YAZILDI
+
+Model NE çizileceğini söyler (tür, kolonlar, başlık); NASIL çizileceği inşacının kuralı ve
+denetçinin sınavıdır. Belirtim Vega-Lite JSON'dur, yani veridir:
+
+```
+chart(chart_type=line|bar|map, y_columns, x_column?, title, dual_axis?, log_scale?, province_column?)
+  → charts/spec.py   inşa: stok→y=0, birim+dönem başlıkta, uyarılı gözlem halkalı, ay sonu→ay kutusu
+  → charts/lint.py   9 kural, bağımsız; geçmezse TOOL_FAILED ve dosya YOK
+  → charts/render.py .vl.json + PNG/SVG (vl-convert, tarayıcısız, 0,36 s)
+```
+
+Birim ve seri tipi workspace provenance → katalogdan; bilinmiyorsa "birim belirtilmemiş"
+açıkça yazılır. Gold join kolonları önekten seriye bağlanır. Harita `assets/geo/
+tr_provinces.geojson` ister; yoksa politika katmanında durur. Çıktı `AgentAnswer.artifacts`
+ile CLI'a gider, dosya yolu cevaba yazılmaz.
 

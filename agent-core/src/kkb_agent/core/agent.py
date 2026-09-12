@@ -126,6 +126,10 @@ class AgentAnswer:
     #: için ölçülmedi. Koşucular bunu rapor eder; anlatı doğrulaması görünür olmalı.
     grounding: str = ""
 
+    #: Araçların ürettiği çıktı dosyaları (grafik belirtimi/PNG; ADR-0032). CLI yolu basar,
+    #: koşucular varlığını denetler. Metnin içine gömülmez: dosya yolu cevabın parçası değil.
+    artifacts: list[dict[str, Any]] = field(default_factory=list)
+
     #: Motor-bağımsız koşucuların okuduğu özet. Alan, property DEĞİL: karşılaştırma
     #: koşucusu iki turlu vakalarda iki cevabın özetini birleştirip geri YAZIYOR
     #: (`answer.extra = ...`). Property olarak yazınca o atama AttributeError veriyor
@@ -227,6 +231,7 @@ class AnalyticsAgent:
         native = self.llm.supports_native_tools()
         tools = self.registry.schemas() if native else None
         produced_data = False   # veri getiren bir araç başarıyla çalıştı mı?
+        artifacts: list[dict[str, Any]] = []  # grafik vb. (ADR-0032)
         nudged = False          # "önce veriyi çek" uyarısı bir kez verilir
         seen: set[tuple[str, str]] = set()   # (araç, argüman) — döngü kilidi
         duplicates = 0                       # kilidin kaç kez devreye girdiği
@@ -331,7 +336,7 @@ class AnalyticsAgent:
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=answer_text))
                 return AgentAnswer(text=answer_text, steps=steps, workspace=self.workspace,
-                                   grounding=grounding)
+                                   grounding=grounding, artifacts=artifacts)
 
             # --- Araçları çalıştır ---
             messages.append(
@@ -392,6 +397,8 @@ class AnalyticsAgent:
                     tool_texts.append(result.content)
                 if result.ok and call.name in self.DATA_PRODUCING_TOOLS:
                     produced_data = True
+                if result.ok and result.artifacts.get("chart"):
+                    artifacts.append(result.artifacts["chart"])
                 if result.error is not None and not result.error.is_retryable:
                     terminal = result.error
                 log.info("adım %d: %s -> %s", i, call.name, "ok" if result.ok else "HATA")
@@ -416,7 +423,8 @@ class AnalyticsAgent:
                 text = self._strip_reasoning(final.content)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=text))
-                return AgentAnswer(text=text, steps=steps, workspace=self.workspace, grounding=grounding)
+                return AgentAnswer(text=text, steps=steps, workspace=self.workspace,
+                                   grounding=grounding, artifacts=artifacts)
 
         # --- Adım limiti ---
         final = self.llm.chat(
@@ -431,7 +439,7 @@ class AnalyticsAgent:
         )
         text = self._strip_reasoning(final.content)
         return AgentAnswer(text=text, steps=steps, workspace=self.workspace,
-                           hit_step_limit=True, grounding=grounding)
+                           hit_step_limit=True, grounding=grounding, artifacts=artifacts)
 
     # ------------------------------------------------------------------
     def _build_messages(self, question: str) -> list[ChatMessage]:
