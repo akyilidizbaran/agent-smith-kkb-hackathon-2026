@@ -18,6 +18,7 @@ from .adapters.silver_lakehouse import SilverLakehouse
 from .contracts.lakehouse import GoldCapable, LakehouseError
 from .config import load_settings
 from .core.agent import SYSTEM_PROMPT, AnalyticsAgent
+from .core.context import build_question_context
 from .core.evidence import EvidenceBuilder
 from .core.registry import ToolRegistry
 from .core.workspace import AnalysisWorkspace
@@ -146,9 +147,16 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
         f"alan={profile.domain!r} araçlar={len(registry)}",
         file=sys.stderr,
     )
+    # Ön-yükleme: soruya göre seçilen k serinin kartı + gerçek kırılım değerleri, bütçeyle.
+    preloader = None
+    if settings.preload_budget_tokens > 0:
+        def preloader(question: str):
+            return build_question_context(
+                lakehouse, question, budget_tokens=settings.preload_budget_tokens, k=settings.preload_k,
+            )
     return AnalyticsAgent(
         llm, registry, workspace=workspace, max_steps=max_steps, profile=profile,
-        system_prompt=system_prompt, evidence=EvidenceBuilder(lakehouse),
+        system_prompt=system_prompt, evidence=EvidenceBuilder(lakehouse), preloader=preloader,
     )
 
 
@@ -190,6 +198,10 @@ def main() -> None:
         if args.trace:
             print("\n--- izlenebilirlik ---")
             print(result.trace_text())
+            if result.context:
+                print(result.context)
+            if result.usage:
+                print(f"token: prompt {result.usage.get('prompt', 0)} · completion {result.usage.get('completion', 0)} · {result.usage.get('calls', 0)} çağrı")
             print("---")
         print(f"\n{result.text}\n")
         for art in result.artifacts:

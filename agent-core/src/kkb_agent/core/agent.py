@@ -20,7 +20,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 from ..domain import DomainProfile
 from ..llm.base import ChatMessage, LLMClient, ToolCall
@@ -132,6 +132,11 @@ class AgentAnswer:
     #: Kanıt paneli (ADR-0033): cevaptaki sayı → hücre → SQL → gözlem → artifact → RAW/URL.
     #: Cevap üretildikten SONRA kurulur; kurulamazsa None, cevap düşmez.
     evidence: Any = None
+    #: LLM çağrılarının toplam token kullanımı {"prompt": …, "completion": …, "calls": …};
+    #: ön-yüklemenin (ADR-0013/0035) bedeli ve kazancı buradan ölçülür.
+    usage: dict[str, int] = field(default_factory=dict)
+    #: Bu soru için kurulan ön-yükleme bağlamının özeti ("ön-yükleme[preloaded]: 3 kart …").
+    context: str = ""
 
     #: Motor-bağımsız koşucuların okuduğu özet. Alan, property DEĞİL: karşılaştırma
     #: koşucusu iki turlu vakalarda iki cevabın özetini birleştirip geri YAZIYOR
@@ -213,6 +218,7 @@ class AnalyticsAgent:
         system_prompt: str = SYSTEM_PROMPT,
         profile: DomainProfile | None = None,
         evidence: Any = None,
+        preloader: Callable[[str], Any] | None = None,
     ) -> None:
         self.llm = llm
         self.registry = registry
@@ -220,6 +226,11 @@ class AnalyticsAgent:
         self.max_steps = max_steps
         # Kanıt paneli inşacısı (core/evidence.EvidenceBuilder); None ise panel kurulmaz.
         self.evidence_builder = evidence
+        # Soruya göre bağlam ön-yükleyici (core/context.build_question_context); None ise
+        # model kataloğu araçlarla keşfeder (ADR-0013 öncesi davranış).
+        self.preloader = preloader
+        self._last_context: Any = None
+        self._usage: dict[str, int] = {}
         # Alan bilgisi prompt'a koddan değil profilden girer (ADR-0012).
         # Profil verilmezse registry'ninki, o da yoksa nötr varsayılan kullanılır.
         self.profile = profile or registry.profile
@@ -233,7 +244,11 @@ class AnalyticsAgent:
     # ------------------------------------------------------------------
     def ask(self, question: str) -> AgentAnswer:
         """Bir soruyu uçtan uca cevaplar; cevaba kanıt panelini iliştirir."""
+        self._usage = {"prompt": 0, "completion": 0, "calls": 0}
+        self._last_context = None
         answer = self._ask(question)
+        answer.usage = dict(self._usage)
+        answer.context = self._last_context.summary() if self._last_context is not None else ""
         if self.evidence_builder is not None:
             try:
                 answer.evidence = self.evidence_builder.build(
@@ -262,7 +277,7 @@ class AnalyticsAgent:
 
         for i in range(1, self.max_steps + 1):
             started = time.perf_counter()
-            response = self.llm.chat(messages, tools=tools)
+            response = self._chat(messages, tools=tools)
 
             calls = response.tool_calls if native else self._parse_json_call(response.content)
 
@@ -429,7 +444,7 @@ class AnalyticsAgent:
                 # Tekrar denemeyle çözülmeyecek bir hata: modele araç verilmeden
                 # son bir tur. Aksi halde model aynı yolu farklı yazımlarla
                 # denemeye devam ediyor ve adım limitini yakıyor (ADR-0017).
-                final = self.llm.chat(
+                final = self._chat(
                     messages
                     + [
                         ChatMessage(
@@ -448,7 +463,7 @@ class AnalyticsAgent:
                                    grounding=grounding, artifacts=artifacts)
 
         # --- Adım limiti ---
-        final = self.llm.chat(
+        final = self._chat(
             messages
             + [
                 ChatMessage(
@@ -463,10 +478,32 @@ class AnalyticsAgent:
                            hit_step_limit=True, grounding=grounding, artifacts=artifacts)
 
     # ------------------------------------------------------------------
+    def _chat(self, messages: list[ChatMessage], *, tools: Any = None) -> LLMResponse:
+        """Tek LLM çağrısı noktası: token kullanımı toplanır (ön-yüklemenin ölçüsü)."""
+        response = self.llm.chat(messages, tools=tools) if tools is not None else self.llm.chat(messages)
+        usage = getattr(response, "usage", None) or {}
+        self._usage["prompt"] = self._usage.get("prompt", 0) + int(usage.get("prompt", 0) or 0)
+        self._usage["completion"] = self._usage.get("completion", 0) + int(usage.get("completion", 0) or 0)
+        self._usage["calls"] = self._usage.get("calls", 0) + 1
+        return response
+
     def _build_messages(self, question: str) -> list[ChatMessage]:
         system = self._system_prompt
         if not self.llm.supports_native_tools():
             system += "\n" + JSON_PROTOCOL_PROMPT + self.registry.describe()
+
+        # Soruya göre seçilmiş katalog kartları ve gerçek kırılım değerleri (ADR-0013, D1):
+        # keşif turları LLM turu olmaktan çıkar. Bütçe aşılırsa yalnız dizin satırı girer.
+        if self.preloader is not None:
+            try:
+                context = self.preloader(question)
+            except Exception as exc:  # noqa: BLE001 — ön-yükleme cevabı asla düşürmez
+                log.warning("ön-yükleme kurulamadı: %s", exc)
+                context = None
+            self._last_context = context
+            if context is not None and context.text:
+                from .context import PRELOAD_PROMPT_RULES
+                system += PRELOAD_PROMPT_RULES + "\n\n" + context.text
 
         # Aktif tablo varsa modele durumu hatırlat: "tabloyu bozmadan" akışının anahtarı.
         # TEK system mesajı, en başta: MIA/vLLM ikinci bir system mesajını reddediyor

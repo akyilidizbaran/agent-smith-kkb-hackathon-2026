@@ -59,3 +59,4 @@ sıfırdan başlatmamak için kayıt tutulur.
 | [0032](0032-grafik-belirtim-veridir-deterministik-denetci.md) | Grafik: Vega-Lite belirtimi veridir, eksen/ölçek kararı araçta, deterministik denetçi geçmeden dosya yok; harita sınır dosyasına bağlı | Kabul edildi |
 | [0033](0033-kanit-paneli-sayidan-kaynak-baytlarina.md) | Kanıt paneli: cevaptaki sayı → hücre → SQL → gözlem → artifact → Bronze/RAW → URL + fetched_at; 'tam' ölçülebilir, golden her vakada ölçer | Kabul edildi |
 | [0034](0034-web-erisimi-butceli-robots-saygili-erisim-sozlesmeli.md) | Web: `web_url` bütçeli, robots'a saygılı, erişim sözleşmesiyle; tablolar profilci dilbilgisiyle sayıya (pandas tahmini 100× hata); `web_search` yalnız anahtar varsa | Kabul edildi |
+| [0035](0035-sinirli-on-yukleme-soruya-gore-k-kart.md) | Sınırlı ön-yükleme: soruya göre seçilen k kart + gerçek değerler, token bütçesiyle; seed adım 7,0 → 3,3, gerçek DB 3,0 → 1,6, doğruluk aynı | Kabul edildi |

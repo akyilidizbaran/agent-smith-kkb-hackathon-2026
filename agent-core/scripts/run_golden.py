@@ -41,6 +41,7 @@ class StabilityReport:
     passed: int
     durations: list[float] = field(default_factory=list)
     step_counts: list[int] = field(default_factory=list)
+    prompt_tokens: list[int] = field(default_factory=list)
     failure_reasons: dict[str, int] = field(default_factory=dict)
     tool_paths: set[str] = field(default_factory=set)
 
@@ -70,6 +71,9 @@ class CaseOutcome:
     grounding: str = ""
     roles: dict[str, int] = field(default_factory=dict)
     evidence: str = "—"   # kanıt zinciri: tam | EKSİK: … | — (tablo yok / ölçülmedi)
+    prompt_tokens: int = 0   # tüm LLM çağrılarının prompt token toplamı (ön-yüklemenin ölçüsü)
+    llm_calls: int = 0
+    context: str = ""        # ön-yükleme özeti
     failures: list[str] = field(default_factory=list)
     answer_preview: str = ""
 
@@ -80,9 +84,13 @@ def run_case(case: GoldenCase) -> CaseOutcome:
 
     answer = agent.ask(case.question)
     steps = list(answer.steps)
+    usage = dict(answer.usage)
+    context = answer.context
     if case.follow_up:
         answer = agent.ask(case.follow_up)
         steps += answer.steps
+        for key, value in answer.usage.items():
+            usage[key] = usage.get(key, 0) + value
 
     duration = time.perf_counter() - started
     tools = [s.tool_name for s in steps if s.tool_name]
@@ -161,6 +169,9 @@ def run_case(case: GoldenCase) -> CaseOutcome:
         grounding=answer.grounding,
         roles={r: sum(1 for s in steps if s.role == r) for r in ("retrieve", "execute", "validate", "narrate")},
         evidence=evidence_state,
+        prompt_tokens=usage.get("prompt", 0),
+        llm_calls=usage.get("calls", 0),
+        context=context,
         failures=failures,
         answer_preview=answer.text[:200].replace("\n", " "),
     )
@@ -182,6 +193,7 @@ def run_stability(cases: list[GoldenCase], repeat: int) -> list[StabilityReport]
                 )
             rep.durations.append(o.duration_s)
             rep.step_counts.append(o.steps)
+            rep.prompt_tokens.append(o.prompt_tokens)
             rep.tool_paths.add(" → ".join(o.tools_used) or "(araç yok)")
             if o.passed:
                 rep.passed += 1
@@ -203,6 +215,7 @@ def print_stability(reports: list[StabilityReport]) -> None:
         print(
             f"\n{r.id:26} {r.passed}/{r.runs} ({r.pass_rate:.0%})  {r.verdict}"
             f"  | ort. {avg:.0f}s | adımlar: {r.step_counts}"
+            + (f" | prompt token: {sum(r.prompt_tokens) // max(1, len(r.prompt_tokens))}" if any(r.prompt_tokens) else "")
         )
         for reason, n in sorted(r.failure_reasons.items(), key=lambda x: -x[1]):
             print(f"     ✗ {n}x {reason}")
@@ -299,6 +312,10 @@ def main() -> None:
             roles[k] = roles.get(k, 0) + v
     if roles:
         print("ROLLER: " + ", ".join(f"{k}×{v}" for k, v in roles.items() if v))
+    if outcomes:
+        print(f"TOKEN: vaka başına ort. prompt {sum(o.prompt_tokens for o in outcomes) / len(outcomes):.0f}, "
+              f"LLM çağrısı {sum(o.llm_calls for o in outcomes) / len(outcomes):.1f}"
+              + (f" | {outcomes[0].context}" if outcomes[0].context else ""))
     chained = [o for o in outcomes if o.evidence != "—"]
     if chained:
         full = sum(1 for o in chained if o.evidence == "tam")

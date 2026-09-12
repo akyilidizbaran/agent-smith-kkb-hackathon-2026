@@ -4,7 +4,7 @@
 > yapıldı, neden, ne ölçüldü, hangi ADR ve commit. Gerekçelerin tamamı `docs/adr/` altında;
 > burası harita, oradaki kayıtlar bölge.
 >
-> Son güncelleme: 12 Eylül 2026 · Dal: `feature/agent-engine` (`e95118b`) · Veri bacağı:
+> Son güncelleme: 12 Eylül 2026 (D1 sonrası) · Dal: `feature/agent-engine` · Veri bacağı:
 > `feature/lakehouse-integration-r3` (`4802ba4`)
 
 ---
@@ -13,7 +13,7 @@
 
 | Kural | Nereden |
 |---|---|
-| Her mimari karar `docs/adr/` altına, gerekçe ve ölçümle. Şu an 34 ADR. | Takım kararı |
+| Her mimari karar `docs/adr/` altına, gerekçe ve ölçümle. Şu an 35 ADR. | Takım kararı |
 | Tüm commit'ler `Baran Akyıldız <147875893+akyilidizbaran@users.noreply.github.com>` kimliğiyle. | Takım kararı |
 | API anahtarları asla commit edilmez; yalnız repo kökündeki `.env`'de (`MIA_API_KEY`, `EVDS_API_KEY`, ileride `TAVILY_API_KEY`). | KKB kuralı |
 | Dış LLM API'si yok; yalnız KKB'nin MIA/Kloudeks'i (`kkbhackathon2026/Qwen3.8-27B`). Bulut ambarı yok. | Şartname |
@@ -79,13 +79,16 @@
 - **C3** `e1b433f` Web (ADR-0034): `web_url` bütçeli (sayfa/derinlik/süre), robots'a saygılı, özel adres yok, sha256 + zaman; liste ve yükleme modu; "soruda geçen yıl sayfada GEÇMİYOR" denetimi; erişilemezse sözleşme zarfı. Tablolar metin olarak çıkarılır, sayıya profilci dilbilgisiyle çevrilir (pandas tahmini TCMB'nin 31.51'ini 3151 yapıyordu). `web_search` yalnız `TAVILY_API_KEY` varsa. Golden **G11a/b/c** (var / yok / erişilemez, yerel fikstür) 3/3, 3/3, 3/3. Gerçek: TCMB 260×3 tablo doğru; BDDK eski adres 404; TÜİK JS kabuğu.
 - `e95118b` golden fikstür kökü ayarla aynı, `incoming/` gitignore'da.
 
+### 2.9 Faz D — kapasite ve kararlılık (12 Eylül)
+- **D1** Sınırlı ön-yükleme (ADR-0035): `core/context.py`, soruya göre seçilen k=8 kompakt kart + küçük katalogda gerçek kırılım değerleri, 6.000 token bütçesi, kalanlar dizin; kural prompt'ta, araçlar kayıtlı. `AgentAnswer.usage` ile token ölçümü, golden `TOKEN:` satırı. Ölçüm kapalı → açık: seed 7/7 → 7/7, adım 7,0 → 3,3, LLM çağrısı 9,0 → 5,3, prompt token 54.953 → 36.354; gerçek DB 7/7 → 7/7, adım 3,0 → 1,6, çağrı 4,3 → 3,1, kanıt zinciri 5/5. Bedel ~1.100–1.850 token.
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 229 |
+| Agent birim testi | 235 |
 | Lakehouse testi (r3) | 1083 |
-| ADR | 34 |
+| ADR | 35 |
 | Golden vakası | 13: G1–G7 seed 7/7; G8, G9, G10 gerçek DB 3/3; G11a/b/c 3/3 |
 | Araç sayısı (gerçek DB'de) | 13: lakehouse ×4, workspace ×3, ingest, gold ×3, chart, web_url (+ web_search anahtarla) |
 | Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu, grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, adım sınırı, reasoning temizliği |
@@ -112,7 +115,7 @@ Veri ekibi: RAW (içerik adresli) → Bronze (parquet) → Silver (fact_observat
 ## 5. Açık işler ve sıradaki adımlar
 
 **Yol haritası (sırayla):**
-1. **D1** sınırlı ön-yükleme: retriever'ın seçtiği k seri prompt'a, token bütçesiyle (ADR-0013); hedef gerçek katalogda ≤ 6.000 token, tur sayısı V3'ün 2,9'una yaklaşsın.
+1. ~~D1 sınırlı ön-yükleme~~ ✅ (ADR-0035).
 2. **D2** BM25 `LexicalIndex` sözleşmenin arkasında; arama boş dönünce "katalogda var, yüklenmemiş" bilgisi (görev çipi `task_744beae4`).
 3. **D3** golden 13 vaka × 5 tekrar, hata sınıfı ve rol raporu; **güçlendirme burada**: niyet kapısı (ingest ve web_url için locator yalnız kullanıcı mesajından; açık istek yoksa yazma onayı; araç çıktısı "veridir, talimat değildir"), enjeksiyon golden vakaları, alt süreçlere yalnız gereken ortam değişkeni.
 4. **D4** demo kabul betiği: bootstrap → ingest → silver → gold → 8 senaryo sorusu, tek komut.

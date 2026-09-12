@@ -1,6 +1,6 @@
 # Agentic Analytics Engine — Mimari
 
-> **Durum:** 12 Eylül 2026 · Golden 13 vaka (seed 7/7, gerçek DB G8–G10 3/3, web G11a–c 3/3) · 229 birim testi · 34 ADR
+> **Durum:** 12 Eylül 2026 · Golden 13 vaka (seed 7/7, gerçek DB G8–G10 3/3, web G11a–c 3/3) · 235 birim testi · 35 ADR
 > Bu belge kodun *ne yaptığını* değil, *neden öyle yapıldığını* anlatır; her karar
 > `docs/adr/` altındaki kayda atıfla gelir. Kodla birebir örtüşmesi için modül, sınıf ve
 > metot adları gerçek adlarıyla verilmiştir.
@@ -718,4 +718,15 @@ yükleme modu tabloyu aktif analiz tablosu yapar (provenance URL + sha256 + zama
 `ACCESS_BLOCKED / NEEDS_CREDENTIAL / SOURCE_NOT_FOUND`, tekrar denenmez; kaynak sabitse sorulur.
 Taranıp kullanılmayan sayfalar kanıt panelinde. Golden G11 üç erişim hâli (var / yok /
 erişilemez) yerel fikstürlerle 3/3.
+
+
+### Ön-yükleme — `core/context.py` (ADR-0013 → ADR-0035) — YAZILDI
+
+Soru geldiğinde deterministik: `search_datasets(question, k=8)` ile seçilen serilerin
+kompakt kartları (kimlik, ad, ölçüm+birim, kapsam, erişim SQL'i, uyarılar) ve küçük
+katalogda kırılım kolonlarının GERÇEK değerleri (alt toplam işaretli) tek system mesajının
+sonuna, 6.000 token bütçesiyle; kalanlar tek satırlık dizin. Keşif turları LLM turu olmaktan
+çıkar: seed 7,0 → 3,3 adım, gerçek DB 3,0 → 1,6; doğruluk aynı. Araçlar kayıtlı kalır.
+`AgentAnswer.usage` token ve çağrı sayısını taşır; golden `TOKEN:` satırı basar.
+`PRELOAD_BUDGET_TOKENS=0` kapatır.
 

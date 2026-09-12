@@ -36,6 +36,9 @@ class Settings:
     # Grafik: belirtim + PNG/SVG buraya yazılır; il sınırları (GeoJSON) buradan okunur.
     chart_dir: Path
     geo_dir: Path
+    # Ön-yükleme (ADR-0013/0035): soruya göre seçilen seri kartları için token bütçesi; 0 kapatır.
+    preload_budget_tokens: int
+    preload_k: int
 
     @property
     def provider_label(self) -> str:
@@ -60,4 +63,6 @@ def load_settings() -> Settings:
         ingest_allowed_root=Path(os.getenv("INGEST_ALLOWED_ROOT", PROJECT_ROOT.parent / "incoming")),
         chart_dir=Path(os.getenv("CHART_DIR", PROJECT_ROOT / "data" / "charts")),
         geo_dir=Path(os.getenv("GEO_DIR", PROJECT_ROOT / "assets" / "geo")),  # data/ gitignore'da; sınır dosyası lisansıyla repoya girer
+        preload_budget_tokens=int(os.getenv("PRELOAD_BUDGET_TOKENS", "6000")),
+        preload_k=int(os.getenv("PRELOAD_K", "8")),
     )
