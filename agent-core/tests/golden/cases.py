@@ -30,6 +30,8 @@ class GoldenCase:
     # Nihai cevap metninde geçmesi/geçmemesi gerekenler
     answer_must_contain: list[str] = field(default_factory=list)
     answer_must_not_contain: list[str] = field(default_factory=list)
+    # Alternatifli iğne: listeden EN AZ BİRİ geçmeli (Türkçe çekim çeşitliliği için).
+    answer_must_contain_any: list[str] = field(default_factory=list)
     # Doğru aracı seçti mi? Sonuç doğru olsa bile yanlış yoldan gelinmiş olabilir.
     must_use_tools: list[str] = field(default_factory=list)
     # Araç yolu üzerinde denetim: (ad, adım listesi → bool). Birden çok meşru yol varsa
@@ -37,6 +39,9 @@ class GoldenCase:
     # dayatmak vakayı yanlışlıkla düşürür — ölçüldü, G9 0/3 böyle kaldı.
     tool_path_checks: list[tuple[str, Callable[[list], bool]]] = field(default_factory=list)
     expect_no_table: bool = False
+    # Tablo isteğe bağlı: hem "tablo yüklendi" hem "tablo yüklenmedi" meşru (ör. kaynak
+    # sabit ve istenen yıl sayfada yok — model mevcut yılları gösterebilir de göstermeyebilir de).
+    table_optional: bool = False
     #: Araç adımı üst sınırı. Amacı kaçak döngüyü yakalamak, cimrilik değil.
     #:
     #: ADR-0027 (anlatı doğrulama) devreye girdikten sonra bütçeler bir kez yukarı
@@ -102,6 +107,26 @@ def _value_near(expected: float, tol: float = 0.02) -> Callable[[pd.DataFrame], 
         return False
 
     return check
+
+
+_FIXTURE_DIR = pathlib.Path(__file__).resolve().parent / "fixtures"
+_INCOMING = pathlib.Path(os.getenv("INGEST_ALLOWED_ROOT", "incoming"))
+
+
+def _fixture(name: str) -> str:
+    """Golden web fikstürünü izinli köke kopyalar (yoksa) ve yolunu döndürür.
+
+    web_url yerel dosyayı yalnız izinli kökten okur; ağ olmadan üç erişim hâli
+    (var / yok / erişilemez) deterministik ölçülür."""
+    src = _FIXTURE_DIR / name
+    dst = _INCOMING / name
+    try:
+        if src.is_file() and (not dst.is_file() or dst.read_bytes() != src.read_bytes()):
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes(src.read_bytes())
+    except OSError:
+        pass
+    return str(dst)
 
 
 CASES: list[GoldenCase] = [
@@ -270,5 +295,43 @@ CASES: list[GoldenCase] = [
         # yazdı ve 'grafik' alt dizesi (k→ğ) eşleşmedi, vaka 0/3 düştü.
         answer_must_contain=["grafi"],
         max_steps_used=10,
+    ),
+    GoldenCase(
+        id="G11a_web_var",
+        question="Şu sayfadan 2025 yıllık TÜFE enflasyonunu söyle: " + _fixture("tufe_2025.html"),
+        why="C3 (ADR-0034), erişim hâli VAR: kullanıcının verdiği sayfa okunur, tablo yüklenir, sayı "
+        "tablodan verilir; kanıt zinciri URL + sha256 + çekiliş zamanında biter. Fikstür yerel: "
+        "ağ olmadan deterministik. 2025 yıllık TÜFE fikstürde 31,07.",
+        table_checks=[("2025 satırı ve %31,07 tabloda", _value_near(31.07))],
+        must_use_tools=["web_url"],
+        answer_must_contain=["31,07"],
+        max_steps_used=6,
+    ),
+    GoldenCase(
+        id="G11b_web_yok",
+        question="Şu sayfadan 2025 yıllık TÜFE enflasyonunu söyle: " + _fixture("tufe_2024.html"),
+        why="Erişim hâli YOK: sayfa açılıyor ama 2025 yok (yalnız 2023–2024). Kaynak kullanıcı "
+        "tarafından sabitlendi: agent 2025'in bu sayfada bulunmadığını söylemeli, başka kaynağa "
+        "geçmemeli, 2024 değerini 2025 diye vermemeli.",
+        table_optional=True,
+        must_use_tools=["web_url"],
+        answer_must_contain_any=["yok", "bulunm", "yer alm", "içerm"],
+        answer_must_not_contain=["31,07"],
+        max_steps_used=6,
+        tool_path_checks=[
+            ("2025 için Gold/lakehouse'a sessizce geçilmedi",
+             lambda steps: not any(s.tool_name in ("lakehouse_query", "gold_align") and s.ok for s in steps)),
+        ],
+    ),
+    GoldenCase(
+        id="G11c_web_erisilemez",
+        question="Şu adresten 2025 yıllık TÜFE enflasyonunu söyle: https://veri.example.invalid/tufe.html",
+        why="Erişim hâli ERİŞİLEMEZ: alan adı çözülmez (hızlı, deterministik). Kaynak URL ile "
+        "sabit: agent erişemediğini ve sebebini söyler, seçenek sunar, tahmin etmez, sessizce "
+        "başka kaynağa geçmez (ADR-0028).",
+        expect_no_table=True,
+        must_use_tools=["web_url"],
+        answer_must_contain_any=["erişemedim", "ulaşamadım", "erişilemedi", "ulaşılamadı", "erişilemiyor", "açılamadı"],
+        max_steps_used=4,
     ),
 ]

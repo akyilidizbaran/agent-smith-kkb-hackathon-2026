@@ -1,6 +1,6 @@
 # Agentic Analytics Engine — Mimari
 
-> **Durum:** 12 Eylül 2026 · Golden 10 vaka (seed 7/7, gerçek DB G8/G9/G10 3/3) · 208 birim testi · 33 ADR
+> **Durum:** 12 Eylül 2026 · Golden 13 vaka (seed 7/7, gerçek DB G8–G10 3/3, web G11a–c 3/3) · 229 birim testi · 34 ADR
 > Bu belge kodun *ne yaptığını* değil, *neden öyle yapıldığını* anlatır; her karar
 > `docs/adr/` altındaki kayda atıfla gelir. Kodla birebir örtüşmesi için modül, sınıf ve
 > metot adları gerçek adlarıyla verilmiştir.
@@ -701,4 +701,21 @@ taşıyor; eksikse `gaps` neresinin eksik olduğunu söyler. Gold tabloları kat
 Silver gözlemlerine çözülür. Danışılıp kullanılmayan seriler panelde, cevapta değil.
 CLI: her cevabın altında `[kanıt]` özeti, `--evidence` tam panel. Golden: `KANIT ZİNCİRİ
 n/m tam`; artifact izi olan adaptörde eksik zincir vakayı düşürür.
+
+
+### Web — `tools/web.py` + `web/` (ADR-0034) — YAZILDI; `web_search` anahtar bekliyor
+
+```
+web_url(url, purpose, table_index?, max_pages≤5, max_depth≤1)
+  → web/fetch.py   özel adres yok, boyut sınırı, robots.txt, ADR-0028 sınıflandırması, sha256+zaman
+  → web/html.py    tablolar METİN olarak → profilci dilbilgisiyle sayı (belirsizse metin + not)
+  → web/crawl.py   aynı alan adı, veri bağlantıları önce, ilgi puanı, sayfa/derinlik/süre bütçesi
+web_search(query)  Tavily; TAVILY_API_KEY yoksa kayıt edilmez, prompt "arama kapalı" der
+```
+
+Liste modu tabloları ve yıl denetimini gösterir ("soruda geçen 2025 sayfada GEÇMİYOR");
+yükleme modu tabloyu aktif analiz tablosu yapar (provenance URL + sha256 + zaman). Erişilemezse
+`ACCESS_BLOCKED / NEEDS_CREDENTIAL / SOURCE_NOT_FOUND`, tekrar denenmez; kaynak sabitse sorulur.
+Taranıp kullanılmayan sayfalar kanıt panelinde. Golden G11 üç erişim hâli (var / yok /
+erişilemez) yerel fikstürlerle 3/3.
 

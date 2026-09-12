@@ -171,6 +171,10 @@ class EvidenceBuilder:
                 gaps.append("Gold satırları artifact listesi taşıyor ama hiçbiri çözülemedi")
             return observations, artifacts
 
+        # Web tablosu: zincir sayfanın baytlarında biter (URL + sha256 + zaman); gözlem aranmaz.
+        if columns and all((c.sql or "").startswith("web_url ") for c in columns):
+            return [], {}
+
         # Silver sorgusu: dönem + provenance'taki seri(ler).
         if time_col is None:
             gaps.append("tabloda dönem kolonu yok; satırlar gözleme bağlanamadı")
@@ -197,6 +201,26 @@ class EvidenceBuilder:
             gaps.append("provenance'taki seriler için dönemlere karşılık gözlem bulunamadı")
         return observations, artifacts
 
+    @staticmethod
+    def _web(panel: EvidencePanel, artifacts: list[dict[str, Any]]) -> None:
+        """Kullanılan sayfa kaynak; taranıp kullanılmayan ve erişilemeyen sayfalar panelde."""
+        for art in artifacts:
+            if art.get("kind") != "web":
+                continue
+            used = art.get("used")
+            for v in art.get("visited", []):
+                entry = {"url": v.get("url"), "sha256": v.get("sha256"), "fetched_at": v.get("fetched_at"),
+                         "status": v.get("status"), "title": v.get("title")}
+                if used and v.get("url") == used:
+                    if entry not in panel.web_sources:
+                        panel.web_sources.append(entry)
+                else:
+                    panel.web_unused.append({**entry, "note": "tarandı, tabloya girmedi"})
+            for b in art.get("blocked", []):
+                panel.web_unused.append({"url": b.get("url"), "note": f"erişilemedi: {b.get('status')} / {b.get('reason')}"})
+            for url, reason in art.get("skipped", [])[:10]:
+                panel.web_unused.append({"url": url, "note": f"atlandı: {reason}"})
+
     # ------------------------------------------------------------------ giriş
     def build(
         self, question: str, answer: str, workspace: AnalysisWorkspace, steps: list[Any],
@@ -222,7 +246,9 @@ class EvidenceBuilder:
                 if ds and ds not in used and ds not in consulted:
                     consulted.append(ds)
         panel.consulted_unused = consulted
-        panel.chart_paths = [str(a.get("png_path") or a.get("spec_path")) for a in (artifacts or []) if a]
+        panel.chart_paths = [str(a.get("png_path") or a.get("spec_path")) for a in (artifacts or [])
+                             if a and a.get("kind") != "web"]
+        self._web(panel, artifacts or [])
         unmatched = [n.text for n in panel.numbers if not n.matched]
         if unmatched:
             panel.gaps.append("tabloda bulunmayan sayılar: " + ", ".join(unmatched[:8]))

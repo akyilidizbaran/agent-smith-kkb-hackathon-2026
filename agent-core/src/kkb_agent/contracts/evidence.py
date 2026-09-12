@@ -94,6 +94,8 @@ class EvidencePanel:
     supports_artifacts: bool = False
     table_rows: int = 0
     chart_paths: list[str] = field(default_factory=list)
+    web_sources: list[dict[str, Any]] = field(default_factory=list)   # kullanılan sayfa: url, sha256, fetched_at
+    web_unused: list[dict[str, Any]] = field(default_factory=list)    # taranıp kullanılmayan / erişilemeyen
 
     @property
     def matched_numbers(self) -> int:
@@ -107,6 +109,8 @@ class EvidencePanel:
             return False
         if any(c.sql is None for c in self.columns):
             return False
+        if self.web_sources and not self.observations:
+            return not self.gaps          # zincir web sayfasının baytlarında biter: URL + sha256 + zaman
         if self.supports_artifacts and (not self.observations or not all(o.complete for o in self.observations)):
             return False
         return not self.gaps
@@ -118,8 +122,11 @@ class EvidencePanel:
         parts = [
             f"{self.matched_numbers}/{len(self.numbers)} sayı tabloda",
             f"{len(self.columns)} kolon → SQL",
-            f"{len(self.observations)} gözlem → {arts} artifact",
         ]
+        if self.web_sources:
+            parts.append(f"{len(self.web_sources)} web sayfası (sha256+zaman)")
+        else:
+            parts.append(f"{len(self.observations)} gözlem → {arts} artifact")
         if fetched:
             parts.append(f"çekiliş {', '.join(fetched)}")
         return f"kanıt zinciri {state}: " + " · ".join(parts)
@@ -167,6 +174,16 @@ class EvidencePanel:
             lines.append(f"  … {len(self.observations) - max_observations} gözlem daha")
         if not self.observations:
             lines.append("  (gözlem izi yok)")
+        if self.web_sources:
+            lines.append("")
+            lines.append("WEB KAYNAĞI (kullanılan sayfa):")
+            for w in self.web_sources:
+                lines.append(f"  {w.get('url')} | sha256 {str(w.get('sha256'))[:12]}… | çekiliş {w.get('fetched_at')} | HTTP {w.get('status')}")
+        if self.web_unused:
+            lines.append("")
+            lines.append("TARANDI, KULLANILMADI / ERİŞİLEMEDİ:")
+            for w in self.web_unused:
+                lines.append(f"  {w.get('url')} — {w.get('note')}")
         if self.consulted_unused:
             lines.append("")
             lines.append("DANIŞILDI, KULLANILMADI: " + ", ".join(self.consulted_unused))
@@ -197,6 +214,8 @@ class EvidencePanel:
             "gaps": self.gaps,
             "supports_artifacts": self.supports_artifacts,
             "chart_paths": self.chart_paths,
+            "web_sources": self.web_sources,
+            "web_unused": self.web_unused,
         }
 
 

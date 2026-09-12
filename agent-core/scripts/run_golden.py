@@ -98,6 +98,8 @@ def run_case(case: GoldenCase) -> CaseOutcome:
         # Halüsinasyon testi: veri yoksa uydurulmuş bir tablo da olmamalı.
         if table is not None and not table.empty:
             failures.append("kapsam dışı soruya rağmen tablo üretildi")
+    elif case.table_optional and (table is None or table.empty):
+        pass  # tablo yüklenmemesi meşru; cevap denetimleri aşağıda
     else:
         if table is None or table.empty:
             failures.append("analiz tablosu üretilmedi")
@@ -126,6 +128,8 @@ def run_case(case: GoldenCase) -> CaseOutcome:
     for needle in case.answer_must_not_contain:
         if needle.lower() in low:
             failures.append(f"cevapta olmaması gereken '{needle}' geçiyor")
+    if case.answer_must_contain_any and not any(n.lower() in low for n in case.answer_must_contain_any):
+        failures.append(f"cevapta şunlardan hiçbiri geçmiyor: {', '.join(case.answer_must_contain_any)}")
 
     tool_steps = len([s for s in steps if s.tool_name])
     if tool_steps > case.max_steps_used:

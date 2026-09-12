@@ -83,8 +83,8 @@ def read_table_for_profiling(
         if _private_host(parsed.hostname or ""):
             raise ReadRefused("özel/loopback adreslere erişim yok")
         if session is None:
-            import requests
-            session = requests.Session()
+            from ..web.session import default_session
+            session = default_session()
         try:
             resp = session.get(locator, timeout=30, allow_redirects=True, stream=True)
         except Exception as exc:  # noqa: BLE001 — DNS/TLS/timeout → unreachable

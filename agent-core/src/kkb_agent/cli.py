@@ -38,6 +38,10 @@ from .builder.ingest import LakehouseCLI
 from .tools.ingest import IngestFromUrlTool
 from .tools.gold import GOLD_PROMPT_RULES, GoldAlignTool, GoldDecomposeTool, GoldJoinTool
 from .tools.chart import CHART_PROMPT_RULES, ChartTool
+from .tools.web import (
+    WEB_PROMPT_RULES, WEB_SEARCH_PROMPT_RULES, WEB_SEARCH_UNAVAILABLE_RULES, WebSearchTool, WebUrlTool,
+)
+from .web.search import TavilySearch
 
 
 def open_lakehouse(path, *, gold: GoldCLI | None = None) -> SilverLakehouse | DuckDBLakehouse:
@@ -110,6 +114,16 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
         ChartTool(lakehouse, workspace, chart_dir=settings.chart_dir, geo_dir=settings.geo_dir)
     )
     system_prompt = SYSTEM_PROMPT + CHART_PROMPT_RULES
+    # Dış kaynak (ADR-0034): web_url her zaman; web_search yalnız arama anahtarı varsa.
+    settings.ingest_allowed_root.mkdir(parents=True, exist_ok=True)
+    registry.register(WebUrlTool(workspace, allowed_local_root=settings.ingest_allowed_root, registry=registry))
+    system_prompt += WEB_PROMPT_RULES
+    search = TavilySearch()
+    if search.available:
+        registry.register(WebSearchTool(search, registry=registry))
+        system_prompt += WEB_SEARCH_PROMPT_RULES
+    else:
+        system_prompt += WEB_SEARCH_UNAVAILABLE_RULES
     if isinstance(lakehouse, GoldCapable) and getattr(lakehouse, "gold", None) is not None:
         registry.register_all(
             [

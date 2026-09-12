@@ -196,6 +196,8 @@ class AnalyticsAgent:
             "gold_align",
             "gold_decompose",
             "gold_join",
+            # Sayfa içeriği de araç çıktısıdır; tablo yüklenmese bile cevap oradan verilebilir (ADR-0034).
+            "web_url",
             # Ingest kartı da bir cevaptır: "bu dosyayı ekle" isteğinde sorgu gerekmez.
             "ingest_from_url",
         }
@@ -416,6 +418,8 @@ class AnalyticsAgent:
                     produced_data = True
                 if result.ok and result.artifacts.get("chart"):
                     artifacts.append(result.artifacts["chart"])
+                if result.artifacts.get("web"):   # erişilemeyen sayfa da kanıt paneline girer
+                    artifacts.append({"kind": "web", **result.artifacts["web"]})
                 if result.error is not None and not result.error.is_retryable:
                     terminal = result.error
                 log.info("adım %d: %s -> %s", i, call.name, "ok" if result.ok else "HATA")
