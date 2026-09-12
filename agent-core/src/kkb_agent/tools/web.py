@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import Literal, Any
 
 from pydantic import BaseModel, Field
 
@@ -232,6 +232,8 @@ class WebUrlTool(Tool):
 class WebSearchParams(BaseModel):
     query: str = Field(description="Arama sorgusu, Türkçe; kurum ve gösterge adı geçsin")
     max_results: int = Field(default=5, ge=1, le=10)
+    topic: Literal["general", "news", "finance"] = Field(default="general", description="news: güncel haber; finance: finans kaynakları")
+    time_range: Literal["day", "week", "month", "year"] | None = Field(default=None, description="Yalnız bu aralıktaki sayfalar (güncel soru için)")
 
 
 class WebSearchTool(Tool):
@@ -249,7 +251,8 @@ class WebSearchTool(Tool):
         self._registry = registry
 
     def run(self, params: WebSearchParams) -> ToolResult:
-        hits, outcome = self.search.search(params.query, max_results=params.max_results)
+        hits, outcome = self.search.search(params.query, max_results=params.max_results,
+                                           topic=params.topic, time_range=params.time_range)
         if not outcome.ok:
             constraint = detect_source_constraint(getattr(self._registry, "active_question", "") or "")
             err = to_tool_error(outcome, decide(outcome, constraint))
@@ -259,7 +262,7 @@ class WebSearchTool(Tool):
         sanctioned = getattr(self._registry, "sanctioned_locators", None)
         if isinstance(sanctioned, set):
             sanctioned.update(h.url for h in hits)   # kullanıcının istediği aramanın sonuçları açılabilir
-        lines = [f"ARAMA: {params.query} — {len(hits)} sonuç"]
+        lines = [f"ARAMA: {params.query} — {len(hits)} sonuç (kalan arama bütçesi: {getattr(self.search, 'remaining', '?')})"]
         for i, h in enumerate(hits, start=1):
             lines.append(f"{i}. {h.title} — {h.url}\n   {h.snippet}")
         lines.append("YAPACAĞIN: sayı okuma; uygun adresi web_url ile aç ve tabloyu yükle.")

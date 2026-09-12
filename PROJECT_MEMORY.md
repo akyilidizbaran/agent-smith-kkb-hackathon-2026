@@ -106,6 +106,12 @@ Kullanıcı: "anomali ve nedensellik araçlarının bulunmaması çok kötü gö
 - Golden ilk koşu 0/6 ve üç kaçak: kanıt paneli kart sayılarını (k, n, r, p) tanımıyordu → kart parametreleri not edilir, satır sayısı ve işareti düşmüş sayı eşleşir, tanımlayıcı rakamı (`5690_3`) ve "0.263" doğru ayrışır; dönem ipucu "2021'den bu yana"yı "= 2021" diyordu → `>=`/`<=`/`BETWEEN`; model "aylık" soruya çeyreklik Gold tablosunu okudu → `FREQUENCY_MISMATCH` (kabadan ince üretilemez; inceden kaba serbest).
 - Ölçüm (demo DB, aylık konut 66 ay): aykırı 2023-03 (+6,49 %) ve 2023-05 (+5,42 %); rejimler 2021-02→2023-02 %1,15/ay, 2023-03→08 %3,34, 2023-09→2024-09 %0,31, 2024-10→ %2,62; haftalık faiz → konut bakiyesi: gecikme +8 hafta r=−0,28, Granger p=0,003 (ters yön p=0,19). İlk ceza kalibrasyonu (3·log(n), serinin MAD'ı) gerçek seride hiç rejim bulamadı → ölçülüp değiştirildi. Testler 270 → 287. README'deki boş vaatler (anomali, nedensellik) kapandı; ARCHITECTURE "planlı" → "yazıldı". Golden G15–G17 üç koşu 0/6 → 1/6 → **9/9 kararlı** (2 / 4 / 3 adım, 47–60k token); G16'da model önce çeyreklik Gold tablosunu deniyor, guard aylık seriye çeviriyor. Kabul senaryoları 8 → 10 (G15, G17); mevcut DB'de **10/10** (G9 dâhil, kanıt zinciri 10/10 tam, 1–4 adım, 23–72k token).
 
+### 2.12 Tavily anahtarı ve arama bütçesi (13 Eylül)
+- Kullanıcı Tavily dev anahtarını verdi → yalnız kök `.env` (`TAVILY_API_KEY`, gitignore'da); `.env.example`'a boş alan. Sohbette paylaşıldığı için yarışma sonrası döndürülmeli.
+- `web/search.py`: anahtar `Authorization: Bearer` başlığında (gövdede değil), `topic` ve `time_range` modele açık, **süreç başına bütçe** `WEB_SEARCH_BUDGET` (varsayılan 20; ücretsiz katman ayda 1.000 kredi, golden döngüsü bitirmesin). Kart "kalan arama bütçesi: n" yazar; bütçe dolunca erişim sözleşmesi zarfıyla "kullanıcıdan adres iste".
+- Canlı doğrulama: "BDDK haftalık bülten konut kredileri toplam" → 3 sonuç, ilki bddk.org.tr/bultenhaftalik (0,87). `web_search` artık kayıtlı: gerçek DB'de 19 araç.
+- Tavily `SKILL.md` okundu; CLI kurulumu (`curl | bash`), `tvly login`, Claude Code'a global skill ekleme **uygulanmadı** (REST + httpx yeterli; dış betik çalıştırma yok). Alternatif ücretsiz sağlayıcılar (Google Programmable Search 100/gün, Brave 2.000/ay) `SearchClient` sözleşmesine ikinci adaptör olarak eklenebilir; demo için Tavily yeter.
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
@@ -114,7 +120,7 @@ Kullanıcı: "anomali ve nedensellik araçlarının bulunmaması çok kötü gö
 | Lakehouse testi (r3) | 1083 |
 | ADR | 40 |
 | Golden vakası | 19: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 10 senaryo 10/10 |
-| Araç sayısı (gerçek DB'de) | 18: lakehouse ×4, workspace ×4 (query dâhil), analitik ×3 (anomaly_detect, change_points, lead_lag), ingest, promote_draft, gold ×3, chart, web_url (+ web_search anahtarla) |
+| Araç sayısı (gerçek DB'de) | 19: lakehouse ×4, workspace ×4 (query dâhil), analitik ×3 (anomaly_detect, change_points, lead_lag), ingest, promote_draft, gold ×3, chart, web_url, web_search (Tavily anahtarı .env'de) |
 | Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu (iş yapan araç/tablo varken susar), istenen yetenek zorunluluğu (grafik, analitik), frekans uyuşmazlığı (kabadan ince yok), grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, GOLD_REQUIRED, niyet kapısı, beyan kapısı, adım sınırı, reasoning temizliği |
 
 ## 4. Mimari, tek bakışta

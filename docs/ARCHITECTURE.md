@@ -708,14 +708,15 @@ CLI: her cevabın altında `[kanıt]` özeti, `--evidence` tam panel. Golden: `K
 n/m tam`; artifact izi olan adaptörde eksik zincir vakayı düşürür.
 
 
-### Web — `tools/web.py` + `web/` (ADR-0034) — YAZILDI; `web_search` anahtar bekliyor
+### Web — `tools/web.py` + `web/` (ADR-0034) — YAZILDI; `web_search` Tavily anahtarıyla açık (13 Eyl)
 
 ```
 web_url(url, purpose, table_index?, max_pages≤5, max_depth≤1)
   → web/fetch.py   özel adres yok, boyut sınırı, robots.txt, ADR-0028 sınıflandırması, sha256+zaman
   → web/html.py    tablolar METİN olarak → profilci dilbilgisiyle sayı (belirsizse metin + not)
   → web/crawl.py   aynı alan adı, veri bağlantıları önce, ilgi puanı, sayfa/derinlik/süre bütçesi
-web_search(query)  Tavily; TAVILY_API_KEY yoksa kayıt edilmez, prompt "arama kapalı" der
+web_search(query, topic?, time_range?)  Tavily (Bearer başlığı, basic arama); TAVILY_API_KEY yoksa kayıt edilmez,
+                   prompt "arama kapalı" der; süreç başına bütçe WEB_SEARCH_BUDGET (varsayılan 20)
 ```
 
 Liste modu tabloları ve yıl denetimini gösterir ("soruda geçen 2025 sayfada GEÇMİYOR");

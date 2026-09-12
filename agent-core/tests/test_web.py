@@ -227,15 +227,25 @@ def test_web_search_anahtar_yoksa_needs_credential() -> None:
     assert not r.ok and r.error.error_code == "NEEDS_CREDENTIAL"
 
 
-def test_web_search_sonuc_veri_degildir() -> None:
+def test_web_search_sonuc_veri_degildir_anahtar_baslikta_butce_sayilir() -> None:
+    seen: list[dict] = []
+
     class S:
-        def post(self, url, json=None, timeout=None):
-            return Resp(200, b"", ctype="application/json") | {} if False else SimpleNamespace(
+        def post(self, url, json=None, headers=None, timeout=None):
+            seen.append({"json": json, "headers": headers})
+            return SimpleNamespace(
                 status_code=200, json=lambda: {"results": [{"title": "TÜİK TÜFE", "url": "https://tuik.example/tufe", "content": "yıllık %31"}]})
-    tool = WebSearchTool(TavilySearch(environ={"TAVILY_API_KEY": "k"}, session=S()))
-    r = tool.validate_and_run({"query": "2025 enflasyon"})
+    search = TavilySearch(environ={"TAVILY_API_KEY": "k"}, session=S(), budget=2)
+    tool = WebSearchTool(search)
+    r = tool.validate_and_run({"query": "2025 enflasyon", "topic": "news", "time_range": "year"})
     assert r.ok and "https://tuik.example/tufe" in r.content and "sayı okuma" in r.content
     assert "k" not in r.artifacts["web_search"]["hits"]
+    assert seen[0]["headers"]["Authorization"] == "Bearer k" and "api_key" not in seen[0]["json"]
+    assert seen[0]["json"]["topic"] == "news" and seen[0]["json"]["time_range"] == "year" and seen[0]["json"]["search_depth"] == "basic"
+    assert "kalan arama bütçesi: 1" in r.content
+    tool.validate_and_run({"query": "2025 enflasyon tuik"})
+    r3 = tool.validate_and_run({"query": "2025 enflasyon üçüncü"})
+    assert not r3.ok and "bütçesi doldu" in r3.content and len(seen) == 2
 
 
 # ------------------------------------------------------------------ kanıt zinciri
@@ -298,7 +308,7 @@ def test_arama_sonuclari_onayli_adres_olur() -> None:
     reg = SimpleNamespace(active_question="enflasyonu ara", sanctioned_locators=set())
 
     class S:
-        def post(self, url, json=None, timeout=None):
+        def post(self, url, json=None, headers=None, timeout=None):
             return SimpleNamespace(status_code=200, json=lambda: {"results": [{"title": "t", "url": "https://tuik.example/tufe", "content": "c"}]})
     WebSearchTool(TavilySearch(environ={"TAVILY_API_KEY": "k"}, session=S()), registry=reg).validate_and_run({"query": "enflasyon"})
     assert reg.sanctioned_locators == {"https://tuik.example/tufe"}

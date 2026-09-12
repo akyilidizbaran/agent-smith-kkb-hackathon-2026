@@ -69,7 +69,16 @@ sayfalar "TARANDI, KULLANILMADI / ERİŞİLEMEDİ" altında.
 ## Açık kalan
 - Tarama derinliği 1 ile sınırlı; PDF okunmuyor (kurum bültenleri çoğu PDF) — D fazı adayı.
 - JS ile dolan sayfalar (TÜİK) boş gelir; tarayıcı yok ve olmayacak (bot denetimi çizgisi).
-- `web_search` anahtar olmadan ölçülemedi; Tavily anahtarı gelirse aynı testler canlıda koşar.
+- ~~`web_search` anahtar olmadan ölçülemedi~~ → **13 Eylül:** Tavily dev anahtarı `.env`'e girdi
+  (gitignore'da; sohbette paylaşıldığı için yarışma sonrası döndürülmeli). Anahtar artık gövdede
+  değil `Authorization: Bearer` başlığında; `topic` (general/news/finance) ve `time_range`
+  (day/week/month/year) parametreleri modele açıldı; **süreç başına arama bütçesi**
+  `WEB_SEARCH_BUDGET` (varsayılan 20): ücretsiz katman ayda 1.000 kredi, golden döngüsü
+  bir öğleden sonra bitirebilirdi. Canlı doğrulama: "BDDK haftalık bülten konut kredileri toplam"
+  → 3 sonuç, ilki bddk.org.tr/bultenhaftalik (skor 0,87). Tavily'nin `SKILL.md` kurulum
+  belgesi okundu; CLI kurulumu (`curl | bash`), `tvly login` ve Claude Code'a global skill
+  ekleme uygulanmadı: entegrasyon REST + httpx, SDK ve CLI gerekmiyor, güvenlik çizgisi
+  (dış betik çalıştırma yok) korunuyor.
 
 ## İlgili
 ADR-0028 (erişim ve geri çekilme sözleşmesi), ADR-0030 (profilci dilbilgisi), ADR-0033
