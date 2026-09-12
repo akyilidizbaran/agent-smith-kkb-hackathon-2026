@@ -46,6 +46,10 @@ ErrorCode = Literal[
     "DUPLICATE_CALL",
     "TOOL_FAILED",
     "SQL_FAILED",
+    # erişim katmanı — kaynağa ulaşılabildi mi (ADR-0028)
+    "NEEDS_CREDENTIAL",
+    "ACCESS_BLOCKED",
+    "SOURCE_NOT_FOUND",
 ]
 
 #: Tekrar denemenin sonucu değiştirmeyeceği hatalar. Bunlar modele "düzelt ve
@@ -55,6 +59,11 @@ NOT_RETRYABLE: frozenset[str] = frozenset({
     "OUT_OF_COVERAGE",   # veri yok; kaç kez sorulursa sorulsun yok
     "UNSAFE_SQL",        # politika; farklı yazımı denemek sınırı aşma girişimi olur
     "UNKNOWN_TOOL",      # var olmayan araç
+    # Aynı kaynağı aynı biçimde tekrar istemek sonucu değiştirmez; alternatif
+    # kaynak ayrı bir çağrıdır ve kararı harness verir (access_policy.decide).
+    "NEEDS_CREDENTIAL",
+    "ACCESS_BLOCKED",
+    "SOURCE_NOT_FOUND",
 })
 
 
@@ -66,7 +75,7 @@ class ToolError:
     message: str
     hint: str | None = None
     candidates: list[str] = field(default_factory=list)
-    layer: Literal["schema", "reference", "policy", "data", "workspace", "harness"] = "data"
+    layer: Literal["schema", "reference", "policy", "data", "workspace", "harness", "access"] = "data"
     retryable: bool | None = None  # None → NOT_RETRYABLE tablosuna bak
 
     @property

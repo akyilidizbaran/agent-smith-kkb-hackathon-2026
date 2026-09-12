@@ -53,7 +53,15 @@ def test_retryable_acikca_gecilebilir() -> None:
 
 
 def test_not_retryable_kumesi_beklendigi_gibi() -> None:
-    assert NOT_RETRYABLE == {"OUT_OF_COVERAGE", "UNSAFE_SQL", "UNKNOWN_TOOL"}
+    """Küme bilerek sabitlenmiş: bir kod buraya ancak gerekçesiyle girer.
+
+    ADR-0028 üç erişim kodu ekledi — aynı kaynağı aynı biçimde tekrar istemek sonucu
+    değiştirmez; alternatif kaynak ayrı bir çağrıdır ve kararı harness verir.
+    """
+    assert NOT_RETRYABLE == {
+        "OUT_OF_COVERAGE", "UNSAFE_SQL", "UNKNOWN_TOOL",
+        "NEEDS_CREDENTIAL", "ACCESS_BLOCKED", "SOURCE_NOT_FOUND",
+    }
 
 
 def test_bilinmeyen_arac_aday_listeler() -> None:
