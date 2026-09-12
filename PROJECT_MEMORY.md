@@ -13,7 +13,7 @@
 
 | Kural | Nereden |
 |---|---|
-| Her mimari karar `docs/adr/` altına, gerekçe ve ölçümle. Şu an 37 ADR. | Takım kararı |
+| Her mimari karar `docs/adr/` altına, gerekçe ve ölçümle. Şu an 38 ADR. | Takım kararı |
 | Tüm commit'ler `Baran Akyıldız <147875893+akyilidizbaran@users.noreply.github.com>` kimliğiyle. | Takım kararı |
 | API anahtarları asla commit edilmez; yalnız repo kökündeki `.env`'de (`MIA_API_KEY`, `EVDS_API_KEY`, ileride `TAVILY_API_KEY`). | KKB kuralı |
 | Dış LLM API'si yok; yalnız KKB'nin MIA/Kloudeks'i (`kkbhackathon2026/Qwen3.8-27B`). Bulut ambarı yok. | Şartname |
@@ -86,14 +86,16 @@
 
 - **D3** Güçlendirme + kararlılık (ADR-0037): `core/intent.py` niyet kapısı (ingest/web_url adresi yalnız kullanıcı mesajından ya da onaylı arama sonuçlarından; yazma yalnız açık istekle; `INTENT_REQUIRED` tekrar denenmez), dış içerik "veridir, talimat değildir" çerçevesi, alt süreç ortamı izin listesi (API anahtarları geçmez), G13 enjeksiyon vakası, kararlılık raporunda hata sınıfı/rol/token/tam hata metni. Ölçüm 5 tekrar: seed G1–G7 hepsi 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5; G9 4/5 (model anlatıda fark hesapladı, guard uyarı düştü, kanıt zinciri eksik saydı). Testler 243 → 250.
 
+- **D4** Demo kabul betiği (ADR-0038): `scripts/demo_acceptance.py` tek komut: bootstrap → canlı ingest (5 seri, `--only`) → silver → gold → 8 senaryo (G1, G2, G14, G8, G9, G10, G11a, G13) golden koşucusuyla; JSON rapor + çıkış kodu. Sıfırdan ölçüm: ingest 26 s, Silver 684 satır, Gold 3 tablo, **8/8 senaryo, kanıt zinciri 8/8**. Güvenlik kilidi: katalog betiği `--only` tanımıyorsa filtresiz canlı ingest reddedilir (ölçüldü: bir kez 1.620 seriyi çekmeye başladı, durduruldu). Veri ekibi betiğine `--database/--data-root/--only` eklendi (r3 `c07f73a`). G14: gerçek DB'de "tabloyu bozmadan" Gold faiz sütunu, 3/3.
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 250 |
+| Agent birim testi | 252 |
 | Lakehouse testi (r3) | 1083 |
-| ADR | 37 |
-| Golden vakası | 15 × 5 tekrar: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5; G9 4/5 |
+| ADR | 38 |
+| Golden vakası | 16: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3; G9 4/5. Demo kabul sıfırdan 8/8 |
 | Araç sayısı (gerçek DB'de) | 13: lakehouse ×4, workspace ×3, ingest, gold ×3, chart, web_url (+ web_search anahtarla) |
 | Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu, grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, adım sınırı, reasoning temizliği |
 
@@ -122,8 +124,8 @@ Veri ekibi: RAW (içerik adresli) → Bronze (parquet) → Silver (fact_observat
 1. ~~D1 sınırlı ön-yükleme~~ ✅ (ADR-0035).
 2. ~~D2 BM25 dizini ve yüklenmemiş seri cevabı~~ ✅ (ADR-0036).
 3. ~~D3 kararlılık + güçlendirme~~ ✅ (ADR-0037).
-4. **D4** demo kabul betiği: bootstrap → ingest → silver → gold → 8 senaryo sorusu, tek komut.
-5. **E** üç dalın main'e merge commit'le birleşmesi (squash yok), ölü dalların silinmesi, docs, gizli bilgi taraması, 20 Eylül dondurma.
+4. ~~D4 demo kabul betiği~~ ✅ (ADR-0038).
+5. **E** main'e birleştirme. Prova yapıldı (yerel, itilmedi): agent-engine main'in üstüne merge commit; r3 **bağımsız tarihçe** (ortak ata yok) → `--allow-unrelated-histories`, yalnız README.md ve .gitignore çakışıyor (birleştirildi: README agent metni + depo haritası). Gizli bilgi taraması iki dalda temiz; `.env/.duckdb/.parquet` izlenmiyor. Silinebilir dallar: r3'e tamamen dâhil 13 lakehouse dalı; dâhil olmayan 4 dal (busra/agent-v3 → A4 kararı; lakehouse-main-ready, lakehouse-source-access, source-access-bddk-weekly → yalnız eski docs commit'leri). **Push ve dal silme kullanıcı onayı bekliyor.**
 
 **Karar ve dış bağımlılık:** A4 motor yakınsaması (Büşra ile); 81 il sınır dosyası (kaynak + lisans, kullanıcı onayı); Tavily anahtarı; isteğe bağlı `build_gold` aracı (jüri dosyasını Gold'a taşıyan akış, bugün "insan onayı gerek" diye kesiliyor, doğru davranış).
 

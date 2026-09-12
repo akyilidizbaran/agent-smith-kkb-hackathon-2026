@@ -1,6 +1,6 @@
 # Agentic Analytics Engine — Mimari
 
-> **Durum:** 12 Eylül 2026 · Golden 15 vaka × 5 tekrar (14 kararlı; G9 4/5) · 250 birim testi · 37 ADR
+> **Durum:** 12 Eylül 2026 · Golden 16 vaka; demo kabul sıfırdan 8/8 (`scripts/demo_acceptance.py`) · 252 birim testi · 38 ADR
 > Bu belge kodun *ne yaptığını* değil, *neden öyle yapıldığını* anlatır; her karar
 > `docs/adr/` altındaki kayda atıfla gelir. Kodla birebir örtüşmesi için modül, sınıf ve
 > metot adları gerçek adlarıyla verilmiştir.

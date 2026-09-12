@@ -18,7 +18,8 @@ venv/
 
 # Veri (lakehouse çıktıları repoya girmez)
 data/
-incoming/          # Architect'in izinli yerel kökü: jüri dosyaları, golden fikstür kopyaları
+# Architect'in izinli yerel kökü: jüri dosyaları, golden fikstür kopyaları (satır sonu yorumu gitignore'da desteklenmez)
+incoming/
 !data/.gitkeep
 *.duckdb
 *.duckdb.wal

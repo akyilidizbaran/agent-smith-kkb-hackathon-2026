@@ -368,4 +368,17 @@ CASES: list[GoldenCase] = [
         ],
         max_steps_used=6,
     ),
+    GoldenCase(
+        id="G14_tabloyu_bozmadan_gold_sutunu",
+        question="2025 yılında konut kredisi bakiyesini aylık olarak göster.",
+        follow_up="Bu tabloyu hiç bozmadan, yeni bir sütun olarak aylık ortalama konut kredisi faiz oranını ekle.",
+        why="Demo 3. sorunun gerçek DB provası (G6 seed'e özgü: taşıt serisi demo DB'de yüklü değil). "
+        "İkinci turda tablo yeniden kurulmamalı, sütun eklenmeli; kaynak Gold'un aylık ortalama faiz "
+        "tablosu (gold.konut_faizi_aylik, dönem sonu anahtarı aylık bakiyeyle birebir örtüşür). "
+        "Ölçer: workspace + Gold tablosu + kanıt zinciri (iki kaynaktan tek tablo).",
+        table_checks=[("hâlâ 12 satır (tablo bozulmamış)", _rows(12)),
+                      ("faiz sütunu geldi (en az iki sayısal kolon)", lambda df: len(df.select_dtypes("number").columns) >= 2)],
+        must_use_tools=["workspace_add_column"],
+        max_steps_used=8,
+    ),
 ]
