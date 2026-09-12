@@ -65,6 +65,8 @@ class SilverBuildReport:
     withheld_rows: dict[str, int] = field(default_factory=dict)
     #: how many rows were dropped as identical boundary duplicates of another artifact's row
     deduplicated_rows: int = 0
+    #: rows of promoted (active) ad-hoc series appended after the Bronze-derived snapshot
+    promoted_adhoc_rows: int = 0
 
     def render(self) -> str:
         """A short operator-facing summary; every number here is a count, never a guess."""
@@ -77,6 +79,8 @@ class SilverBuildReport:
             f"rows published         : {self.rows_published}",
             f"series published       : {len(self.series_published)}",
         ]
+        if self.promoted_adhoc_rows:
+            lines.append(f"promoted ad-hoc rows   : {self.promoted_adhoc_rows}")
         if self.withheld_series:
             withheld_by_reason: dict[str, int] = defaultdict(int)
             for reason in self.withheld_series.values():
@@ -234,6 +238,31 @@ def _deduplicate_boundaries(
     return ordered.iloc[keep_positions].reset_index(drop=True)
 
 
+def _append_promoted_adhoc(connection: duckdb.DuckDBPyConnection, report: SilverBuildReport) -> None:
+    """Promoted ad-hoc series (status active, source adhoc) are part of the trusted surface
+    (catalog/promotion.py). The Bronze-derived snapshot knows nothing about them, so they are
+    appended here on every build path -- including a build with no Bronze at all -- so a
+    rebuild never silently drops a promotion."""
+
+    has_adhoc = connection.execute(
+        "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'adhoc' AND table_name = 'fact_observation'"
+    ).fetchone()[0]
+    if not has_adhoc:
+        return
+    from ..catalog.promotion import copy_active_adhoc_to_silver
+
+    promoted_rows = copy_active_adhoc_to_silver(connection)
+    if promoted_rows:
+        report.rows_published += promoted_rows
+        promoted_ids = tuple(
+            row[0] for row in connection.execute(
+                "SELECT series_id FROM meta.series WHERE source_id = 'adhoc' AND status = 'active' ORDER BY 1"
+            ).fetchall()
+        )
+        report.series_published = tuple(sorted(set(report.series_published) | set(promoted_ids)))
+        report.promoted_adhoc_rows = promoted_rows
+
+
 def build_silver_snapshot(
     connection: duckdb.DuckDBPyConnection,
     *,
@@ -298,6 +327,7 @@ def build_silver_snapshot(
         report.artifacts_staged += 1
 
     if not staged_frames:
+        _append_promoted_adhoc(connection, report)
         return report
 
     staging = pd.concat(staged_frames, ignore_index=True)
@@ -307,6 +337,8 @@ def build_silver_snapshot(
     published = materialize_fact_observation_snapshot(connection, staging)
     report.rows_published = len(published)
     report.series_published = tuple(sorted(set(published["series_id"].tolist())))
+
+    _append_promoted_adhoc(connection, report)
     return report
 
 

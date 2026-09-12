@@ -16,9 +16,11 @@ from .application import (
     run_bootstrap,
     run_gold_build,
     run_known_source_ingestion,
+    run_promote_draft,
     run_silver_build,
 )
 from .db.connection import connect_untrusted
+from .catalog.promotion import PromotionError
 from .errors import LakehouseError
 from .gold.build import call_gold_function
 from .gold.catalog import DEFAULT_GOLD_CATALOG_ROOT, GOLD_FUNCTIONS, GoldCatalogError
@@ -107,6 +109,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="directory of metric YAML files (default: catalog/gold)",
     )
     gold.set_defaults(handler=_handle_gold)
+
+    promote = commands.add_parser(
+        "promote-draft",
+        help="promote an ad-hoc draft series to active and copy its rows into Silver (a human's decision)",
+    )
+    _add_storage_options(promote)
+    promote.add_argument("--series", required=True, help="adhoc:<key> draft series id")
+    promote.set_defaults(handler=_handle_promote_draft)
 
     gold_run = commands.add_parser(
         "gold-run",
@@ -232,6 +242,27 @@ def _handle_gold(
         return 2
     print("status: success")
     print(report.render())
+    return 0
+
+
+def _handle_promote_draft(
+    args: argparse.Namespace, *, session: Any = None, clock: Any = None
+) -> int:
+    """Draft → active on a human's say-so. Refuses curated or non-draft rows."""
+
+    try:
+        result = run_promote_draft(database=args.database, series_id=args.series)
+    except PromotionError as exc:
+        print("status: failed", file=sys.stderr)
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print("status: success")
+    print(f"series_id: {result.series_id}")
+    print(f"previous_status: {result.previous_status}")
+    print("status_now: active")
+    print("semantic_confidence: derived")
+    print(f"rows_promoted: {result.rows_promoted}")
+    print(f"silver_rows_replaced: {result.silver_rows_replaced}")
     return 0
 
 

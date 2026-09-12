@@ -22,6 +22,7 @@ from .adhoc import (
     publish_adhoc_observations,
 )
 from .catalog.artifacts import ArtifactRepository
+from .catalog.promotion import PromotionResult, promote_draft_series
 from .catalog.registration import register_series
 from .connectors.base import BaseConnector
 from .connectors.evds import EvdsConnector
@@ -273,6 +274,16 @@ def run_silver_build(
         return build_silver_snapshot(
             connection, bronze_root=Path(data_root) / "bronze"
         )
+    finally:
+        connection.close()
+
+
+def run_promote_draft(*, database: str | Path, series_id: str) -> PromotionResult:
+    """Promote one ad-hoc draft on a human's say-so: draft → active, rows → Silver."""
+
+    connection = bootstrap_database(database)
+    try:
+        return promote_draft_series(connection, series_id)
     finally:
         connection.close()
 
