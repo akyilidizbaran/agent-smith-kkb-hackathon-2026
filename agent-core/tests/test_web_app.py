@@ -77,3 +77,10 @@ def test_tabloya_dokunmayan_cevap_eski_tabloyu_gostermez() -> None:
     assert first["table"] is not None
     second = client.post("/api/ask", json={"question": "selam"}).json()
     assert second["table"] is None and second["table_title"] == "" and second["text"] == "Selam. Sorunu yazabilirsin."
+
+
+def test_statik_dosyalar_ve_three_js_yerelden_servis_edilir() -> None:
+    client = TestClient(create_app(FakeAgent))
+    r = client.get("/static/vendor/three.module.min.js")
+    assert r.status_code == 200 and "three.js" in r.text[:200].lower() or "three" in r.text[:300]
+    assert "Yolculuğu izle" in client.get("/").text

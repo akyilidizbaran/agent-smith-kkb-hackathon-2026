@@ -22,6 +22,7 @@ from typing import Any, Callable
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -206,6 +207,8 @@ def create_app(agent_factory: Callable[[], Any]) -> FastAPI:
     app = FastAPI(title="AgentSmithler", docs_url=None, redoc_url=None)
     session = Session(agent_factory)
     app.state.session = session
+    # Yerel dosyalar (three.js vb.); CDN yok, demo çevrimdışı da çalışır (ADR-0047).
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:

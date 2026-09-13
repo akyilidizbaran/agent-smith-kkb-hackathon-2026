@@ -162,13 +162,18 @@ Aynı soruya birebir aynı cevap (her çağrı temperature 0). Araç turları 0 
 - Ölçüm (demo DB, aynı soru): temiz ajan ×3 → değerler 3/3 aynı, anlatı 3/3 farklı (T=0'da da farklı: uç nokta T=0'da bile birebir deterministik değil). Aynı oturumda tekrar → T=0,5'te bile birebir aynı (model tarihçedeki cevabını kopyalıyor) → harness tekrar sorusuna "kopyalama" notu ekler → benzerlik 1,00 → 0,49, değerler aynı. Ders: şikâyetin kaynağı sıcaklık değil tarihçeden kopyalamaydı.
 - Testler 325 → 327.
 
+### 2.20 Kanıt yolculuğu — iki gösterim denemesi (13 Eylül, ADR-0047)
+Kanıt panelinde "Yolculuğu izle": aynı zincir (Cevap → Tablo·SQL → Silver → Bronze → RAW; web/OCR'da Belge halkası) iki görünümle. 2,5B: izometrik SVG + rAF, karakter "Smith" yürür, halkalar yanar, balon gerçek kanıtı yazar. 3B: three.js v0.170.0 (MIT) `static/vendor/` yerel, CDN yok; kamera döner/sürüklenir, aktif halka ışır. Sayı çipi tıklanınca yolculuk o sayıdan; kopuk halkada karakter durur (kırmızı). FastAPI `/static` mount. Karar kullanıcıda; seçilmeyen görünüm kaldırılacak.
+- "Sen kimsin" sorusu: sistem promptu "Sen {domain} üzerinde çalışan bir veri analisti ajansın" ile başlar; {domain} `DomainProfile.from_catalog(lakehouse.list_datasets())` ile ajan kurulurken kataloğun kaynak adlarından deterministik türetilir ("bddk_monthly ve evds … kaynaklı veriler"), `DOMAIN_DESCRIPTION`/`DOMAIN_AUDIENCE` .env ile ezilir; lakehouse değişince bir sonraki kurulumda kendiliğinden güncellenir (ADR-0012).
+- Testler 327 → 328.
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 327 |
+| Agent birim testi | 328 |
 | Lakehouse testi (r3 + genişlik dalı) | 1.079 |
-| ADR | 46 |
+| ADR | 47 |
 | Golden vakası | 21: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3, G18a/b 2/2; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 11 senaryo 11/11 |
 | Araç sayısı (gerçek DB'de) | 19: lakehouse ×4, workspace ×4 (query dâhil), analitik ×3 (anomaly_detect, change_points, lead_lag), ingest, promote_draft, gold ×3, chart, web_url, web_search (Tavily anahtarı .env'de) |
 | Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu (iş yapan araç/tablo varken susar), istenen yetenek zorunluluğu (grafik, analitik), frekans uyuşmazlığı (kabadan ince yok), grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, GOLD_REQUIRED, niyet kapısı, beyan kapısı, adım sınırı, reasoning temizliği |

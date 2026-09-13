@@ -71,6 +71,22 @@
   .status { font-size: 12px; color: var(--muted2); }
   .busy { font-size: 13px; color: var(--muted); padding: 6px 0; }
   .err { padding: 10px 12px; background: var(--red-bg); border: 1px solid #e5b4b4; border-radius: 6px; color: var(--red); font-size: 13px; }
+  /* Kanıt yolculuğu (ADR-0047) */
+  .jbtn { height: 26px; padding: 0 10px; border: 1px solid var(--teal-line); background: var(--teal-bg); color: var(--teal-ink); border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer; }
+  .jbtn[disabled] { opacity: .45; cursor: default; }
+  .modal { position: fixed; inset: 0; background: rgba(31,29,26,.55); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .modal .panel { width: min(1040px, 94vw); background: var(--paper); border-radius: 12px; border: 1px solid var(--line); box-shadow: 0 20px 60px rgba(0,0,0,.25); display: flex; flex-direction: column; overflow: hidden; }
+  .modal .mhead { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--card); }
+  .modal .mhead .t { font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600; font-size: 16px; }
+  .tabs { display: flex; gap: 4px; margin-left: 12px; } .tab { padding: 4px 10px; border: 1px solid #d9d3c7; background: #fff; border-radius: 6px; font-size: 12px; cursor: pointer; } .tab.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .modal .close { margin-left: auto; border: 0; background: transparent; font-size: 20px; cursor: pointer; color: var(--muted); }
+  .stage { position: relative; height: 440px; background: #fff; overflow: hidden; }
+  .stage svg, .stage canvas { display: block; width: 100%; height: 100%; }
+  .stage .lbl { position: absolute; transform: translate(-50%, 0); font-size: 12px; font-weight: 500; background: rgba(255,255,255,.85); padding: 2px 6px; border-radius: 4px; pointer-events: none; white-space: nowrap; }
+  .bubble { padding: 12px 16px; border-top: 1px solid var(--line); background: var(--card); display: grid; grid-template-columns: 150px minmax(0,1fr) auto; gap: 12px; align-items: center; }
+  .bubble .who { font-size: 12px; color: var(--muted); } .bubble .what { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; line-height: 1.45; word-break: break-all; }
+  .bubble .ctl { display: flex; gap: 6px; } .bubble .ctl button { height: 28px; padding: 0 10px; border: 1px solid #d9d3c7; background: #fff; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer; }
+  .num { cursor: pointer; }
   @media (max-width: 1100px) { .layout { grid-template-columns: minmax(0, 1fr); } aside.left, aside.right { display: none; } }
 </style>
 </head>
@@ -118,7 +134,7 @@
 
   <aside class="right">
     <div class="ev-head">
-      <div style="display:flex;align-items:center;justify-content:space-between"><div class="label">Kanıt zinciri</div><span class="badge none" id="ev-badge">—</span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between"><div class="label">Kanıt zinciri</div><div style="display:flex;gap:8px;align-items:center"><button class="jbtn" id="btn-journey" disabled title="Zinciri adım adım izle">Yolculuğu izle</button><span class="badge none" id="ev-badge">—</span></div></div>
       <div style="font-size:13px;color:#4a463f;line-height:1.45" id="ev-summary">Cevap gelince her sayı hücreye, sorguya, gözleme ve kaynağa bağlanır.</div>
     </div>
     <div class="ev-body" id="ev-body"></div>
@@ -202,14 +218,16 @@ function renderTrace(p) {
   $("trace").innerHTML = `<span class="label" style="margin-right:4px">Araç izi</span>${chips.join("")}<span class="status mono" style="margin-left:auto">${(p.steps || []).filter((s) => s.tool).length} adım · ${fmtInt(u.prompt)} token · ${p.elapsed_s} s${gate}</span>`;
 }
 
+let lastEvidence = null;
 function renderEvidence(p) {
   const ev = p.evidence; const body = $("ev-body"); const badge = $("ev-badge");
+  lastEvidence = ev || null; $("btn-journey").disabled = !ev;
   if (!ev) { badge.className = "badge none"; badge.textContent = "—"; $("ev-summary").textContent = "Bu cevap için tablo yok."; body.innerHTML = ""; return; }
   badge.className = "badge " + (ev.complete ? "ok" : "gap"); badge.textContent = ev.complete ? "tam" : "EKSİK";
   $("ev-summary").textContent = ev.summary;
   let html = "";
   if (ev.numbers && ev.numbers.length) {
-    html += `<div><div class="label" style="margin-bottom:6px">Cevaptaki sayılar</div><div class="numbers">${ev.numbers.map((n) => `<span class="num ${n.matched ? "" : "miss"}" title="${esc(n.column || "")} ${esc(n.row_key || "")}">${esc(n.text)}</span>`).join("")}</div></div>`;
+    html += `<div><div class="label" style="margin-bottom:6px">Cevaptaki sayılar <span style="font-weight:400;text-transform:none;letter-spacing:0">(tıkla → o sayının yolculuğu)</span></div><div class="numbers">${ev.numbers.map((n, i) => `<span class="num ${n.matched ? "" : "miss"}" data-i="${i}" title="${esc(n.column || "")} ${esc(n.row_key || "")}">${esc(n.text)}</span>`).join("")}</div></div>`;
   }
   const nodes = [];
   (ev.columns || []).slice(0, 3).forEach((c) => nodes.push({t: `Kolon · ${c.column}`, d: c.sql || "provenance yok", amber: !c.sql}));
@@ -222,6 +240,7 @@ function renderEvidence(p) {
   if (ev.consulted_unused && ev.consulted_unused.length) html += `<div class="note"><strong>Danışılıp kullanılmayan</strong><br>${ev.consulted_unused.map(esc).join(" · ")}</div>`;
   if (ev.web_unused && ev.web_unused.length) html += `<div class="note"><strong>Taranıp kullanılmayan</strong><br>${ev.web_unused.map((w) => esc((w.url || "") + " · " + (w.note || ""))).join("<br>")}</div>`;
   body.innerHTML = html;
+  body.querySelectorAll(".num").forEach((el) => el.addEventListener("click", () => openJourney(Number(el.dataset.i))));
 }
 
 async function ask() {
@@ -238,6 +257,127 @@ async function ask() {
   } catch (e) { busy.remove(); const d = document.createElement("div"); d.className = "err"; d.textContent = "Bağlantı hatası: " + e; $("thread").appendChild(d); }
   finally { $("btn-ask").disabled = false; $("q").focus(); }
 }
+
+// ---------------- Kanıt yolculuğu: aynı veri, iki gösterim (SVG+CSS / three.js) ----------------
+function buildJourney(ev, idx) {
+  const num = (idx !== null && idx !== undefined) ? ev.numbers[idx] : null;
+  const col = num && num.column ? (ev.columns || []).find((c) => c.column === num.column) : (ev.columns || [])[0];
+  const obsList = ev.observations || [];
+  const obs = (num && obsList.find((o) => o.value !== null && Math.abs(Number(o.value) - Number(num.number)) < 1e-6)) || obsList[0] || null;
+  const web = (ev.web_sources || [])[0] || null;
+  const short = (x, n) => (x || "").length > n ? (x || "").slice(0, n) + "…" : (x || "");
+  const nodes = [
+    {title: "Cevap", detail: num ? `${num.text} → kolon "${num.column || "?"}", satır ${num.row_key ?? num.row_index ?? "?"}` : `${ev.numbers.length} sayı, ${ev.numbers.filter((n) => n.matched).length} tabloda`, ok: num ? !!num.matched : ev.numbers.every((n) => n.matched)},
+    {title: "Tablo · SQL", detail: col && col.sql ? short(col.sql.replace(/\s+/g, " "), 160) : "bu kolonun sorgu izi yok", ok: !!(col && col.sql)},
+  ];
+  if (obs) {
+    nodes.push({title: "Silver gözlemi", detail: `${obs.series_id} · ${obs.observation_date} · değer ${obs.value} · quality ${obs.quality_flag}${obs.vintage_id ? " · vintage " + obs.vintage_id : ""}`, ok: true});
+    nodes.push({title: "Bronze · artifact", detail: `sha256 ${(obs.artifact_sha256 || "").slice(0, 16)}… · run ${(obs.run_id || "—").slice(0, 8)} · ${obs.bronze_path ? "parquet: " + obs.bronze_path.split("/").slice(-2).join("/") : "parquet bulunamadı"}`, ok: !!obs.artifact_sha256});
+    nodes.push({title: "RAW · kaynak", detail: `${obs.locator || "kaynak adresi yok"} · HTTP ${obs.http_status ?? "—"} · çekim ${obs.fetched_at || "—"}${obs.raw_path ? " · " + obs.raw_path.split("/").slice(-1)[0] : ""}`, ok: !!(obs.locator && obs.fetched_at)});
+  } else if (web) {
+    nodes.push({title: web.ocr ? "Belge (OCR)" : "Web sayfası", detail: `${web.url} · sha256 ${(web.sha256 || "").slice(0, 16)}… · ${web.fetched_at || ""}${web.ocr ? " · " + (web.ocr.model || "") + " · kalite " + (web.ocr.quality || "") : ""}`, ok: !!(web.url && web.sha256)});
+  } else {
+    nodes.push({title: "Silver gözlemi", detail: "gözlem izi yok (seed adaptörü ya da hesaplanmış kolon)", ok: false});
+  }
+  const firstBroken = nodes.findIndex((n) => !n.ok);
+  return {nodes, stopAt: firstBroken === -1 ? nodes.length - 1 : firstBroken, gaps: ev.gaps || []};
+}
+
+const journey = {t: 0, playing: true, view: "svg", data: null, raf: 0, three: null, last: 0};
+const DUR = 9000;                     // bir tur (ms)
+function jState() {                   // 0..1 zaman → hangi halkada, aralarda nerede
+  const n = journey.data.nodes.length; const segs = n - 1;
+  const pos = Math.min(journey.t * segs, journey.data.stopAt);   // kopuk halkada durur
+  return {pos, at: Math.min(Math.floor(pos + 1e-6), n - 1), segs};
+}
+function openJourney(idx) {
+  if (!lastEvidence) return;
+  journey.data = buildJourney(lastEvidence, idx); journey.t = 0; journey.playing = true; journey.last = 0;
+  let m = $("journey");
+  if (!m) {
+    m = document.createElement("div"); m.className = "modal"; m.id = "journey";
+    m.innerHTML = `<div class="panel"><div class="mhead"><span class="t">Kanıt yolculuğu</span><span class="status">Smith her halkayı tek tek açıyor</span><div class="tabs"><button class="tab on" data-v="svg">2,5B · SVG + CSS</button><button class="tab" data-v="three">3B · three.js</button></div><button class="close" title="Kapat">×</button></div><div class="stage" id="stage"></div><div class="bubble"><div class="who" id="jwho"></div><div class="what" id="jwhat"></div><div class="ctl"><button id="jplay">Duraklat</button><button id="jstep">Sonraki halka</button></div></div></div>`;
+    document.body.appendChild(m);
+    m.querySelector(".close").addEventListener("click", closeJourney);
+    m.addEventListener("click", (e) => { if (e.target === m) closeJourney(); });
+    m.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => { m.querySelectorAll(".tab").forEach((x) => x.classList.toggle("on", x === b)); journey.view = b.dataset.v; mountView(); }));
+    $("jplay").addEventListener("click", () => { journey.playing = !journey.playing; $("jplay").textContent = journey.playing ? "Duraklat" : "Oynat"; });
+    $("jstep").addEventListener("click", () => { const s = jState(); journey.t = Math.min((s.at + 1) / s.segs, 1); journey.playing = false; $("jplay").textContent = "Oynat"; });
+  }
+  m.hidden = false; mountView();
+}
+function closeJourney() { const m = $("journey"); if (m) m.hidden = true; cancelAnimationFrame(journey.raf); journey.raf = 0; if (journey.three) { journey.three.dispose(); journey.three = null; } }
+function tick(now) {
+  if (journey.playing) { if (journey.last) journey.t = (journey.t + (now - journey.last) / DUR) % 1; journey.last = now; } else journey.last = now;
+  const s = jState(); const node = journey.data.nodes[s.at];
+  $("jwho").textContent = `${s.at + 1}/${journey.data.nodes.length} · ${node.title}${node.ok ? "" : " · KOPUK"}`;
+  $("jwhat").textContent = node.detail + (s.at === journey.data.stopAt && !node.ok ? "   ⟵ zincir burada kopuyor" : "");
+  if (journey.view === "svg") drawSvg(s); else if (journey.three) journey.three.draw(s);
+  journey.raf = requestAnimationFrame(tick);
+}
+function mountView() {
+  cancelAnimationFrame(journey.raf); journey.raf = 0; journey.last = 0;
+  const stage = $("stage"); stage.innerHTML = "";
+  if (journey.three) { journey.three.dispose(); journey.three = null; }
+  if (journey.view === "svg") { stage.innerHTML = svgSkeleton(); journey.raf = requestAnimationFrame(tick); return; }
+  stage.innerHTML = `<div class="busy" style="padding:16px">three.js yükleniyor…</div>`;
+  import("/static/vendor/three.module.min.js").then((THREE) => { if (journey.view !== "three") return; journey.three = makeThree(THREE, stage); journey.raf = requestAnimationFrame(tick); })
+    .catch((e) => { stage.innerHTML = `<div class="err" style="margin:16px">three.js yüklenemedi: ${esc(String(e))}</div>`; });
+}
+// --- 2,5B: izometrik SVG; karakter yol boyunca, halkalar sırayla yanar
+function nodeXY(i, n) { const x0 = 90, x1 = 830, y0 = 300, y1 = 110; const k = n > 1 ? i / (n - 1) : 0; return [x0 + (x1 - x0) * k, y0 + (y1 - y0) * k]; }
+function svgSkeleton() {
+  const n = journey.data.nodes.length; const pts = journey.data.nodes.map((_, i) => nodeXY(i, n));
+  const grid = []; for (let i = 0; i < 9; i++) grid.push(`<path d="M ${30 + i * 60} 400 L ${330 + i * 60} 160" stroke="#e6e2d8"/>`); for (let i = 0; i < 5; i++) grid.push(`<path d="M ${30 + i * 75} ${400 - i * 60} L ${430 + i * 75} ${400 - i * 60 + 30}" stroke="#e6e2d8"/>`);
+  const links = pts.slice(1).map((p, i) => `<path id="jl${i}" d="M ${pts[i][0]} ${pts[i][1]} L ${p[0]} ${p[1]}" stroke="#c7e0dc" stroke-width="5" stroke-linecap="round"/>`).join("");
+  const boxes = pts.map((p, i) => { const node = journey.data.nodes[i]; const c = node.ok ? ["#0f6b63", "#0a4f49", "#083f3a"] : ["#c53030", "#9b2c2c", "#7a2222"]; return `<g id="jn${i}" transform="translate(${p[0]} ${p[1]})" opacity=".45"><path d="M -34 -16 L 0 -32 L 34 -16 L 0 0 Z" fill="${c[0]}"/><path d="M -34 -16 L -34 8 L 0 24 L 0 0 Z" fill="${c[1]}"/><path d="M 0 0 L 0 24 L 34 8 L 34 -16 Z" fill="${c[2]}"/><text y="46" text-anchor="middle" font-size="12" font-weight="500" fill="#1f1d1a">${esc(node.title)}</text></g>`; }).join("");
+  const smith = `<g id="jsmith"><ellipse cy="-2" rx="9" ry="4" fill="rgba(0,0,0,.15)"/><rect x="-7" y="-30" width="14" height="18" rx="4" fill="#0f6b63"/><circle cy="-36" r="8" fill="#f6f4ef" stroke="#1f1d1a" stroke-width="1.5"/><circle cx="-3" cy="-37" r="1.4" fill="#1f1d1a"/><circle cx="3" cy="-37" r="1.4" fill="#1f1d1a"/><g id="jlegs" stroke="#0f6b63" stroke-width="3" stroke-linecap="round"><path d="M -5 -12 L -9 -2"/><path d="M 5 -12 L 9 -2"/></g><rect x="-12" y="-27" width="9" height="9" rx="1.5" fill="#fff8e8" stroke="#a35a00"/></g>`;
+  return `<svg viewBox="0 0 920 440" xmlns="http://www.w3.org/2000/svg" style="font-family:'IBM Plex Sans',sans-serif"><g stroke-width="1" fill="none">${grid.join("")}</g>${links}${boxes}${smith}</svg>`;
+}
+function drawSvg(s) {
+  const n = journey.data.nodes.length; const i = Math.min(Math.floor(s.pos), n - 2); const f = Math.min(s.pos - i, 1);
+  const a = nodeXY(i, n), b = nodeXY(Math.min(i + 1, n - 1), n);
+  const x = a[0] + (b[0] - a[0]) * f, y = a[1] + (b[1] - a[1]) * f - 10;
+  const bob = journey.playing && s.pos < journey.data.stopAt ? Math.sin(performance.now() / 90) * 3 : 0;
+  const sm = $("jsmith"); if (sm) sm.setAttribute("transform", `translate(${x} ${y + bob})`);
+  const legs = $("jlegs"); if (legs) legs.setAttribute("transform", `skewX(${bob * 3})`);
+  for (let k = 0; k < n; k++) { const g = $("jn" + k); if (g) g.setAttribute("opacity", k <= s.at ? "1" : ".45"); }
+  for (let k = 0; k < n - 1; k++) { const l = $("jl" + k); if (l) l.setAttribute("stroke", k < s.at || (k === s.at && f > 0 && s.at < journey.data.stopAt) ? (journey.data.nodes[k + 1].ok ? "#0f6b63" : "#c53030") : "#c7e0dc"); }
+}
+// --- 3B: three.js; aynı zaman, aynı düğümler; kamera sürüklenir ve kendi döner
+function makeThree(THREE, stage) {
+  const W = stage.clientWidth || 1000, H = stage.clientHeight || 440;
+  stage.innerHTML = "";
+  const renderer = new THREE.WebGLRenderer({antialias: true, alpha: true}); renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(W, H); stage.appendChild(renderer.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0xffffff);
+  const camera = new THREE.PerspectiveCamera(38, W / H, 0.1, 100);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xd9d3c7, 1.1)); const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(4, 8, 6); scene.add(sun);
+  const grid = new THREE.GridHelper(16, 16, 0xe6e2d8, 0xefece5); grid.position.y = -0.01; scene.add(grid);
+  const nodes = journey.data.nodes; const n = nodes.length;
+  const P = nodes.map((_, i) => { const k = n > 1 ? i / (n - 1) : 0; return new THREE.Vector3(-6.5 + 13 * k, 0.45 + i * 0.5, 1.2 - 2.4 * k); });
+  const mats = nodes.map((nd) => new THREE.MeshStandardMaterial({color: nd.ok ? 0x0f6b63 : 0xc53030, roughness: .55, metalness: .1, emissive: 0x000000}));
+  const boxes = nodes.map((_, i) => { const m = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.9, 1.1), mats[i]); m.position.copy(P[i]); scene.add(m); const ped = new THREE.Mesh(new THREE.CylinderGeometry(.5, .6, P[i].y - .45, 24), new THREE.MeshStandardMaterial({color: 0xe8e4da})); ped.position.set(P[i].x, (P[i].y - .45) / 2, P[i].z); scene.add(ped); return m; });
+  const linkMats = []; for (let i = 0; i < n - 1; i++) { const g = new THREE.BufferGeometry().setFromPoints([P[i].clone().add(new THREE.Vector3(0, .5, 0)), P[i + 1].clone().add(new THREE.Vector3(0, .5, 0))]); const mt = new THREE.LineBasicMaterial({color: 0xc7e0dc}); linkMats.push(mt); scene.add(new THREE.Line(g, mt)); }
+  const smith = new THREE.Group(); const body = new THREE.Mesh(new THREE.CapsuleGeometry(.22, .35, 4, 12), new THREE.MeshStandardMaterial({color: 0x0f6b63})); body.position.y = .45; const head = new THREE.Mesh(new THREE.SphereGeometry(.24, 20, 20), new THREE.MeshStandardMaterial({color: 0xf6f4ef})); head.position.y = .98; const eye1 = new THREE.Mesh(new THREE.SphereGeometry(.04, 8, 8), new THREE.MeshBasicMaterial({color: 0x1f1d1a})); eye1.position.set(-.08, 1.02, .2); const eye2 = eye1.clone(); eye2.position.x = .08; const bag = new THREE.Mesh(new THREE.BoxGeometry(.22, .22, .12), new THREE.MeshStandardMaterial({color: 0xfff8e8})); bag.position.set(-.3, .5, 0); smith.add(body, head, eye1, eye2, bag); scene.add(smith);
+  const labels = nodes.map((nd) => { const d = document.createElement("div"); d.className = "lbl"; d.textContent = nd.title; stage.appendChild(d); return d; });
+  let theta = 0.35, phi = 1.12, drag = null, auto = true;
+  renderer.domElement.addEventListener("pointerdown", (e) => { drag = [e.clientX, e.clientY]; auto = false; });
+  window.addEventListener("pointermove", (e) => { if (!drag) return; theta -= (e.clientX - drag[0]) * .006; phi = Math.max(.35, Math.min(1.4, phi - (e.clientY - drag[1]) * .006)); drag = [e.clientX, e.clientY]; });
+  window.addEventListener("pointerup", () => { drag = null; });
+  function draw(s) {
+    if (auto) theta += .0018;
+    const R = 15; camera.position.set(Math.sin(theta) * Math.sin(phi) * R, Math.cos(phi) * R + 1.2, Math.cos(theta) * Math.sin(phi) * R); camera.lookAt(0, 1.2, 0);
+    const i = Math.min(Math.floor(s.pos), n - 2); const f = Math.min(s.pos - i, 1);
+    smith.position.lerpVectors(P[i], P[Math.min(i + 1, n - 1)], f); smith.position.y += .45 + (journey.playing && s.pos < journey.data.stopAt ? Math.abs(Math.sin(performance.now() / 90)) * .12 : 0);
+    smith.lookAt(P[Math.min(i + 1, n - 1)].x, smith.position.y, P[Math.min(i + 1, n - 1)].z);
+    boxes.forEach((b, k) => { mats[k].emissive.setHex(k === s.at ? (nodes[k].ok ? 0x2fb3a5 : 0xff5555) : 0x000000); mats[k].emissiveIntensity = k === s.at ? .6 : 0; b.scale.setScalar(k <= s.at ? 1 : .8); mats[k].opacity = 1; });
+    linkMats.forEach((mt, k) => mt.color.setHex(k < s.at ? (nodes[k + 1].ok ? 0x0f6b63 : 0xc53030) : 0xc7e0dc));
+    renderer.render(scene, camera);
+    labels.forEach((d, k) => { const v = P[k].clone().add(new THREE.Vector3(0, .95, 0)).project(camera); d.style.left = ((v.x + 1) / 2 * W) + "px"; d.style.top = ((1 - v.y) / 2 * H) + "px"; d.style.opacity = k <= s.at ? "1" : ".5"; });
+  }
+  return {draw, dispose() { renderer.dispose(); labels.forEach((d) => d.remove()); renderer.domElement.remove(); }};
+}
+$("btn-journey").addEventListener("click", () => openJourney(null));
 $("btn-ask").addEventListener("click", ask);
 $("q").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.keyCode === 13) && !e.shiftKey) { e.preventDefault(); ask(); } });
 $("btn-reset").addEventListener("click", async () => { await fetch("/api/reset", {method: "POST"}); $("thread").innerHTML = ""; $("ev-body").innerHTML = ""; $("ev-badge").className = "badge none"; $("ev-badge").textContent = "—"; $("ev-summary").textContent = "Cevap gelince her sayı hücreye, sorguya, gözleme ve kaynağa bağlanır."; $("trace").innerHTML = `<span class="label" style="margin-right:4px">Araç izi</span><span class="status">henüz soru yok</span>`; history = []; loadStatus(); });
