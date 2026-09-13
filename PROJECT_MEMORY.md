@@ -229,7 +229,10 @@ Kullanıcı uyurken tüm milestone'ları sırayla kapatma görevi. Kod dalı yal
 - Kabul matrisi A01–A33 test eşlemesi çıkarıldı (14 tam, 19 kısmi, 0 yok); kısmi kalanlardan A23 (özet), A26 (eski cevap tablosu), A07 (PNG indirme), A27 (model kesintisi) testle kapatıldı.
 - Arayüz uçtan uca betiği `scripts/ui_e2e_m16.py` (Playwright, önbellekteki Chromium, sunucu açıkken). İlk koşu 6/7: tek başarısızlık betiğin yanlış beklentisiydi (fikstürde İstanbul yok, ajan doğru "Ankara" dedi) → beklenen değer fikstürden hesaplanıyor.
 - CI: agent-core işi bağımlılık düzeltmesiyle yeşil; art arda push'ta eski koşu iptal (`concurrency`). README, AGENT.md, ARCHITECTURE durum/doğrulama/sınırlar bölümleri 14 Eylül gerçeğine göre güncellendi (M17-T04).
-- Testler ajan 377 → 387.
+- **İkinci kabul koşusu 11/14** (`acceptance_m16_2026-09-14_0133.json`): grafik ve birleştirme turları düzeldi. Kalan üç: (1) finans ilk turunda tek eşleşmeyen sayı "dosya zinciri"ni de ✗ yapıyordu → rozetler bağımsız; (2) ziyaret fikstüründe kırılma 2024-10 çıktı, beklenen 2025-01 → yüzde tabanında düzey sıçraması ayrı kırılma; (3) L10 not eklenmesine rağmen sormadı → netleştirme deterministik, LLM çağrılmıyor.
+- **Büşra'nın dalı (14 Eyl 00:15):** bizim dalı merge etmiş; ilgi kapısı, çapraz kontrol, birim tahmini eklemiş; bize not bırakmış. İki isteği yapıldı (`FILE_IRRELEVANT`, Windows sürücü harfi); kodunu bu dala alma kararı ekipte. Merge provası: onun dalı → bizim dal çatışmasız (84 dosya, V3 motoru kökte); main ← bizim dal çatışmasız (main ata commit).
+- Sır taraması (ca2bfe3): `.env` gizli değerleri ağaçta/tarihçede yok; tek eşleşmeler `.env.example`'daki değişken referansı ve test fikstüründeki sahte AKIA dizisi. Lakehouse testleri yerelde 1.086 geçti (12 dk).
+- Testler ajan 377 → 391.
 
 ## 3. Bugünkü sayılar
 

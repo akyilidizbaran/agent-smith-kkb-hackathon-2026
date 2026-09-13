@@ -145,6 +145,7 @@ class ChangePointResult:
     basis: str
     penalty: float
     trend_rho: float
+    jumps: list[int] = field(default_factory=list)   # yüzde tabanında tek dönemlik düzey sıçramaları (indeks)
 
 
 def _sse(x: np.ndarray) -> float:
@@ -204,6 +205,31 @@ def binary_segmentation(x: np.ndarray, *, min_size: int = 4, max_breaks: int = 3
     return sorted(breaks), float(penalty)
 
 
+def level_jumps(x: np.ndarray, *, z: float = 8.0, floor: float = 1.0, max_jumps: int = 3, k: int = 3) -> list[int]:
+    """Yüzde değişim tabanında tek dönemlik düzey sıçramaları (dürtü): değer hem önceki hem sonraki k gözlemin
+    medyanından çok uzak, o iki yerel medyan ise birbirine yakın. Ölçek: birinci farkların MAD'ı (sağlam gürültü).
+
+    M16 ölçümü (14 Eyl): trendli seride 2025-01'deki düzey kırılması yüzde tabanında TEK bir büyük değişime dönüşüyor;
+    en az 4 gözlemlik bölüt kuralı onu Ekim 2024'te başlayan bir "rejime" gömüyor ve kırılma üç ay erken görünüyordu.
+    Büyüme hızının kalıcı değişimi (0,5% → 3%) dürtü değildir: sonraki medyan da yeni düzeydedir, bölütleme bulur.
+    Sıçrama ayrı kırılma sayılır, bölütlemeye medyanla girer. Saf gürültüde z>8 pratikte görülmez."""
+    n = len(x)
+    if n < 2 * k + 1:
+        return []
+    d = np.diff(x)
+    scale = max(1.4826 * float(np.median(np.abs(d - np.median(d)))) / np.sqrt(2.0), 1e-9)
+    cand: list[tuple[float, int]] = []
+    for i in range(n):
+        left, right = x[max(0, i - k):i], x[i + 1:i + 1 + k]
+        if len(left) < 2 or len(right) < 2:
+            continue
+        lm, rm = float(np.median(left)), float(np.median(right))
+        dev = min(abs(x[i] - lm), abs(x[i] - rm))
+        if dev >= floor and dev > z * scale and abs(lm - rm) < dev / 4:
+            cand.append((dev, i))
+    return sorted(i for _, i in sorted(cand, reverse=True)[:max_jumps])
+
+
 def detect_change_points(values: np.ndarray, *, basis: str = "auto", min_size: int = 4,
                          max_breaks: int = 3) -> ChangePointResult:
     v = np.asarray(values, dtype=float)
@@ -211,15 +237,22 @@ def detect_change_points(values: np.ndarray, *, basis: str = "auto", min_size: i
     x_full = _series_on_basis(v, chosen)
     ok = np.where(~np.isnan(x_full))[0]
     x = x_full[ok]
-    breaks_local, pen = binary_segmentation(x, min_size=min_size, max_breaks=max_breaks)
+    jumps_local = level_jumps(x) if chosen == "change" else []
+    xs = x.copy()
+    if jumps_local:
+        xs[jumps_local] = float(np.median(np.delete(x, jumps_local)))
+    seg_local, pen = binary_segmentation(xs, min_size=min_size, max_breaks=max_breaks)
+    # Sıçramanın min_size komşuluğundaki bölütleme kırılması aynı olaydır; sıçrama önceliklidir.
+    extra = [b for b in seg_local if all(abs(b - j) >= min_size for j in jumps_local)]
+    breaks_local = sorted(set(jumps_local) | set(extra[: max(0, max_breaks - len(jumps_local))]))
     breaks = [int(ok[i]) for i in breaks_local]
     bounds = [0, *breaks_local, len(x)]
     segments = [
         Segment(start=int(ok[bounds[j]]), end=int(ok[bounds[j + 1] - 1]),
-                mean=float(np.mean(x[bounds[j]:bounds[j + 1]])), n=int(bounds[j + 1] - bounds[j]))
+                mean=float(np.mean(xs[bounds[j]:bounds[j + 1]])), n=int(bounds[j + 1] - bounds[j]))
         for j in range(len(bounds) - 1)
     ] if len(x) else []
-    return ChangePointResult(breaks, segments, x_full, chosen, pen, rho)
+    return ChangePointResult(breaks, segments, x_full, chosen, pen, rho, jumps=[int(ok[i]) for i in jumps_local])
 
 
 # ----------------------------------------------------------------------------- öncül-ardıl

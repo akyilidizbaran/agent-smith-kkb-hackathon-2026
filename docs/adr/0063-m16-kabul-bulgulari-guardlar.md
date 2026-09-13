@@ -35,6 +35,21 @@ dört kusur buldu. Rapor rapordan çıkarılmadı: `docs/experiments/acceptance_
   Adaptör çözülen RAW dosyasının sha256'sını (yol, boyut, mtime önbellekli) kayıtla karşılaştırır; uyuşmazsa gözlemin
   `raw_digest_ok=False` olur, Bronze bulunsa da `file_present` yanlıştır ve panel "baytları kayıtlı özetle uyuşmuyor" boşluğu yazar.
 
+### İkinci koşu sonrası düzeltmeler (aynı gece, 11/14 tur)
+
+- **Kısa belirsiz soru: not yerine deterministik soru.** Aday adları modele not olarak eklendiğinde de model iki koşuda
+  sormadan birini seçti. Kapı artık LLM'i hiç çağırmadan aday listeli netleştirme sorusunu kendisi döner; aktif tablo
+  varken ya da kullanıcı bizim soruya kısa yanıt veriyorsa (bekleyen soru) çalışmaz.
+- **Rozetler bağımsız.** `chain_ok` panelin bütün boşluklarına bakıyordu; tek eşleşmeyen sayı, dosyaları diskte duran
+  zinciri de ✗ gösterdi (finans ilk turu, 13/14 sayı). Dosya zinciri artık yalnız zincir boşluklarına bakar.
+- **Yüzde tabanında düzey sıçraması.** Trendli seride tek aylık düzey kırılması yüzde tabanında tek bir dürtüye dönüşüyor,
+  en az 4 gözlemlik bölüt kuralı onu üç ay önce başlayan "rejime" gömüyordu (fikstürde 2025-01 yerine 2024-10). Dürtü:
+  değer önceki ve sonraki 3 gözlemin medyanından sağlam z > 8 ve ≥ 1 puan uzak, iki yerel medyan birbirine yakın.
+  Sıçrama ayrı kırılmadır, bölütlemeye medyanla girer, kartta "düzey sıçraması" yazar. Büyüme hızının kalıcı değişimi
+  dürtü sayılmaz (mevcut test korunur).
+- **Ekip notu (Büşra, 13 Eyl):** `FILE_IRRELEVANT` hata kodu listede ve tekrar denenemez; okuyucu tek harfli URL şemasını
+  Windows sürücü harfi sayar (izinli kök kuralı aynen uygulanır).
+
 ## Reddedilenler
 
 - **İşlem iddiasında cevabı doğrudan reddetmek:** "eklendi" gibi fiiller önceki turdaki gerçek işi anlatırken de geçer;
@@ -44,5 +59,5 @@ dört kusur buldu. Rapor rapordan çıkarılmadı: `docs/experiments/acceptance_
 
 ## Sonuç
 
-Ajan birim testleri 377 → 387 (guard, kapı, grafik ×2, RAW yolu, RAW özeti; A26 eski cevap/A07 PNG indirme ve A27 model kesintisi testleri). Canlı etki M16 ikinci koşusunda ölçülür
+Ajan birim testleri 377 → 391 (guard, kapı ×2, grafik ×2, RAW yolu, RAW özeti, rozet bağımsızlığı, düzey sıçraması, sürücü harfi; A26/A07 indirme ve A27 model kesintisi). Canlı etki M16 ikinci koşusunda ölçülür
 (`docs/M16_KABUL_RAPORU.md`).

@@ -323,7 +323,9 @@ class ChangePointsTool(_AnalyticsTool):
         if res.breaks:
             for k, b in enumerate(res.breaks):
                 before, after = res.segments[k], res.segments[k + 1]
-                card.append(f"kırılma {k + 1}: {labels[b]} — önceki rejim ortalaması {_fmt(before.mean)}{unit} "
+                jump = (f"düzey sıçraması (tek dönem değişimi {res.analysed[b]:+.1f}%, rejim ortalamalarına katılmadı); "
+                        if b in res.jumps else "")
+                card.append(f"kırılma {k + 1}: {labels[b]} — {jump}önceki rejim ortalaması {_fmt(before.mean)}{unit} "
                             f"({before.n} gözlem) → sonraki {_fmt(after.mean)}{unit} ({after.n} gözlem)")
             card.append("Rejimler:\n" + segs.to_string(index=False))
         else:

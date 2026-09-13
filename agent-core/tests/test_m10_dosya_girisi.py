@@ -112,3 +112,18 @@ def test_compute_column_metin_kolonuna_gore_siralamayi_reddeder() -> None:
     ws2.set_table(pd.DataFrame({"Tarih": pd.to_datetime(["2025-02-28", "2025-01-31"]), "Bakiye": [1300.0, 1234.5]}), description="t")
     r2 = WorkspaceComputeColumnTool(ws2).run(ComputeColumnParams(expression='"Bakiye" - LAG("Bakiye") OVER (ORDER BY "Tarih")', column_name="degisim", purpose="test"))
     assert r2.ok and ws2.table["degisim"].tolist()[1] == 65.5, "zaman sırasına göre fark: Şubat − Ocak (satır hizası korunur)"
+
+
+def test_windows_surucu_harfi_sema_sayilmaz(tmp_path) -> None:
+    """Büşra'nın notu (13 Eyl): urlparse('C:\\\\veri\\\\x.csv').scheme == 'c' → 'desteklenmeyen şema: c' reddi yanlıştı.
+    Tek harfli şema yerel yol sayılır; izinli kök kuralı yine uygulanır (kök dışıysa aynı ret, şema değil kök sebebiyle)."""
+    from kkb_agent.builder.read import read_bytes_for_profiling
+
+    with pytest.raises(ReadRefused) as exc:
+        read_bytes_for_profiling("C:\\veri\\x.csv", allowed_roots=[tmp_path])
+    assert "şema" not in str(exc.value) and "izinli kök" in str(exc.value)
+    with pytest.raises(ReadRefused) as exc2:
+        read_table_for_profiling("D:\\baska\\y.xlsx", allowed_roots=[tmp_path])
+    assert "şema" not in str(exc2.value)
+    with pytest.raises(ReadRefused, match="şema"):
+        read_bytes_for_profiling("ftp://host/x.csv", allowed_roots=[tmp_path])

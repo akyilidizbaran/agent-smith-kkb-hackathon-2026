@@ -18,6 +18,11 @@ from datetime import date, datetime
 from typing import Any, Protocol, runtime_checkable
 
 
+# Boşluk metinleri core/evidence.py'de üretilir; rozet ayrımı bu iki imle yapılır (metin değişirse test düşer).
+_CLAIM_GAP_PREFIX = "tabloda bulunmayan sayılar"
+_PROVENANCE_GAP_MARK = "kolonunun provenance kaydı yok"
+
+
 @dataclass(frozen=True)
 class ObservationEvidence:
     """Bir Silver/adhoc gözleminin kaynak baytlarına kadar izi."""
@@ -129,17 +134,24 @@ class EvidencePanel:
         return not any(c.sql is None for c in self.columns)
 
     @property
+    def chain_gaps(self) -> list[str]:
+        """Yalnız zincir halkalarının boşlukları. Sayı ve sorgu izi boşlukları kendi rozetlerinde sayılır;
+        M16 ölçümü (14 Eyl): tek eşleşmeyen sayı, dosyaları diskte duran zinciri de ✗ gösteriyordu."""
+        return [g for g in self.gaps if not g.startswith(_CLAIM_GAP_PREFIX) and _PROVENANCE_GAP_MARK not in g]
+
+    @property
     def chain_ok(self) -> bool:
         """Kaynak zinciri: gözlem → artifact → RAW/Bronze dosyası diskte; ya da web sayfası sha256+zaman."""
+        gaps = self.chain_gaps
         chained = [c for c in self.columns if not (c.sql or "").startswith("türetilmiş:")]
         if self.columns and not chained:
-            return not self.gaps        # tablo yalnız türetilmiş kolonlardan oluşuyor (olağan dışı)
+            return not gaps             # tablo yalnız türetilmiş kolonlardan oluşuyor (olağan dışı)
         if self.web_sources and not self.observations:
-            return not self.gaps          # zincir web sayfasının baytlarında biter: URL + sha256 + zaman
+            return not gaps               # zincir web sayfasının baytlarında biter: URL + sha256 + zaman
         if self.supports_artifacts:
             if not self.observations or not all(o.complete and o.file_present for o in self.observations):
                 return False
-        return not self.gaps
+        return not gaps
 
     @property
     def complete(self) -> bool:

@@ -491,3 +491,28 @@ def test_a27_model_kesintisi_kontrollu_cevap_sayi_yok_istek_hatasi_yutulmaz() ->
     agent, _ = _agent(_Down(BadRequestError("şema", response=httpx.Response(400, request=req), body=None)))
     with pytest.raises(BadRequestError):
         agent.ask("x")
+
+
+def test_l10_kisa_belirsiz_soruda_llm_cagrilmadan_netlestirme_ve_yanitta_kapi_susar() -> None:
+    from types import SimpleNamespace
+
+    class _Search(Tool):
+        name = "lakehouse_search"
+        description = "arama"
+        Params = _Params
+
+        def __init__(self) -> None:
+            names = ("Krediler (Toplam)", "Tüketici Kredileri, Toplam", "Konut Kredisi, ANKARA", "Kredi Kartları")
+            self.lakehouse = SimpleNamespace(search_datasets=lambda q, limit=5: [SimpleNamespace(name=n) for n in names])
+
+        def run(self, params):
+            return ToolResult(content="-")
+
+    llm = _ScriptedLLM([LLMResponse(content="Konut kredisi tablosu hazır.")])
+    agent, _ = _agent(llm)
+    agent.registry.register(_Search())
+    ans = agent.ask("Kredi bakiyesini göster.")
+    assert llm.seen_tool_offers == [], "LLM çağrılmadı"
+    assert ans.text.rstrip().endswith("?") and "- Tüketici Kredileri" in ans.text and ans.steps[0].candidates
+    agent.ask("Konut kredisi")            # bizim soruya kısa yanıt: kapı susar, model çalışır
+    assert llm.seen_tool_offers, "bekleyen soruya yanıt modele gitti"

@@ -64,6 +64,8 @@ def test_not_retryable_kumesi_beklendigi_gibi() -> None:
         "OUT_OF_COVERAGE", "UNSAFE_SQL",
         "NEEDS_CREDENTIAL", "ACCESS_BLOCKED", "SOURCE_NOT_FOUND",
         "GOLD_REFUSED", "INTENT_REQUIRED",
+        # Büşra'nın ilgi kapısı (V3 §3.9, 14 Eyl): aynı dosya aynı soruyla yine ilgisiz; onay ayrı çağrıdır.
+        "FILE_IRRELEVANT",
     }
     # UNKNOWN_TOOL tekrar denenebilir: ad uyduran model aday listesiyle düzeltir (ADR-0036).
 

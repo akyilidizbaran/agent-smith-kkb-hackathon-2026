@@ -133,8 +133,6 @@ ACTION_CLAIM_NOTE = ("Bu turda HİÇBİR ARAÇ ÇALIŞMADI; yapılmamış bir i�
 _STOP = frozenset({"göster", "goster", "getir", "ver", "nedir", "ne", "kadar", "nasıl", "nasil", "listele", "bana", "lütfen",
                    "lutfen", "bir", "bu", "şu", "su", "ile", "ve", "mi", "mı", "mu", "mü", "olan", "tablo", "tabloyu"})
 _PERIOD = re.compile(r"\d|yıl|yil|ay\b|aylık|aylik|çeyrek|ceyrek|hafta|dönem|donem|gün|gun|son\b", re.I)
-VAGUE_NOTE = ("\n\n(Harness notu: soru kısa ve hangi seri/dönem olduğunu belirtmiyor; katalogda birbirinden farklı "
-              "eşleşen seriler var: {names}. TAHMİN ETME: bu seçenekleri kısaca listeleyip hangisini istediğini TEK soruda sor.)")
 
 
 def vague_candidates(question: str, search) -> list[str]:
@@ -386,6 +384,9 @@ class AnalyticsAgent:
             self._history.append(ChatMessage(role="assistant", content=text))
             step = AgentStep(index=1, role="narrate", thought="selamlaşma — LLM çağrılmadı", result_summary=text)
             return AgentAnswer(text=text, steps=[step], workspace=self.workspace, usage=dict(self._usage))
+        clarify = self._vague_clarification(question)
+        if clarify is not None:
+            return clarify
         self._truncated = False
         try:
             answer = self._ask(question)
@@ -424,6 +425,31 @@ class AnalyticsAgent:
             except Exception as exc:  # noqa: BLE001 — panel cevabı asla düşürmez
                 log.warning("kanıt paneli kurulamadı: %s", exc)
         return answer
+
+    def _vague_clarification(self, question: str) -> AgentAnswer | None:
+        """Çok kısa, dönemsiz soruda katalog ≥3 farklı seriye işaret ediyorsa netleştirme sorusu — LLM çağrılmaz.
+
+        M16 ölçümü (14 Eyl): aynı bilgi modele not olarak eklendiğinde de model sormadan birini seçti (L10, iki koşu).
+        Kural deterministik ve alandan bağımsız: adaylar katalog adlarıdır. Aktif tablo varken (soru ona dairdir) ya da
+        kullanıcı bizim sorumuza kısa yanıt veriyorsa (bekleyen soru) kapı çalışmaz."""
+        search_tool = self.registry.get("lakehouse_search")
+        lake = getattr(search_tool, "lakehouse", None)
+        if lake is None or not hasattr(lake, "search_datasets") or self.workspace.has_table:
+            return None
+        if pending_question(self._history, question):
+            return None
+        names = vague_candidates(question, lake.search_datasets)
+        if not names:
+            return None
+        text = ("Hangisini kastettiğinizi netleştirelim; katalogda bu soruya uyan birden çok seri var:\n"
+                + "\n".join(f"- {n}" for n in names)
+                + "\n\nHangisini ve hangi dönemi (ör. son 12 ay, 2025 aylık) göstereyim?")
+        self.last_gate = None
+        self._history.append(ChatMessage(role="user", content=question))
+        self._history.append(ChatMessage(role="assistant", content=text))
+        step = AgentStep(index=1, role="validate", thought="kısa belirsiz soru — netleştirme soruldu, LLM çağrılmadı",
+                         result_summary=text, candidates=list(names))
+        return AgentAnswer(text=text, steps=[step], workspace=self.workspace, usage=dict(self._usage))
 
     CATALOG_CHANGING_TOOLS = frozenset({"ingest_from_url", "promote_draft"})
     """Architect araçları: başarılı çağrıdan sonra katalog değişmiştir, profil yeniden türetilir."""
@@ -464,11 +490,6 @@ class AnalyticsAgent:
         ask_started = time.perf_counter()
         budget_hit = False
         messages = self._build_messages(question)
-        search_tool = self.registry.get("lakehouse_search")
-        if search_tool is not None and not self.workspace.has_table and messages and messages[-1].role == "user":
-            names = vague_candidates(question, getattr(search_tool, "lakehouse").search_datasets)
-            if names:
-                messages[-1] = ChatMessage(role="user", content=messages[-1].content + VAGUE_NOTE.format(names="; ".join(names)))
         steps: list[AgentStep] = []
         native = self.llm.supports_native_tools()
         tools = self.registry.schemas(only=gate.allowed) if native else None

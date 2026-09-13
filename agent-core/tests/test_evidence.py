@@ -291,3 +291,14 @@ def test_a23_raw_baytlari_kayitli_ozetle_uyusmazsa_zincir_tam_degil(lake, tmp_pa
     raw.write_bytes(b"dogru")
     assert lake._raw_digest_ok(lake2_sha, str(raw)) is True, "önbellek boyut/mtime değişince yenilenir"
     assert lake._raw_digest_ok(lake2_sha, str(tmp_path / "yok.json")) is None
+
+
+def test_eslesmeyen_sayi_dosya_zinciri_rozetini_kirmizi_yapmaz(lake) -> None:
+    """M16 (14 Eyl): 13/14 sayı eşleşince 'dosya zinciri ✗' da görünüyordu; üç rozet bağımsızdır."""
+    ws = AnalysisWorkspace()
+    r = lake.execute_sql("SELECT observation_date, value AS bakiye FROM silver.fact_observation "
+                         "WHERE series_id = 'bddk_monthly:konut' AND observation_date < '2025-03-01' ORDER BY 1")
+    ws.set_table(r.data, description="iki ay", provenance=r.provenance)
+    panel = EvidenceBuilder(lake).build("soru", "Ocak 100, Şubat 110, fark 999 milyon TL.", ws, [])
+    assert panel.states() == {"sayılar": False, "sorgu izi": True, "dosya zinciri": True}, panel.gaps
+    assert not panel.complete and any(g.startswith("tabloda bulunmayan sayılar") for g in panel.gaps)

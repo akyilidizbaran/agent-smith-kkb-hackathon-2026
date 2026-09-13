@@ -78,8 +78,8 @@ Bu test sayıları birbirleriyle toplanarak başarı oranı veya motor üstünl�
 | M13 | İddia doğrulama ve kanıtın doğru sunulması | P0 | Mevcut kod; M03/M07/M11 ile entegrasyon | Agent + veri + UI | Çekirdek tamamlandı (13 Eyl, ADR-0050); T04/T07/T11/T12 açık |
 | M14 | Kullanıcı arayüzü ve tam çıktı indirme | P1 | M10, M11, M13 | UI + API | Çekirdek tamamlandı (14 Eyl, ADR-0055); T11/T12 açık |
 | M15 | Süre/çıktı bütçeleri ve otomatik kontroller | P1/P2 | M01; M02 ölçümleri | Agent + geliştirme altyapısı | Çekirdek tamamlandı (14 Eyl, ADR-0061); ölçüm T01/T02 M16'dan |
-| M16 | Birleşik kabul ve görülmemiş veri provası | P0 | Tüm zorunlu uygulama milestone'ları | Ekip + değerlendirme | Planlandı |
-| M17 | Teslim, belgeler, merge ve freeze | P0 | M16 | Ekip koordinasyonu | Planlandı |
+| M16 | Birleşik kabul ve görülmemiş veri provası | P0 | Tüm zorunlu uygulama milestone'ları | Ekip + değerlendirme | Çekirdek tamamlandı (14 Eyl, ADR-0063, `docs/M16_KABUL_RAPORU.md`); T02/T04/T07/T10 kısmi, T11 ekip |
+| M17 | Teslim, belgeler, merge ve freeze | P0 | M16 | Ekip koordinasyonu | Hazırlık tamamlandı (14 Eyl): belgeler, merge provası, sır taraması, operasyon tarifi; main'e birleştirme, freeze etiketi ve T09/T11/T12 kullanıcı/ekip kararı |
 
 Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki belirli hatalar motor seçimini beklemeden mevcut kodda düzeltilebilir. Paralel çalışma ancak sorumlular ve dosya sahiplikleri belli olduktan sonra yapılır; bu belge arka planda agent veya görev başlatmaz.
 
@@ -328,7 +328,7 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 - [x] **M11-T04** (bekleyen soru notu): Bekleyen açıklama sorusuna kısa yanıt geldiğinde hangi işlem/kolon/dönem için cevap olduğu bilinsin; tüm sohbet metni sınırsız yetki veya parametre havuzu olmasın.
 - [x] **M11-T05** (netleştirme kuralı): Sonucu değiştiren eksikleri sor: birim/çarpan, tarih çözümü, veri tanımı, baz dönem, stok/akım ve kritik join anahtarı.
 - [x] **M11-T06** (sunum tercihleri varsayılır ve belirtilir): Sonucu değiştirmeyen sunum tercihlerini makul varsayımla çöz; kullanılan varsayımı kısa ve görünür belirt.
-- [ ] **M11-T07** (M02 bulgusu: L10-01 'Kredi bakiyesini göster' iki motorda da netleştirme sormadı): “Krediler arttı mı?” gibi belirsiz soruda olası yorumları veri kataloğundan üret; bir soru turunda gerekli alanları topluca iste, gereksiz soru zinciri kurma.
+- [x] **M11-T07** (14 Eyl: deterministik netleştirme — ≤2 içerik sözcüğü, dönem yok, ≥3 farklı katalog adı → aday listeli soru, LLM çağrılmaz; bekleyen soruya yanıtta susar (ADR-0063)): “Krediler arttı mı?” gibi belirsiz soruda olası yorumları veri kataloğundan üret; bir soru turunda gerekli alanları topluca iste, gereksiz soru zinciri kurma.
 - [~] **M11-T08** (sorudan sayı M13 + nedensellik filtresi): Kullanıcının yanlış öncülünü düzelt; verilen yüzdeyi veya nedensel hikâyeyi kanıt sayma. Varsayımsal açıklamayı açıkça hipotez olarak ayır.
 - [x] **M11-T09** (profil yenileme, sıfırlama): Alan/katalog değiştiğinde önceki finans bağlamını, stale arama sonuçlarını ve geçersiz tablo referanslarını temizle.
 - [x] **M11-T10** (web_app/agent testleri): Reset, tekrarlanan soru, selamlaşma ve eski yanıta geri dönmede yanlış tablo/kanıt gösterilmediğini dene.
@@ -349,7 +349,7 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 - [~] **M12-T03** (tekrar tarih → ret + 'tek seriye indir' ipucu; otomatik kırılım seçimi yok): Aynı tarihte birden fazla varlık varsa önce varlık kırılımını netleştir; hepsini tek seri gibi sıraya koyma.
 - [x] **M12-T04**: Null, NaN, ±Infinity, sabit seri, sıfır taban ve çok küçük örneklem için açık davranış tanımla.
 - [~] **M12-T05** (taban/eşik kartta; negatif tabanda yüzde değişim denetimi açık): Düzey/yüzde değişim tercihini, trend kontrolünü ve kullanılan eşiği kartta göster; negatif/sıfır değerlerde yüzde değişimin anlamını denetle.
-- [~] **M12-T06** (sentetik testler var; gerçek veri A32/A33 M16'da): Anomali yöntemlerini sentetik sıçrama/trend/sabit seri ile ve gerçek verinin bilinen örnekleriyle doğrula; otomatik yöntem seçimini görünür kıl.
+- [x] **M12-T06** (gerçek veri A32 (acil başvuru Aralık sıçraması) ve A33 (ziyaret 2025-01 kırılması, düzey sıçraması düzeltmesiyle) canlı + birim testi): Anomali yöntemlerini sentetik sıçrama/trend/sabit seri ile ve gerçek verinin bilinen örnekleriyle doğrula; otomatik yöntem seçimini görünür kıl.
 - [x] **M12-T07** (kartta min segment/ceza/max; boşluk notu): Kırılma algoritmasında min segment, ceza ve maksimum kırılma kararını kaydet; eksik dönemlerin birleşerek yapay komşuluk üretmesini engelle.
 - [x] **M12-T08**: Öncülükte hizalama, gecikme yönü, örneklem sayısı ve iki yönlü sonuç açık olsun; “k dönem” gerçek frekansla anlamlı olsun.
 - [x] **M12-T09** (uygulanmadı; kart 'KONTROL EDİLMEDİ, betimsel' der — dürüst sunum): Granger önkoşulları, durağanlık/dönüşüm ihtiyacı, gecikme seçimi ve çoklu deneme etkilerini değerlendir; uygulanmayan kontrolü yapılmış gibi sunma.
@@ -438,17 +438,17 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Son aday commitleriyle tekrarlı kabul raporu; her vaka için giriş, beklenen durum, gözlenen sonuç, iz, kaynak ve çıktı dosyası.
 
-- [ ] **M16-T01:** Aşağıdaki kabul matrisi için fikstür ve modelden bağımsız beklenen sonuçları hazırla; başarısız koşuları rapordan çıkarma.
-- [ ] **M16-T02:** Temiz kurulumdan RAW/Bronze/Silver/Gold ve UI'ye kadar çalıştır; seed ile demo verisini ayrı koşular olarak kaydet.
-- [ ] **M16-T03:** Zorunlu finans sorularını tek oturumda ardışık uygula; önceki tabloyu koruma ve kaynaklar arası hizalamayı her turda kontrol et.
-- [ ] **M16-T04:** Ayrı temiz ortamda finans kataloğu olmadan finans dışı veriyle aynı motoru çalıştır; gerçek finans DB'sini bu prova için silme.
-- [ ] **M16-T05:** Görülmemiş dosya/kolon adları/alan ve belirsiz semantik örnekleriyle test et; yalnız geliştirmede ezberlenen fikstürlerle yetinme.
-- [ ] **M16-T06:** Yetkisiz yazma, yanlış öncül, dosya enjeksiyonu, kaynak sabitleme ve private redirect sınırlarını tekrar doğrula.
-- [ ] **M16-T07:** İnternet/MIA/OCR/arama kesintisi ve bütçe dolması durumunda kontrollü sonuçları dene; bunlar hata gizlemek için başarılı analiz sayılmasın.
-- [ ] **M16-T08:** Playwright ile gerçek UI akışlarını çalıştır; ekran görüntüsüne URL/tarih, koşuya commit/model/veri sürümü ekle.
-- [ ] **M16-T09:** Tam tablo/rapor/grafik indirmelerini açıp içeriklerini doğrula; kanıt eksikliği uyarısı export'ta da bulunsun.
-- [ ] **M16-T10:** Başarı eşikleri ve tekrar sayısı M00/M15 kararına göre uygulansın; kritik yanlış iddia/yetkisiz yazma testleri kesin beklenen davranışa sahip olsun.
-- [ ] **M16-T11:** Başka ekip üyesi son çalıştırma tarifini takip etsin; bildirilmemiş yerel dosya, env override veya açık terminal bağımlılığı kalmasın.
+- [x] **M16-T01** (14 Eyl: kabul matrisi A01–A33 test eşlemesi 14 tam/19 kısmi/0 yok; modelden bağımsız durum kontrolleri `scripts/acceptance_m16.py`; başarısız koşular raporda — `docs/M16_KABUL_RAPORU.md`): Aşağıdaki kabul matrisi için fikstür ve modelden bağımsız beklenen sonuçları hazırla; başarısız koşuları rapordan çıkarma.
+- [~] **M16-T02** (2016+ canlı kurulum ayrı kökte ölçüldü (M08, 681/681) ve data/ ile yer değişti; aynı gece temiz makinede bootstrap→UI tek zincir tekrar koşulmadı): Temiz kurulumdan RAW/Bronze/Silver/Gold ve UI'ye kadar çalıştır; seed ile demo verisini ayrı koşular olarak kaydet.
+- [x] **M16-T03** (çok turlu finans senaryosu tek oturumda canlı koşuldu; tablo koruma ve hizalama her turda denetlendi, sonuçlar raporda): Zorunlu finans sorularını tek oturumda ardışık uygula; önceki tabloyu koruma ve kaynaklar arası hizalamayı her turda kontrol et.
+- [~] **M16-T04** (bellek-içi finans dışı adaptör + fikstürler aynı motorda; canlı ajanda finans dışı dosyalar; boş katalogla canlı prova Architect sıfırlaması gerektirir, demo DB korunarak yapılmadı): Ayrı temiz ortamda finans kataloğu olmadan finans dışı veriyle aynı motoru çalıştır; gerçek finans DB'sini bu prova için silme.
+- [x] **M16-T05** (görülmemiş kolon/alan: acil başvuru, hastane/nüfus birleştirme, ziyaret kırılması; belirsiz sayı biçimi 7.120 metin kalır): Görülmemiş dosya/kolon adları/alan ve belirsiz semantik örnekleriyle test et; yalnız geliştirmede ezberlenen fikstürlerle yetinme.
+- [x] **M16-T06** (A13 yanlış öncül ve A20 dosya enjeksiyonu canlı; anahtarsız Architect 403 arayüzde; A19 private redirect ve kaynak sabitleme birim testleriyle): Yetkisiz yazma, yanlış öncül, dosya enjeksiyonu, kaynak sabitleme ve private redirect sınırlarını tekrar doğrula.
+- [~] **M16-T07** (model kesintisi (A27) ve süre bütçesi birim testleri; canlı ağ kesintisi denemesi yapılmadı): İnternet/MIA/OCR/arama kesintisi ve bütçe dolması durumunda kontrollü sonuçları dene; bunlar hata gizlemek için başarılı analiz sayılmasın.
+- [x] **M16-T08** (Playwright `scripts/ui_e2e_m16.py` 7/7 (önceki 6/7 koşu raporda): soru, tablo, dışa aktarım, yükleme, yüklenen dosyayı sorma, anahtarsız profil reddi, sıfırlama; ekran görüntüleri + commit/model/URL): Playwright ile gerçek UI akışlarını çalıştır; ekran görüntüsüne URL/tarih, koşuya commit/model/veri sürümü ekle.
+- [x] **M16-T09** (arayüzden indirilen CSV/XLSX satırları API tablosuyla aynı, HTML raporda tablo; A25/A26/A07 birim testleri): Tam tablo/rapor/grafik indirmelerini açıp içeriklerini doğrula; kanıt eksikliği uyarısı export'ta da bulunsun.
+- [~] **M16-T10** (sayısal eşik ekip kararı (M15-T02); kritik vakalar kesin beklenenle: A13/A20/A21 geçti): Başarı eşikleri ve tekrar sayısı M00/M15 kararına göre uygulansın; kritik yanlış iddia/yetkisiz yazma testleri kesin beklenen davranışa sahip olsun.
+- [ ] **M16-T11** (başka ekip üyesi — kullanıcıya bırakıldı): Başka ekip üyesi son çalıştırma tarifini takip etsin; bildirilmemiş yerel dosya, env override veya açık terminal bağımlılığı kalmasın.
 
 **Kabul:** Bütün zorunlu vaka aileleri üzerinde sonuç ve sınırlama kayıtlıdır. Açık engelleyici kusur yoktur. Uyarılı kabul ancak önceden tanımlanmış eksik kanıt/erişim davranışı için kullanılır; yanlış hesap veya yetki aşımı için kullanılmaz.
 
@@ -460,22 +460,34 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** İncelenmiş bütünleşik teslim adayı, doğru belgeler, son kabul raporu ve freeze kaydı.
 
-- [ ] **M17-T01:** M02 baseline ve M16 kabul commitlerini sabitle; teslim ağacında agent/veri/UI/dokümanların birlikte bulunduğunu kontrol et.
-- [ ] **M17-T02:** Agent ve lakehouse tarihçeleri için merge planını ayrı çalışma alanında prova et; çatışma çözümünde iki tarafın işlev ve belgelerini koru.
-- [ ] **M17-T03:** Ekip katkıları ve araştırma/benchmark dosyalarının korunmasını kontrol et; merge ile kod aktarımı ve yazarlık kaydı birbirinden kopmasın.
-- [ ] **M17-T04:** README, ARCHITECTURE, AGENT, sözleşmeler, ADR indeksi ve eski yol haritasının güncel durum bağlantılarını düzelt; eski ölçümleri güncel gibi göstermeyi bırak.
-- [ ] **M17-T05:** Kurulum, servis ayarları (yalnız değişken adları), bootstrap/ingest/silver/gold, UI başlatma, veri değiştirme ve sorun giderme komutlarını doğrula.
-- [ ] **M17-T06:** Veri snapshot'ı/RAW kanıtlarının nasıl teslim veya tekrar üretileceğini belirle; büyük veriyi gelişigüzel Git'e ekleme. Kullanım/lisans koşullarını kaynak bazında kaydet.
-- [ ] **M17-T07:** Gizli bilgi taramasını mevcut ağaç ve gerekli geçmiş kapsamıyla yap; çıktıda sırrı gösterme. Düzeltme gerekirse ayrı işlem olarak ele al, otomatik tarihçe yeniden yazma.
-- [ ] **M17-T08:** İnternete bağlı demo, servis erişilememe akışı ve yeni dosya senaryosu için kısa operasyon tarifini hazırla; kayıtlı sonucu canlı hesap diye sunma.
+- [~] **M17-T01** (aday commit ve kabul koşuları raporda; teslim ağacında agent+lakehouse+UI+belgeler birlikte (merge provasında doğrulandı)): M02 baseline ve M16 kabul commitlerini sabitle; teslim ağacında agent/veri/UI/dokümanların birlikte bulunduğunu kontrol et.
+- [x] **M17-T02** (ayrı çalışma ağacında prova: main ← feature/agent-engine çatışmasız (main ata commit, 498 dosya); feature/busra/agent-v3 → agent-engine de çatışmasız (84 dosya, V3 motoru kökte) — main'e gönderilmedi): Agent ve lakehouse tarihçeleri için merge planını ayrı çalışma alanında prova et; çatışma çözümünde iki tarafın işlev ve belgelerini koru.
+- [~] **M17-T03** (Büşra'nın 14 Eyl ilgi kapısı/çapraz kontrol/birim tahmini onun dalında; notundaki iki istek (FILE_IRRELEVANT kodu, Windows sürücü harfi) bizim dalda yapıldı; dal birleştirmesi ekip kararı): Ekip katkıları ve araştırma/benchmark dosyalarının korunmasını kontrol et; merge ile kod aktarımı ve yazarlık kaydı birbirinden kopmasın.
+- [x] **M17-T04** (README, AGENT, ARCHITECTURE durum/doğrulama/sınırlar 14 Eyl gerçeğine; ADR indeksi 0063): README, ARCHITECTURE, AGENT, sözleşmeler, ADR indeksi ve eski yol haritasının güncel durum bağlantılarını düzelt; eski ölçümleri güncel gibi göstermeyi bırak.
+- [~] **M17-T05** (komutlar `docs/OPERASYON_TARIFI.md`; make serve/ci ve testler bu gece koşuldu, make demo-data M08'de ayrı kökte koşuldu): Kurulum, servis ayarları (yalnız değişken adları), bootstrap/ingest/silver/gold, UI başlatma, veri değiştirme ve sorun giderme komutlarını doğrula.
+- [x] **M17-T06** (veri Git'e girmez, make demo-data aynı kaynaklardan üretir; kaynak koşulları operasyon tarifinde §5): Veri snapshot'ı/RAW kanıtlarının nasıl teslim veya tekrar üretileceğini belirle; büyük veriyi gelişigüzel Git'e ekleme. Kullanım/lisans koşullarını kaynak bazında kaydet.
+- [x] **M17-T07** (14 Eyl ca2bfe3: .env gizli değerleri ağaçta/tarihçede yok; izlenen .env yok; tek eşleşmeler .env.example'da değişken referansı ve test fikstüründe sahte AKIA dizisi): Gizli bilgi taramasını mevcut ağaç ve gerekli geçmiş kapsamıyla yap; çıktıda sırrı gösterme. Düzeltme gerekirse ayrı işlem olarak ele al, otomatik tarihçe yeniden yazma.
+- [x] **M17-T08** (`docs/OPERASYON_TARIFI.md` — demo akışı, erişim matrisi, sorun giderme, internet yok durumu): İnternete bağlı demo, servis erişilememe akışı ve yeni dosya senaryosu için kısa operasyon tarifini hazırla; kayıtlı sonucu canlı hesap diye sunma.
 - [ ] **M17-T09:** Gerekli repo erişimleri ve varsa video/sunum/ek teslim beklentisini mentör talebine göre tamamla; dış mesaj/davet işlemleri ayrı açık yetki gerektirir.
-- [ ] **M17-T10:** Kullanıcının mevcut merge/push/branch silme sınırlarını koru. Ana dala gönderme ve dal silme, bu belge yazıldı diye yetkilendirilmiş sayılmaz; hazır diff ve kabul raporuyla somut karar alınır.
+- [x] **M17-T10** (main'e gönderilmedi, dal silinmedi; karar kullanıcıda): Kullanıcının mevcut merge/push/branch silme sınırlarını koru. Ana dala gönderme ve dal silme, bu belge yazıldı diye yetkilendirilmiş sayılmaz; hazır diff ve kabul raporuyla somut karar alınır.
 - [ ] **M17-T11:** Teslim commitini/etiketini, veri manifestini ve son test raporunu freeze kaydına yaz; varsa branch temizliğini kod tesliminden bağımsız değerlendir.
 - [ ] **M17-T12:** 20 Eylül dondurma sonrası repo güncellemesi yapılmaması kuralını ekipçe teyit et; son tarih sonrası bir ihtiyaç çıkarsa yarışma sürecini esas al.
 
 **Kabul:** Başka ekip üyesi belgelenen son committen ortamı açabilir; demo raporuyla çalışan kod aynıdır; gizli değerler repoda değildir; açık sınırlamalar belgelenmiştir. Gerekli takım/kullanıcı kararları alınmadan uzaktaki ana dal değiştirilmez.
 
 **Risk / sınır:** Branch silmek ürünün tamamlanma ölçütü değildir. İlgisiz tarihçeleri birleştirme ve çatışma çözümü kabul testinden sonra tekrar doğrulanmalıdır; test edilmemiş merge freeze edilmez.
+
+### Gece koşusu ek bulguları (14 Eylül) — plan dışı, kayda geçti
+
+- [x] **EK-01** M16 kabulü: araç çağrılmadan "yüklendi/birleştirildi" iddiası → bir kez geri gönderim guard'ı (ADR-0063).
+- [x] **EK-02** M11-T07: kısa belirsiz soru → deterministik netleştirme sorusu, LLM çağrılmaz (modele not eklemek canlıda iki koşuda işe yaramadı).
+- [x] **EK-03** A07: farklı birimli karşılaştırma grafiği ilk dönem = 100; çift eksen kendiliğinden açılmaz.
+- [x] **EK-04** Kanıt paneli: eşleşmeyen tek sayı "dosya zinciri" rozetini de kırmızı yapıyordu → rozetler bağımsız.
+- [x] **EK-05** A23: RAW dosya baytları kayıtlı sha256 ile karşılaştırılır; taşınan veri kökünde RAW yolu çözülür.
+- [x] **EK-06** A33: yüzde tabanında tek dönemlik düzey sıçraması ayrı kırılma (fikstürde 2025-01 doğru ay).
+- [x] **EK-07** Büşra'nın notu: `FILE_IRRELEVANT` hata kodu, Windows sürücü harfi okuyucuda şema sayılmaz.
+- [ ] **EK-08** Büşra'nın ilgi kapısı/çapraz kontrol/birim tahmini kodunu bu dala alma kararı ve G12a–d golden vakaları (ekip kararı).
+- [x] **EK-09** CI: agent-core işi pillow/lxml eksikliğiyle düşüyordu → bağımlılık; art arda push'ta eski koşu iptal.
 
 ## 6. Asgari birleşik kabul matrisi
 

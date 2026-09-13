@@ -52,6 +52,8 @@ class TurnResult:
     evidence: str
     grounding: str
     answer_preview: str
+    evidence_states: dict = field(default_factory=dict)
+    evidence_gaps: list = field(default_factory=list)
 
 
 @dataclass
@@ -197,7 +199,9 @@ def run_turns(sid: str, title: str, turns: list[Turn], agent=None) -> ScenarioRe
             tools=[s.tool_name for s in (ans.steps if ans else []) if s.tool_name], failures=failures,
             rows=None if table is None else len(table), columns=[] if table is None else list(map(str, table.columns)),
             evidence=getattr(getattr(ans, "evidence", None), "summary", lambda: "")() if ans and ans.evidence else "",
-            grounding=getattr(ans, "grounding", "") if ans else "", answer_preview=(ans.text if ans else "")[:240].replace("\n", " ")))
+            grounding=getattr(ans, "grounding", "") if ans else "", answer_preview=(ans.text if ans else "")[:240].replace("\n", " "),
+            evidence_states=ans.evidence.states() if ans is not None and ans.evidence is not None else {},
+            evidence_gaps=list(ans.evidence.gaps)[:6] if ans is not None and ans.evidence is not None else []))
         print(f"  [{sid}] {'✓' if not failures else '✗'} {secs:>5}s {res.turns[-1].question[:70]} {failures or ''}", flush=True)
         if table is not None:
             state["prev_rows"], state["prev_cols"] = len(table), len(table.columns)

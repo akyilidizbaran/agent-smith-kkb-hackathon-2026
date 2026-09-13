@@ -101,6 +101,9 @@ def read_bytes_for_profiling(
     """(içerik, medya türü, erişim sonucu) — tablo dosyası da PDF/görsel de aynı kurallarla okunur."""
 
     parsed = urlparse(locator)
+    if len(parsed.scheme) == 1:
+        # Windows sürücü harfi: urlparse("C:\\veri\\x.csv").scheme == "c" — şema değil yerel yol (Büşra'nın notu, 13 Eyl)
+        parsed = urlparse("")
     if parsed.scheme in ("http", "https"):
         if _private_host(parsed.hostname or ""):
             raise ReadRefused("özel/loopback adreslere erişim yok")
@@ -153,6 +156,9 @@ def read_table_for_profiling(
     """(tablo, erişim sonucu). Tablo yalnız `outcome.ok` iken dolu."""
 
     parsed = urlparse(locator)
+    if len(parsed.scheme) == 1:
+        # Windows sürücü harfi: urlparse("C:\\veri\\x.csv").scheme == "c" — şema değil yerel yol (Büşra'nın notu, 13 Eyl)
+        parsed = urlparse("")
     if parsed.scheme in ("http", "https"):
         if _private_host(parsed.hostname or ""):
             raise ReadRefused("özel/loopback adreslere erişim yok")
