@@ -26,9 +26,32 @@ from kkb_agent.config import load_settings  # noqa: E402
 from scripts.demo_acceptance import DEMO_SERIES, _run, _stage_incoming, build_commands  # noqa: E402
 
 
+def required_series(core: Path, launcher: str) -> tuple[str, ...]:
+    """M08 zorunlu set, katalogdan (kod listesi değil): BDDK aylık + haftalık, FinTürk'ün tamamı (81 il × 8
+    ölçüm) ve birimi + ölçüm türü tanımlı EVDS serileri. Anlamı belirsiz keşif serileri (unit yok) dışarıda."""
+    snippet = (
+        "from pathlib import Path\n"
+        "from src.lakehouse.catalog.series import load_catalog_files\n"
+        "for r in load_catalog_files(Path('catalog/series')):\n"
+        "    unit = getattr(r, 'unit', None); mt = getattr(r, 'measure_type', None)\n"
+        "    mt = getattr(mt, 'value', mt)\n"
+        "    if r.source_id in ('bddk_monthly', 'bddk_weekly', 'bddk_finturk') or (unit and mt not in (None, 'unknown')):\n"
+        "        print(r.series_id)\n"
+    )
+    code, out = _run([*launcher.split(), "-c", snippet], core, timeout=180)
+    if code != 0:
+        raise SystemExit(f"katalog okunamadı: {out[-400:]}")
+    ids = tuple(line.strip() for line in out.splitlines() if ":" in line and " " not in line.strip())
+    if not ids:
+        raise SystemExit("zorunlu seri listesi boş çıktı")
+    return ids
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--only", default=",".join(DEMO_SERIES), help="virgülle seri kimlikleri (varsayılan demo seti)")
+    ap.add_argument("--set", choices=["required", "demo"], default="required",
+                    help="required: M08 zorunlu set (BDDK aylık+haftalık, 81 il FinTürk, anlamı tanımlı EVDS) · demo: 127 serilik hızlı set")
+    ap.add_argument("--only", default=None, help="virgülle seri kimlikleri (--set yerine)")
     ap.add_argument("--fresh", action="store_true", help="mevcut DB ve RAW/Bronze'u sil, sıfırdan kur (--yes ister)")
     ap.add_argument("--yes", action="store_true", help="--fresh için onay")
     ap.add_argument("--skip-ingest", action="store_true", help="bootstrap/ingest/silver/gold'u atla; yalnız fikstürleri kopyala")
@@ -54,8 +77,18 @@ def main() -> int:
         code, help_text = _run([*s.lakehouse_cli.split(), "scripts/run_catalog_ingestion.py", "--help"], core, timeout=120)
         if code != 0 or "--only" not in help_text:
             print("✗ run_catalog_ingestion.py '--only' tanımıyor; filtresiz canlı ingest ÇALIŞTIRILMAZ."); return 2
-        only = tuple(x.strip() for x in args.only.split(",") if x.strip())
-        for name, cmd in build_commands(data.parent, core, launcher=s.lakehouse_cli, db=db, data=data, only=only):
+        if args.only:
+            only = tuple(x.strip() for x in args.only.split(",") if x.strip())
+        elif args.set == "demo":
+            only = DEMO_SERIES
+        else:
+            only = required_series(core, s.lakehouse_cli)
+        only_file = data / "ingest_series.txt"
+        only_file.write_text("\n".join(only) + "\n", encoding="utf-8")
+        report = data / "ingest_report.json"
+        print(f"seri seti: {len(only)} seri → {only_file}")
+        for name, cmd in build_commands(data.parent, core, launcher=s.lakehouse_cli, db=db, data=data, only=only,
+                                        only_file=only_file, report=report):
             t = time.perf_counter(); code, out = _run(cmd, core); secs = time.perf_counter() - t
             tail = "\n".join(out.strip().splitlines()[-4:])
             print(f"{'✓' if code == 0 else '✗'} {name} ({secs:.0f} s)"); [print(f"    {l}") for l in tail.splitlines()]

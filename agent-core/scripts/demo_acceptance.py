@@ -92,7 +92,8 @@ def _run(cmd: list[str], cwd: Path, *, timeout: float = 1800) -> tuple[int, str]
 
 def build_commands(root: Path, core_dir: Path, *, launcher: str = "uv run python",
                    db: Path | None = None, data: Path | None = None,
-                   only: tuple[str, ...] = DEMO_SERIES) -> list[tuple[str, list[str]]]:
+                   only: tuple[str, ...] = DEMO_SERIES, only_file: Path | None = None,
+                   report: Path | None = None) -> list[tuple[str, list[str]]]:
     """Veri ekibi komutları, sırayla. Test edilebilir: yürütmez, planlar.
 
     Varsayılan yerleşim root/data; `build_demo_data.py` kalıcı DATA_ROOT'u db/data ile verir.
@@ -103,7 +104,9 @@ def build_commands(root: Path, core_dir: Path, *, launcher: str = "uv run python
     return [
         ("bootstrap", [*L, "-m", "lakehouse", "bootstrap", "--database", str(db), "--data-root", str(data)]),
         ("ingest (canlı: BDDK + EVDS)", [*L, "scripts/run_catalog_ingestion.py", "--database", str(db),
-                                          "--data-root", str(data), "--only", ",".join(only)]),
+                                          "--data-root", str(data),
+                                          *(["--only-file", str(only_file)] if only_file else ["--only", ",".join(only)]),
+                                          *(["--report", str(report)] if report else [])]),
         ("silver", [*L, "-m", "lakehouse", "silver", "--database", str(db), "--data-root", str(data)]),
         ("gold", [*L, "-m", "lakehouse", "gold", "--database", str(db), "--data-root", str(data)]),
     ]

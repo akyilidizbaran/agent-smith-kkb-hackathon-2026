@@ -22,9 +22,11 @@ import truststore
 
 truststore.inject_into_ssl()
 
+import json
 import sys
 import time
-from datetime import date
+from dataclasses import asdict, dataclass, field
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import requests
@@ -40,14 +42,83 @@ load_dotenv_simple(_REPO_ROOT)
 from ingestion_registry import CONNECTOR_REGISTRY, SeriesRow
 
 from src.lakehouse.catalog.artifacts import ArtifactRepository
+from src.lakehouse.contracts.identifiers import new_run_id
+from src.lakehouse.ingestion.observability import (
+    RUN_STATUS_FAILED,
+    RUN_STATUS_SUCCESS,
+    RUN_STATUS_WARNING,
+    IngestionWarning,
+    RunArtifactLink,
+    RunRepository,
+    describe_exception,
+)
 from src.lakehouse.contracts.models import FetchSpec
 from src.lakehouse.db.bootstrap import bootstrap_database
 from src.lakehouse.errors import ErrorPayload, LakehouseError
 from src.lakehouse.storage.parquet import ParquetConflictError, ParquetStorage
 from src.lakehouse.storage.raw import RawStorage
 
-DEFAULT_START = date(2021, 1, 1)
+# Yüklü kapsam (M00 K04, 14 Eyl): 2016-01'den itibaren; istenen başka dönem --start/--end ile.
+DEFAULT_START = date(2016, 1, 1)
 DEFAULT_END = date(2026, 6, 30)
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+@dataclass
+class SeriesOutcome:
+    """One series' result, persisted as JSON so a partial run is never reported as complete (M07-T10)."""
+
+    series_id: str
+    status: str                 # ok | warning | failed | skipped | shared
+    run_id: str | None = None
+    assets: int = 0
+    new: int = 0
+    already: int = 0
+    failed: int = 0
+    rows_out: int = 0
+    warnings: int = 0
+    error: str | None = None
+    seconds: float = 0.0
+    shared_with: str | None = None
+
+
+@dataclass
+class RunReport:
+    requested: list[str] = field(default_factory=list)
+    missing: list[str] = field(default_factory=list)       # --only listed but not active in catalog
+    stale_runs_closed: list[str] = field(default_factory=list)
+    outcomes: list[SeriesOutcome] = field(default_factory=list)
+    start: str = ""
+    end: str = ""
+
+    @property
+    def ok(self) -> bool:
+        return not self.missing and all(o.status in ("ok", "warning", "shared") for o in self.outcomes)
+
+
+def close_stale_runs(connection, *, now: datetime) -> list[str]:
+    """Runs left ``running`` by an interrupted process are closed as failed (M07-T11).
+
+    This script is the only writer while it runs (DuckDB single-writer file lock), so any run
+    still ``running`` when it starts belongs to a process that died. Leaving it open would make
+    "running" mean nothing; closing it keeps the evidence and says why. RAW/Bronze files the
+    dead run already wrote stay: they are content-addressed, and the next run re-links them.
+    """
+
+    repo = RunRepository(connection)
+    stale = [r[0] for r in connection.execute(
+        "SELECT run_id FROM meta.run WHERE status = 'running' AND started_at < ? ORDER BY started_at", [now]
+    ).fetchall()]
+    for run_id in stale:
+        try:
+            repo.finish(run_id=run_id, status=RUN_STATUS_FAILED, ended_at=now,
+                        error="interrupted: run was still 'running' when a new ingestion started")
+        except Exception:  # noqa: BLE001 - a bookkeeping race must not stop ingestion
+            continue
+    return stale
 
 _ERROR_HINTS = {
     "SOURCE_UNAVAILABLE": (
@@ -139,8 +210,12 @@ def _run_one(
     session: requests.Session,
     artifact_repository: ArtifactRepository,
     parquet_storage: ParquetStorage,
-) -> bool:
-    """Fetch and land every asset a series' FetchSpec produces.
+    *,
+    start: date = DEFAULT_START,
+    end: date = DEFAULT_END,
+    clock=_utc_now,
+) -> SeriesOutcome:
+    """Fetch and land every asset a series' FetchSpec produces, under one recorded run.
 
     Deliberately does NOT use IngestionPipeline.run(): that method processes every asset
     a connector returns as one all-or-nothing batch, so a single already-ingested asset
@@ -148,22 +223,46 @@ def _run_one(
     re-run over a range it partly already covers) aborts the whole call and silently
     drops any later, genuinely-new assets in the same batch. This function fetches once,
     then lands each asset independently, so one quarter/month already in Bronze cannot
-    hide others that are not. This is a script-local choice, not a change to the shared
-    pipeline.
+    hide others that are not.
+
+    Run tracking (M07, ADR-0057) follows the same contract as IngestionPipeline: a
+    ``meta.run`` row is opened before the fetch, every registered artifact is linked in
+    ``meta.run_artifact`` BEFORE parsing, every parser warning is persisted in
+    ``meta.ingest_warning`` BEFORE the Bronze write, and the run closes exactly once as
+    ``success`` / ``warning`` / ``failed`` with ``rows_out`` and a redacted, bounded error.
+    Silver's ``_run_context`` reads these back, so a warned artifact stays ``source_warning``
+    after a rebuild instead of being silently upgraded to ``ok``.
     """
 
+    started = time.perf_counter()
     print(f"\n=== {row.series_id} ({row.name_tr}) ===")
+    outcome = SeriesOutcome(series_id=row.series_id, status="failed")
 
     binding = CONNECTOR_REGISTRY.get(row.source_id)
     if binding is None:
         print(f"  SKIPPED: no connector registered for source_id={row.source_id!r}")
-        return False
+        outcome.status, outcome.error = "skipped", f"no connector for source_id={row.source_id}"
+        return outcome
 
     try:
-        spec = binding.build_spec(row, DEFAULT_START, DEFAULT_END)
+        spec = binding.build_spec(row, start, end)
     except ValueError as exc:
         print(f"  SKIPPED: {exc}")
-        return False
+        outcome.status, outcome.error = "skipped", str(exc)[:300]
+        return outcome
+
+    connection = artifact_repository.connection
+    runs = RunRepository(connection)
+    run_id = runs.start(run_id=new_run_id(), source_id=spec.source_id, dataset_id=spec.dataset_id,
+                        started_at=clock())
+    outcome.run_id = run_id
+
+    def close(status: str, error: str | None = None) -> None:
+        try:
+            runs.finish(run_id=run_id, status=status, ended_at=clock(), rows_out=outcome.rows_out, error=error)
+        except Exception as exc:  # noqa: BLE001 - never mask the ingestion outcome
+            print(f"  WARNING: run {run_id} could not be closed: {type(exc).__name__}")
+        outcome.seconds = round(time.perf_counter() - started, 2)
 
     connector = binding.connector_cls(raw_storage, session=session)
     parser = binding.parser_cls()
@@ -178,51 +277,73 @@ def _run_one(
         hint = _ERROR_HINTS.get(payload.error_code)
         if hint:
             print(f"  hint       : {hint}")
-        return False
+        outcome.error = describe_exception(exc)
+        close(RUN_STATUS_FAILED, outcome.error)
+        return outcome
+    except Exception as exc:  # noqa: BLE001 - an unexpected connector crash is still a recorded failure
+        outcome.error = describe_exception(exc)
+        print(f"  FAILED (fetch, unexpected): {outcome.error}")
+        close(RUN_STATUS_FAILED, outcome.error)
+        return outcome
 
     if not assets:
         print("  FAILED: connector returned no assets")
-        return False
+        outcome.error = "EMPTY_DATASET: connector returned no assets"
+        close(RUN_STATUS_FAILED, outcome.error)
+        return outcome
 
-    ok_count = 0
-    already_count = 0
-    fail_count = 0
+    outcome.assets = len(assets)
+    errors: list[str] = []
     for asset in assets:
         try:
             _validate_asset(spec, asset)
             artifact_inserted = artifact_repository.register(asset)
+            parser_config_sha256 = asset.metadata.get("parser_config_sha256") if isinstance(asset.metadata, dict) else None
+            runs.link_artifact(RunArtifactLink(
+                run_id=run_id, artifact_sha256=asset.artifact_sha256, source_id=asset.source_id,
+                dataset_id=asset.dataset_id, fetched_at=asset.fetched_at, parser_config_sha256=parser_config_sha256,
+            ))
             parsed_batch = parser.parse(asset)
             _validate_batch(asset, parsed_batch)
+            if parsed_batch.warnings:
+                records = []
+                for message in parsed_batch.warnings:
+                    outcome.warnings += 1
+                    records.append(IngestionWarning(
+                        run_id=run_id, warning_seq=outcome.warnings, source_id=asset.source_id,
+                        dataset_id=asset.dataset_id, artifact_sha256=asset.artifact_sha256, message=message,
+                    ))
+                runs.record_warnings(records, created_at=clock())
             bronze_path = parquet_storage.write(parsed_batch)
         except ParquetConflictError:
             # Same RAW artifact re-processed at a different wall-clock time: fetched_at
             # is embedded in every Bronze row, so a second parse of identical source
             # bytes is legitimately a different Bronze representation. Bronze already
             # holds this one asset; that is a per-asset skip, not a failure of the rest.
-            already_count += 1
+            outcome.already += 1
             continue
         except ValueError as exc:
-            # ArtifactRepository.register() raises a plain ValueError (not a LakehouseError)
-            # when the same artifact_sha256 was already registered under different
-            # immutable metadata (source_id/dataset_id/media_type/byte_size/http_status/
-            # raw_path) -- e.g. a series moved to a different dataset_id between catalog
-            # regenerations, as happened when TP.KTF12/TP.KFE.TR's dataset_id changed from
-            # the original hand-curated evds.yml to the auto-generated one. This is a real
-            # identity conflict worth flagging distinctly, but must not abort every other
-            # series' processing the way an uncaught exception would.
+            # ArtifactRepository.register() raises a plain ValueError when the same
+            # artifact_sha256 was already registered under different immutable metadata
+            # (e.g. a series moved to a different dataset_id between catalog regenerations).
+            # A real identity conflict: flagged distinctly, recorded on the run, but it must
+            # not abort every other asset's processing.
             print(f"  FAILED (artifact identity conflict): {exc}")
-            fail_count += 1
+            outcome.failed += 1
+            errors.append(describe_exception(exc))
             continue
         except LakehouseError as exc:
             payload = exc.payload
             print(f"  FAILED (asset {asset.locator}, fetched_at={asset.fetched_at})")
             print(f"    error_code : {payload.error_code}")
             print(f"    message    : {payload.message}")
-            fail_count += 1
+            outcome.failed += 1
+            errors.append(describe_exception(exc))
             continue
 
-        ok_count += 1
+        outcome.new += 1
         row_count = len(parsed_batch.dataframe)
+        outcome.rows_out += row_count
         print(
             f"  OK   fetched_at={asset.fetched_at}  rows={row_count}  "
             f"inserted={artifact_inserted}  -> {bronze_path.name}"
@@ -231,10 +352,17 @@ def _run_one(
             print(f"       warnings: {parsed_batch.warnings}")
 
     print(
-        f"  -- {row.series_id}: {ok_count} new, {already_count} already in Bronze, "
-        f"{fail_count} failed, out of {len(assets)} fetched asset(s)"
+        f"  -- {row.series_id}: {outcome.new} new, {outcome.already} already in Bronze, "
+        f"{outcome.failed} failed, out of {len(assets)} fetched asset(s) · run {run_id}"
     )
-    return fail_count == 0
+    if outcome.failed:
+        outcome.status = "failed"
+        outcome.error = f"{outcome.failed}/{len(assets)} asset(s) failed: " + " | ".join(errors[:3])
+        close(RUN_STATUS_FAILED, describe_exception(RuntimeError(outcome.error)))
+    else:
+        outcome.status = "warning" if outcome.warnings else "ok"
+        close(RUN_STATUS_WARNING if outcome.warnings else RUN_STATUS_SUCCESS)
+    return outcome
 
 
 def _parse_args(argv: list[str] | None = None):
@@ -247,6 +375,10 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--database", type=Path, default=None, help="DuckDB path (default: data/lakehouse.duckdb)")
     parser.add_argument("--data-root", type=Path, default=None, help="root containing raw/ and bronze/ (default: data)")
     parser.add_argument("--only", default=None, help="comma-separated series ids; default: every active series")
+    parser.add_argument("--only-file", type=Path, default=None, help="file with one series id per line (large sets)")
+    parser.add_argument("--start", type=date.fromisoformat, default=DEFAULT_START, help="YYYY-MM-DD (default 2016-01-01)")
+    parser.add_argument("--end", type=date.fromisoformat, default=DEFAULT_END, help="YYYY-MM-DD (default 2026-06-30)")
+    parser.add_argument("--report", type=Path, default=None, help="write a JSON coverage report (requested/processed/skipped/failed)")
     return parser.parse_args(argv)
 
 
@@ -264,24 +396,39 @@ def main(argv: list[str] | None = None) -> int:
     _require_repo_root_cwd()
     args = _parse_args(argv)
     data_root = args.data_root or Path("data")
+    if args.start > args.end:
+        print(f"ERROR: --start {args.start} is after --end {args.end}")
+        return 2
 
     trusted = bootstrap_database(args.database or (data_root / "lakehouse.duckdb"))
     raw_storage = RawStorage(data_root / "raw")
     parquet_storage = ParquetStorage(data_root / "bronze")
     artifact_repository = ArtifactRepository(trusted)
     session = requests.Session()
+    report = RunReport(start=str(args.start), end=str(args.end))
+    report.stale_runs_closed = close_stale_runs(trusted, now=_utc_now())
+    if report.stale_runs_closed:
+        print(f"Closed {len(report.stale_runs_closed)} stale 'running' run(s) from an interrupted process.")
 
     series = _load_active_series(trusted)
+    wanted: set[str] = set()
     if args.only:
-        wanted = {sid.strip() for sid in args.only.split(",") if sid.strip()}
+        wanted |= {sid.strip() for sid in args.only.split(",") if sid.strip()}
+    if args.only_file:
+        wanted |= {line.strip() for line in args.only_file.read_text(encoding="utf-8").splitlines()
+                   if line.strip() and not line.startswith("#")}
+    if wanted:
+        report.requested = sorted(wanted)
         series = [row for row in series if row.series_id in wanted]
-        missing = wanted - {row.series_id for row in series}
-        if missing:
-            print(f"WARNING: --only listed series not active in the catalog: {', '.join(sorted(missing))}")
-    print(f"Katalogda {len(series)} aktif seri bulundu.")
+        report.missing = sorted(wanted - {row.series_id for row in series})
+        if report.missing:
+            # A requested series that does not exist is a failure of the request, not a
+            # silently smaller success (M07-T10).
+            print(f"ERROR: --only listed series not active in the catalog: {', '.join(report.missing)}")
+    print(f"Katalogda {len(series)} aktif seri bulundu · dönem {args.start} → {args.end}.")
 
-    outcomes: dict[str, bool] = {}
-    # Aynı çekilişi paylaşan seriler (FinTürk: bir ilin 8 ölçüm sütunu tek yanıtta gelir) bir kez
+    by_id: dict[str, SeriesOutcome] = {}
+    # Aynı çekimi paylaşan seriler (FinTürk: bir ilin 8 ölçüm sütunu tek yanıtta gelir) bir kez
     # çekilir; parser yanıttaki bütün serileri Bronze'a yazdığı için ikinci çekim yalnız ağ
     # maliyetidir. Anahtar FetchSpec'in kendisidir (kaynak, adres, parametreler, tarih aralığı).
     shared: dict[str, str] = {}
@@ -290,37 +437,48 @@ def main(argv: list[str] | None = None) -> int:
             binding = CONNECTOR_REGISTRY.get(row.source_id)
             if binding is not None:
                 try:
-                    key = _spec_key(binding.build_spec(row, DEFAULT_START, DEFAULT_END))
+                    key = _spec_key(binding.build_spec(row, args.start, args.end))
                 except ValueError:
                     key = None
                 if key is not None and key in shared:
                     first = shared[key]
-                    outcomes[row.series_id] = outcomes[first]
-                    print(f"\n=== {row.series_id} ({row.name_tr}) ===\n  aynı çekilişten ({first}); yeniden istenmedi")
+                    base = by_id[first]
+                    shared_outcome = SeriesOutcome(series_id=row.series_id, status="shared" if base.status in ("ok", "warning") else base.status,
+                                                   run_id=base.run_id, shared_with=first, error=base.error)
+                    by_id[row.series_id] = shared_outcome
+                    report.outcomes.append(shared_outcome)
+                    print(f"\n=== {row.series_id} ({row.name_tr}) ===\n  aynı çekimden ({first}); yeniden istenmedi")
                     continue
                 if key is not None:
                     shared[key] = row.series_id
             if position > 0:
                 # Generic, source-agnostic pacing between DIFFERENT series' first requests.
-                # Connectors that need per-request pacing within one series' own fetch()
-                # (e.g. BddkFinTurkConnector across quarters) already handle that themselves;
-                # this is the outer loop's own courtesy delay so a catalog with hundreds or
-                # thousands of series (e.g. the EVDS housing-theme extension) doesn't fire
-                # requests back-to-back with zero pacing between series.
                 time.sleep(0.2)
-            outcomes[row.series_id] = _run_one(
-                row, raw_storage, session, artifact_repository, parquet_storage
-            )
+            outcome = _run_one(row, raw_storage, session, artifact_repository, parquet_storage,
+                               start=args.start, end=args.end)
+            by_id[row.series_id] = outcome
+            report.outcomes.append(outcome)
     finally:
         trusted.close()
         session.close()
+        if args.report:
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            payload = {"start": report.start, "end": report.end, "ok": report.ok, "requested": len(report.requested),
+                       "missing": report.missing, "stale_runs_closed": report.stale_runs_closed,
+                       "counts": {k: sum(1 for o in report.outcomes if o.status == k) for k in ("ok", "warning", "shared", "failed", "skipped")},
+                       "outcomes": [asdict(o) for o in report.outcomes]}
+            args.report.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print("\n=== SUMMARY ===")
-    for series_id, ok in outcomes.items():
-        print(f"  [{'OK' if ok else 'FAIL'}] {series_id}")
-    succeeded = sum(1 for ok in outcomes.values() if ok)
-    print(f"\n{succeeded}/{len(outcomes)} series ingested successfully.")
-    return 0 if succeeded == len(outcomes) else 1
+    for o in report.outcomes:
+        if o.status not in ("ok", "shared"):
+            print(f"  [{o.status.upper()}] {o.series_id}" + (f" — {o.error[:160]}" if o.error else ""))
+    counts = {k: sum(1 for o in report.outcomes if o.status == k) for k in ("ok", "warning", "shared", "failed", "skipped")}
+    succeeded = counts["ok"] + counts["warning"] + counts["shared"]
+    print(f"\n{succeeded}/{len(report.outcomes)} series ingested successfully "
+          f"(ok {counts['ok']}, warning {counts['warning']}, shared {counts['shared']}, failed {counts['failed']}, "
+          f"skipped {counts['skipped']}; missing from catalog {len(report.missing)}).")
+    return 0 if report.ok and report.outcomes else 1
 
 
 if __name__ == "__main__":
