@@ -737,6 +737,18 @@ sonuna, 6.000 token bütçesiyle; kalanlar tek satırlık dizin. Keşif turları
 `PRELOAD_BUDGET_TOKENS=0` kapatır.
 
 
+### Kademeli retrieval ve araç kapısı — `core/retriever.py`, `core/facets.py`, `core/tool_gate.py` (ADR-0043) — YAZILDI
+
+Modele giden kart sayısı sabit (8–12), aday havuzu ölçekle büyür. `CatalogRetriever` üç kademe:
+`preload_all` (katalog ≤ 60: arama yok, hepsi kart), `bm25` (yüzlü BM25, havuz k×10), `hybrid`
+(≥ 5.000 ve embedder varsa: BM25 ∪ MIA embedding → RRF → yüzler). Yüzler puan değil eleme/öncelik:
+il (81 il, ekleriyle), frekans (aynı → ince → kaba), kaynak. Adaptörler (Silver, seed) ve
+`scripts/retrieval_golden.py` aynı sınıfı kullanır; eşikler golden'daki recall ile konur
+(2.214 seride yüzler recall@8 0,864 → 0,996). Embedding vektörleri `EmbeddingCache` ile diskte.
+Araç kapısı her tur soruya göre araç alt kümesi sunar (lakehouse/workspace/gold her zaman; chart,
+analitik, web, Architect sinyalle); şemayı daraltır, yetkiyi değil. Ölçüldü: 11 senaryoda adım
+36 → 27, prompt token ≈ %40 düştü.
+
 ### Arama — `core/lexical.py` BM25 (ADR-0036) — YAZILDI
 
 Retrieval sözleşmesinin (`contracts/retrieval.py`) ilk gerçek uygulaması: saf Python BM25,

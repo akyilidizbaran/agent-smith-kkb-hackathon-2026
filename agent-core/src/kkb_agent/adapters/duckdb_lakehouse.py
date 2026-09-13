@@ -201,26 +201,25 @@ class DuckDBLakehouse:
         Eşleşme yoksa küçük seed kataloğunda ilk N tablo döner: tek tablolu seed'de
         "tablo bulunamadı" demek yanıltıcı olurdu. Silver adaptörü boş döner (ADR-0026).
         """
-        from ..contracts.retrieval import Candidate
-        from ..core.lexical import Bm25Index, candidate_text
+        from ..core.facets import province_of
+        from ..core.retriever import CatalogRecord, CatalogRetriever, RetrievalPolicy
 
-        if getattr(self, "_bm25_for", None) is not id(self._catalog):
-            index = Bm25Index()
-            index.index([
-                Candidate(
-                    id=spec.dataset_id,
-                    text=candidate_text(
-                        name=spec.name, description=spec.description, tags=spec.tags,
-                        aliases=[a for c in spec.columns for a in c.aliases]
-                        + [f"{c.name} {c.description}" for c in spec.columns]
-                        + [v for c in spec.columns for v in c.example_values],
-                        dataset_id=spec.dataset_id,
-                    ),
+        if getattr(self, "_retr_for", None) is not id(self._catalog):
+            records = [
+                CatalogRecord(
+                    id=spec.dataset_id, name=spec.name, description=spec.description, tags=tuple(spec.tags),
+                    aliases=tuple([a for c in spec.columns for a in c.aliases]
+                                  + [f"{c.name} {c.description}" for c in spec.columns]
+                                  + [v for c in spec.columns for v in c.example_values]),
+                    frequency=str(getattr(spec.frequency, "value", spec.frequency)), source=spec.source,
+                    province=province_of(f"{spec.dataset_id} {spec.name}"),
                 )
                 for spec in self._catalog.values()
-            ])
-            self._bm25, self._bm25_for = index, id(self._catalog)
-        hits = self._bm25.search(query, k=limit)
+            ]
+            self._retr = CatalogRetriever(records, policy=getattr(self, "retrieval_policy", None) or RetrievalPolicy())
+            self._retr_for = id(self._catalog)
+        self._bm25 = self._retr   # eski ad; testler ve araçlar `search_datasets` üzerinden gelir
+        hits = self._retr.search(query, k=limit)
         found = [self._catalog[h.id] for h in hits if h.id in self._catalog]
         return found or list(self._catalog.values())[:limit]
 

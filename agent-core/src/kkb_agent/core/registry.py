@@ -6,7 +6,7 @@ Agent kodunda hiçbir değişiklik gerekmez.
 
 from __future__ import annotations
 
-from typing import Any, Iterator
+from typing import Iterable, Any, Iterator
 
 from ..domain import DomainProfile
 from .tool import Tool, ToolResult
@@ -48,13 +48,17 @@ class ToolRegistry:
     def names(self) -> list[str]:
         return list(self._tools)
 
-    def schemas(self) -> list[dict[str, Any]]:
-        return [t.openai_schema(self.profile) for t in self._tools.values()]
+    def schemas(self, only: Iterable[str] | None = None) -> list[dict[str, Any]]:
+        """Modele sunulan şemalar; `only` verilirse araç kapısının alt kümesi (ADR-0043)."""
+        names = set(only) if only is not None else None
+        return [t.openai_schema(self.profile) for t in self._tools.values() if names is None or t.name in names]
 
-    def describe(self) -> str:
+    def describe(self, only: Iterable[str] | None = None) -> str:
         """Native tool-calling desteklemeyen modeller için metin katalog."""
+        names = set(only) if only is not None else None
         return "\n".join(
             f"- {t.name}: {self.profile.render(t.description)}" for t in self._tools.values()
+            if names is None or t.name in names
         )
 
     def execute(self, name: str, args: dict[str, Any]) -> ToolResult:

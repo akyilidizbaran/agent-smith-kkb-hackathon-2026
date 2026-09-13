@@ -42,6 +42,8 @@ from .tools.gold import GOLD_PROMPT_RULES, GoldAlignTool, GoldDecomposeTool, Gol
 from .tools.chart import CHART_PROMPT_RULES, ChartTool
 from .tools.workspace_query import WorkspaceQueryTool
 from .vision.ocr import OcrClient
+from .adapters.mia_embedder import EmbeddingCache, MiaEmbedder
+from .core.retriever import RetrievalPolicy
 from .tools.analytics import ANALYTICS_PROMPT_RULES, AnomalyDetectTool, ChangePointsTool, LeadLagTool
 from .tools.web import (
     WEB_PROMPT_RULES, WEB_SEARCH_PROMPT_RULES, WEB_SEARCH_UNAVAILABLE_RULES, WebSearchTool, WebUrlTool,
@@ -108,6 +110,14 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
         audience=settings.domain_audience,
     )
 
+    # Retrieval kademesi (ADR-0043): politika ayarlardan; hybrid için MIA embedder + disk önbelleği.
+    policy = RetrievalPolicy(mode=settings.retrieval_mode, small_max=settings.retrieval_small_max,
+                             hybrid_min=settings.retrieval_hybrid_min)
+    lakehouse.retrieval_policy = policy
+    if settings.embedding_model and settings.retrieval_mode in ("auto", "hybrid"):
+        lakehouse.embedder = MiaEmbedder(base_url=settings.llm_base_url, api_key=settings.llm_api_key,
+                                         model=settings.embedding_model)
+        lakehouse.embedding_cache = EmbeddingCache(settings.embedding_cache_dir)
     registry = ToolRegistry(profile)
     # Görüntü/PDF girişi (ADR-0041): OCR istemcisi yalnız VISION_MODEL varsa; yoksa belgeler "okunamadı" der.
     ocr = OcrClient(base_url=settings.llm_base_url, api_key=settings.llm_api_key, model=settings.vision_model) \
@@ -192,10 +202,12 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
         def preloader(question: str):
             return build_question_context(
                 lakehouse, question, budget_tokens=settings.preload_budget_tokens, k=settings.preload_k,
+                retrieval_mode=settings.retrieval_mode, small_max=settings.retrieval_small_max,
             )
     return AnalyticsAgent(
         llm, registry, workspace=workspace, max_steps=max_steps, profile=profile,
         system_prompt=system_prompt, evidence=EvidenceBuilder(lakehouse), preloader=preloader,
+        tool_gate=settings.tool_gate,
     )
 
 

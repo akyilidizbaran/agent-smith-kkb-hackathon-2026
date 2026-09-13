@@ -40,7 +40,7 @@ def test_kucuk_katalog_tum_kartlar_ve_dizin_yok(silver: SilverLakehouse) -> None
 
 
 def test_buyuk_katalog_soruya_gore_k_kart_kalan_dizin(silver: SilverLakehouse) -> None:
-    ctx = build_question_context(silver, "konut kredisi bakiyesi", k=3)
+    ctx = build_question_context(silver, "konut kredisi bakiyesi", k=3, small_max=10)   # 20 seri "büyük" sayılsın (ADR-0043 kademe)
     assert ctx.mode == "preloaded" and len(ctx.preloaded_ids) <= 3
     assert "bddk_monthly:seri_03" in ctx.preloaded_ids      # alias 'konut kredisi' eşleşti
     assert ctx.indexed == 20 - len(ctx.preloaded_ids)
@@ -48,7 +48,7 @@ def test_buyuk_katalog_soruya_gore_k_kart_kalan_dizin(silver: SilverLakehouse) -
 
 
 def test_butce_asilinca_kart_kesilir_dizin_nota_doner(silver: SilverLakehouse) -> None:
-    ctx = build_question_context(silver, "konut kredisi", k=25, budget_tokens=150)
+    ctx = build_question_context(silver, "konut kredisi", k=25, budget_tokens=150, small_max=10)
     assert ctx.mode in ("preloaded", "index") and ctx.tokens <= 150 + 60
     assert len(ctx.preloaded_ids) < 20
     assert "seri daha var" in ctx.text or "DİĞER SERİLER" in ctx.text

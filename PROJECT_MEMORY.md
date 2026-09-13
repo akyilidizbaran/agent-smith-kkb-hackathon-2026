@@ -128,13 +128,22 @@ Demo DB'de 5 seri vardı; BDDK aylık/haftalık kataloglarında birer seri, FinT
 - Alınmayan: haftalık ek kalemler (konumsal kimlik), KOBİ (sütun belirsiz), üretilmiş EVDS `unknown` serileri.
 - **Ölçüm (sıfırdan):** bootstrap 2 s, canlı ingest **197 s** (127/127; FinTürk 264 artifact = 12 il × 22 çeyrek), Silver 2 s **8.290 satır**, Gold 1 s **6 tablo** red 0. İki kaçak: rasyo "(%)" birimi Silver'ın incelenmiş birim tablosunda yoktu (`% → pct`); FinTürk'te bir çekilişin 8 serisi Bronze'da çekilişin `dataset_id`'sini taşıyor → yeni sütunlar ilin konut `dataset_id`'sini aldı. Senaryolar 10/11 → G17 düzeltmeleri (Unicode eksi, olumsuz nedensellik, p eşiği, ikinci geri gönderme) → G17 3/3, G9 3/3, G12 (Van) 2/2. Adım sayıları arttı (G1 1 → 3, G14 4 → 8): büyük katalogda model daha çok arıyor; araç kapısı sıradaki iş. Lakehouse: `% → pct` birim eşlemesi; üç test yeni katalog durumuna uyarlandı (kataloglanmayan sütun sentetik, Gold refused sayısı katalogdan türetilir); paket 1.079 test. Dal `feature/lakehouse-catalog-breadth` itildi (r3 üstüne, main değil).
 
+### 2.15 Kademeli retrieval, yüzler, araç kapısı (13 Eylül, ADR-0043)
+Kullanıcı: proje çok kataloglu sistemlere göre kurulmalı; küçükte basit, büyükte güçlü çözüm, eşikler ölçülerek. Önerilen ve onaylanan: modele giden kart sayısı sabit, aday havuzu ölçekle büyür.
+- `core/retriever.py` `CatalogRetriever` + `RetrievalPolicy`: `preload_all` (≤ 60 seri), `bm25` (yüzlü), `hybrid` (≥ 5.000 ve embedder varsa; BM25 ∪ embedding → RRF → yüzler). Adaptörler ve ölçüm koşucusu aynı sınıfı kullanır. `RETRIEVAL_MODE`, `RETRIEVAL_SMALL_MAX`, `RETRIEVAL_HYBRID_MIN`, `EMBEDDING_CACHE_DIR`, `TOOL_GATE` ayarları.
+- `core/facets.py`: il (81 il, ekleriyle), frekans, kaynak yüzleri; il sorulduysa başka il elenir, sorulmadıysa il serileri ulusalın arkasına; frekans aynı → ince → kaba.
+- `adapters/mia_embedder.py`: MIA Qwen3-Embedding-8B (4096), 64'lük dilim, disk önbelleği (2.214 seri 36 MB). Kosinüs numpy ile (saf Python döngüsü ölçüm koşusunu bitiremedi).
+- `scripts/retrieval_golden.py`: üretilmiş + 34 elle sorgu, recall@1/@8 mod başına; EVDS'nin 53.792 serisi büyük ölçek ölçümü için canlı listelendi (yüklenmedi).
+- `core/tool_gate.py`: her tur soruya göre araç alt kümesi (lakehouse/workspace/gold her zaman; chart, analitik, web, Architect sinyalle); şemayı daraltır, yetkiyi değil.
+- **Ölçüm:** 2.214 seride BM25 yüzsüz recall@1 0,649 / recall@8 0,864 → yüzlü **0,888 / 0,996**. Kabul 11/11; adımlar 36 → 27, prompt token ≈ 690k → ≈ 416k (G14 8 → 4 adım, G10 6 → 2, G17 4 → 2). Hibrit: 2.214 seride recall@1 0,888 → **0,940**, recall@8 0,996 → 1,000 (bedel: soru başına bir embedding çağrısı, ağ bağımlılığı → orta kademede BM25 kaldı); EVDS 3.000 örneklem (yalnız adlar): BM25 0,792/0,973 → hibrit **0,821/0,993**; eşik 5.000'de bırakıldı, 3.000–5.000 gri bölge. "3 aylık" gibi sayılı vade frekans yüzü sayılmaz (ölçülüp düzeltildi); embedding ucu düşerse BM25'e düşer. Testler 298 → 307.
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 298 |
+| Agent birim testi | 307 |
 | Lakehouse testi (r3 + genişlik dalı) | 1.079 |
-| ADR | 42 |
+| ADR | 43 |
 | Golden vakası | 21: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3, G18a/b 2/2; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 11 senaryo 11/11 |
 | Araç sayısı (gerçek DB'de) | 19: lakehouse ×4, workspace ×4 (query dâhil), analitik ×3 (anomaly_detect, change_points, lead_lag), ingest, promote_draft, gold ×3, chart, web_url, web_search (Tavily anahtarı .env'de) |
 | Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu (iş yapan araç/tablo varken susar), istenen yetenek zorunluluğu (grafik, analitik), frekans uyuşmazlığı (kabadan ince yok), grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, GOLD_REQUIRED, niyet kapısı, beyan kapısı, adım sınırı, reasoning temizliği |
@@ -206,5 +215,6 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
 - Model beyan edilmemiş semantiği (birim, ölçüm tipi) uydurur; beyan **kullanıcı metninde** aranır, araç parametresine güvenilmez (ADR-0039).
 - Sohbet-içi SQL aracı sonucu tabloyu ezerse model bir sonraki turda küçülmüş tabloyla yanlış dönem için cevap verir; varsayılan bakış modu olmalı.
 - Kanıt panelinde `sources` listesi "web — başlık" biçiminde; `"web" in sources` liste üyeliği sessizce yanlış. DuckDB aynı dosyaya aynı süreçte farklı yapılandırmayla ikinci bağlantı açtırmaz; doğrulama ayrı süreçte.
+- Retrieval'da il/frekans sözcükleri puan değil eleme olmalı (BM25 tek başına "konut kredisi"de 81 ili öne alıyordu); sayıyla gelen "3 aylık" vade, frekans değil. Kosinüs benzerliğini saf Python döngüsüyle yazma (2.214×4096 sorgu başına saniyeler), numpy matrisle.
 - Model grafik sonrası tabloyu "doğrulamak" için sorgu üstüne sorgu atar; kart çizilen satırları taşıyıp "araç çağırmayı bırak" demeli; grafik istenip çizilmediyse harness geri göndermeli.
 - Trendli seride aykırılık düzeyde değil değişimde aranır (uçlar sahte aykırı); kırılma cezası serinin kendi MAD'ıyla değil birinci farkların MAD'ıyla ölçeklenmeli (gerçek seride hiç rejim bulunamıyordu). Yöntemi gerçek seride ölçmeden kabul etme.

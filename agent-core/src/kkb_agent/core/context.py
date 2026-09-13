@@ -115,15 +115,22 @@ def build_question_context(
     k: int = 8,
     max_values: int = 60,
     values_if_at_most: int = 12,
+    retrieval_mode: str = "auto",
+    small_max: int = 60,
 ) -> CatalogContext:
-    """Soruya göre seçilmiş kartlar + değerler, bütçe içinde; kalanlar dizin satırı."""
+    """Soruya göre seçilmiş kartlar + değerler, bütçe içinde; kalanlar dizin satırı.
+
+    Kademe (ADR-0043): katalog `small_max`'ı aşmıyorsa (ya da mod `preload_all`) arama yok,
+    hepsi kart olur ve bütçe neyi keserse o dizinde kalır; aksi hâlde adaptörün retriever'ı
+    (BM25/hybrid + yüzler) ilk k'yı seçer."""
     if budget_tokens <= 0:
         return CatalogContext(text="", mode="off", tokens=0)
     specs = lakehouse.list_datasets()
     if not specs:
         return CatalogContext(text="", mode="empty", tokens=0)
 
-    if len(specs) <= k:
+    preload_all = retrieval_mode == "preload_all" or (retrieval_mode == "auto" and len(specs) <= small_max)
+    if preload_all or len(specs) <= k:
         chosen = list(specs)
     else:
         chosen = list(lakehouse.search_datasets(question, limit=k))

@@ -39,6 +39,13 @@ class Settings:
     # Ön-yükleme (ADR-0013/0035): soruya göre seçilen seri kartları için token bütçesi; 0 kapatır.
     preload_budget_tokens: int
     preload_k: int
+    # Retrieval kademesi (ADR-0043): auto | preload_all | bm25 | hybrid; eşikler retrieval golden ile ölçülür.
+    retrieval_mode: str
+    retrieval_small_max: int
+    retrieval_hybrid_min: int
+    embedding_cache_dir: Path
+    # Araç kapısı (ADR-0043): soruya göre araç alt kümesi sunulur; "off" ile ölçüm için kapatılır.
+    tool_gate: bool
 
     @property
     def provider_label(self) -> str:
@@ -65,4 +72,9 @@ def load_settings() -> Settings:
         geo_dir=Path(os.getenv("GEO_DIR", PROJECT_ROOT / "assets" / "geo")),  # data/ gitignore'da; sınır dosyası lisansıyla repoya girer
         preload_budget_tokens=int(os.getenv("PRELOAD_BUDGET_TOKENS", "6000")),
         preload_k=int(os.getenv("PRELOAD_K", "8")),
+        retrieval_mode=os.getenv("RETRIEVAL_MODE", "auto"),
+        retrieval_small_max=int(os.getenv("RETRIEVAL_SMALL_MAX", "60")),
+        retrieval_hybrid_min=int(os.getenv("RETRIEVAL_HYBRID_MIN", "5000")),
+        embedding_cache_dir=Path(os.getenv("EMBEDDING_CACHE_DIR", PROJECT_ROOT / "data" / "cache" / "embeddings")),
+        tool_gate=os.getenv("TOOL_GATE", "on").lower() != "off",
     )

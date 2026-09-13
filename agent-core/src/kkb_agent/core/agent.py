@@ -26,6 +26,7 @@ from ..domain import DomainProfile
 from ..llm.base import ChatMessage, LLMClient, ToolCall
 from .errors import ToolError
 from .grounding import causal_language, grounding_check
+from . import tool_gate
 
 # Kullanıcının grafik isteği (Türkçe çekimli: grafiği, grafiğini, çiz, çizer misin, görselleştir).
 _CHART_ASK = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
@@ -241,7 +242,10 @@ class AnalyticsAgent:
         profile: DomainProfile | None = None,
         evidence: Any = None,
         preloader: Callable[[str], Any] | None = None,
+        tool_gate: bool = True,
     ) -> None:
+        self.tool_gate = tool_gate
+        self.last_gate = None
         self.llm = llm
         self.registry = registry
         self.workspace = workspace or AnalysisWorkspace()
@@ -290,10 +294,16 @@ class AnalyticsAgent:
         self.registry.active_question = question
         if hasattr(self.registry, "user_text"):
             self.registry.user_text = (self.registry.user_text + "\n" + question).strip()
+        # Araç kapısı (ADR-0043): soruya göre araç alt kümesi; kapalı olan aile şemaya girmez.
+        gate = tool_gate.decide(
+            question, set(self.registry.names()), user_text=getattr(self.registry, "user_text", "") or "",
+            has_table=self.workspace.has_table, enabled=self.tool_gate,
+        )
+        self.last_gate = gate
         messages = self._build_messages(question)
         steps: list[AgentStep] = []
         native = self.llm.supports_native_tools()
-        tools = self.registry.schemas() if native else None
+        tools = self.registry.schemas(only=gate.allowed) if native else None
         produced_data = False   # veri getiren bir araç başarıyla çalıştı mı?
         artifacts: list[dict[str, Any]] = []  # grafik vb. (ADR-0032)
         nudged = False          # "önce veriyi çek" uyarısı bir kez verilir
@@ -565,7 +575,7 @@ class AnalyticsAgent:
     def _build_messages(self, question: str) -> list[ChatMessage]:
         system = self._system_prompt
         if not self.llm.supports_native_tools():
-            system += "\n" + JSON_PROTOCOL_PROMPT + self.registry.describe()
+            system += "\n" + JSON_PROTOCOL_PROMPT + self.registry.describe(only=getattr(self, 'last_gate', None).allowed if getattr(self, 'last_gate', None) else None)
 
         # Soruya göre seçilmiş katalog kartları ve gerçek kırılım değerleri (ADR-0013, D1):
         # keşif turları LLM turu olmaktan çıkar. Bütçe aşılırsa yalnız dizin satırı girer.

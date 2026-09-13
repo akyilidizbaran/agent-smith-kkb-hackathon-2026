@@ -39,7 +39,8 @@ from ..contracts.catalog import (
 from ..contracts.evidence import ObservationEvidence
 from ..contracts.lakehouse import GoldRefused, LakehouseError, QueryProvenance, QueryResult
 from ..contracts.retrieval import Candidate
-from ..core.lexical import Bm25Index, candidate_text
+from ..core.facets import province_of
+from ..core.retriever import CatalogRecord, CatalogRetriever, RetrievalPolicy, record_from_spec
 from .duckdb_lakehouse import guard_sql, hardened_connection, register_reader
 from .gold_cli import GoldCLI, GoldRunOutcome
 
@@ -546,42 +547,46 @@ class SilverLakehouse:
         )
 
     # ---------- Arama: BM25 sözlük dizini (ADR-0036) ----------
-    def _index(self) -> Bm25Index:
-        """Sorgulanabilir katalog üzerinde BM25; katalog nesnesi değişince (reload) yeniden kurulur."""
-        if getattr(self, "_bm25_for", None) is not id(self._catalog):
-            index = Bm25Index()
-            index.index([
-                Candidate(
-                    id=spec.dataset_id,
-                    text=candidate_text(
-                        name=spec.name, description=spec.description, tags=spec.tags,
-                        aliases=[a for c in spec.columns for a in c.aliases], dataset_id=spec.dataset_id,
-                    ),
-                )
-                for spec in self._catalog.values()
-            ])
-            self._bm25 = index
-            self._bm25_for = id(self._catalog)
-        return self._bm25
+    # ---------- Retrieval (ADR-0036 BM25 → ADR-0043 kademeli + yüzlü) ----------
+    retrieval_policy: RetrievalPolicy | None = None   # cli.build_agent ayarlardan verir; None → auto varsayılanları
+    embedder: object | None = None                    # Embedder sözleşmesi (MIA); yalnız hybrid kademede kullanılır
+    embedding_cache: object | None = None
 
-    def _uningested_index(self) -> Bm25Index:
-        if getattr(self, "_bm25_un_for", None) is not id(self._uningested):
-            index = Bm25Index()
-            index.index([Candidate(id=sid, text=candidate_text(name=name, description="", tags=(), aliases=(), dataset_id=sid))
-                         for sid, name in self._uningested.items()])
-            self._bm25_un = index
-            self._bm25_un_for = id(self._uningested)
-        return self._bm25_un
+    def _retriever(self) -> CatalogRetriever:
+        """Sorgulanabilir katalog üzerinde retriever; katalog nesnesi değişince (reload) yeniden kurulur."""
+        if getattr(self, "_retr_for", None) is not id(self._catalog):
+            self._retr = CatalogRetriever(
+                [record_from_spec(spec) for spec in self._catalog.values()],
+                policy=self.retrieval_policy or RetrievalPolicy(), embedder=self.embedder,
+                embedding_cache=self.embedding_cache,
+            )
+            self._retr_for = id(self._catalog)
+        return self._retr
+
+    @property
+    def retrieval_mode(self) -> str:
+        return self._retriever().mode
+
+    def _uningested_retriever(self) -> CatalogRetriever:
+        if getattr(self, "_retr_un_for", None) is not id(self._uningested):
+            self._retr_un = CatalogRetriever(
+                [CatalogRecord(id=sid, name=name, source=sid.split(":", 1)[0], province=province_of(f"{sid} {name}"))
+                 for sid, name in self._uningested.items()],
+                policy=RetrievalPolicy(mode="bm25"),
+            )
+            self._retr_un_for = id(self._uningested)
+        return self._retr_un
 
     def search_datasets(self, query: str, limit: int = 5) -> list[DatasetSpec]:
-        """BM25 (Türkçe katlama + ön ek), takma adlar 3× ağırlıklı (ADR-0036).
+        """Kademeli retrieval (ADR-0043): BM25 (+ hybrid) ve yüzler — il, frekans, kaynak.
 
-        Eşleşme yoksa boş döner (ADR-0026): 1.620 serilik katalogda alakasız bir seri
+        Eşleşme yoksa boş döner (ADR-0026): 2.214 serilik katalogda alakasız bir seri
         vermek modeli ondan cevap üretmeye davet eder. Yüklenmemiş seriler burada
         değil; onlar için `search_uningested`.
         """
-        hits = self._index().search(query, k=limit)
+        hits = self._retriever().search(query, k=limit)
         self.last_search_terms = {h.id: (h.meta.get("matched", []), h.meta.get("unmatched", [])) for h in hits}
+        self.last_facets = self._retriever().last_facets
         return [self._catalog[h.id] for h in hits if h.id in self._catalog]
 
     def search_uningested(self, query: str, limit: int = 5) -> list[tuple[str, str]]:
@@ -590,7 +595,7 @@ class SilverLakehouse:
         Ölçüldü: arama boş dönünce model on kez farklı sözcükle aradı (G5/G6, gerçek DB).
         "Yok" ile "var ama yüklenmemiş" aynı cevap değildir; ikincisi burada söylenir.
         """
-        hits = self._uningested_index().search(query, k=limit)
+        hits = self._uningested_retriever().search(query, k=limit)
         return [(h.id, self._uningested.get(h.id, "")) for h in hits]
 
     # ---------- Sorgulama ----------
