@@ -280,7 +280,8 @@ class LeadLagTool(_AnalyticsTool):
         if len(g_df):
             self.workspace.note_peek(f"granger({a},{b})", g_df)
         self.workspace.note_peek(f"lead_lag({a},{b}) parametreler", pd.DataFrame({
-            "n": [res.n], "en_guclu_gecikme": [k], "r": [round(res.best_r, 2)], "max_lag": [params.max_lag]}))
+            "n": [res.n], "en_guclu_gecikme": [k], "r": [round(res.best_r, 2)], "max_lag": [params.max_lag],
+            "p_esik": [0.05]}))   # "p < 0,05" anlamlılık eşiği de kartın sayısıdır (ölçüldü, G17)
         card = [
             f"ÖNCÜL-ARDIL: A={a}, B={b} — taban: {_BASIS_TEXT[res.basis]} | n={res.n} ortak gözlem "
             f"({len(table)} satır) | gecikme aralığı ±{params.max_lag}",
@@ -292,8 +293,9 @@ class LeadLagTool(_AnalyticsTool):
         else:
             card.append("Granger testi: yeterli gözlem yok.")
         card.append("Bu bir öncülük/eşzamanlılık ölçüsüdür, NEDENSELLİK DEĞİLDİR. YAPACAĞIN: 'öncülük ediyor / "
-                    "birlikte hareket ediyor' de, 'neden oldu' deme; gecikme, r, p ve n değerlerini karttan aktar. "
-                    "ARAÇ ÇAĞIRMAYI BIRAK, cevabını yaz.")
+                    "önden hareket ediyor / birlikte hareket ediyor' de; cevabında 'neden', 'yol aç', 'sebep', "
+                    "'etkisiyle' sözcüklerini HİÇ kullanma (olumsuz cümlede bile); gecikme, r, p ve n değerlerini "
+                    "karttan aktar. ARAÇ ÇAĞIRMAYI BIRAK, cevabını yaz.")
         return ToolResult(content="\n".join(card))
 
 

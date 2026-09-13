@@ -27,14 +27,26 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
+_MONTHLY_ITEMS = (1534, 1533, 1535, 1536, 1539, 1543, 1544, 1545, 1546, 1547, 1548,
+                  1160, 1676, 1688, 1717, 1357, 1344)
+_MONTHLY_RATIOS = (544, 1749, 1746)
+_EVDS = ("TP.KTF12", "TP.DK.USD.A.YTL", "TP.DK.EUR.A.YTL", "TP.BISPOLFAIZ.TUR", "TP.APIFON4",
+         "TP.TRY.MT02", "TP.KKHARTUT.KT1", "TP.HPBITABLO1.11", "TP.HPBITABLO1.18", "TP.TUKFIY2025.GENEL")
+_PROVINCES = ("ISTANBUL", "ANKARA", "IZMIR", "BURSA", "ANTALYA", "KOCAELI", "KONYA", "ADANA",
+              "GAZIANTEP", "MERSIN", "KAYSERI", "TEKIRDAG")
+_FINTURK_COLUMNS = ("KonutKredisi", "TasitKredisi", "DigerTuketiciKredileri", "KrediliMevduatHesabi",
+                    "BireyselKrediKartlari", "TakiptekiTasitKredisi", "TakiptekiKonutKredisi",
+                    "TakiptekiDigerTuketiciKredileri")
 DEMO_SERIES = (
-    "bddk_monthly:1534_Toplam",
+    *(f"bddk_monthly:{i}_Toplam" for i in _MONTHLY_ITEMS),
+    *(f"bddk_monthly:{i}_Rasyo" for i in _MONTHLY_RATIOS),
     "bddk_weekly:5690_3",
-    "evds:TP.KTF12",
-    "bddk_finturk:ISTANBUL_KonutKredisi",
-    "bddk_finturk:ANKARA_KonutKredisi",
+    *(f"evds:{c}" for c in _EVDS),
+    *(f"bddk_finturk:{p}_{c}" for p in _PROVINCES for c in _FINTURK_COLUMNS),
 )
-"""Demo senaryosunun serileri: aylık/haftalık konut stoku, haftalık faiz, iki il (FinTürk)."""
+"""Demo serileri (13 Eyl, veri genişliği): 20 BDDK aylık kalem (bakiye + oran), haftalık konut, 10 EVDS
+(konut faizi, kur, politika faizi, AOFM, mevduat faizi, kart harcaması, M2/M3, TÜFE) ve 12 ilin 8'er
+FinTürk sütunu (bir ilin 8 serisi tek çekiliştir). Toplam 127 seri, ~43 çekiliş grubu."""
 
 SCENARIO_CASES = (
     "G1_tek_deger",          # 1. tek değer, kaynak gösterimi

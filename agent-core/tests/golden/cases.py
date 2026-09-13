@@ -32,6 +32,9 @@ class GoldenCase:
     answer_must_not_contain: list[str] = field(default_factory=list)
     # Alternatifli iğne: listeden EN AZ BİRİ geçmeli (Türkçe çekim çeşitliliği için).
     answer_must_contain_any: list[str] = field(default_factory=list)
+    # Düzenli ifadeyle yasak: olumsuzlanmış biçimi ("neden olduğu söylenemez") geçirip iddiayı
+    # ("neden oldu.") yakalamak için; düz iğne bunu ayıramıyor (ölçüldü, G17).
+    answer_must_not_match: list[str] = field(default_factory=list)
     # Doğru aracı seçti mi? Sonuç doğru olsa bile yanlış yoldan gelinmiş olabilir.
     must_use_tools: list[str] = field(default_factory=list)
     # Araç yolu üzerinde denetim: (ad, adım listesi → bool). Birden çok meşru yol varsa
@@ -337,11 +340,11 @@ CASES: list[GoldenCase] = [
     ),
     GoldenCase(
         id="G12_yuklenmemis_seri",
-        question="2025 yılında taşıt kredisi bakiyesini aylık olarak göster.",
-        why="D2 (ADR-0036): seri katalogda tanımlı ama bu veri havuzuna çekilmemiş. Ölçülen açık: "
-        "arama boş dönünce model on kez farklı sözcükle arayıp bütçeyi yakıyordu. Arama artık "
-        "'var ama henüz yüklenmemiş' der ve tekrar denenmez; agent bunu kullanıcıya söyler, "
-        "konut serisini taşıt diye kullanmaz, sayı üretmez. Gerçek DB (seed'de taşıt yüklü, vaka orada anlamsız).",
+        question="2025 yılında Van ilindeki konut kredisi bakiyesini çeyreklik göster.",
+        why="D2 (ADR-0036): seri katalogda tanımlı (FinTürk, 81 il) ama demo setine yalnız 12 il çekildi; Van "
+        "yüklü değil. Ölçülen açık: arama boş dönünce model on kez farklı sözcükle arayıp bütçeyi yakıyordu. "
+        "Arama artık 'var ama henüz yüklenmemiş' der ve tekrar denenmez; agent bunu söyler, İstanbul'u Van "
+        "diye kullanmaz, sayı üretmez. (13 Eyl'e kadar vaka taşıt kredisiydi; ADR-0042 ile taşıt yüklendi.)",
         expect_no_table=True,
         must_use_tools=["lakehouse_search"],
         answer_must_contain_any=["yüklenme", "çekilme", "henüz", "bulunm", "yer alm"],
@@ -418,7 +421,7 @@ CASES += [
         table_checks=[("iki sayısal seri aynı tabloda", lambda df: len(df.select_dtypes("number").columns) >= 2)],
         must_use_tools=["lead_lag"],
         answer_must_contain_any=["öncü", "gecikme", "korelasyon", "birlikte hareket"],
-        answer_must_not_contain=["neden oldu", "yol açtı"],
+        answer_must_not_match=[r"\b(neden old\w*|yol aç\w*)\b(?![^.\n]{0,40}(söylenemez|anlamına gelme|kanıtla\w*maz|gösterme|değil|iddia edilemez))"],
         max_steps_used=8,
     ),
 ]

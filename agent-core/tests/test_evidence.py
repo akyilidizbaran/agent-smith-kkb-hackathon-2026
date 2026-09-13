@@ -225,10 +225,11 @@ def test_satir_sayisi_ve_isaret_yazimi_zinciri_kirmaz() -> None:
                  provenance=QueryProvenance(sql="web_url https://x/p.csv tablo#0", dataset_ids=[], sources=["web — p"], source_urls=["https://x/p.csv"]))
     ws.remember_web({"used": "https://x/p.csv", "visited": [{"url": "https://x/p.csv", "sha256": "ab" * 32, "fetched_at": "t", "status": 200}]})
     ws.note_peek("anomaly parametreler", pd.DataFrame({"alt_sinir": [-2.31], "n": [65]}))
-    panel = EvidenceBuilder(Silverish()).build("soru", "40 satır var; alt sınır −2,31; 65 gözlem.", ws, [], artifacts=[])
+    panel = EvidenceBuilder(Silverish()).build("soru", "40 satır var; alt sınır −2,31 (mutlak 2,31); 65 gözlem.", ws, [], artifacts=[])
     m = {n.text: n for n in panel.numbers}
     assert m["40"].matched and m["40"].column == "(satır sayısı)"
-    assert m["2,31"].matched and m["2,31"].row_key.startswith("işaret")
+    assert m["-2,31"].matched and not m["-2,31"].row_key.startswith("işaret")   # Unicode eksi ASCII'ye çevrildi
+    assert m["2,31"].matched and m["2,31"].row_key.startswith("işaret")          # işaretsiz yazım: ters işaretle eşleşir
     assert m["65"].matched and panel.complete, panel.gaps
 
 

@@ -31,9 +31,16 @@ _NUM_RE = re.compile(
 )
 
 
+def _ascii_minus(text: str) -> str:
+    """Model "−0,54" (U+2212) yazar, araç "-0.54" (ASCII); işaret düşünce eşleşmez (ölçüldü, G17:
+    dört korelasyon katsayısı "araç çıktısında yok" sayıldı). Yalnız gerçek eksi işareti çevrilir;
+    aralık tiresi (2024–2026) dokunulmaz."""
+    return (text or "").replace("\u2212", "-")
+
+
 def numbers_in(text: str) -> list[float]:
     out: list[float] = []
-    for m in _NUM_RE.finditer(text or ""):
+    for m in _NUM_RE.finditer(_ascii_minus(text)):
         raw = m.group(0)
         if "," in raw:
             raw = raw.replace(".", "").replace(",", ".")
@@ -60,7 +67,7 @@ def grounding_check(question: str, answer: str, tool_texts: list[str], tolerance
         pool.update(numbers_in(t))
     asked = set(numbers_in(question))
     missing: list[str] = []
-    for m in _NUM_RE.finditer(answer or ""):
+    for m in _NUM_RE.finditer(_ascii_minus(answer)):
         vals = numbers_in(m.group(0))
         if not vals:
             continue
@@ -76,9 +83,22 @@ def grounding_check(question: str, answer: str, tool_texts: list[str], tolerance
 # Ölçüldü (Deney 2): "Suriyeli sığınmacıların etkisiyle artış hızlanmış" veride olmayan bir
 # sebep; "etkisiyle" ve "nedeniyle" listede yoktu, cümle geçti. Sonuç bağlacı olan
 # "dolayısıyla" bilerek dışarıda (toplam/sonuç anlatımında meşru).
-_CAUSAL = re.compile(r"\b(neden oldu|yol açtı|sebep oldu|kaynaklandı|sayesinde|yüzünden|etkisiyle|nedeniyle)\b", re.I)
+_CAUSAL = re.compile(r"\b(neden old\w*|yol aç\w*|sebep old\w*|kaynaklan\w*|sayesinde|yüzünden|etkisiyle|nedeniyle)\b", re.I)
+# Olumsuzlanmış nedensellik iddia değildir: "neden olduğu söylenemez / anlamına gelmez / kanıtlamaz"
+# (ölçüldü, G17: model kartın istediği çekinceyi yazdı, filtre onu iddia sandı ve geri gönderdi).
+_CAUSAL_NEGATED = re.compile(
+    r"\b(neden old\w*|yol aç\w*|sebep old\w*|kaynaklan\w*)\b[^.\n]{0,40}?"
+    r"(söylenemez|anlamına gelme\w*|kanıtla\w*maz|gösterme\w*|değil\w*|iddia edilemez|çıkarılamaz)", re.I,
+)
 
 
 def causal_language(answer: str) -> list[str]:
-    """Nedensellik dili filtresi (edge-case 8): yakalanan ifadeler."""
-    return sorted({m.group(0).lower() for m in _CAUSAL.finditer(answer or "")})
+    """Nedensellik dili filtresi (edge-case 8): yakalanan ifadeler; olumsuzlanmış olanlar sayılmaz."""
+    text = answer or ""
+    negated = [(m.start(), m.end()) for m in _CAUSAL_NEGATED.finditer(text)]
+    found: set[str] = set()
+    for m in _CAUSAL.finditer(text):
+        if any(a <= m.start() < b for a, b in negated):
+            continue
+        found.add(m.group(0).lower())
+    return sorted(found)

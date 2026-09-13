@@ -310,6 +310,7 @@ class AnalyticsAgent:
         stuck_note: str | None = None        # son tura verilecek özel yönerge
         tool_texts: list[str] = []           # grounding havuzu: araçların gerçekten söyledikleri
         regenerated = False                  # cevap bir kez geri gönderildi mi
+        causal_rounds = 0                    # nedensellik dili için geri gönderme sayısı (en çok 2)
         grounding = ""                       # son ölçüm; AgentAnswer'a taşınır
 
         for i in range(1, self.max_steps + 1):
@@ -385,8 +386,13 @@ class AnalyticsAgent:
                     causal = causal_language(answer_text)
                     if causal:
                         grounding += " | CAUSAL:" + ",".join(causal)
-                    if not regenerated and (grounding.startswith("MISS") or causal):
+                    # Nedensellik iddiası için ikinci bir geri gönderme hakkı: ölçüldü (G17), model
+                    # kartın "neden deme" uyarısına rağmen ilk yeniden yazımda da nedensellik dili kullandı.
+                    causal_retry = causal and causal_rounds < 2
+                    if (not regenerated and (grounding.startswith("MISS") or causal)) or causal_retry:
                         regenerated = True
+                        if causal:
+                            causal_rounds += 1
                         steps.append(
                             AgentStep(
                                 index=i,
@@ -411,7 +417,9 @@ class AnalyticsAgent:
                                 content="Cevabında " + "; ".join(problems) + ". Yalnızca "
                                 "araçlardan dönen sayıları kullan; hesap gerekiyorsa "
                                 "workspace_compute_column ile yaptır. Veriden çıkarılamayan "
-                                "neden-sonuç iddiası kurma. Cevabını yeniden yaz.",
+                                "neden-sonuç iddiası kurma: 'neden', 'yol aç', 'sebep', 'etkisiyle' "
+                                "sözcüklerini hiç kullanma, 'öncülük ediyor / birlikte hareket ediyor' de. "
+                                "Cevabını yeniden yaz.",
                             )
                         )
                         continue

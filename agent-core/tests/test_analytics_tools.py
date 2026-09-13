@@ -87,3 +87,12 @@ def test_sayi_ayristirma_tanimlayici_ve_sifirli_ondalik() -> None:
     from kkb_agent.core.grounding import numbers_in
     assert numbers_in("bddk_weekly:5690_3 serisinde r=0.263, 124 hafta, k=1,5, 65.425.957 kişi") == [0.263, 124.0, 1.5, 65425957.0]
     assert numbers_in("TP.KTF12 2025'te %33,39") == [2025.0, 33.39]
+
+
+def test_unicode_eksi_ve_olumsuz_nedensellik() -> None:
+    from kkb_agent.core.grounding import causal_language, grounding_check, numbers_in
+    assert numbers_in("r = \u22120,54 ve 2024\u20132026") == [-0.54, 2024.0, 2026.0]
+    assert grounding_check("soru", "En güçlü ilişki r = \u22120,54.", ["gecikme +1, r=-0.54"]) == "OK"
+    assert causal_language("Faiz artışı bakiyenin düşmesine neden oldu.") == ["neden oldu"]
+    assert causal_language("Bu, faizin bakiyeye neden olduğu anlamına gelmez; öncülük bulgusudur.") == []
+    assert causal_language("Faizin bakiyeye yol açtığı söylenemez.") == []

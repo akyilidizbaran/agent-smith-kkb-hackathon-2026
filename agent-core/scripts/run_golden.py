@@ -18,6 +18,8 @@ karşılaştırılmalıdır — "iyileştirdim" iddiasının tek objektif kanıt
 
 from __future__ import annotations
 
+import re
+
 import json
 import sys
 import time
@@ -139,6 +141,9 @@ def run_case(case: GoldenCase) -> CaseOutcome:
     for needle in case.answer_must_not_contain:
         if needle.lower() in low:
             failures.append(f"cevapta olmaması gereken '{needle}' geçiyor")
+    for pattern in getattr(case, "answer_must_not_match", []):
+        if re.search(pattern, answer.text, re.I):
+            failures.append(f"cevapta yasak ifade var (düzenli ifade): {pattern[:40]}")
     if case.answer_must_contain_any and not any(n.lower() in low for n in case.answer_must_contain_any):
         failures.append(f"cevapta şunlardan hiçbiri geçmiyor: {', '.join(case.answer_must_contain_any)}")
 
@@ -176,7 +181,7 @@ def run_case(case: GoldenCase) -> CaseOutcome:
         llm_calls=usage.get("calls", 0),
         context=context,
         failures=failures,
-        answer_preview=answer.text[:200].replace("\n", " "),
+        answer_preview=answer.text[:600].replace("\n", " "),
     )
 
 
@@ -209,7 +214,10 @@ def run_stability(cases: list[GoldenCase], repeat: int) -> list[StabilityReport]
                 key = f.split(":")[0].strip()
                 rep.failure_reasons[key] = rep.failure_reasons.get(key, 0) + 1
             if o.failures:
-                rep.failure_samples.append(f"{i}/{repeat}: " + " | ".join(o.failures)[:300])
+                # Cevabın başı da rapora girer: "yasak ifade var" gibi bulguların hangi cümleden
+                # geldiği görülsün (ölçüldü, G17: sebep anlaşılmadan iki koşu harcandı).
+                rep.failure_samples.append(f"{i}/{repeat}: " + " | ".join(o.failures)[:300]
+                                           + f"\n         cevap: {o.answer_preview[:400]}")
             print(f"   {i}/{repeat} {'✓' if o.passed else '✗'} {o.duration_s:.0f}s {o.steps} adım")
         reports.append(rep)
     return reports

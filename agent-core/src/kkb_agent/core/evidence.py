@@ -92,7 +92,7 @@ def _key_text(value: Any) -> str:
 def _number_texts(answer: str) -> list[tuple[str, float]]:
     """Metindeki sayılar, göründükleri yazımla; `numbers_in` ile aynı ayrıştırma."""
     out: list[tuple[str, float]] = []
-    for m in _NUM_RE.finditer(answer or ""):
+    for m in _NUM_RE.finditer((answer or "").replace("\u2212", "-")):
         raw = m.group(0)
         parsed = numbers_in(raw)
         if parsed:

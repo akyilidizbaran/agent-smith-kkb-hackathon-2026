@@ -60,6 +60,8 @@ Architect ve yeni araçların üstüne oturacağı ortak katman. Önce bu, çün
 
 | D7 ✅ | **Görüntü ve PDF girişi** (ADR-0041, 13 Eyl): `web_url` ve `ingest_from_url` PDF/görseli MIA OCR ile okur; Borsa İstanbul altın PDF'leri (demo slaytı) 2 tablo doğru | colspan/rowspan ızgarası, `<td>` başlık terfisi, "OCR ile okundu, doğrulanmadı" | golden G18a/G18b; kabul 11 senaryo |
 
+| D8 ✅ | **Veri genişliği** (ADR-0042, 13 Eyl): BDDK aylık 20 kalem, FinTürk 648 seri, EVDS kur/faiz/mevduat/kart/para arzı/TÜFE, Gold 6 metrik; demo seti 127 seri | `feature/lakehouse-catalog-breadth` (r3 üstüne), veri ekibi düzenleyebilir | sıfırdan kabul: bkz. ADR |
+
 Stretch (zaman kalırsa): `clarify` (EVPI, L10-01), katkı ayrıştırması (il bazında waterfall), çapraz kaynak mutabakat fonksiyonu.
 
 ## Faz E — Kapanış (19–20 Eylül)

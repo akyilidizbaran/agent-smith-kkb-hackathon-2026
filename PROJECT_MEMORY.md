@@ -119,13 +119,22 @@ Demo slaytı "Altın İşlemleri PDF'inden değer çıkarma" istiyor; ADR-0022 O
 - Kanıt: sayfa notu + provenance uyarısı "görüntüden OCR ile okundu, doğrulanmadı"; zincir URL + belge sha256 + zaman + OCR bilgisi; ingest'te OCR tablosu CSV olarak izinli köke, belge kopyası yanına, sha256/sayfa/model katalog açıklamasında. `VISION_MODEL` yoksa "okunamaz", uydurma yok.
 - Ölçüm: `ith_au.pdf` 5,8 s, 32×14 tablo 14/14 sayısal, 2025 Ocak 9.654,00 kg; `kmp_au.pdf` 1,9 s, 13×11, "TL | Hacim/Volume (TL)" 2026 Ocak 93.824.682.381. İlk denemede tek "-" hücresi altı kolonu metin bırakmış, colspan başlıkları kaydırmıştı; ikisi de ölçülüp düzeltildi. Testler 287 → 297. Golden G18a **2/2** (26 s, 2 adım), G18b ilk 0/2 → kanıt paneli düzeltmesi (sorudaki sayı yankı, metin hücre sayı) → **2/2** (21 s). Kabul senaryoları 10 → 11 (G18a); mevcut DB'de **11/11**, kanıt zinciri 11/11. `.env.example`'a `VISION_MODEL`.
 
+### 2.14 Veri genişliği (13 Eylül, ADR-0042) — veri ekibinin işi devralındı, `feature/lakehouse-catalog-breadth`
+Demo DB'de 5 seri vardı; BDDK aylık/haftalık kataloglarında birer seri, FinTürk'te yalnız konut kolonu. Oturum yeniden başlayınca scratchpad ve /tmp silinmişti: lakehouse worktree r3'ün itilmiş ucundan yeni dalda kuruldu, demo DB sıfırdan yeniden.
+- **Keşif canlı ve kanıtlı:** BDDK aylık kalem ağacı Gelişmiş sayfanın `<option>` listesinden (ilk kimlik kararlı); 19 kalem 2025-12 için tek tek çağrıldı, birim yanıtın kolon başlığından; rasyoların sütunu `KalemSutunGetir` ile `?Rasyo`. EVDS 678 veri grubu listelendi, 8 seri seçildi (kur, politika faizi, AOFM, mevduat faizi, kart harcaması, M2/M3), TÜFE küratörlü.
+- **Katalog:** BDDK aylık 1 → 20, FinTürk 81 → 648 (7 sütun × 81 il, ek istek yok: aynı yanıtın kolonları), EVDS 1.537 → 1.545; toplam 2.214 seri yükleniyor (bootstrap doğrulandı, katalog testleri 54/54). Gold 3 → 6 metrik (tüketici kırılımı, takipteki kırılımı, kur+faiz).
+- **Ingest betiği:** aynı FetchSpec'i paylaşan seriler bir kez çekilir (bir ilin 8 sütunu = 1 istek/dönem).
+- **Demo seti** 5 → 127 seri (~43 çekiliş grubu). G12 "yüklenmemiş seri" vakası taşıttan Van iline taşındı (taşıt artık yüklü).
+- Alınmayan: haftalık ek kalemler (konumsal kimlik), KOBİ (sütun belirsiz), üretilmiş EVDS `unknown` serileri.
+- **Ölçüm (sıfırdan):** bootstrap 2 s, canlı ingest **197 s** (127/127; FinTürk 264 artifact = 12 il × 22 çeyrek), Silver 2 s **8.290 satır**, Gold 1 s **6 tablo** red 0. İki kaçak: rasyo "(%)" birimi Silver'ın incelenmiş birim tablosunda yoktu (`% → pct`); FinTürk'te bir çekilişin 8 serisi Bronze'da çekilişin `dataset_id`'sini taşıyor → yeni sütunlar ilin konut `dataset_id`'sini aldı. Senaryolar 10/11 → G17 düzeltmeleri (Unicode eksi, olumsuz nedensellik, p eşiği, ikinci geri gönderme) → G17 3/3, G9 3/3, G12 (Van) 2/2. Adım sayıları arttı (G1 1 → 3, G14 4 → 8): büyük katalogda model daha çok arıyor; araç kapısı sıradaki iş. Lakehouse: `% → pct` birim eşlemesi, iki test yeni katalog durumuna uyarlandı.
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 297 |
-| Lakehouse testi (r3) | 1083 |
-| ADR | 41 |
+| Agent birim testi | 298 |
+| Lakehouse testi (r3 + genişlik dalı) | 1.086 |
+| ADR | 42 |
 | Golden vakası | 21: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3, G18a/b 2/2; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 11 senaryo 11/11 |
 | Araç sayısı (gerçek DB'de) | 19: lakehouse ×4, workspace ×4 (query dâhil), analitik ×3 (anomaly_detect, change_points, lead_lag), ingest, promote_draft, gold ×3, chart, web_url, web_search (Tavily anahtarı .env'de) |
 | Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu (iş yapan araç/tablo varken susar), istenen yetenek zorunluluğu (grafik, analitik), frekans uyuşmazlığı (kabadan ince yok), grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, GOLD_REQUIRED, niyet kapısı, beyan kapısı, adım sınırı, reasoning temizliği |
