@@ -235,16 +235,19 @@ Kullanıcı uyurken tüm milestone'ları sırayla kapatma görevi. Kod dalı yal
 - **CI lakehouse işi GitHub'da düşüyordu:** 1.086 testin 1'i (`test_an_ipv4_mapped_loopback_is_refused`): `::ffff:127.0.0.1` yerelde (Python 3.12.13) "loopback", koşucudaki 3.12'de "private" sınıflanıyor. Adres sınıflamadan önce IPv4'e açılıyor; sebep yorumlayıcıya bağlı değil. Aynı iş GitHub'da 34 dk sürdü, 40 dk sınırı bir koşuyu iptal ettirdi → 60 dk.
 - **M05-T03 (ADR-0064):** ajan ile lakehouse bağlayıcısı karşılaştırıldı; ajan multicast, site-local ve `.internal`/`.localhost` adlarını geçiriyordu. Tek adres modülü (`web/addresses.py`) ve iki paketin okuduğu ortak vaka dosyası `docs/sozlesmeler/url_erisim_vakalari.json` (17 adres, 5 ad). Lakehouse tarafı 22 test, ajan tarafı 23 test.
 - **Üçüncü kabul koşusu 11/14, senaryo 5/6** (`acceptance_m16_2026-09-14_0154.json`, ae7fb01): L10 (0,2 s, LLM yok), ziyaret kırılması (2025-01) ve birleştirme düzeldi. Kalan: finans 1. turda "50" eşleşmedi (bağlam kırpılmış), 3. turda faiz "17.985" binlik okundu → iki okuma; grafik turunda model chart'ı çağırmadan reddetti → tablo varken de grafik zorunluluğu. Arayüz uçtan uca ae7fb01'de 7/7.
-- Testler ajan 377 → 416.
+- **Dördüncü kabul koşusu 12/14** (`acceptance_m16_2026-09-14_0205.json`, b33c03f): grafik turu chart'ı çağırdı ve geçti. Kalan iki: finans 3. turda yuvarlanmış değişim "−0,40" (−0,403) göreli %0,5'e takıldı → tolerans gösterilen hassasiyetin yarım birimi (M13-T05); birleştirme turu kontrol hatası (ajan fikstürün beklediği gibi Van yinelemesinde reddedip sordu) → kontrol düzeltildi, kayıt değiştirilmedi. Arayüz uçtan uca b33c03f'de 7/7.
+- Sabah raporu: kararlar (Büşra dalı, main/freeze, ARCHITECT_TOKEN, K10, boş katalog provası, ekip eşikleri/mentör/arkadaş provası) ve açıklar `docs/M16_KABUL_RAPORU.md` ile artifact sayfasında.
+- Testler ajan 377 → 417.
 
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 377 |
-| Lakehouse testi (r3 + genişlik dalı) | 1.079 |
-| ADR | 61 |
+| Agent birim testi | 417 (14 Eyl gece) |
+| Lakehouse testi | 1.086 + 22 ortak URL vakası (yerel 12 dk; GitHub 34 dk) |
+| ADR | 64 |
 | Golden vakası | 21: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3, G18a/b 2/2; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 11 senaryo 11/11 |
+| M16 kabul (14 tur) | koşu 1–4: 10 → 11 → 11 → 12 (b44cc1f → b33c03f); arayüz uçtan uca son kodda 7/7 |
 | Araç sayısı (gerçek DB'de) | 19: lakehouse ×4, workspace ×4 (query dâhil), analitik ×3 (anomaly_detect, change_points, lead_lag), ingest, promote_draft, gold ×3, chart, web_url, web_search (Tavily anahtarı .env'de) |
 | Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu (iş yapan araç/tablo varken susar), istenen yetenek zorunluluğu (grafik, analitik), frekans uyuşmazlığı (kabadan ince yok), grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, GOLD_REQUIRED, niyet kapısı, beyan kapısı, adım sınırı, reasoning temizliği |
 

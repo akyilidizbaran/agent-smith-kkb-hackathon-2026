@@ -370,7 +370,7 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 - [x] **M13-T02** (yıl/≤31/dönem sayısı filtre kaldı; sorudan diğer sayılar iddia): Küçük tam sayılar/yıllar için genel muafiyetleri yeniden değerlendir; tarih/etiket ile ölçüm değerini bağlamına göre ayır.
 - [x] **M13-T03**: Unicode eksi/binlik/ondalık normalizasyonunu tek yerde tut; ters işaretli değeri koşulsuz eşleştiren fallback'i kaldır veya doğru ayrıştırmayla sınırla.
 - [ ] **M13-T04:** Aynı sayının başka yıl/kolon/varlıkta bulunmasını yeterli kanıt sayma. İddianın dönem, birim, seri ve entity bağını kontrol et; çözülemeyen bağa doğrulanmış etiketi verme.
-- [~] **M13-T05** (tolerans %0,5 korundu; sınır örnekleri testi açık): Yuvarlama toleransını gösterilen hassasiyete göre ele al; geniş toleransın maddi yanlışları kabul etmediğini sınır örnekleriyle test et.
+- [x] **M13-T05** (14 Eyl: tolerans = göreli %0,5 ya da gösterilen ondalık hassasiyetin yarım birimi, büyük olan; sınır testi −0,40↔−0,403 kabul, 100,6↔100 ve 255↔250 ret; M16 dördüncü koşu bulgusu): Yuvarlama toleransını gösterilen hassasiyete göre ele al; geniş toleransın maddi yanlışları kabul etmediğini sınır örnekleriyle test et.
 - [~] **M13-T06** (workspace kolon provenance'ı var; formül/girdi lineage'i M09-T07 ile): SQL ve hesap araçlarının ürettiği türetilmiş kolonlara formül/girdi lineage ekle; metin içi serbest hesap yerine kayıtlı sonucu kullandır.
 - [ ] **M13-T07:** Önceki tablo/bakış sonucuna eşleşen iddianın hangi sürüm ve kaynakla doğrulandığını koru; güncel tablonun provenance'ıyla karıştırma.
 - [x] **M13-T08**: Üç ayrı durumu tanımla: hesap/iddia doğruluğu, semantik güven, kaynak zinciri/dosya bütünlüğü. Tek yeşil “tam” rozeti hepsinin yerine geçmesin.
@@ -488,6 +488,7 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 - [x] **EK-07** Büşra'nın notu: `FILE_IRRELEVANT` hata kodu, Windows sürücü harfi okuyucuda şema sayılmaz.
 - [ ] **EK-08** Büşra'nın ilgi kapısı/çapraz kontrol/birim tahmini kodunu bu dala alma kararı ve G12a–d golden vakaları (ekip kararı).
 - [x] **EK-09** CI: agent-core işi pillow/lxml eksikliğiyle düşüyordu → bağımlılık; art arda push'ta eski koşu iptal.
+- [x] **EK-11** M16 dördüncü koşu: yuvarlanmış değişim tolerans dışı sayılıyordu (M13-T05) ve birleştirme kontrolü fikstürün beklediği reddi başarısız sayıyordu → ikisi düzeltildi.
 - [x] **EK-10** CI lakehouse işi GitHub'da tek testte düşüyordu (IPv4-eşlemeli loopback etiketi Python yamasına bağlı) → adres önce açılır; iş 34 dk sürdüğü için süre sınırı 60 dk.
 
 ## 6. Asgari birleşik kabul matrisi

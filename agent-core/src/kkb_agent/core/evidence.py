@@ -121,10 +121,14 @@ class EvidenceBuilder:
         self.max_rows = max_rows
 
     # ------------------------------------------------------------------ halkalar
-    def _hits(self, series: pd.Series, candidates: list[float]) -> pd.Series:
-        """Adaylardan ilki tabloda tolerans içinde bulunursa eşleşen satırlar; yoksa boş seri."""
+    def _hits(self, series: pd.Series, candidates: list[float], decimals: int | None = None) -> pd.Series:
+        """Adaylardan ilki tabloda tolerans içinde bulunursa eşleşen satırlar; yoksa boş seri.
+
+        Tolerans: göreli %0,5 ya da GÖSTERİLEN hassasiyetin yarım birimi, hangisi büyükse (M13-T05). "−0,40" yazılan
+        değer −0,403 ise yuvarlamadır (ölçüldü, M16 dördüncü koşu); "100,6" yazılan değer 100 ise maddi farktır."""
+        half_unit = 0.5 * 10 ** (-decimals) if decimals else 0.0
         for n in candidates:
-            hits = series[(series - n).abs() <= max(abs(n) * self.tolerance, 1e-9)]
+            hits = series[(series - n).abs() <= max(abs(n) * self.tolerance, half_unit if n == candidates[0] else 0.0, 1e-9)]
             if not hits.empty:
                 return hits
         return series.iloc[0:0]
@@ -151,6 +155,8 @@ class EvidenceBuilder:
             # "17.985": Türkçe binlik (17985) mi, noktalı ondalık (17,985) mı? Yazım ikisini de taşır; biri tabloda
             # varsa sayı oradadır (M16 üçüncü koşu: faiz 17.985 yazıldı, 17985 aranıp "tabloda yok" dendi).
             candidates = [number] + ([float(text)] if re.fullmatch(r"[-+]?\d{1,3}\.\d{3}", text) else [])
+            # Gösterilen ondalık hane: yalnız virgüllü yazımda kesin ("−0,40" → 2). Noktalı yazım binlik olabilir; hane sayılmaz.
+            decimals = len(text.rsplit(",", 1)[1]) if "," in text else None
             if number in asked and (number in periods or (float(number).is_integer() and 1900 <= number <= 2100)):
                 ev.matched, ev.column, ev.row_key = True, "(soruda geçiyor)", text   # dönem/yıl filtresi
                 out.append(ev)
@@ -171,7 +177,7 @@ class EvidenceBuilder:
                 continue
             for col in numeric_cols:
                 series = table[col]
-                hits = self._hits(series, candidates)
+                hits = self._hits(series, candidates, decimals)
                 if not hits.empty:
                     idx = int(hits.index[0])
                     ev.matched, ev.column, ev.row_index = True, str(col), idx
@@ -179,7 +185,7 @@ class EvidenceBuilder:
                     break
             if not ev.matched:
                 for col, series in text_parsed.items():
-                    hits = self._hits(series, candidates)
+                    hits = self._hits(series, candidates, decimals)
                     if not hits.empty:
                         idx = int(hits.index[0])
                         ev.matched, ev.column, ev.row_index = True, col, idx
@@ -193,7 +199,7 @@ class EvidenceBuilder:
                     found = False
                     for col in [c for c in old.columns if pd.api.types.is_numeric_dtype(old[c])]:
                         series = old[col]
-                        hits = self._hits(series, candidates)
+                        hits = self._hits(series, candidates, decimals)
                         if not hits.empty:
                             ev.matched, ev.column, ev.row_key = True, str(col), f"önceki tablo (-{depth})"
                             found = True
@@ -206,7 +212,7 @@ class EvidenceBuilder:
                     found = False
                     for col in [c for c in frame.columns if pd.api.types.is_numeric_dtype(frame[c])]:
                         series = frame[col]
-                        hits = self._hits(series, candidates)
+                        hits = self._hits(series, candidates, decimals)
                         if not hits.empty:
                             ev.matched, ev.column, ev.row_key = True, str(col), f"bakış sorgusu: {sql[:80]}"
                             found = True

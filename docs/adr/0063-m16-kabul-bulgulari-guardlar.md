@@ -59,6 +59,14 @@ dört kusur buldu. Rapor rapordan çıkarılmadı: `docs/experiments/acceptance_
   için "tabloda yok" dendi. Tek noktalı üç haneli yazımda iki okumadan biri tabloda varsa sayı eşleşir.
 - **Açık:** finans ilk turunda eşleşmeyen tek sayı "50"; bağlam kayıtta kırpılmıştı, betik artık tam cevabı yazıyor.
 
+### Dördüncü koşu sonrası (12/14)
+
+- **Tolerans gösterilen hassasiyete bakar (M13-T05).** Faiz değişimi −0,403 cevapta "−0,40" yazıldı; göreli %0,5 (0,002)
+  yuvarlamayı "tabloda yok" saydı. Virgüllü yazımda tolerans, göreli %0,5 ile son gösterilen hanenin yarım biriminden büyük
+  olanıdır; "100,6" ↔ 100 ve "255" ↔ 250 hâlâ eşleşmez. Noktalı yazımda (binlik olabilir) hane sayılmaz.
+- **Kabul kontrolü düzeltmesi.** Birleştirme turunda ajan, fikstür belgesinin beklediği gibi yinelenen Van anahtarında
+  reddedip sordu; kontrol yalnız başarılı birleştirmeyi kabul ediyordu. Koşu kaydı değiştirilmedi.
+
 ## Reddedilenler
 
 - **İşlem iddiasında cevabı doğrudan reddetmek:** "eklendi" gibi fiiller önceki turdaki gerçek işi anlatırken de geçer;

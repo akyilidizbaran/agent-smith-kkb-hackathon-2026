@@ -314,3 +314,14 @@ def test_noktali_uc_haneli_sayi_hem_binlik_hem_ondalik_okunur(lake) -> None:
     assert got == {"276.263": True, "17.985": True}, panel.numbers
     miss = EvidenceBuilder(lake).build("soru", "Faiz 19.450.", ws, [])
     assert [n.matched for n in miss.numbers] == [False]
+
+
+def test_m13_t05_gosterilen_hassasiyetin_yarim_birimi_yuvarlama_maddi_fark_degil(lake) -> None:
+    """M16 dördüncü koşu: faiz değişimi −0,403 cevapta "−0,40" yazıldı; göreli %0,5 (0,002) yuvarlamayı reddediyordu."""
+    ws = AnalysisWorkspace()
+    ws.set_table(pd.DataFrame({"observation_date": [date(2025, 1, 28), date(2025, 2, 28)],
+                               "degisim": [-0.403, -0.0575], "bakiye": [100.0, 250.0]}), description="değişim")
+    ok = EvidenceBuilder(lake).build("soru", "Değişim −0,40 ve −0,06 puan.", ws, [])
+    assert [n.matched for n in ok.numbers] == [True, True], ok.numbers
+    bad = EvidenceBuilder(lake).build("soru", "Bakiye 100,6 ve 255 oldu; değişim −0,41.", ws, [])
+    assert [n.matched for n in bad.numbers] == [False, False, False], "yarım birimi aşan fark maddi sayılır"

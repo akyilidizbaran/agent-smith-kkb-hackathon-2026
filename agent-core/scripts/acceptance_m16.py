@@ -114,6 +114,17 @@ def answer_has_any(*needles):
     return (f"cevapta biri: {needles}", lambda a, ans, st: any(n.lower() in (ans.text or "").lower() for n in needles))
 
 
+def join_or_refused_duplicate():
+    """Fikstür beklentisi (tests/fixtures/generic/README.md): hastane tablosunda Van iki kez → birleştirme reddedilir ve
+    kullanıcıya sorulur; ya da ajan tekilleştirip açıkça birleştirir. İkisi de doğru davranıştır."""
+    def f(a, ans, st):
+        joined = any(s.tool_name in ("workspace_join", "workspace_query") and s.ok for s in ans.steps)
+        text = (ans.text or "")
+        asked = "Van" in text and "?" in text and any(s.tool_name == "workspace_join" for s in ans.steps)
+        return joined or asked
+    return ("birleştirme ya da yinelenen anahtar (Van) nedeniyle ret + soru", f)
+
+
 def no_table():
     return ("tablo üretilmedi", lambda a, ans, st: a.workspace.table is None or a.workspace.table.empty)
 
@@ -151,7 +162,7 @@ def generic() -> list[Turn]:
              [used_any("change_points"), answer_has_any("2025-01", "ocak 2025", "2024-12", "2025-02", "ocak")]),
         Turn(f"Nüfus dosyasını yükle.\n\nDosya: {inc / 'nufus_il.csv'}", [rows_at_least(4)]),
         Turn(f"Hastane dosyasını da yükle ve nüfus tablosuyla il üzerinden birleştir.\n\nDosya: {inc / 'hastane_il.csv'}",
-             [used_any("workspace_join", "workspace_query")]),
+             [join_or_refused_duplicate()]),
     ]
 
 
