@@ -74,7 +74,7 @@ def test_oncul_ardil_karti_nedensellik_degil_der() -> None:
                  description="t", provenance=QueryProvenance(sql="q", dataset_ids=[], sources=["t"]))
     r = LeadLagTool(ws).validate_and_run({"column_a": "faiz", "column_b": "bakiye", "max_lag": 4, "basis": "level", "purpose": "öncülük"})
     assert r.ok, r.content
-    assert "gecikme +2" in r.content and "faiz, bakiye'den 2 dönem ÖNCE" in r.content
+    assert "gecikme +2" in r.content and "faiz, bakiye'den 2 hafta ÖNCE" in r.content
     assert "NEDENSELLİK DEĞİLDİR" in r.content and "Granger" in r.content
     assert len(ws.table.columns) == 3          # tablo değişmedi
     names = [p[0] for p in ws.peeks()]

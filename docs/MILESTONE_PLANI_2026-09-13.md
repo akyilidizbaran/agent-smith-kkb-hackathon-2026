@@ -74,7 +74,7 @@ Bu test sayıları birbirleriyle toplanarak başarı oranı veya motor üstünl�
 | M09 | Gold, hizalama ve reel dönüşüm | P1 | M07, M08 | Veri + agent | Planlandı |
 | M10 | Dosya/URL/PDF/OCR giriş akışı | P1 | M03, M04 sınırı, M05 | Agent + UI | Planlandı |
 | M11 | Oturum, tablo korunması ve açıklama soruları | P1 | M03, M04; M10 ile entegrasyon | Agent + UI | Planlandı |
-| M12 | Anomali/kırılma/öncülük doğruluğu | P0/P1 | M03; M09/M11 ile entegrasyon | Analitik | Planlandı |
+| M12 | Anomali/kırılma/öncülük doğruluğu | P0/P1 | M03; M09/M11 ile entegrasyon | Analitik | Çekirdek tamamlandı (13 Eyl, ADR-0052); T03/T05/T06 kısmi |
 | M13 | İddia doğrulama ve kanıtın doğru sunulması | P0 | Mevcut kod; M03/M07/M11 ile entegrasyon | Agent + veri + UI | Çekirdek tamamlandı (13 Eyl, ADR-0050); T04/T07/T11/T12 açık |
 | M14 | Kullanıcı arayüzü ve tam çıktı indirme | P1 | M10, M11, M13 | UI + API | Planlandı |
 | M15 | Süre/çıktı bütçeleri ve otomatik kontroller | P1/P2 | M01; M02 ölçümleri | Agent + geliştirme altyapısı | Planlandı |
@@ -344,17 +344,17 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Doğrulanan zaman ekseni, kontrollü analitik retleri ve yöntem/önkoşul bilgisi taşıyan anomali/kırılma/öncülük kartları.
 
-- [ ] **M12-T01:** Gözlem sayısı, ortak gözlem sayısı ve yöntem gereksinimlerine göre `max_lag` sınırını doğrula; kısa seride shape hatası yerine yapılandırılmış sonuç dön.
-- [ ] **M12-T02:** Zaman kolonunu ve frekansı belirle; sıralama, tekrar tarih, boş dönem ve düzensiz örneklem kontrolü yap.
-- [ ] **M12-T03:** Aynı tarihte birden fazla varlık varsa önce varlık kırılımını netleştir; hepsini tek seri gibi sıraya koyma.
-- [ ] **M12-T04:** Null, NaN, ±Infinity, sabit seri, sıfır taban ve çok küçük örneklem için açık davranış tanımla.
-- [ ] **M12-T05:** Düzey/yüzde değişim tercihini, trend kontrolünü ve kullanılan eşiği kartta göster; negatif/sıfır değerlerde yüzde değişimin anlamını denetle.
-- [ ] **M12-T06:** Anomali yöntemlerini sentetik sıçrama/trend/sabit seri ile ve gerçek verinin bilinen örnekleriyle doğrula; otomatik yöntem seçimini görünür kıl.
-- [ ] **M12-T07:** Kırılma algoritmasında min segment, ceza ve maksimum kırılma kararını kaydet; eksik dönemlerin birleşerek yapay komşuluk üretmesini engelle.
-- [ ] **M12-T08:** Öncülükte hizalama, gecikme yönü, örneklem sayısı ve iki yönlü sonuç açık olsun; “k dönem” gerçek frekansla anlamlı olsun.
-- [ ] **M12-T09:** Granger önkoşulları, durağanlık/dönüşüm ihtiyacı, gecikme seçimi ve çoklu deneme etkilerini değerlendir; uygulanmayan kontrolü yapılmış gibi sunma.
-- [ ] **M12-T10:** Korelasyon veya Granger sonucundan doğrulanmamış nedensellik üretme; dış bağlam kaynaklarını istatistiksel ispat olarak göstermeden ayrı sun.
-- [ ] **M12-T11:** Hesap kartlarındaki r/p/F/n ve eşiklerin kanıt panelinde doğru işaret ve hassasiyetle taşınmasını M13 ile test et.
+- [x] **M12-T01**: Gözlem sayısı, ortak gözlem sayısı ve yöntem gereksinimlerine göre `max_lag` sınırını doğrula; kısa seride shape hatası yerine yapılandırılmış sonuç dön.
+- [x] **M12-T02**: Zaman kolonunu ve frekansı belirle; sıralama, tekrar tarih, boş dönem ve düzensiz örneklem kontrolü yap.
+- [~] **M12-T03** (tekrar tarih → ret + 'tek seriye indir' ipucu; otomatik kırılım seçimi yok): Aynı tarihte birden fazla varlık varsa önce varlık kırılımını netleştir; hepsini tek seri gibi sıraya koyma.
+- [x] **M12-T04**: Null, NaN, ±Infinity, sabit seri, sıfır taban ve çok küçük örneklem için açık davranış tanımla.
+- [~] **M12-T05** (taban/eşik kartta; negatif tabanda yüzde değişim denetimi açık): Düzey/yüzde değişim tercihini, trend kontrolünü ve kullanılan eşiği kartta göster; negatif/sıfır değerlerde yüzde değişimin anlamını denetle.
+- [~] **M12-T06** (sentetik testler var; gerçek veri A32/A33 M16'da): Anomali yöntemlerini sentetik sıçrama/trend/sabit seri ile ve gerçek verinin bilinen örnekleriyle doğrula; otomatik yöntem seçimini görünür kıl.
+- [x] **M12-T07** (kartta min segment/ceza/max; boşluk notu): Kırılma algoritmasında min segment, ceza ve maksimum kırılma kararını kaydet; eksik dönemlerin birleşerek yapay komşuluk üretmesini engelle.
+- [x] **M12-T08**: Öncülükte hizalama, gecikme yönü, örneklem sayısı ve iki yönlü sonuç açık olsun; “k dönem” gerçek frekansla anlamlı olsun.
+- [x] **M12-T09** (uygulanmadı; kart 'KONTROL EDİLMEDİ, betimsel' der — dürüst sunum): Granger önkoşulları, durağanlık/dönüşüm ihtiyacı, gecikme seçimi ve çoklu deneme etkilerini değerlendir; uygulanmayan kontrolü yapılmış gibi sunma.
+- [x] **M12-T10** (nedensellik filtresi mevcut, ADR-0040): Korelasyon veya Granger sonucundan doğrulanmamış nedensellik üretme; dış bağlam kaynaklarını istatistiksel ispat olarak göstermeden ayrı sun.
+- [x] **M12-T11** (r/p iki-üç ondalık, kart sayıları peek'te; M13 ile aynı kural): Hesap kartlarındaki r/p/F/n ve eşiklerin kanıt panelinde doğru işaret ve hassasiyetle taşınmasını M13 ile test et.
 
 **Kabul:** Kısa, düzensiz, sırasız, tekrarlı ve eksik seriler kontrollü ele alınır. Başarılı sonuç hesap verisi, yöntem ve sınırlama içerir. Kullanıcıya “nedensellik kanıtlandı” şeklinde desteklenmeyen sonuç gitmez.
 
@@ -398,7 +398,7 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 - [ ] **M14-T05:** Grafik indirme için mevcut PNG/SVG yeteneğini ürünleştir; başlık, dönem, birim, uyarı ve kaynak bilgisi dosyada kaybolmasın.
 - [ ] **M14-T06:** Rapor formatlarını kararlaştır. HTML/PDF başlangıç önerisidir; rapor soruyu, varsayımları, hesapları, tablo/grafikleri, kaynakları ve uyarıları taşısın.
 - [ ] **M14-T07:** Export'u cevap/tablo sürümüne bağla; eski cevaptaki indirme düğmesi yeni tablonun verisini indirmesin.
-- [ ] **M14-T08:** NaN ve ±Infinity JSON davranışını düzelt; eksik veya hesaplanamayan değeri sessiz sıfıra çevirme. Sayfa tüm cevap nedeniyle 500 vermesin.
+- [x] **M14-T08** (NaN ve ±Infinity → null; katı JSON testi): NaN ve ±Infinity JSON davranışını düzelt; eksik veya hesaplanamayan değeri sessiz sıfıra çevirme. Sayfa tüm cevap nedeniyle 500 vermesin.
 - [ ] **M14-T09:** Uzun işlemde işin sürdüğünü ve hangi aşamada olduğunu göster. SSE/iptal ayrı kapsam kararıdır; bütün akışı bloklayan kör bekleyiş azaltılsın.
 - [ ] **M14-T10:** Reset, tekrar yükleme, eski cevaba dönüş, modal aç/kapat, grafik büyütme ve klavye erişimini gerçek tarayıcıyla kontrol et.
 - [ ] **M14-T11:** Üç sütunlu ekranı demo bilgisayarında test et; kritik tablo/uyarı/soru kutusu erişilebilir olsun.
@@ -657,3 +657,5 @@ Belgelendirme tamamlanması uygulama milestone'larının tamamlanması değildir
 - **2026-09-13 — M13 çekirdek:** sorudan sayı muaf değil, açık ters işaret eşleşmez, işaret uyarısı, üç kanıt durumu (sayılar/sorgu izi/dosya zinciri), RAW/Bronze diskte şart, kapsam notu; A13/A14/A23 regresyonu. Açık: T04 (dönem/birim/varlık bağı), T05 sınır testleri, T07 (eski sürüm kanıtı), T11 (kanıt türleri), T12 (yeniden üretim politikası — mevcut bir kez geri gönderme korunuyor). Sıradaki: M05.
 
 - **2026-09-13 — M05 kapandı (T03 hariç):** yönlendirme sekme sekme doğrulanır, robots aynı sınırdan, döngü/sekme/süre/bayt sınırları, yarım indirme kapanır; A19 testi. DNS rebinding kapsam dışı yazıldı. Sıradaki: M12.
+
+- **2026-09-13 — M12 çekirdek + M14-T08:** zaman ekseni doğrulama, tekrar tarih reddi, gecikme sınırı, sonsuz/sabit davranışı, kart notları; Infinity JSON. A15/A16/A29 testleri. Sıradaki: M02 kıyas seti.
