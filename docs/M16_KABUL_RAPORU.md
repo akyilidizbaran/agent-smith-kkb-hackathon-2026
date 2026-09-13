@@ -10,11 +10,11 @@ sütunlardır; biri diğerinin yerine yazılmaz (M16 risk notu).
 
 | Katman | Sonuç | Kanıt |
 |---|---|---|
-| Ajan birim/sözleşme testleri | 416 geçti | `make test`, CI agent-core işi yeşil |
-| Lakehouse testleri | 1.086 geçti (yerel, 12 dk) | GitHub'da tek düşen test düzeltildi (§6) |
+| Ajan birim/sözleşme testleri | 418 geçti | `make test`, CI agent-core işi yeşil |
+| Lakehouse testleri | 1.086 geçti (yerel 12 dk; GitHub cc793be'de başarılı) | GitHub'da tek düşen test düzeltildi (§6) |
 | Kabul matrisi A01–A33 test eşlemesi | 14 tam · 19 kısmi · 0 yok | §3 |
-| Canlı çok turlu kabul (14 tur × 5 koşu) | 10 → 11 → 11 → 12 → 12 | `docs/experiments/acceptance_m16_*.json` |
-| Arayüz uçtan uca (Playwright) | 6/7 → 7/7 → 7/7 → 7/7 (son kod b33c03f) | `docs/experiments/ui_e2e_m16_*/rapor.json` + ekran görüntüleri |
+| Canlı çok turlu kabul (14 tur × 6 koşu) | 10 → 11 → 11 → 12 → 12 → 14 (son kod cc793be, senaryo 6/6) | `docs/experiments/acceptance_m16_*.json` |
+| Arayüz uçtan uca (Playwright) | 6/7 → 7/7 → 7/7 → 7/7 → 7/7 (son kod cc793be) | `docs/experiments/ui_e2e_m16_*/rapor.json` + ekran görüntüleri |
 
 Her koşunun bulduğu kusur harness'te kapatıldı ve bir sonraki koşu yeni commit'te yapıldı (ADR-0063). Aynı tur farklı
 koşularda farklı sonuç verebiliyor (model stokastik); tek koşuya bakılarak "düzeldi" denmez.
@@ -32,6 +32,7 @@ puanlanmaz; tablo, kolon, satır sayısı, araç yolu, bilinen değer ve kanıt 
 | 3 (01:54) | ae7fb01 | 11/14 | 3/6 | 4/4 | ✓ | ✓ | ✓ | ✓ |
 | 4 (02:05) | b33c03f | 12/14 | 5/6 | 3/4* | ✓ | ✓ | ✓ | ✓ |
 | 5 (02:14) | b05cea3 | 12/14 | 4/6 | 4/4 | ✓ | ✓ | ✓ | ✓ |
+| **6 (02:19)** | **cc793be** | **14/14** | **6/6** | **4/4** | ✓ | ✓ | ✓ | ✓ |
 
 \* Dördüncü koşudaki birleştirme turu kontrol hatasıdır: ajan, fikstür belgesinin beklediği gibi hastane tablosunda iki kez
 geçen Van anahtarında `workspace_join` reddini aldı ve kullanıcıya nasıl ilerleyeceğini sordu. Kontrol yalnız başarılı
@@ -120,7 +121,8 @@ Architect geçişinin 403 reddi · arayüzden oturum sıfırlama. Her adımda ek
 | 01:39 | 320905f | — | Betik hatası (pandas metin tipi), rapor yazılmadı; klasör saklandı |
 | 01:41 | 320905f | 7/7 | Soru adımı 195,6 s |
 | 01:55 | ae7fb01 | 7/7 | Soru adımı 35,9 s |
-| 02:06 | b33c03f | 7/7 | Soru adımı ve yüklenen dosya sorusu doğru; son kod |
+| 02:06 | b33c03f | 7/7 | Soru adımı ve yüklenen dosya sorusu doğru |
+| 02:20 | cc793be | 7/7 | Uydurma sayı guard'larıyla son kod |
 
 ## 5. Sınırlar ve kısmi kalanlar
 
@@ -130,14 +132,14 @@ Architect geçişinin 403 reddi · arayüzden oturum sıfırlama. Her adımda ek
   tam sıfırlaması gerektirir, demo verisini korumak için yapılmadı. Önerilen: ayrı `DATA_ROOT` ile prova.
 - **M16-T07:** model kesintisi ve süre bütçesi birim testleriyle; canlı ağ kesintisi denemesi yapılmadı.
 - **M16-T10/T11:** sayısal eşik ve başka ekip üyesinin tarifi izlemesi ekip işi.
-- **Canlı teyit bekleyen:** beşinci koşuda iki uydurma sayı bulundu (yanlış bakiye, araçsız tablo); ikisi için guard eklendi, altıncı koşu sonucu `acceptance_m16_*` kayıtlarında. Kanıt paneli iki durumda da sayıları kırmızı gösterdi; yanlış sayı kullanıcıdan saklanmadı ama cevaba girdi.
+- **Uydurma sayı guard'ları:** beşinci koşuda yanlış bakiye ve araçsız tablo cevaba girdi; guard'lar eklendikten sonraki altıncı koşu 14/14. Tek temiz koşu stokastik davranışın kanıtı değildir; tekrar sayısı ve eşik ekip kararı (M16-T10).
 
 ## 6. CI, bütünleştirme ve güvenlik (M17 hazırlığı)
 
 - **CI:** agent-core işi `pillow`/`lxml` eksikliğiyle düşüyordu → bağımlılık; yeşil. Lakehouse işi GitHub'da 1.086 testin
   1'inde düştü: `::ffff:127.0.0.1` Python 3.12 yamasına göre "loopback" ya da "private" etiketleniyordu → adres önce açılıyor.
   İş GitHub'da 34 dk sürdü; 40 dk sınırı bir koşuyu iptal ettirdi → 60 dk. Art arda push'ta eski koşu iptal (`concurrency`);
-  son commit'in lakehouse işi sessiz bir aralıkta tamamlanmalı.
+  son kod commit'i cc793be'nin tam koşusu GitHub'da iki işte de başarılı (43 dk, koşu 34789368571).
 - **Merge provası (ayrı çalışma ağacı, push yok):** `main` ← `feature/agent-engine` çatışmasız (main ata commit, 498 dosya).
   `feature/busra/agent-v3` → `feature/agent-engine` de çatışmasız (84 dosya; V3 motoru repo kökünde, ilgi kapısı, çapraz
   kontrol, birim tahmini). İkisi de ekip kararı.

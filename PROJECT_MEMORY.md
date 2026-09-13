@@ -238,17 +238,19 @@ Kullanıcı uyurken tüm milestone'ları sırayla kapatma görevi. Kod dalı yal
 - **Dördüncü kabul koşusu 12/14** (`acceptance_m16_2026-09-14_0205.json`, b33c03f): grafik turu chart'ı çağırdı ve geçti. Kalan iki: finans 3. turda yuvarlanmış değişim "−0,40" (−0,403) göreli %0,5'e takıldı → tolerans gösterilen hassasiyetin yarım birimi (M13-T05); birleştirme turu kontrol hatası (ajan fikstürün beklediği gibi Van yinelemesinde reddedip sordu) → kontrol düzeltildi, kayıt değiştirilmedi. Arayüz uçtan uca b33c03f'de 7/7.
 - Sabah raporu: kararlar (Büşra dalı, main/freeze, ARCHITECT_TOKEN, K10, boş katalog provası, ekip eşikleri/mentör/arkadaş provası) ve açıklar `docs/M16_KABUL_RAPORU.md` ile artifact sayfasında.
 - **Beşinci kabul koşusu 12/14** (`acceptance_m16_2026-09-14_0214.json`, b05cea3) — ciddi bulgu: iki uydurma sayı cevaba girdi. (1) "Ara 2025: 1.048.900 milyon TL", gerçek 678.970; tek geri göndermeden sonra notla gitti → MISS iki hak. (2) Faiz sorusunda araç çağrılmadan kafadan farklar ve tekrarlanan uydurma satırlar → araçsız turda tabloda olmayan ≥2 sayı geri gönderilir. Kanıt paneli ikisini de kırmızı gösterdi.
+- **Altıncı kabul koşusu 14/14, senaryo 6/6** (`acceptance_m16_2026-09-14_0219.json`, cc793be): uydurma sayı guard'ları sonrası ilk tam koşu; arayüz uçtan uca aynı commit'te 7/7. Tek koşu kararlılık kanıtı değildir.
+- **CI yeşil:** son kod commit'i cc793be'nin tam GitHub koşusu (agent-core + lakehouse-core) başarılı, 43 dk (koşu 34789368571).
 - Testler ajan 377 → 418.
 
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 417 (14 Eyl gece) |
+| Agent birim testi | 418 (14 Eyl gece) |
 | Lakehouse testi | 1.086 + 22 ortak URL vakası (yerel 12 dk; GitHub 34 dk) |
 | ADR | 64 |
 | Golden vakası | 21: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3, G18a/b 2/2; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 11 senaryo 11/11 |
-| M16 kabul (14 tur) | koşu 1–4: 10 → 11 → 11 → 12 (b44cc1f → b33c03f); arayüz uçtan uca son kodda 7/7 |
+| M16 kabul (14 tur) | koşu 1–6: 10 → 11 → 11 → 12 → 12 → 14 (b44cc1f → cc793be); arayüz uçtan uca son kodda 7/7 |
 | Araç sayısı (gerçek DB'de) | 19: lakehouse ×4, workspace ×4 (query dâhil), analitik ×3 (anomaly_detect, change_points, lead_lag), ingest, promote_draft, gold ×3, chart, web_url, web_search (Tavily anahtarı .env'de) |
 | Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu (iş yapan araç/tablo varken susar), istenen yetenek zorunluluğu (grafik, analitik), frekans uyuşmazlığı (kabadan ince yok), grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, GOLD_REQUIRED, niyet kapısı, beyan kapısı, adım sınırı, reasoning temizliği |
 
