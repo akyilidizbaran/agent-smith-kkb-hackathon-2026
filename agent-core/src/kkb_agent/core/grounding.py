@@ -31,11 +31,15 @@ _NUM_RE = re.compile(
 )
 
 
+_DATE_TOKEN = re.compile(r"\b\d{1,2}\.\d{1,2}\.\d{2,4}\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}/\d{1,2}/\d{2,4}\b")
+
+
 def _ascii_minus(text: str) -> str:
     """Model "−0,54" (U+2212) yazar, araç "-0.54" (ASCII); işaret düşünce eşleşmez (ölçüldü, G17:
     dört korelasyon katsayısı "araç çıktısında yok" sayıldı). Yalnız gerçek eksi işareti çevrilir;
-    aralık tiresi (2024–2026) dokunulmaz."""
-    return (text or "").replace("\u2212", "-")
+    aralık tiresi (2024–2026) dokunulmaz. Tarih yazımları ("27.07.2026", "2026-06-30") sayı değildir:
+    ölçüldü (G18c), belgenin güncelleme tarihi "27,07" diye "tabloda yok" sayıldı; maskelenir."""
+    return _DATE_TOKEN.sub(" ", (text or "").replace("\u2212", "-"))
 
 
 def numbers_in(text: str) -> list[float]:

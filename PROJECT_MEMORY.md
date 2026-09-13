@@ -137,11 +137,17 @@ Kullanıcı: proje çok kataloglu sistemlere göre kurulmalı; küçükte basit,
 - `core/tool_gate.py`: her tur soruya göre araç alt kümesi (lakehouse/workspace/gold her zaman; chart, analitik, web, Architect sinyalle); şemayı daraltır, yetkiyi değil.
 - **Ölçüm:** 2.214 seride BM25 yüzsüz recall@1 0,649 / recall@8 0,864 → yüzlü **0,888 / 0,996**. Kabul 11/11; adımlar 36 → 27, prompt token ≈ 690k → ≈ 416k (G14 8 → 4 adım, G10 6 → 2, G17 4 → 2). Hibrit: 2.214 seride recall@1 0,888 → **0,940**, recall@8 0,996 → 1,000 (bedel: soru başına bir embedding çağrısı, ağ bağımlılığı → orta kademede BM25 kaldı); EVDS 3.000 örneklem (yalnız adlar): BM25 0,792/0,973 → hibrit **0,821/0,993**; eşik 5.000'de bırakıldı, 3.000–5.000 gri bölge. "3 aylık" gibi sayılı vade frekans yüzü sayılmaz (ölçülüp düzeltildi); embedding ucu düşerse BM25'e düşer. Testler 298 → 307.
 
+### 2.16 Canlı PDF provası (13 Eylül, ADR-0041 ek)
+Demo günü PDF canlı verilecek. Borsa İstanbul'un 20 PDF'i indirilip OCR hattından geçirildi (tek sayfa yatay metal tabloları, 2 sayfalık cevher, 4 sayfalık elmas, 24 sayfalık aylık rapor, düşük kaliteli JPEG tarama).
+- Kapatılan kaçaklar: OCR'ın virgülü nokta okuması ("133.119.720.04" → ondalık düzeltmesi); tek noktalı sayıların belirsiz kalması (tablo düzeyinde ayraç kuralı + karışık kolon kuralı); üç satırlı başlık ve birim satırı ("2025 | TL | USD | …" → başlığa; elmas 0/10 → 9/10 sayısal); düşük kaliteli taramada sessiz yanlış sayı (satır toplamı denetimi + yapı/karışık hücre izi → "DİKKAT, sayı verme" notu; küçük görsel 2× büyütme).
+- Yeni: `pages` parametresi (web_url ve ingest), belge başına 90 s zaman bütçesi, kart kalan sayfalar için `pages` ister; prompt kuralı.
+- Golden G18c (2 sayfalık yatay cevher belgesi, altın/gümüş ayrımı, 2025 altın 28.088,44 kg) eklendi; ilk 0/2: model gümüş tablosunu altın diye verdi → her OCR tablosu "sayfa n: <başlık>" etiketi taşır (kart + provenance). G18a/b 2/2; G18c etiketten sonra 3/3 doğru değer (bir koşuda kanıt paneli "27.07.2026" tarihini sayı sandı → tarih yazımları maskelenir). Testler 307 → 315.
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 307 |
+| Agent birim testi | 315 |
 | Lakehouse testi (r3 + genişlik dalı) | 1.079 |
 | ADR | 43 |
 | Golden vakası | 21: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3, G18a/b 2/2; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 11 senaryo 11/11 |

@@ -29,7 +29,9 @@ from ..web.search import TavilySearch
 
 WEB_PROMPT_RULES = """
 PDF ve görsel adresleri (.pdf, .png, .jpg) de web_url ile açılır: sayfalar OCR ile okunur, tablolar \
-listelenir. OCR bir okumadır, doğrulama değildir: cevapta "görüntüden OCR ile okundu, doğrulanmadı" de.
+listelenir. Varsayılan ilk 5 sayfa; kart "belge N sayfa" diyorsa ve aranan tablo yoksa aynı aracı \
+pages='6-10' gibi bir sayfa aralığıyla yeniden çağır, sayfa uydurma. OCR bir okumadır, doğrulama \
+değildir: cevapta "görüntüden OCR ile okundu, doğrulanmadı" de.
 
 DIŞ KAYNAK KURALI (web):
 Kullanıcı bir adres/site verdiyse ("şu sayfadan", "bu linkten", URL) web_url ile o adresi oku; \
@@ -67,6 +69,7 @@ class WebUrlParams(BaseModel):
         description="Listelenen tablolardan hangisi aktif analiz tablosu olsun (#0, #1 ...). İlk çağrıda boş bırak, listeyi gör.",
     )
     max_pages: int = Field(default=1, ge=1, le=5, description="Tarama bütçesi: en çok kaç sayfa (aynı alan adı)")
+    pages: str | None = Field(default=None, description="PDF için hangi sayfalar: '3', '2-4', '1,5' (varsayılan ilk 5); belge uzunsa kart söyler")
     max_depth: int = Field(default=0, ge=0, le=1, description="Bağlantı derinliği: 0 yalnız verilen sayfa, 1 bir adım")
 
 
@@ -125,6 +128,7 @@ class WebUrlTool(Tool):
                 params.url, budget=budget, keywords=keywords, session=self.session, robots=self.robots,
                 allowed_local_roots=[self.allowed_local_root] if self.allowed_local_root else [],
                 environ=self.environ, allow_private=self.allow_private, ocr=self.ocr,
+                ocr_options={"pages": params.pages} if params.pages else None,
             )
         except FetchRefused as exc:
             return ToolResult.fail(
@@ -166,8 +170,11 @@ class WebUrlTool(Tool):
                     candidates=[f"#{i}" for i in range(len(flat))],
                 )
             page, table = flat[params.table_index]
+            local_index = next((i for (pp, i, tt) in tables if pp is page and tt is table), 0)
+            labels = getattr(page.page, "table_labels", []) or []
+            table_label = labels[local_index] if local_index < len(labels) else ""
             prov = QueryProvenance(
-                sql=f"web_url {page.url} tablo#{params.table_index}",
+                sql=f"web_url {page.url} tablo#{params.table_index}" + (f" ({table_label})" if table_label else ""),
                 dataset_ids=[],
                 sources=[f"web — {page.page.title or page.url}"],  # type: ignore[union-attr]
                 source_urls=[page.url],
@@ -181,7 +188,8 @@ class WebUrlTool(Tool):
             self.workspace.title = params.purpose
             web_artifact["used"] = page.url
             content = [
-                f"TABLO YÜKLENDİ: #{params.table_index} ({len(table)} satır, {len(table.columns)} sütun) — {page.url}",
+                f"TABLO YÜKLENDİ: #{params.table_index} ({len(table)} satır, {len(table.columns)} sütun) — {page.url}"
+                + (f" — {table_label}" if table_label else ""),
                 f"Sütunlar: {', '.join(map(str, table.columns))}",
                 _plain(table.head(10)),
                 f"Kaynak: {page.page.title or page.url} | sha256 {page.fetch.sha256[:12]}… | çekiliş {page.fetch.fetched_at:%Y-%m-%d %H:%M} UTC",
@@ -201,9 +209,11 @@ class WebUrlTool(Tool):
                      f"çekiliş {first.fetch.fetched_at:%Y-%m-%d %H:%M} UTC | {result.summary()}")
         index = 0
         for p in pages_with_tables:
-            for t in p.page.tables:  # type: ignore[union-attr]
+            labels = getattr(p.page, "table_labels", []) or []
+            for j, t in enumerate(p.page.tables):  # type: ignore[union-attr]
                 cols = ", ".join(map(str, t.columns))[:160]
-                lines.append(f"TABLO #{index} ({p.url}): {len(t)}×{len(t.columns)} — {cols}")
+                where = f"{labels[j]} — " if j < len(labels) and labels[j] else ""
+                lines.append(f"TABLO #{index} ({where}{p.url}): {len(t)}×{len(t.columns)} — {cols}")
                 lines.append(_plain(t.head(3))[:400])
                 index += 1
         if index == 0:

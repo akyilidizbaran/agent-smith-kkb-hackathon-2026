@@ -28,7 +28,7 @@ from ..contracts.evidence import (
     ColumnEvidence, EvidenceCapable, EvidencePanel, NumberEvidence, ObservationEvidence,
 )
 from ..contracts.lakehouse import LakehouseError
-from .grounding import _NUM_RE, numbers_in
+from .grounding import _NUM_RE, _ascii_minus, numbers_in
 from .workspace import AnalysisWorkspace
 
 _DATE_PREFERENCE = ("period_end", "observation_date", "donem", "dönem", "tarih", "date")
@@ -92,7 +92,7 @@ def _key_text(value: Any) -> str:
 def _number_texts(answer: str) -> list[tuple[str, float]]:
     """Metindeki sayılar, göründükleri yazımla; `numbers_in` ile aynı ayrıştırma."""
     out: list[tuple[str, float]] = []
-    for m in _NUM_RE.finditer((answer or "").replace("\u2212", "-")):
+    for m in _NUM_RE.finditer(_ascii_minus(answer)):
         raw = m.group(0)
         parsed = numbers_in(raw)
         if parsed:

@@ -42,6 +42,7 @@ class OcrUnavailable(RuntimeError):
 class IngestParams(BaseModel):
     locator: str = Field(description="Yerel dosya yolu ya da http(s) URL'i (CSV, TSV, XLSX, JSON; PDF/PNG/JPG belgeler OCR ile okunur)")
     table_index: int | None = Field(default=None, description="PDF/görselde birden çok tablo varsa hangisi (0 tabanlı); boşsa en büyük tablo")
+    pages: str | None = Field(default=None, description="PDF için hangi sayfalar: '3', '2-4' (varsayılan ilk 5)")
     name: str = Field(description="Serinin okunabilir adı, ör. 'İl bazında konut satışları'")
     series_key: str | None = Field(
         default=None,
@@ -158,7 +159,7 @@ class IngestFromUrlTool(Tool):
         )
         if content is None or not outcome.ok:
             return None, outcome, None, params.locator
-        doc = ocr_document(content, media, client=self.ocr, url=params.locator.split("?")[0])
+        doc = ocr_document(content, media, client=self.ocr, url=params.locator.split("?")[0], pages=params.pages)
         page = extract_ocr_page(params.locator, doc)
         if not page.tables:
             raise OcrUnavailable(f"Belgede OCR tablo bulamadı ({len(doc.pages)} sayfa okundu). {doc.note()}")

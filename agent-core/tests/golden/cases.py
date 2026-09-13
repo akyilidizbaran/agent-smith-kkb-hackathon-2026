@@ -442,6 +442,18 @@ CASES += [
         max_steps_used=5,
     ),
     GoldenCase(
+        id="G18c_pdf_cok_sayfa_yatay",
+        question=f"Şu belgeden 2025 yılı toplam altın cevher üretimini söyle: {_fixture('cevher-uretim-bildirimleri.pdf')}",
+        why="Çok sayfalı (2) yatay belge: sayfa 1 altın, sayfa 2 gümüş; iki tablo da 19×14, colspan başlık "
+        "('ALTIN / GOLD | Toplam/Total'). Doğru tablo (altın) seçilmeli; 2025 toplamı 28.088,44 kg. Satır toplamı "
+        "denetimi 'tutarlı' der; model gümüşü altın diye vermemeli (71.787).",
+        table_checks=[("yıl×ay tablosu yüklendi (≥ 12 kolon)", lambda df: len(df.columns) >= 12)],
+        must_use_tools=["web_url"],
+        answer_must_contain_any=["28.088", "28088"],
+        answer_must_not_contain=["71.787", "71787"],
+        max_steps_used=5,
+    ),
+    GoldenCase(
         id="G18b_pdf_altin_islem",
         question=f"Şu belgeden 2026 Ocak ayında TL cinsinden altın işlem hacmini söyle: {_fixture('kmp_au.pdf')}",
         why="Çok satırlı başlık (TL/USD/EUR × hacim/miktar/işlem sayısı, colspan/rowspan): ızgara açılır, başlıklar "

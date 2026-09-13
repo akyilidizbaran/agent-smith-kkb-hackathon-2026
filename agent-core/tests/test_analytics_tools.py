@@ -96,3 +96,10 @@ def test_unicode_eksi_ve_olumsuz_nedensellik() -> None:
     assert causal_language("Faiz artışı bakiyenin düşmesine neden oldu.") == ["neden oldu"]
     assert causal_language("Bu, faizin bakiyeye neden olduğu anlamına gelmez; öncülük bulgusudur.") == []
     assert causal_language("Faizin bakiyeye yol açtığı söylenemez.") == []
+
+
+def test_tarih_yazimi_sayi_sayilmaz() -> None:
+    from kkb_agent.core.evidence import _number_texts
+    from kkb_agent.core.grounding import numbers_in
+    assert numbers_in("Son güncelleme 27.07.2026; 2025 toplamı 28.088,44 kg; 2026-06-30 itibarıyla 31,07") == [2025.0, 28088.44, 31.07]
+    assert [t for t, _ in _number_texts("Güncelleme tarihi 27.07.2026, değer 3.058,69")] == ["3.058,69"]

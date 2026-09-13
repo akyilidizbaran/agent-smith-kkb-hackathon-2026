@@ -9,6 +9,8 @@ kullanılmaz — ölçüldü, TCMB'nin "31.51"ini 3151 yapıyordu. Doğrudan ver
 
 from __future__ import annotations
 
+from collections import Counter
+
 from pathlib import Path
 
 import re
@@ -36,6 +38,7 @@ class PageContent:
     kind: str = "html"   # html | data | text | ocr | document
     notes: list[str] = field(default_factory=list)   # sayı biçimi belirsizlikleri vb.
     ocr: dict[str, Any] | None = None                # {"model", "pages", "sha256", "truncated"} — OCR ile okunduysa
+    table_labels: list[str] = field(default_factory=list)   # tablo başına bağlam ("sayfa 2: GÜMÜŞ / SILVER"); tables ile hizalı
 
     def table_previews(self, max_rows: int = 3) -> list[str]:
         out = []
@@ -145,6 +148,8 @@ def convert_numbers(frame: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     out = frame.copy()
     notes: list[str] = []
     profile = profile_table(frame)
+    ambiguous: list[tuple[str, dict[tuple[str, str | None], list[float | None]], str]] = []
+    resolved_pairs: Counter[tuple[str, str | None]] = Counter()
     for col in profile.columns:
         if not col.numeric_under or col.date_formats:
             continue
@@ -160,13 +165,47 @@ def convert_numbers(frame: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
         distinct = {tuple(v) for v in parsed.values()}
         if len(distinct) == 1:
             out[col.name] = pd.Series(next(iter(parsed.values())), index=frame.index, dtype="float64")
+            # Bu kolonun ayraç çiftleri (hepsi aynı sayıyı verdi) tablonun kuralına oy verir; ayraçlı
+            # (binlik ya da ondalık gerçekten görülen) çiftler sayılır, ayraçsız düz sayılar sayılmaz.
+            for (decimal, thousands) in parsed:
+                if any(("," in v or "." in v) for v in values if v):
+                    resolved_pairs[(decimal, thousands)] += 1
         else:
             sample = next((v for v in values if v), "")
-            notes.append(f"'{col.name}' sayı biçimi belirsiz (ör. {sample!r}: binlik mi ondalık mı?); metin bırakıldı")
+            ambiguous.append((col.name, parsed, sample))
+    # Tablo düzeyinde ayraç kuralı (ölçüldü, OCR provası): "1.484", "514.813" gibi tek noktalı sayılar
+    # kolon başına belirsizdir ama aynı tablonun başka kolonları "1.234,56" ise nokta binliktir.
+    # Kural yalnız tablonun kendi çözümlü kolonlarından türer; dışarıdan varsayım yok.
+    convention = None
+    if resolved_pairs:
+        convention, _votes = resolved_pairs.most_common(1)[0]
+        if any(pair[0] != convention[0] for pair in resolved_pairs):
+            convention = None      # tablo kendi içinde çelişiyor: kural yok
+    for name, parsed, sample in ambiguous:
+        values = frame[name].map(lambda t: "" if t is None else str(t))
+        if convention is not None and convention in parsed:
+            out[name] = pd.Series(parsed[convention], index=frame.index, dtype="float64")
+            notes.append(f"'{name}' sayı biçimi belirsizdi (ör. {sample!r}); tablonun diğer kolonlarının "
+                         f"ayraç kuralıyla (ondalık {convention[0]!r}, binlik {convention[1]!r}) çözüldü")
+            continue
+        # Karışık kolon kuralı (ölçüldü, OCR provası: elmas tabloları): kolonda hem düz tam sayılar
+        # ("89", "129") hem de tek noktalı 3 haneli gruplar ("1.484") varsa nokta binliktir; ondalıklı
+        # bir kolon her satırda ondalık taşırdı. Yalnız bu iki biçim varsa uygulanır.
+        nonblank = [v for v in values if v]
+        dotted = [v for v in nonblank if "." in v]
+        plain = [v for v in nonblank if "." not in v and "," not in v]
+        if (dotted and plain and not any("," in v for v in nonblank)
+                and all(re.fullmatch(r"-?\d{1,3}(\.\d{3})+", v) for v in dotted) and (",", ".") in parsed):
+            out[name] = pd.Series(parsed[(",", ".")], index=frame.index, dtype="float64")
+            notes.append(f"'{name}' sayı biçimi belirsizdi (ör. {sample!r}); kolonda düz tam sayılar da olduğundan "
+                         f"nokta binlik sayıldı")
+            continue
+        notes.append(f"'{name}' sayı biçimi belirsiz (ör. {sample!r}: binlik mi ondalık mı?); metin bırakıldı")
     return out, notes
 
 
 _DIGIT = re.compile(r"\d")
+_UNIT_TOKEN = re.compile(r"^[A-Za-zÇĞİÖŞÜçğıöşü%/.]{1,8}$")
 
 
 def promote_header_rows(frame: pd.DataFrame, max_rows: int = 2) -> pd.DataFrame:
@@ -174,17 +213,30 @@ def promote_header_rows(frame: pd.DataFrame, max_rows: int = 2) -> pd.DataFrame:
     İstanbul altın tabloları 'sütun_n' ve ilk satır 'Yıl / Year, Oca./Jan., …'). Kolon adları
     zaten anlamlıysa dokunulmaz; aksi hâlde hiç rakam içermeyen ilk en çok `max_rows` satır
     başlık olur, çok satırlı başlık ' | ' ile birleşir. Sayı içeren satır asla başlık olmaz."""
-    if frame.empty or not all(str(c).startswith("sütun_") for c in frame.columns):
+    if frame.empty:
         return frame
-    header_rows: list[list[str]] = []
+    generic = all(str(c).startswith("sütun_") for c in frame.columns)
+    # Adlı kolonlarda (<th> vardı) da başın altında alt başlık / birim satırı kalabilir (ölçüldü, elmas:
+    # <th> satırından sonra "Hacim/ Volume" ve "TL | USD | EURO" satırları veri sanılıyordu).
+    header_rows: list[list[str]] = [] if generic else [[str(c) for c in frame.columns]]
     body = frame
-    while len(header_rows) < max_rows and len(body) > 1:
+    limit = max_rows if generic else max_rows + 1
+    while len(header_rows) < limit and len(body) > 1:
         cells = [str(v).strip() for v in body.iloc[0].tolist()]
-        if not any(cells) or any(_DIGIT.search(c) for c in cells):
+        if not any(cells):
             break
-        header_rows.append(cells)
+        first_digits = bool(_DIGIT.search(cells[0]))
+        rest_digits = any(_DIGIT.search(c) for c in cells[1:])
+        if not first_digits and not rest_digits and generic:
+            header_rows.append(cells)          # düz başlık satırı (yalnız adsız kolonlarda)
+        elif first_digits and not rest_digits and any(cells[1:]):
+            # Birim / alt başlık satırı (ölçüldü, elmas): "2025 | TL | USD | Miktar/Amount carat" — ilk hücre
+            # rowspan'lı yıl artığı, kalan hücrelerde rakam yok. Veri satırı olsa sayı taşırdı.
+            header_rows.append([""] + cells[1:])
+        else:
+            break
         body = body.iloc[1:]
-    if not header_rows:
+    if not header_rows or (not generic and len(header_rows) == 1):
         return frame
     # Birleşik (colspan) başlık hücreleri sağa doğru boş kalır: her başlık satırında soldaki
     # dolu hücre boşlara taşınır ("TL | Hacim", "TL | Miktar", "USD | Hacim").
@@ -208,31 +260,126 @@ def promote_header_rows(frame: pd.DataFrame, max_rows: int = 2) -> pd.DataFrame:
     return out
 
 
+_TOTAL_COL = re.compile(r"toplam|total", re.I)
+_OCR_DECIMAL_DOT = re.compile(r"^(-?\d{1,3}(?:\.\d{3})*)\.(\d{2})$")
+_GARBLED = re.compile(r"^\d*[A-Za-z]\d+$|^\d+[A-Za-z]\d*$|^[A-Za-z]\d{2,}$")
+
+
+def normalize_ocr_decimals(frame: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """OCR virgülü nokta okur: "133.119.720,04" → "133.119.720.04", "0,00" → "0.00" (ölçüldü, elmas
+    tabloları: hiçbir kolon sayıya çevrilemedi). Son noktadan sonra tam 2 hane varsa ve hücrede
+    virgül yoksa o nokta ondalık virgüldür; 3 haneli gruplar ("1.484") dokunulmaz. Yalnız OCR
+    tablolarına uygulanır; HTML sayfaları kendi ayracını taşır."""
+    out = frame.copy()
+    fixed = 0
+    for col in out.columns:
+        if pd.api.types.is_numeric_dtype(out[col]):
+            continue
+        def fix(v):
+            nonlocal fixed
+            if isinstance(v, str):
+                m = _OCR_DECIMAL_DOT.match(v.strip())
+                if m:
+                    fixed += 1
+                    return f"{m.group(1)},{m.group(2)}"
+            return v
+        out[col] = out[col].map(fix)
+    return out, fixed
+
+
+def garble_ratio(frame: pd.DataFrame) -> float:
+    """Rakam-harf karışık hücrelerin oranı ("2O25", "l7582", "4O"): OCR'ın görüntüyü çözemediğinin
+    deterministik izi."""
+    cells = [str(v).strip() for v in frame.to_numpy().ravel() if isinstance(v, str) and str(v).strip()]
+    if not cells:
+        return 0.0
+    return sum(1 for c in cells if _GARBLED.match(c)) / len(cells)
+
+
+def row_sum_consistency(table: pd.DataFrame, tolerance: float = 0.01) -> float | None:
+    """Toplam sütunu olan sayısal tabloda satırların kaçında öbür sayısal kolonların toplamı toplamla
+    örtüşüyor (0–1). OCR kalitesinin deterministik ölçüsü (ölçüldü: JPEG q35 taramada değerler
+    sessizce yanlıştı). Toplam kolonu ya da yeterli satır yoksa None: karar yok."""
+    numeric = [c for c in table.columns if pd.api.types.is_numeric_dtype(table[c])]
+    totals = [c for c in numeric if _TOTAL_COL.search(str(c))]
+    if not totals or len(numeric) < 4:
+        return None
+    total_col = totals[0]
+    parts = [c for c in numeric if c != total_col and not re.search(r"y[ıi]l|year|s[ıi]ra|no\b", str(c), re.I)]
+    if len(parts) < 2:
+        return None
+    ok = checked = 0
+    for _, row in table.iterrows():
+        t = row[total_col]
+        vals = [row[c] for c in parts]
+        vals = [v for v in vals if v == v]
+        if t != t or not vals or abs(float(t)) < 1e-9:
+            continue
+        checked += 1
+        if abs(sum(vals) - float(t)) <= tolerance * abs(float(t)):
+            ok += 1
+    if checked < 3:
+        return None
+    return ok / checked
+
+
 def extract_ocr_page(url: str, doc: Any) -> PageContent:
     """OCR belgesi (vision.ocr.OcrDocument) → sayfa içeriği: tablolar aynı profilci dilbilgisiyle
     sayıya çevrilir; her tablo 'görüntüden okundu, doğrulanmadı' notunu taşır."""
     from lxml import html as lh
 
     tables: list[pd.DataFrame] = []
+    labels: list[str] = []
     notes: list[str] = [doc.note()]
-    html_blocks = [html for _, html in doc.tables]
-    if html_blocks:
+    # Sayfa bağlamı tablonun adıdır: aynı yapıdaki iki tablo (sayfa 1 altın, sayfa 2 gümüş) başlıkta
+    # metal adını taşımayabilir; ölçüldü (G18c), model gümüş tablosunu altın diye verdi. Sayfanın
+    # metin başı tablo etiketine girer, kart ve provenance onu gösterir.
+    page_title = {p.page_no: " · ".join(line.strip() for line in (p.prose or "").splitlines()
+                                        if line.strip() and line.strip() != "[Non-Text]")[:80] for p in doc.pages}
+    for page_no, html in doc.tables:
         try:
-            frag = lh.fromstring("<html><body>" + "".join(html_blocks) + "</body></html>")
+            frag = lh.fromstring("<html><body>" + html + "</body></html>")
             for raw in _string_tables(frag):
-                converted, table_notes = convert_numbers(promote_header_rows(raw))
+                named = promote_header_rows(raw, max_rows=3)
+                named, fixed = normalize_ocr_decimals(named)
+                converted, table_notes = convert_numbers(named)
+                if fixed:
+                    table_notes.append(f"{fixed} hücrede OCR'ın nokta okuduğu ondalık virgül düzeltildi (\"…,04\" biçimi)")
                 tables.append(converted)
+                labels.append(f"sayfa {page_no}" + (f": {page_title[page_no]}" if page_title.get(page_no) else ""))
                 notes.extend(table_notes)
         except Exception as exc:  # noqa: BLE001 — OCR HTML bozuksa tablo yok, metin var
-            notes.append(f"OCR tablosu ayrıştırılamadı: {exc}")
+            notes.append(f"OCR tablosu ayrıştırılamadı (sayfa {page_no}): {exc}")
+    quality = "bilinmiyor"
+    # Yapı çözülememişse (başlıklar 'sütun_n', sayısal kolon yok) OCR görüntüyü okuyamamıştır (ölçüldü:
+    # JPEG q35 tarama, 2× büyütmeyle bile); tablo var diye sayı verilmez, söylenir.
+    unstructured = [t for t in tables if len(t.columns) >= 3
+                    and len(t.select_dtypes("number").columns) < 0.3 * len(t.columns)
+                    and (sum(str(c).startswith("sütun_") for c in t.columns) >= 0.5 * len(t.columns)
+                         or garble_ratio(t) >= 0.15)]
+    if tables and len(unstructured) == len(tables):
+        quality = "belirsiz"
+        notes.append("DİKKAT: OCR tablo yapısını çözemedi (başlıklar okunmadı, sayısal kolon yok); görüntü kalitesi "
+                     "düşük olabilir. Bu tablodan sayı verme; kullanıcıdan daha net bir kopya ya da CSV iste.")
+    checks = [row_sum_consistency(t) for t in tables]
+    checked = [c for c in checks if c is not None]
+    if checked:
+        worst = min(checked)
+        quality = "düşük" if worst < 0.5 else "tutarlı"
+        if worst < 0.5:
+            notes.append(f"DİKKAT: OCR tablosunda satır toplamları toplam sütunuyla tutmuyor (tutarlı satır oranı "
+                         f"{worst:.0%}); görüntü kalitesi düşük olabilir, sayılar güvenilmez — kaynağın kendisiyle karşılaştır.")
+        else:
+            notes.append(f"OCR tutarlılık denetimi: satır toplamları toplam sütunuyla örtüşüyor ({worst:.0%}).")
     text = "\n".join(p.prose for p in doc.pages if p.prose)[:20000]
     title = Path(urlparse(url).path).name or url
-    return PageContent(url=url, title=title, text=text, tables=tables, kind="ocr", notes=notes,
+    return PageContent(url=url, title=title, text=text, tables=tables, kind="ocr", notes=notes, table_labels=labels,
                        ocr={"model": doc.model, "pages": [p.page_no for p in doc.pages], "sha256": doc.sha256,
-                            "truncated": doc.truncated, "total_pages": doc.total_pages})
+                            "truncated": doc.truncated, "total_pages": doc.total_pages, "quality": quality})
 
 
-def extract_page(content: bytes, media_type: str, url: str, *, ocr: Any = None) -> PageContent:
+def extract_page(content: bytes, media_type: str, url: str, *, ocr: Any = None,
+                 ocr_options: dict[str, Any] | None = None) -> PageContent:
     kind = media_type.split(";")[0].strip().lower()
     path = urlparse(url).path.lower()
     from ..vision.ocr import is_document, ocr_document
@@ -244,7 +391,7 @@ def extract_page(content: bytes, media_type: str, url: str, *, ocr: Any = None) 
                                text="(PDF/görsel belge; OCR istemcisi yapılandırılmamış — VISION_MODEL yok)",
                                notes=["PDF/görsel belge OCR olmadan okunamaz."])
         try:
-            doc = ocr_document(content, kind, client=ocr, url=url)
+            doc = ocr_document(content, kind, client=ocr, url=url, **(ocr_options or {}))
         except Exception as exc:  # noqa: BLE001 — servis hatası sayfa notuna, uydurma yok
             return PageContent(url=url, title=Path(path).name, kind="document",
                                text=f"(PDF/görsel belge; OCR başarısız: {exc})", notes=[f"OCR başarısız: {exc}"])
