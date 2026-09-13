@@ -9,8 +9,6 @@ kökten. Her çekim sha256 ve zaman damgası taşır: kanıt paneli buna iner.
 from __future__ import annotations
 
 import hashlib
-import ipaddress
-import socket
 import time
 import urllib.robotparser
 from dataclasses import dataclass, field
@@ -58,15 +56,9 @@ class FetchResult:
 
 
 def private_host(host: str) -> bool:
-    try:
-        infos = socket.getaddrinfo(host, None)
-    except socket.gaierror:
-        return False
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-            return True
-    return False
+    """Ortak adres kuralı (M05-T03): `web.addresses.blocked_host`; lakehouse bağlayıcısıyla aynı vakalar."""
+    from .addresses import blocked_host
+    return blocked_host(host) is not None
 
 MAX_REDIRECTS = 5
 ROBOTS_MAX_BYTES = 512 * 1024

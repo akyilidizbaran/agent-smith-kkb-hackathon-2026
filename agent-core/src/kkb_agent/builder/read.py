@@ -13,8 +13,6 @@ bot engeli, giriş sayfası, 404 burada sınıflandırılır, yorumlanmaz.
 from __future__ import annotations
 
 import io
-import ipaddress
-import socket
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlparse
@@ -79,15 +77,9 @@ def _table_from_bytes(content: bytes, name: str, *, sheet: str | int | None = No
 
 
 def _private_host(host: str) -> bool:
-    try:
-        infos = socket.getaddrinfo(host, None)
-    except socket.gaierror:
-        return False
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-            return True
-    return False
+    """Web getirmeyle aynı kural (M05-T03); `web.addresses` paket içinden import etmez, döngü yok."""
+    from ..web.addresses import blocked_host
+    return blocked_host(host) is not None
 
 
 def read_bytes_for_profiling(

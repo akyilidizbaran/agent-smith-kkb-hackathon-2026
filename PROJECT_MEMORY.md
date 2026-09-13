@@ -233,7 +233,8 @@ Kullanıcı uyurken tüm milestone'ları sırayla kapatma görevi. Kod dalı yal
 - **Büşra'nın dalı (14 Eyl 00:15):** bizim dalı merge etmiş; ilgi kapısı, çapraz kontrol, birim tahmini eklemiş; bize not bırakmış. İki isteği yapıldı (`FILE_IRRELEVANT`, Windows sürücü harfi); kodunu bu dala alma kararı ekipte. Merge provası: onun dalı → bizim dal çatışmasız (84 dosya, V3 motoru kökte); main ← bizim dal çatışmasız (main ata commit).
 - Sır taraması (ca2bfe3): `.env` gizli değerleri ağaçta/tarihçede yok; tek eşleşmeler `.env.example`'daki değişken referansı ve test fikstüründeki sahte AKIA dizisi. Lakehouse testleri yerelde 1.086 geçti (12 dk).
 - **CI lakehouse işi GitHub'da düşüyordu:** 1.086 testin 1'i (`test_an_ipv4_mapped_loopback_is_refused`): `::ffff:127.0.0.1` yerelde (Python 3.12.13) "loopback", koşucudaki 3.12'de "private" sınıflanıyor. Adres sınıflamadan önce IPv4'e açılıyor; sebep yorumlayıcıya bağlı değil. Aynı iş GitHub'da 34 dk sürdü, 40 dk sınırı bir koşuyu iptal ettirdi → 60 dk.
-- Testler ajan 377 → 391.
+- **M05-T03 (ADR-0064):** ajan ile lakehouse bağlayıcısı karşılaştırıldı; ajan multicast, site-local ve `.internal`/`.localhost` adlarını geçiriyordu. Tek adres modülü (`web/addresses.py`) ve iki paketin okuduğu ortak vaka dosyası `docs/sozlesmeler/url_erisim_vakalari.json` (17 adres, 5 ad). Lakehouse tarafı 22 test, ajan tarafı 23 test.
+- Testler ajan 377 → 414.
 
 ## 3. Bugünkü sayılar
 

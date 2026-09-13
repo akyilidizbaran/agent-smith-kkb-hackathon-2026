@@ -194,7 +194,7 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 - [x] **M05-T01:** Her redirect hedefini istekten önce doğrula; izinli şema/host/IP politikası bütün adımlarda uygulansın.
 - [x] **M05-T02:** Robots isteğini de aynı güven sınırından geçir; robots üzerinden özel adrese veya sınırsız içeriğe erişilemesin.
-- [ ] **M05-T03:** Normal fetch ve veri generic connector'ı için ortak davranış vakaları oluştur; ayrı süreç sınırını bozmadan sözleşme uyumunu denetle.
+- [x] **M05-T03** (14 Eyl, ADR-0064: ortak vaka dosyası `docs/sozlesmeler/url_erisim_vakalari.json` iki paketin testinde; ajan tarafındaki multicast/site-local/.internal açığı kapandı): Normal fetch ve veri generic connector'ı için ortak davranış vakaları oluştur; ayrı süreç sınırını bozmadan sözleşme uyumunu denetle.
 - [x] **M05-T04:** İstek, yönlendirme sayısı, toplam süre ve byte sınırlarını birlikte uygula; akış okuma hatasında açık yanıt/bağlantı kapansın.
 - [x] **M05-T05** (mevcut: izinli kök, symlink çözümü, boyut, tür; upload adı → M10-T02): Yerel dosyada izinli kök, symlink çözümü, dosya boyutu ve desteklenen tür kontrollerini koru; upload dosya adı fiziksel yolu belirlemesin.
 - [x] **M05-T06** (kimlik bilgisi taşınmıyor; başka hosta yalnız UA/Accept gider; hata metni sebep cümlesi): Yetkili bağlantı kimlik bilgisi farklı hosta yönlendirmede taşınmasın; hata ve trace metinlerine sızmasın.
@@ -488,6 +488,7 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 - [x] **EK-07** Büşra'nın notu: `FILE_IRRELEVANT` hata kodu, Windows sürücü harfi okuyucuda şema sayılmaz.
 - [ ] **EK-08** Büşra'nın ilgi kapısı/çapraz kontrol/birim tahmini kodunu bu dala alma kararı ve G12a–d golden vakaları (ekip kararı).
 - [x] **EK-09** CI: agent-core işi pillow/lxml eksikliğiyle düşüyordu → bağımlılık; art arda push'ta eski koşu iptal.
+- [x] **EK-10** CI lakehouse işi GitHub'da tek testte düşüyordu (IPv4-eşlemeli loopback etiketi Python yamasına bağlı) → adres önce açılır; iş 34 dk sürdüğü için süre sınırı 60 dk.
 
 ## 6. Asgari birleşik kabul matrisi
 
