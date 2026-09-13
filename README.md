@@ -95,6 +95,8 @@ cd agent-core
 uv sync --extra dev              # uv.lock'taki sabit sürümlerle kurar
 python scripts/dev_seed.py    # gerçek BDDK verisiyle geliştirme lakehouse'u
 
+# Kurulum ve demo (repo kökünde, M01 / ADR-0049): make setup → make preflight → make demo-data → make serve
+uv run python -m kkb_agent.cli --preflight   # salt-okunur ön kontrol; HAZIR DEĞİL ise sebebini söyler
 uv run python -m kkb_agent.cli --trace "2025'te konut kredisi nasıl değişti?"
 uv run python -m kkb_agent.serve          # arayüz: http://127.0.0.1:8765 (ADR-0044)
 uv run python scripts/run_golden.py

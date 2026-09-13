@@ -1,0 +1,117 @@
+{
+  "success": true,
+  "Json": {
+    "colNames": [
+      "Banka",
+      "Yıl",
+      "Ay",
+      "Toplam",
+      "Sira"
+    ],
+    "colModels": [
+      {
+        "name": "BankaAdi",
+        "index": "BankaAdi",
+        "align": "left",
+        "sortable": "false",
+        "visible": "true"
+      },
+      {
+        "name": "Yil",
+        "index": "Yil",
+        "align": "center",
+        "sortable": "false",
+        "sorttype": "int",
+        "width": "30"
+      },
+      {
+        "name": "Ay",
+        "index": "Ay",
+        "align": "center",
+        "sortable": "false",
+        "sorttype": "int",
+        "width": "45"
+      },
+      {
+        "name": "Tüketici Kredileri - Tüketici Kredileri - Konut (milyon TL)-Toplam",
+        "index": "Tüketici Kredileri - Tüketici Kredileri - Konut (milyon TL)-Toplam",
+        "align": "right",
+        "sortable": "false",
+        "width": "60",
+        "formatter": "integer",
+        "formatoptions": {
+          "thousandsSeparator": ".",
+          "defaultValue": "0"
+        }
+      },
+      {
+        "name": "Sira",
+        "index": "Sira",
+        "align": "left",
+        "sortable": "false",
+        "sorttype": "int",
+        "hidden": "true"
+      }
+    ],
+    "groupHeaders": [
+      {
+        "startColumnName": "Tüketici Kredileri - Tüketici Kredileri - Konut (milyon TL)-Toplam",
+        "numberOfColumns": "1",
+        "titleText": "Tüketici Kredileri - Tüketici Kredileri - Konut (milyon TL)"
+      }
+    ],
+    "data": {
+      "page": "1",
+      "total": "1",
+      "records": "5",
+      "rows": [
+        {
+          "cell": [
+            "Sektör",
+            2026,
+            6,
+            801438,
+            1
+          ]
+        },
+        {
+          "cell": [
+            "Sektör",
+            2026,
+            5,
+            782918,
+            2
+          ]
+        },
+        {
+          "cell": [
+            "Sektör",
+            2026,
+            4,
+            767314,
+            3
+          ]
+        },
+        {
+          "cell": [
+            "Sektör",
+            2021,
+            2,
+            276263,
+            65
+          ]
+        },
+        {
+          "cell": [
+            "Sektör",
+            2021,
+            1,
+            276785,
+            66
+          ]
+        }
+      ]
+    },
+    "caption": null
+  }
+}

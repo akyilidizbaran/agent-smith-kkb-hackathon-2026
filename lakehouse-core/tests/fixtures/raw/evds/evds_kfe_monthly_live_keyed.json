@@ -1,0 +1,40 @@
+{
+  "totalCount": 5,
+  "items": [
+    {
+      "Tarih": "2021-1",
+      "TP_KFE_TR": "16.49000000",
+      "UNIXTIME": {
+        "$numberLong": "1609455600"
+      }
+    },
+    {
+      "Tarih": "2021-2",
+      "TP_KFE_TR": "16.98000000",
+      "UNIXTIME": {
+        "$numberLong": "1612134000"
+      }
+    },
+    {
+      "Tarih": "2021-3",
+      "TP_KFE_TR": "17.32000000",
+      "UNIXTIME": {
+        "$numberLong": "1614553200"
+      }
+    },
+    {
+      "Tarih": "2021-4",
+      "TP_KFE_TR": "17.86000000",
+      "UNIXTIME": {
+        "$numberLong": "1617224400"
+      }
+    },
+    {
+      "Tarih": "2021-5",
+      "TP_KFE_TR": "18.27000000",
+      "UNIXTIME": {
+        "$numberLong": "1619816400"
+      }
+    }
+  ]
+}

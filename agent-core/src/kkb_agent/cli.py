@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from pathlib import Path
 
 from .adapters.duckdb_lakehouse import DuckDBLakehouse
 from .adapters.gold_cli import GoldCLI
@@ -70,19 +71,33 @@ sayılır: gold_* araçları reddederse kullanıcıya 'doğrulanmamış olsa da 
 'doğrulanmamış olsa da kullan' derse aynı aracı yeniden çağır."""
 
 
-def open_lakehouse(path, *, gold: GoldCLI | None = None) -> SilverLakehouse | DuckDBLakehouse:
-    """Veritabanının şemasına göre adaptörü seçer.
+BUILD_HINT = "veri kurmak için: `make demo-data` (repo kökünde) ya da `uv run python scripts/build_demo_data.py`"
 
-    Şemayı ayrı bir bağlantı açarak yoklamıyoruz: DuckDB aynı dosyaya farklı
-    yapılandırmayla ikinci bağlantıyı reddediyor (sertleştirilmiş bağlantı
-    read_only + locked config kullanıyor). Bunun yerine Silver adaptörünü
-    kurmayı deniyoruz; beklenen ilişkiler yoksa kendi seed adaptörümüze düşüyoruz.
+
+def open_lakehouse(path, *, gold: GoldCLI | None = None, mode: str = "auto") -> SilverLakehouse | DuckDBLakehouse:
+    """Veritabanının şemasına göre adaptörü seçer; mod sessiz düşüşü engeller (M01, ADR-0049).
+
+    demo: Silver şeması şart. DB yoksa ya da şema seed ise açık nedenle durur; seed'e düşmez.
+    seed: geliştirme seed'i (DuckDBLakehouse). auto: Silver'ı dene, yoksa seed (testler, eski davranış).
+    Şemayı ayrı bağlantıyla yoklamıyoruz: DuckDB aynı dosyaya farklı yapılandırmayla ikinci
+    bağlantıyı reddediyor; Silver adaptörünü kurmayı deniyoruz.
     """
+    path = Path(path)
+    if mode not in {"demo", "seed", "auto"}:
+        raise LakehouseError(f"LAKEHOUSE_MODE geçersiz: {mode!r} (demo | seed | auto)")
+    if mode == "seed":
+        return DuckDBLakehouse(path)
+    if mode == "demo" and not path.exists():
+        raise LakehouseError(f"LAKEHOUSE_MODE=demo: veritabanı yok: {path}. {BUILD_HINT}. "
+                             "Geliştirme seed'i istiyorsan LAKEHOUSE_MODE=seed.")
     try:
         return SilverLakehouse(path, gold=gold)
     except LakehouseError as exc:
         if "meta.series" not in str(exc) and "silver.fact_observation" not in str(exc):
             raise
+        if mode == "demo":
+            raise LakehouseError(f"LAKEHOUSE_MODE=demo: {path} Silver şeması taşımıyor (meta.series / "
+                                 f"silver.fact_observation yok); bu bir seed ya da bozuk dosya. {BUILD_HINT}.") from exc
         return DuckDBLakehouse(path)
 
 
@@ -99,7 +114,7 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
         database=settings.lakehouse_path,
         launcher=settings.lakehouse_cli,
     )
-    lakehouse = open_lakehouse(settings.lakehouse_path, gold=gold if gold.available else None)
+    lakehouse = open_lakehouse(settings.lakehouse_path, gold=gold if gold.available else None, mode=settings.lakehouse_mode)
     workspace = AnalysisWorkspace()
 
     # Alan profili katalogdan deterministik olarak türetilir; üslup tercihleri
@@ -221,6 +236,8 @@ def main() -> None:
                         help="Kanıt panelini göster: sayı → SQL → gözlem → artifact → RAW/URL")
     parser.add_argument("--max-steps", type=int, default=10)
     parser.add_argument("--health", action="store_true", help="Lakehouse durumunu göster")
+    parser.add_argument("--preflight", action="store_true", help="Salt-okunur ön kontrol: mod, DB, şema, veri, CLI, dizinler, anahtarlar (M01)")
+    parser.add_argument("--live", action="store_true", help="--preflight ile: MIA'ya bir deneme çağrısı da yap")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -228,6 +245,12 @@ def main() -> None:
         level=logging.INFO if args.verbose else logging.WARNING,
         format="%(levelname)s %(name)s: %(message)s",
     )
+
+    if args.preflight:
+        from .preflight import run_preflight, render
+        checks = run_preflight(load_settings(), live=args.live)
+        print(render(checks))
+        sys.exit(0 if all(c.ok or not c.required for c in checks) else 1)
 
     if args.health:
         agent = build_agent()

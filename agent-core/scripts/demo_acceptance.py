@@ -90,14 +90,20 @@ def _run(cmd: list[str], cwd: Path, *, timeout: float = 1800) -> tuple[int, str]
     return proc.returncode, (proc.stdout + proc.stderr)
 
 
-def build_commands(root: Path, core_dir: Path, *, launcher: str = "uv run python") -> list[tuple[str, list[str]]]:
-    """Veri ekibi komutları, sırayla. Test edilebilir: yürütmez, planlar."""
-    db, data = root / "data" / "lakehouse.duckdb", root / "data"
+def build_commands(root: Path, core_dir: Path, *, launcher: str = "uv run python",
+                   db: Path | None = None, data: Path | None = None,
+                   only: tuple[str, ...] = DEMO_SERIES) -> list[tuple[str, list[str]]]:
+    """Veri ekibi komutları, sırayla. Test edilebilir: yürütmez, planlar.
+
+    Varsayılan yerleşim root/data; `build_demo_data.py` kalıcı DATA_ROOT'u db/data ile verir.
+    """
+    db = db or root / "data" / "lakehouse.duckdb"
+    data = data or root / "data"
     L = launcher.split()
     return [
         ("bootstrap", [*L, "-m", "lakehouse", "bootstrap", "--database", str(db), "--data-root", str(data)]),
         ("ingest (canlı: BDDK + EVDS)", [*L, "scripts/run_catalog_ingestion.py", "--database", str(db),
-                                          "--data-root", str(data), "--only", ",".join(DEMO_SERIES)]),
+                                          "--data-root", str(data), "--only", ",".join(only)]),
         ("silver", [*L, "-m", "lakehouse", "silver", "--database", str(db), "--data-root", str(data)]),
         ("gold", [*L, "-m", "lakehouse", "gold", "--database", str(db), "--data-root", str(data)]),
     ]

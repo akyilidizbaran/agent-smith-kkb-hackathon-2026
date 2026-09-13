@@ -8,8 +8,19 @@ from pathlib import Path
 
 from dotenv import find_dotenv, load_dotenv
 
-# agent-core/ dizini: veri ve yapılandırma yolları buna göre çözülür.
+# agent-core/ dizini (kod) ve repo kökü (veri, .env, lakehouse-core). M01 (ADR-0049): veri
+# yolları REPO_ROOT/data altında toplanır; göreli yollar repo köküne göre çözülür, kod dizinine değil.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = PROJECT_ROOT.parent
+
+
+def _path(env: str, default: Path, *, base: Path | None = None) -> Path:
+    """Ortam değişkeni varsa (göreliyse repo köküne göre), yoksa varsayılan."""
+    raw = os.getenv(env)
+    if not raw:
+        return default
+    p = Path(raw).expanduser()
+    return p if p.is_absolute() else (base or REPO_ROOT) / p
 
 # .env takımın ortak deposunda, repo kökünde durur (agent-core'un bir üstü).
 # find_dotenv yukarı doğru aradığı için hangi dizinden çalıştırıldığımız fark etmez.
@@ -24,6 +35,9 @@ class Settings:
     embedding_model: str | None
     vision_model: str | None
     lakehouse_path: Path
+    # demo: Silver şeması şart, yoksa açık nedenle durur · seed: geliştirme seed'i · auto: dene, düş (testler)
+    lakehouse_mode: str
+    data_root: Path              # RAW/Bronze/incoming/charts/cache kökü (LAKEHOUSE --data-root ile aynı)
     evds_api_key: str | None
     disable_thinking: bool
     domain_description: str | None
@@ -55,28 +69,31 @@ class Settings:
 
 
 def load_settings() -> Settings:
+    data_root = _path("DATA_ROOT", REPO_ROOT / "data")
     return Settings(
         llm_base_url=os.getenv("LLM_BASE_URL", "http://localhost:11434/v1"),
         llm_api_key=os.getenv("LLM_API_KEY", "ollama"),
         llm_model=os.getenv("LLM_MODEL", "qwen3:8b"),
         embedding_model=os.getenv("EMBEDDING_MODEL") or None,
         vision_model=os.getenv("VISION_MODEL") or None,
-        lakehouse_path=PROJECT_ROOT / os.getenv("LAKEHOUSE_PATH", "data/lakehouse.duckdb"),
+        lakehouse_path=_path("LAKEHOUSE_PATH", data_root / "lakehouse.duckdb"),
+        lakehouse_mode=os.getenv("LAKEHOUSE_MODE", "demo").strip().lower(),
+        data_root=data_root,
         evds_api_key=os.getenv("EVDS_API_KEY") or None,
         disable_thinking=os.getenv("LLM_DISABLE_THINKING", "true").lower() == "true",
         domain_description=os.getenv("DOMAIN_DESCRIPTION") or None,
         domain_audience=os.getenv("DOMAIN_AUDIENCE") or None,
-        lakehouse_core_dir=Path(os.getenv("LAKEHOUSE_CORE_DIR", PROJECT_ROOT.parent / "lakehouse-core")),
+        lakehouse_core_dir=_path("LAKEHOUSE_CORE_DIR", REPO_ROOT / "lakehouse-core"),
         lakehouse_cli=os.getenv("LAKEHOUSE_CLI", "uv run python"),
-        ingest_allowed_root=Path(os.getenv("INGEST_ALLOWED_ROOT", PROJECT_ROOT.parent / "incoming")),
-        chart_dir=Path(os.getenv("CHART_DIR", PROJECT_ROOT / "data" / "charts")),
-        geo_dir=Path(os.getenv("GEO_DIR", PROJECT_ROOT / "assets" / "geo")),  # data/ gitignore'da; sınır dosyası lisansıyla repoya girer
+        ingest_allowed_root=_path("INGEST_ALLOWED_ROOT", data_root / "incoming"),
+        chart_dir=_path("CHART_DIR", data_root / "charts"),
+        geo_dir=_path("GEO_DIR", PROJECT_ROOT / "assets" / "geo"),  # sınır dosyası lisansıyla repoya girer
         preload_budget_tokens=int(os.getenv("PRELOAD_BUDGET_TOKENS", "6000")),
         preload_k=int(os.getenv("PRELOAD_K", "8")),
         retrieval_mode=os.getenv("RETRIEVAL_MODE", "auto"),
         retrieval_small_max=int(os.getenv("RETRIEVAL_SMALL_MAX", "60")),
         retrieval_hybrid_min=int(os.getenv("RETRIEVAL_HYBRID_MIN", "5000")),
-        embedding_cache_dir=Path(os.getenv("EMBEDDING_CACHE_DIR", PROJECT_ROOT / "data" / "cache" / "embeddings")),
+        embedding_cache_dir=_path("EMBEDDING_CACHE_DIR", data_root / "cache" / "embeddings"),
         narrate_temperature=float(os.getenv("LLM_NARRATE_TEMPERATURE", "0.5")),
         tool_gate=os.getenv("TOOL_GATE", "on").lower() != "off",
     )

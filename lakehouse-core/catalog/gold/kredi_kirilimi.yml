@@ -1,0 +1,62 @@
+# Gold metric catalog — kredi kırılımı ve makro bağlam (13 Eylül 2026, veri genişliği)
+#
+# Human-authored, reviewed, versioned in Git. Her giriş tek bir Gold fonksiyon çağrısıdır
+# (docs/gold-contract.md); `python -m lakehouse gold` bunu `gold.<metric_id>` olarak kurar.
+# Nasıl birleştirileceği (stok→son, oran→ortalama, akım→toplam) meta.series'ten okunur;
+# fonksiyon reddederse defter kaydeder, tablo kurulmaz.
+
+gold_catalog_schema_version: "1.0"
+
+metrics:
+  - metric_id: tuketici_kredisi_kirilimi_aylik
+    name_tr: Tüketici kredileri kırılımı, aylık (konut, taşıt, ihtiyaç, bireysel kredi kartları)
+    description: >-
+      BDDK Aylık Bülten'deki dört hanehalkı kredi kalemi tek ay ekseninde yan yana:
+      konut (bddk_monthly:1534_Toplam), taşıt (1535), ihtiyaç (1536) ve bireysel kredi kartları
+      (1539). Hepsi dönem sonu bakiyesi (stok, kural last); milyon TL. Kolonlar
+      "<seri>@<varlık>::value" biçimindedir. Kırılım payları ve büyüme karşılaştırması
+      buradan okunur; toplam için 1543 (dövize endeksli dâhil) ayrı seridir.
+    aliases:
+      - tüketici kredisi kırılımı
+      - kredi türlerine göre bakiye
+      - konut taşıt ihtiyaç kredisi karşılaştırması
+      - hanehalkı kredileri kırılımı
+    tags: [kredi, tuketici, konut, tasit, ihtiyac, kredi_karti, bddk, gold, aylik]
+    function: join_on_period
+    series_ids: [bddk_monthly:1534_Toplam, bddk_monthly:1535_Toplam, bddk_monthly:1536_Toplam, bddk_monthly:1539_Toplam]
+    target_frequency: monthly
+
+  - metric_id: takipteki_tuketici_kirilimi_aylik
+    name_tr: Takipteki tüketici kredileri kırılımı, aylık (konut, taşıt, ihtiyaç, kredi kartı)
+    description: >-
+      BDDK Aylık Bülten'deki takipteki (tahsili gecikmiş) hanehalkı kredi kalemleri tek ay
+      ekseninde: takipteki konut (bddk_monthly:1545_Toplam), taşıt (1546), ihtiyaç (1547) ve
+      bireysel kredi kartları (1548). Dönem sonu bakiyesi (stok, kural last); milyon TL.
+      Canlı bakiyelerle (tuketici_kredisi_kirilimi_aylik) oranlanarak ürün bazında takip oranı
+      türetilir; sektör geneli oran için bddk_monthly:544_Rasyo hazır seridir.
+    aliases:
+      - takipteki tüketici kredileri kırılımı
+      - batık kredi kırılımı
+      - kredi türlerine göre takipteki alacaklar
+    tags: [kredi, takip, npl, tuketici, bddk, gold, aylik]
+    function: join_on_period
+    series_ids: [bddk_monthly:1545_Toplam, bddk_monthly:1546_Toplam, bddk_monthly:1547_Toplam, bddk_monthly:1548_Toplam]
+    target_frequency: monthly
+
+  - metric_id: kur_ve_faiz_aylik
+    name_tr: Dolar kuru, politika faizi ve konut kredisi faizi, aylık ortalama
+    description: >-
+      Üç makro bağlam serisi tek ay ekseninde: ABD doları alış kuru (evds:TP.DK.USD.A.YTL,
+      günlük, kural avg → ay ortalaması), TCMB ağırlıklı ortalama fonlama maliyeti
+      (evds:TP.APIFON4, iş günü, avg) ve konut kredisi faiz oranı (evds:TP.KTF12, haftalık, avg).
+      Dış birleştirme: bir kaynağın yayımlamadığı ay boş kalır. Kur TL, faizler yüzde; kolonlar
+      "<seri>@<varlık>::value" biçimindedir.
+    aliases:
+      - kur ve faiz
+      - dolar kuru ve faiz
+      - makro bağlam aylık
+      - politika faizi ve konut faizi
+    tags: [kur, faiz, tcmb, makro, gold, aylik]
+    function: join_on_period
+    series_ids: [evds:TP.DK.USD.A.YTL, evds:TP.APIFON4, evds:TP.KTF12]
+    target_frequency: monthly

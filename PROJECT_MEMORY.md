@@ -183,13 +183,16 @@ Proje görünen adı "AgentSmithler" → "Agent Smith" (arayüz başlığı, Fas
 ### 2.24 M00 kapandı (13 Eylül)
 Transkriptteki 18 zorunlu davranış (R01–R18, zaman damgalı) kabul vakalarına eşlendi; yeni vakalar A30 (yüklü dışı dönem), A31 (kümülatif → akım), A32/A33 (bilinen anomali/kırılma), A21a–c (Analyst reddi, Architect yayını, tam sıfırlama + başka alan). Rol sınırı ve silme kapsamı kabul metni: profil başlatmada seçilir, Analyst kayıt defterinde yazma aracı yok, silme = pasifleştirme ya da açık onaylı tam sıfırlama (kod/kurulum/sırlar hariç). Dosya: `docs/M00_GEREKSINIM_MATRISI_2026-09-13.md`. Sıradaki: M01.
 
+### 2.25 M01 — tek ortam (13 Eylül, ADR-0049)
+Ölçülen: varsayılanlar agent-core/data seed'ine bağlanıyor, `lakehouse-core` yolu yok (scratchpad worktree), Silver yoksa sessizce seed'e düşüyor. Yapılan: `lakehouse-core/` repo ağacına ağaç anlık görüntüsü olarak alındı (`origin/feature/lakehouse-catalog-breadth@cf3e878`, `scripts/sync_lakehouse_core.sh` ile yenilenir; tarihçe veri dalında); `DATA_ROOT` (repo/data) altında DB/raw/bronze/incoming/charts/cache, göreli yollar repo köküne göre; `LAKEHOUSE_MODE=demo|seed|auto` (demo: DB yok ya da seed şeması → açık nedenle durur); `--preflight` salt-okunur ön kontrol (DB, şema, sayılar, tarih aralığı, gold, provenance, RAW/Bronze, CLI `--help` koşusu, izinli kök, model, anahtar var/yok; `--live` MIA denemesi); `scripts/build_demo_data.py` (`make demo-data`) veri değiştiren tek komut, silme yalnız `--fresh --yes`; kök `Makefile`. İlk ön kontrol: HAZIR DEĞİL — veri kökü/DB/izinli kök yok (doğru). Belge: `docs/M01_ORTAM.md`. Testler 330 → 333.
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 330 |
+| Agent birim testi | 333 |
 | Lakehouse testi (r3 + genişlik dalı) | 1.079 |
-| ADR | 48 |
+| ADR | 49 |
 | Golden vakası | 21: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3, G18a/b 2/2; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 11 senaryo 11/11 |
 | Araç sayısı (gerçek DB'de) | 19: lakehouse ×4, workspace ×4 (query dâhil), analitik ×3 (anomaly_detect, change_points, lead_lag), ingest, promote_draft, gold ×3, chart, web_url, web_search (Tavily anahtarı .env'de) |
 | Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu (iş yapan araç/tablo varken susar), istenen yetenek zorunluluğu (grafik, analitik), frekans uyuşmazlığı (kabadan ince yok), grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, GOLD_REQUIRED, niyet kapısı, beyan kapısı, adım sınırı, reasoning temizliği |

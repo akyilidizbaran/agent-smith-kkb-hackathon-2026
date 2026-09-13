@@ -1,0 +1,162 @@
+{
+  "success": true,
+  "Json": {
+    "colNames": [
+      "",
+      "",
+      "",
+      "BasitFont",
+      "TP",
+      "YP",
+      "Toplam"
+    ],
+    "colModels": [
+      {
+        "name": "BankaAdi",
+        "index": "BankaAdi",
+        "align": "left",
+        "sortable": false
+      },
+      {
+        "name": "BasitSira",
+        "index": "BasitSira",
+        "align": "center",
+        "sortable": false,
+        "sorttype": "int",
+        "width": "30"
+      },
+      {
+        "name": "Ad",
+        "index": "Ad",
+        "align": "left",
+        "sortable": false,
+        "width": "318"
+      },
+      {
+        "name": "BasitFont",
+        "index": "BasitFont",
+        "align": "left",
+        "sortable": false,
+        "hidden": true
+      },
+      {
+        "name": "Tp",
+        "index": "Tp",
+        "align": "right",
+        "width": "60",
+        "formatter": "integer",
+        "formatoptions": {
+          "thousandsSeparator": ".",
+          "defaultValue": "0"
+        },
+        "sortable": false
+      },
+      {
+        "name": "Yp",
+        "index": "Yp",
+        "align": "right",
+        "width": "60",
+        "formatter": "integer",
+        "formatoptions": {
+          "thousandsSeparator": ".",
+          "defaultValue": "0"
+        },
+        "sortable": false
+      },
+      {
+        "name": "Toplam",
+        "index": "Toplam",
+        "align": "right",
+        "width": "60",
+        "formatter": "integer",
+        "formatoptions": {
+          "thousandsSeparator": ".",
+          "defaultValue": "0"
+        },
+        "sortable": false
+      }
+    ],
+    "data": {
+      "page": "1",
+      "total": "1",
+      "records": "6",
+      "rows": [
+        {
+          "id": "1",
+          "cell": [
+            "Sektör",
+            1,
+            "Tüketici Kredileri (2+3+4)",
+            "bold",
+            3401363,
+            251,
+            3401614
+          ]
+        },
+        {
+          "id": "2",
+          "cell": [
+            "Sektör",
+            2,
+            "Tüketici Kredileri - Konut",
+            "",
+            801376,
+            62,
+            801438
+          ]
+        },
+        {
+          "id": "3",
+          "cell": [
+            "Sektör",
+            3,
+            "Tüketici Kredileri - Taşıt",
+            "",
+            43001,
+            61,
+            43062
+          ]
+        },
+        {
+          "id": "4",
+          "cell": [
+            "Sektör",
+            4,
+            "Tüketici Kredileri - İhtiyaç",
+            "",
+            2556986,
+            128,
+            2557114
+          ]
+        },
+        {
+          "id": "5",
+          "cell": [
+            "Sektör",
+            5,
+            "Tüketici Kredileri - Döv. End. (6+7+8)",
+            "bold",
+            3,
+            0,
+            3
+          ]
+        },
+        {
+          "id": "6",
+          "cell": [
+            "Sektör",
+            6,
+            "Tüketici Kredileri - Konut (Dövize Endeksli)",
+            "",
+            3,
+            0,
+            3
+          ]
+        }
+      ]
+    },
+    "caption": "Tüketici Kredileri (milyon TL), Dönem:2026/6",
+    "uyari": "<br/>* “Taksitli Ticari Krediler” ticari işletmelerin veya gerçek kişilerin mesleki veya ticari faaliyetleri ile ilgili işyeri, taşıt ve ihtiyaç kredileri ile benzer nitelikteki diğer kredi bilgilerini içermektedir.<br/>** “Kurumsal Kredi Kartları” satırında ticari işletmeler adına açılan ve bunların temsilcileri tarafından kullanılan kurumsal kredi kartlarına ilişkin bilgiler yer almaktadır.<br/>*** Kredi Kartlarından Alacaklar ve Kredi Kartlarından Borçlar kalemleri bilgi amaçlı olarak verilmektedir.",
+    "duyurular": []
+  }
+}
