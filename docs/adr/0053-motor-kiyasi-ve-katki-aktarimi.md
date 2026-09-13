@@ -1,6 +1,6 @@
 # ADR-0053: Motor kıyası (13 Eylül) ve V3 katkılarının aktarımı
 
-**Durum:** Ölçüm sürüyor · **Tarih:** 2026-09-13 · **Milestone:** M02 · **Karar (K01, kullanıcı):** baseline `feature/agent-engine`
+**Durum:** Kabul edildi · **Tarih:** 2026-09-13 · **Milestone:** M02 · **Karar (K01, kullanıcı):** baseline `feature/agent-engine`
 
 ## Bağlam
 11 Eylül kıyası (`docs/MOTOR_KARSILASTIRMA_YANIT.md`) eski agent commit'ine aitti; bugünkü motor OCR,
@@ -19,8 +19,21 @@ M02'nin sorusu artık "hangi motor" değil, "V3'ten ne aktarılır ve bugünkü 
   "belirgin üstünlük gösterilemedi" diye yazılır.
 - **Ölçülenler:** pass^3, süre ort/p50, LLM turu, araç adımı, araç hatası ve kodları, grounding.
 
-## Sonuç
-(koşu bitince doldurulur: `docs/experiments/benchmark_m02_2026-09-13.md`)
+## Sonuç (koşu 13 Eylül gece, 138 koşu, 730 s + 590 s)
+| | ekip (`feature/agent-engine`) | V3 |
+|---|---|---|
+| pass^3 ham | 16/23 | 17/23 |
+| bayat kontroller düzeltilince (içerik) | 20/23 | 18/23 |
+| ort. süre / p50 | 8,6 s / 6,5 s | 10,5 s / 10,0 s |
+| LLM turu / araç adımı | 3,4 / 2,4 | 4,9 / 3,4 |
+| araç hatası | 23 | 82 (65 TOOL_FAILED: ilk sorgu eski tablo adıyla) |
+| grounding temiz | 54/57 | 51/57 |
+
+Ortak düşen: G3 (12 satır kontrolü), L10-01 (netleştirme yok). Ekipte gerçek açık: L3-02 alt kalem
+toplamı (arama "dövize endeksli"yi bulamayınca vazgeçti). V3'te yetenek yok: U3 (`lead_lag`).
+Ayrıntı ve okuma: `docs/experiments/benchmark_m02_2026-09-13.md`. Karar: K01 değişmez; belirgin
+üstünlük iddiası yok. Açılan işler: L3-02 → M08/M11, L10-01 → M11-T07, bayat SQL kontrolleri →
+M16 kabul seti yeniden yazılırken durum kontrolüne çevrilir.
 
 ## Aktarım listesi (M02-T07, öneri)
 | V3 parçası | Durum |

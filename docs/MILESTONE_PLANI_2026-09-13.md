@@ -64,7 +64,7 @@ Bu test sayıları birbirleriyle toplanarak başarı oranı veya motor üstünl�
 |---|---|---|---|---|---|
 | M00 | Kapsam, açık kararlar ve iş bölümü | P0 | Yok | Ekip koordinasyonu | Tamamlandı (13 Eyl; `M00_GEREKSINIM_MATRISI_2026-09-13.md`) |
 | M01 | Tek ve tekrar kurulabilir yerel ortam | P0 | M00 çalışma varsayımları | Entegrasyon | Tamamlandı (13 Eyl, ADR-0049; T08 arkadaş provası M17) |
-| M02 | Güncel motor kıyası ve katkı aktarımı | P0 | M00; eşit test ortamı için M01 | Agent + değerlendirme | Planlandı |
+| M02 | Güncel motor kıyası ve katkı aktarımı | P0 | M00; eşit test ortamı için M01 | Agent + değerlendirme | Tamamlandı (13 Eyl, ADR-0053); T08 ertelendi |
 | M03 | Jenerik veri ve kaynak sözleşmeleri | P0 | M00 | Agent + veri | Planlandı |
 | M04 | Analyst/Architect yetki ve yayın sınırı | P0 | M03; profil uygulama kararı | Agent + veri + UI | Rol sınırı kesin; uygulama planlandı |
 | M05 | Güvenli kaynak erişimi | P0 | Mevcut erişim kodu; M03 sözleşmesi | Agent + veri | Tamamlandı (13 Eyl, ADR-0051); T03 ortak sözleşme testi açık |
@@ -129,15 +129,15 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Sürüm bilgili kıyas raporu, ham koşu kayıtları, baseline kararı ve korunacak modül/araştırma listesi.
 
-- [ ] **M02-T01:** Karşılaştırılan iki güncel commit, aynı MIA modeli/ayarları, aynı DB ve kaynak fikstürlerini sabitle.
-- [ ] **M02-T02:** Ortak çekirdek yetenek kıyasını tam ürün yetenek kapsamından ayır; V3'te eksik araçların yokluğunu dürüstçe raporla.
-- [ ] **M02-T03:** Doğruluk, aktif tablo korunması, hatalı öncül reddi, kaynak/kanıt ve belirsiz soru davranışını durum üzerinden ölç; yalnız metin benzerliği kullanma.
-- [ ] **M02-T04:** Finans, finans dışı, yeni dosya, erişilemeyen URL ve daha önce görülmemiş soruları koşudan önce seç.
-- [ ] **M02-T05:** Tekrarlı koşu bütçesini kararlaştır. Revize öneri: üç tekrar ilk tarama; kritik veya kararı değiştirebilecek dalgalı vakalara hedefli ek tekrar. Koşu sırasını dengele, ağ/model değişkenliğini kaydet. Yakın sonuç eşitlik kanıtı değildir; belirgin üstünlük gösterilemedi diye raporla. Kesin bütçe ve başarı eşiği açık karardır.
-- [ ] **M02-T06:** Süre, LLM çağrısı, prompt/completion token, araç hatası, onarım ve adım limitini birlikte raporla; test adedini kalite puanı sayma.
-- [ ] **M02-T07:** V3 benchmark koşucusu, ham deneyler, alan notları, salt-okunur paralellik ve çıktı sınırını tek tek değerlendir; aktarımda yazarlık/tarihçe korunsun.
-- [ ] **M02-T08:** Paralelliği yalnız bağımsız salt-okunur araçlarda dene; ortak workspace yazan işlemleri ve DuckDB bağlantı sınırlarını koru.
-- [ ] **M02-T09:** Seçilen baseline ve reddedilen alternatifin gerekçesini ADR'ye yaz; aktarılan her modülü uygun regresyonla doğrula.
+- [x] **M02-T01**: Karşılaştırılan iki güncel commit, aynı MIA modeli/ayarları, aynı DB ve kaynak fikstürlerini sabitle.
+- [x] **M02-T02** (U3: V3'te lead_lag yok, 'çağrılmadı' olarak sayıldı): Ortak çekirdek yetenek kıyasını tam ürün yetenek kapsamından ayır; V3'te eksik araçların yokluğunu dürüstçe raporla.
+- [x] **M02-T03** (durum kontrolleri: tablo, SQL, araç, adım limiti; metin puanlanmadı): Doğruluk, aktif tablo korunması, hatalı öncül reddi, kaynak/kanıt ve belirsiz soru davranışını durum üzerinden ölç; yalnız metin benzerliği kullanma.
+- [x] **M02-T04** (U1–U5 koşudan önce yazıldı): Finans, finans dışı, yeni dosya, erişilemeyen URL ve daha önce görülmemiş soruları koşudan önce seç.
+- [x] **M02-T05** (3 tekrar; belirgin üstünlük gösterilemedi yazıldı): Tekrarlı koşu bütçesini kararlaştır. Revize öneri: üç tekrar ilk tarama; kritik veya kararı değiştirebilecek dalgalı vakalara hedefli ek tekrar. Koşu sırasını dengele, ağ/model değişkenliğini kaydet. Yakın sonuç eşitlik kanıtı değildir; belirgin üstünlük gösterilemedi diye raporla. Kesin bütçe ve başarı eşiği açık karardır.
+- [x] **M02-T06**: Süre, LLM çağrısı, prompt/completion token, araç hatası, onarım ve adım limitini birlikte raporla; test adedini kalite puanı sayma.
+- [x] **M02-T07** (aktarım listesi ADR-0053; koşucu+18 vaka yazarlıkla alındı): V3 benchmark koşucusu, ham deneyler, alan notları, salt-okunur paralellik ve çıktı sınırını tek tek değerlendir; aktarımda yazarlık/tarihçe korunsun.
+- [ ] **M02-T08** (ertelendi: tek workspace, DuckDB bağlantı sınırı; M15'te ölçüm): Paralelliği yalnız bağımsız salt-okunur araçlarda dene; ortak workspace yazan işlemleri ve DuckDB bağlantı sınırlarını koru.
+- [x] **M02-T09** (ADR-0053; K01 değişmedi): Seçilen baseline ve reddedilen alternatifin gerekçesini ADR'ye yaz; aktarılan her modülü uygun regresyonla doğrula.
 
 **Kabul:** Ekip, doğruluk/kanıt/yetenek/süre farklarını aynı koşular üzerinden açıklayabilir. Aktarım kaydı hangi dosyanın hangi kaynaktan geldiğini gösterir. Eski raporlar tarihsel kalır.
 
@@ -255,7 +255,7 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Gereksinim→seri→semantik kanıt→yüklü gözlem→Gold hazır matrisi ve güncel kapsama raporu.
 
-- [ ] **M08-T01:** BDDK aylık/haftalık/FinTürk ve EVDS için zorunlu soru ailelerinin gerektirdiği seri kimliklerini çıkar.
+- [ ] **M08-T01** (M02 bulgusu L3-02: tüketici kredisi alt kalem ailesi — konut/taşıt/ihtiyaç/dövize endeksli — tek kartta, eksik alt kalem söylenir): BDDK aylık/haftalık/FinTürk ve EVDS için zorunlu soru ailelerinin gerektirdiği seri kimliklerini çıkar.
 - [ ] **M08-T02:** Her seri için birim/çarpan, frekans, stok/akım/endeks/oran, toplama kuralı, kaynak kapsamı ve kanıtı kaydet.
 - [ ] **M08-T03:** 1.533 unknown/birimsiz seriyi doğrulanacak öncelikli aileler ve keşif için saklanacaklar olarak ayır; katalogdan topluca silmeyi varsayılan çözüm yapma.
 - [ ] **M08-T04:** 2021-01–2026-06 için yayın takvimine göre beklenen ve mevcut gözlemleri karşılaştır; veri yokluğu/erişim yokluğu/anlamı belirsiz ayrımı yap.
@@ -328,7 +328,7 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 - [ ] **M11-T04:** Bekleyen açıklama sorusuna kısa yanıt geldiğinde hangi işlem/kolon/dönem için cevap olduğu bilinsin; tüm sohbet metni sınırsız yetki veya parametre havuzu olmasın.
 - [ ] **M11-T05:** Sonucu değiştiren eksikleri sor: birim/çarpan, tarih çözümü, veri tanımı, baz dönem, stok/akım ve kritik join anahtarı.
 - [ ] **M11-T06:** Sonucu değiştirmeyen sunum tercihlerini makul varsayımla çöz; kullanılan varsayımı kısa ve görünür belirt.
-- [ ] **M11-T07:** “Krediler arttı mı?” gibi belirsiz soruda olası yorumları veri kataloğundan üret; bir soru turunda gerekli alanları topluca iste, gereksiz soru zinciri kurma.
+- [ ] **M11-T07** (M02 bulgusu: L10-01 'Kredi bakiyesini göster' iki motorda da netleştirme sormadı): “Krediler arttı mı?” gibi belirsiz soruda olası yorumları veri kataloğundan üret; bir soru turunda gerekli alanları topluca iste, gereksiz soru zinciri kurma.
 - [ ] **M11-T08:** Kullanıcının yanlış öncülünü düzelt; verilen yüzdeyi veya nedensel hikâyeyi kanıt sayma. Varsayımsal açıklamayı açıkça hipotez olarak ayır.
 - [ ] **M11-T09:** Alan/katalog değiştiğinde önceki finans bağlamını, stale arama sonuçlarını ve geçersiz tablo referanslarını temizle.
 - [ ] **M11-T10:** Reset, tekrarlanan soru, selamlaşma ve eski yanıta geri dönmede yanlış tablo/kanıt gösterilmediğini dene.
@@ -659,3 +659,5 @@ Belgelendirme tamamlanması uygulama milestone'larının tamamlanması değildir
 - **2026-09-13 — M05 kapandı (T03 hariç):** yönlendirme sekme sekme doğrulanır, robots aynı sınırdan, döngü/sekme/süre/bayt sınırları, yarım indirme kapanır; A19 testi. DNS rebinding kapsam dışı yazıldı. Sıradaki: M12.
 
 - **2026-09-13 — M12 çekirdek + M14-T08:** zaman ekseni doğrulama, tekrar tarih reddi, gecikme sınırı, sonsuz/sabit davranışı, kart notları; Infinity JSON. A15/A16/A29 testleri. Sıradaki: M02 kıyas seti.
+
+- **2026-09-13 — M02 kapandı:** 23 vaka × 2 motor × 3 tekrar, aynı DB/model. Ham 16/23 vs 17/23; bayat SQL sözcük kontrolleri düzeltilince içerik 20/23 vs 18/23; ekip daha hızlı (8,6 vs 10,5 s), daha az tur ve hata, grounding 54/57 vs 51/57. K01 değişmedi. Açılan işler: L3-02 alt kalem toplamı (M08-T01/M11), L10-01 netleştirme (M11-T07), U1/L6 kontrol tasarımı (M16). T08 paralellik M15'e.
