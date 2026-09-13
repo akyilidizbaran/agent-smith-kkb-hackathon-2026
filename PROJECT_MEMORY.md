@@ -177,6 +177,12 @@ Kullanıcı: tıklanan yerler bir yere gitmiyor, yolculuk penceresi X ile kapanm
 ### 2.22 Ad: Agent Smith (13 Eylül)
 Proje görünen adı "AgentSmithler" → "Agent Smith" (arayüz başlığı, FastAPI başlığı, README, tasarım dosyaları, kanvas başlığı). Repo ve dizin adları değişmedi. Sol üstte özgün SVG amblem (`static/agent-smith.svg`: ajan silueti, koyu gözlük, kulaklık; film karesi değil, telif/likeness riski yok) ve aynı dosya favicon (`/favicon.ico` 404'ü kapandı).
 
+### 2.23 Milestone planı ve M00 kararları (13 Eylül)
+`docs/MILESTONE_PLANI_2026-09-13.md` (18 milestone, 192 görev) çalışma planı oldu; milestone milestone gidilecek. M00 kararları kullanıcıdan: baseline `feature/agent-engine`; 81 il; yüklü kapsam 2016-01'den itibaren (odak 2021–2026), istenen başka bir dönem sorulursa kaynaktan çekilip cevaplanabilmeli (tarih aralığı koda gömülmez); çıktı CSV+XLSX/PNG/HTML; jüri iki profilde (Analyst/Architect) dosya yükler, Architect tam sıfırlama ve başka alan verisiyle jeneriklik sınar; tüm milestone'lar bu hatta; kota/arama/yardımcı model kısıtı yok; paylaşılan sunucu yok, 10 kullanıcı örneklemi (oturum başına workspace), demo kullanıcının bilgisayarında, internet var, PDF canlı; JS siteleri opsiyonel; harita istenirse (lisans kullanıcıdan). Mentöre M04 sorusu taslağı `docs/mentor/2026-09-13-m04-yetki-sinir-sorusu.md`.
+
+### 2.24 M00 kapandı (13 Eylül)
+Transkriptteki 18 zorunlu davranış (R01–R18, zaman damgalı) kabul vakalarına eşlendi; yeni vakalar A30 (yüklü dışı dönem), A31 (kümülatif → akım), A32/A33 (bilinen anomali/kırılma), A21a–c (Analyst reddi, Architect yayını, tam sıfırlama + başka alan). Rol sınırı ve silme kapsamı kabul metni: profil başlatmada seçilir, Analyst kayıt defterinde yazma aracı yok, silme = pasifleştirme ya da açık onaylı tam sıfırlama (kod/kurulum/sırlar hariç). Dosya: `docs/M00_GEREKSINIM_MATRISI_2026-09-13.md`. Sıradaki: M01.
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
@@ -258,3 +264,53 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
 - Retrieval'da il/frekans sözcükleri puan değil eleme olmalı (BM25 tek başına "konut kredisi"de 81 ili öne alıyordu); sayıyla gelen "3 aylık" vade, frekans değil. Kosinüs benzerliğini saf Python döngüsüyle yazma (2.214×4096 sorgu başına saniyeler), numpy matrisle.
 - Model grafik sonrası tabloyu "doğrulamak" için sorgu üstüne sorgu atar; kart çizilen satırları taşıyıp "araç çağırmayı bırak" demeli; grafik istenip çizilmediyse harness geri göndermeli.
 - Trendli seride aykırılık düzeyde değil değişimde aranır (uçlar sahte aykırı); kırılma cezası serinin kendi MAD'ıyla değil birinci farkların MAD'ıyla ölçeklenmeli (gerçek seride hiç rejim bulunamıyordu). Yöntemi gerçek seride ölçmeden kabul etme.
+
+## 8. Bağımsız repo ve branch incelemesi — 13 Eylül 2026
+
+- Kullanıcı isteği: yerel repo + arkadaşların bütün uzak branchlerini dikkatle incele, soruları hazırla; geliştirmeler daha sonra birlikte tartışılacak. Bu tur uygulama değişikliği, merge, push veya dal silme yapılmadı.
+- Ayrıntılı, commit bağlantılı envanter ve bulgular: `docs/REPO_BRANCH_INCELEMESI_2026-09-13.md`. Eski ölçümler tarihsel kayıttır; aşağıdaki bilgiler güncel incelemedir.
+- Origin verilen GitHub reposuyla aynı; fetch sonrası 21 uzak branch. Agent `67cd6f9`, güncel veri `feature/lakehouse-catalog-breadth@cf3e878`, V3 `479854c`, main `d81d584`. Main yalnız ilk taslak. Agent/veri tarihçeleri ayrı; birleştirme kararı alınmadı.
+- **Yerel gerçek durum:** mevcut ayarlarla `build_agent()` seed `DuckDBLakehouse` açıyor, 1 dataset ve 14 araç. Varsayılan `/Users/baran/Desktop/KKB/lakehouse-core` mevcut değil; Architect/Gold araçları açılmıyor. Önceki 127 serilik demo bu varsayılan çalıştırma değildir. Kanonik DB, CLI yolu ve başlatma komutu kullanıcıyla netleştirilecek.
+- **Güncel katalog sayımı:** 2.214 seri; 1.533 `unknown`/birimsiz; 679 verified, 1.535 derived. EVDS kataloğunda 152 quarterly seri. Önceki açık listelerdeki 1.534 unknown / 233 quarterly değerleri güncel sayım değildir. Semantiği tanımlı 681 seri, yüklü veya tamamı Gold'a uygun demek değildir.
+- **Bağımsız doğrulama:** agent 330 test geçti; V3 snapshot 106 test geçti (agent ortamında). Lakehouse kendi kilitli ortamında 1.079 test geçti (763,29 s). Temiz geçici DB'de gerçek CLI ile CSV → draft → promotion → Silver → Gold çalıştı; 100/110/120 aylık stok Q1 için 120 üretti. Agent adaptörü üç satırı ve mevcut RAW/Bronze kanıtını okudu. GoldCLI derived veri için rıza yokken `UNVERIFIED_SEMANTICS`, rıza varken başarı döndürdü. Canlı MIA/OCR golden yeniden koşulmadı.
+- **Yeniden üretilen açıklar, henüz düzeltilmedi:** sorudaki yanlış `%300` grounding/evidence kontrolünden geçebiliyor; `-0.54` tablo değeri `+0,54` anlatıyla evidence'da eşleşiyor (grounding ayrı olarak reddediyor); RAW/Bronze yolu olmayan observation `complete=True`; public URL'den private hedefe redirect sonrası host yeniden denetlenmiyor (sahte taşıma ile); 8 gözlem + max_lag=24 broadcasting hatası; sırasız/tekrarlı tarihler analitik kontrolünden geçiyor; sonsuzluk JSON serileştirmesini bozuyor.
+- **Koddan doğrulanan eski açık:** toplu `run_catalog_ingestion.py` hâlâ ortak run/warning kayıt hattını atlıyor. Observability modülünün varlığı bu yolun provenance'ını garanti etmiyor.
+- **Arayüz:** Playwright ile sahte agent üzerinde soru/tablo/modal kapatma/reload akışı geçti. Tek RAM oturumu, upload/export/SSE yok; çok kullanıcı gereksinimi henüz kararlaştırılmadı.
+- **Sonraki adım:** rapordaki 14 kapsam/ekip/veri/kanıt/teslim sorusunu kullanıcıyla netleştir; ardından açıkları önceliklendir. V3'ün eski karşılaştırmasını bugünkü motor için güncel üstünlük kanıtı sayma; araştırma/benchmark katkılarını harness kararından ayrı koru.
+
+
+## 9. Kullanıcı yanıtları ve mentör kapsamı — 13 Eylül 2026
+
+- Kaynaklı netleştirme: `docs/KAPSAM_VE_MENTOR_NETLESTIRMESI_2026-09-13.md`; mentör metni kalıcı olarak `docs/mentor/2026-09-13-kullanici-paylasimi.txt` içinde korundu. Kullanıcının eklediği kick-off transkripti okundu; değiştirilmedi.
+- **Kesin kapsam:** jenerik dış/veri analiz agent'ı; finans/krediye bağlı ürün değil. BDDK/EVDS zorunlu başlangıç veri alanı, 2021-01 → 2026-06. Architect ekipçe eklenmiş yetenek; yarışmanın zorunlu kullanıcı rolü/ekranı olarak sunulmayacak.
+- **Takvim:** 20 Eylül freeze geçerli, daha erken bitirme hedefi. Ekip 14 Eylül'de motorları/branchleri inceleyip baseline ve iş bölümünü yeniden belirleyecek; güçlü parçalar taşınabilir. Motor kararı açık.
+- **Çalışma tabanı:** catalog-breadth bu çalışma hattında korunabilir; takımca son kabul edilmiş dal diye ilan edilmez. Şimdilik kendi bilgisayarında demo; transkript 24:47 bunu destekler, 24:11 tekrar kurulabilirliği ister.
+- **Kullanıcı tercihleri:** eksik güven/kanıt uyarıyla gösterilebilir; sayısal sonucu belirleyen eksik bilgi sorulur, diğer varsayımlar açık söylenebilir. Performans eşikleri daha sonra belirlenecek. Dosya yükleme, tablo/grafik/rapor indirme kapsam içi gereklilik.
+- **Erişim:** Tavily arama sağlayıcısı. Yetkili ekip hesabı/API key önceden hazırlanabilir; agent hesap açmaz/CAPTCHA aşmaz. Credential gizli katmanda. Kaynak engeli ve nedeni görünür; dosya/alternatif önerilir, kaynak sabitlenmişse değişiklik kullanıcıya sunulur. Crawl ilgi/sayfa/süre/derinlik bütçeli; tek orchestration agent ve deterministik katmanlar mentörce destekleniyor.
+- **Architect konusunda henüz KARAR DEĞİL:** kullanıcı son kullanıcının yalnız Analyst'e erişmesini önerdi ve görüş istedi. Önerimiz kullanıcı dosya/URL ile oturumda analiz yapabilsin; ortak kataloğa yayın, promotion, kalıcı Silver/Gold değişiklikleri ve credential yönetimi ekip/operator'de kalsın. Registry ve yazıcı erişimi ayrılmalı; tool_gate veya gizli düğme yetki sınırı değildir. Bu kabul edilirse mevcut sohbet promotion akışı ve ilgili ADR'ler uygulama sırasında güncellenmeli.
+- **Güven önerisi:** kanıtı eksik sonuç uyarıyla sunulabilir; yanlış olduğu saptanan sayıyı yalnız uyarı ekleyerek doğrulanmış gibi sunma. Hesap, semantik güven ve kaynak zinciri ayrı gösterilmeli.
+- **Jeneriklik kabul önerisi:** temiz boş katalog + finans dışı veri + aynı motor; önceki finans alias/prompt/SQL varsayımları sızmamalı. Mevcut seri/tarih/değer Silver modelinin genel işlem/ilişkisel veri için sınırları ayrıca değerlendirilmeli. Zorunlu finans çok-turlu senaryosu ve dış veri senaryosu birlikte ölçülmeli.
+- **Kaynak eksiği:** yeni mentör dosyası “2. soru cevabı” başlığında bitiyor; kota/arama/yardımcı model yanıtı yok. ADR-0021'de eski özet var; güncel sayısal kota bu ekten doğrulanmış sayılmaz.
+- Bu tur yalnız doküman/hafıza güncellendi; uygulama veya takım baseline kararı değiştirilmedi.
+
+## 10. Ayrıntılı milestone planı — 13 Eylül 2026
+
+- Kullanıcının bütün konuşulan işleri nedenleriyle milestone'lara kaydetme isteği tamamlandı: güncel operasyonel backlog `docs/MILESTONE_PLANI_2026-09-13.md`.
+- Plan 18 milestone (M00–M17), benzersiz kimlikli 192 görev ve 29 birleşik kabul senaryosu içerir. Her milestone için gerekçe, teslimat, görevler, kabul ölçütleri ve riskler; ayrıca bağımlılık haritası, açık karar defteri ve kapatma kanıtı formatı vardır.
+- Kesin gereksinimler, kod bulguları, öneriler ve açık kararlar ayrıldı. Analyst/Architect yetki önerisi, ortak motor seçimi ve performans eşikleri onaylanmış sayılmadı. 20 Eylül freeze korunuyor; ara tarihler öneridir, ekip taahhüdü değildir.
+- Eski `docs/YOL_HARITASI.md`, ADR'ler ve test ölçümleri tarihsel kayıt olarak korunur; bu plan tamamlanmış işleri sıfırlamaz. Yeni uygulama görevleri kabul kanıtı oluşmadan tamamlandı işaretlenmeyecek.
+- Sonraki adım: M00 kapsam/iş bölümü kararlarını ekipçe netleştirmek; M01 tekrar kurulabilir ortamı hazırlamak ve bağımsız doğruluk açıklarını plan doğrultusunda ele almak. Bu kayıt uygulama geliştirmesi, merge veya push yapıldığı anlamına gelmez.
+- Doküman doğrulaması: milestone/görev/senaryo sayımları, görev kimliği benzersizliği ve yerel belge bağlantıları kontrol edildi. Bu tur uygulama kodu değiştirilmedi.
+
+
+## 11. Milestone geri bildirimi ve kullanıcı kararları — 13 Eylül 2026
+
+- Değerlendirme: `docs/MILESTONE_FEEDBACK_DEGERLENDIRMESI_2026-09-13.md`. Arkadaşın dört önerisi kodla karşılaştırıldı; ana planın ilgili maddeleri güncellendi.
+- M04 düzeltmesi: geçici workspace ve kalıcı CLI yolları zaten ayrıdır; eksik olan kullanıcı/Architect işletim profili sınırıdır. ADR-0039 korunmalı, yeni rol kapsamıyla tamamlanmalı; kimlik sistemi otomatik gereksinim değil.
+- **Kullanıcı kesinleştirdi:** normal kullanıcı ortak kataloğa yazamaz/silemez; Architect veri mimarisini değiştirir. Jüri demosunda iki akış da gösterilebilir. Salt Analyst jüri profili tek başına demo kapsamını karşılamaz.
+- **Kullanıcı kesinleştirdi:** iki yeni tabloyu anahtarla birleştirme zorunlu. Mevcut workspace_query yalnız aktif `t` tablosunu kaydeder; çok kaynaklı tablo kimlikleri, join anahtarı/kardinalite ve provenance M03/M11/A09 kapsamında tamamlanmalı. Silver'ı genel ilişki deposuna dönüştürmek önerilmiyor.
+- **Kullanıcı hedefi:** her türlü silme ve boş ortamdan yeniden kurulum. Öneri: pasifleştirme + ayrı Architect fiziksel veri reseti; katalog/RAW/Bronze/Silver/Gold/oturum/cache kapsanır, kod ve kurulum korunur. Kesin hedef ve işlem onayı gerekir; bu tur veri silinmedi. Kabul ayrı geçici veri kökünde yapılmalı.
+- Mentörden yeni Architect onay cevabı yok; 45 görev için somut liste veya yeni kod yok. 192 alt görevi körlemesine azaltma yerine yaklaşık 35–45 sonuç paketi önerildi; zorunlu kabul vakaları korunur. Henüz paket eşlemesi veya 45 sayısı kararı yok.
+- M02 revize önerisi: üç dengeli ilk tekrar, kritik/dalgalı vakalara bütçeli ek tekrar. Yakın skor eşitlik kanıtı değildir. Kesin model bütçesi ve eşikler hâlâ açık.
+- Bu tur 15 ilgili offline test geçti (0,41 s); tarihsiz grup toplamı A=30/B=7 doğrulandı. Promotion check_policy eski onay + güncel “yayınlama” metninde ret üretmedi; yalnız politika çağrısı yapıldı, CLI/DB yazımı yapılmadı. Onay işlem kapsamına bağlanmalı.
+- Uygulama kodu, dal ve veri değiştirilmedi; yalnız değerlendirme/plan/hafıza yazıldı.
