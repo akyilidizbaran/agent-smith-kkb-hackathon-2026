@@ -281,6 +281,7 @@ class AnalyticsAgent:
         if is_small_talk(question):
             # Harness kuralı: selamlaşma LLM'e gitmez; tablo ve kanıt paneli yok (ADR-0045).
             text = small_talk_reply(question, has_table=self.workspace.has_table)
+            self.last_gate = None  # kapı çalışmadı; iz eski kararı göstermesin
             self._history.append(ChatMessage(role="user", content=question))
             self._history.append(ChatMessage(role="assistant", content=text))
             step = AgentStep(index=1, role="narrate", thought="selamlaşma — LLM çağrılmadı", result_summary=text)
