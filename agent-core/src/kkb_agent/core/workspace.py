@@ -37,8 +37,20 @@ class WorkspaceStep:
     at: datetime = field(default_factory=datetime.now)
 
 
+@dataclass
+class SourceTable:
+    """Oturuma giren her tablonun donmuş kopyası (M11-T01, ADR-0059): ikinci yükleme birinciyi kaybettirmez."""
+
+    id: str
+    title: str
+    frame: pd.DataFrame
+    provenance: dict[str, QueryProvenance]
+
+
 class AnalysisWorkspace:
     """Aktif analiz tablosu ve onun tam geçmişi."""
+
+    MAX_SOURCES = 8
 
     def __init__(self) -> None:
         self._table: pd.DataFrame | None = None
@@ -48,6 +60,9 @@ class AnalysisWorkspace:
         self.title: str = ""
         self._peeks: list[tuple[str, pd.DataFrame]] = []      # bakış sorguları (tabloyu değiştirmeyen)
         self.web_pages: dict[str, dict[str, object]] = {}     # url → sha256/fetched_at/status; turlar arası kalır
+        self._sources: dict[str, SourceTable] = {}             # k1, k2, … — join ve workspace_query için
+        self._source_seq = 0
+        self.active_source_id: str | None = None
 
     # ---------- durum ----------
     @property
@@ -88,15 +103,44 @@ class AnalysisWorkspace:
 
     # ---------- işlemler ----------
     def set_table(
-        self, df: pd.DataFrame, *, description: str, provenance: QueryProvenance | None = None
-    ) -> None:
-        """Yeni bir analiz başlatır. Önceki tablo geçmişe alınır."""
+        self, df: pd.DataFrame, *, description: str, provenance: QueryProvenance | None = None,
+        column_provenance: dict[str, QueryProvenance] | None = None,
+    ) -> str:
+        """Yeni bir analiz başlatır. Önceki tablo geçmişe alınır; tablo kimlikli kaynak olarak kaydedilir."""
         self._snapshot()
         self._table = df.copy()
         if provenance:
             for col in df.columns:
                 self._column_sources[col] = provenance
+        for col, prov in (column_provenance or {}).items():
+            if prov is not None:
+                self._column_sources[col] = prov
         self._record("set_table", description, provenance, columns_added=list(df.columns))
+        return self._register_source(description)
+
+    # ---------- kimlikli kaynak tablolar (M11) ----------
+    def _register_source(self, title: str) -> str:
+        assert self._table is not None
+        self._source_seq += 1
+        sid = f"k{self._source_seq}"
+        prov = {str(c): self._column_sources[c] for c in self._table.columns if c in self._column_sources}
+        self._sources[sid] = SourceTable(id=sid, title=title or "tablo", frame=self._table.copy(), provenance=prov)
+        while len(self._sources) > self.MAX_SOURCES:
+            self._sources.pop(next(iter(self._sources)))
+        self.active_source_id = sid
+        return sid
+
+    def sources(self) -> list[SourceTable]:
+        return list(self._sources.values())
+
+    def source(self, ref: str) -> SourceTable | None:
+        """'aktif' güncel tabloyu (eklenen kolonlarla) verir; 'kN' yüklendiği andaki kopyayı."""
+        if ref in ("aktif", "t", "active"):
+            if self._table is None:
+                return None
+            prov = {str(c): self._column_sources[c] for c in self._table.columns if c in self._column_sources}
+            return SourceTable(id="aktif", title=self.title or "aktif tablo", frame=self._table, provenance=prov)
+        return self._sources.get(ref)
 
     def add_column(
         self,
@@ -189,6 +233,12 @@ class AnalysisWorkspace:
         if self._history:
             lines.append("Bu tabloya uygulanan işlemler:")
             lines += [f"  {s.order}. {s.description}" for s in self._history]
+        if len(self._sources) > 1:
+            lines.append("Oturumdaki tablolar (workspace_join ve workspace_query'de kimlikle kullan; aktif tablo `t`):")
+            for src in self._sources.values():
+                cols = ", ".join(map(str, list(src.frame.columns)[:8]))
+                mark = " ← aktif tablonun kaynağı" if src.id == self.active_source_id else ""
+                lines.append(f"  {src.id}: {src.title[:60]} — {len(src.frame)} satır; kolonlar: {cols}{mark}")
         return "\n".join(lines)
 
     # ---------- iç ----------

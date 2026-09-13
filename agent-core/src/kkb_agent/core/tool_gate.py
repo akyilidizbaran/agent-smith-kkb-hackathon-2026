@@ -20,7 +20,7 @@ from .intent import write_intent
 
 ALWAYS = frozenset({
     "lakehouse_search", "lakehouse_describe", "lakehouse_distinct_values", "lakehouse_query",
-    "workspace_add_column", "workspace_compute_column", "workspace_show", "workspace_query",
+    "workspace_add_column", "workspace_compute_column", "workspace_show", "workspace_query", "workspace_real_value", "workspace_join",
     "gold_align", "gold_decompose", "gold_join",
 })
 CHART = frozenset({"chart"})

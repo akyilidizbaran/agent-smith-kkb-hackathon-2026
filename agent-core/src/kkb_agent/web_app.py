@@ -453,7 +453,13 @@ class Session:
         except Exception:  # noqa: BLE001
             silver_rows = None
         search_tool = agent.registry.get("web_search")
+        ready = {}
+        try:
+            ready = lake.readiness() if lake is not None and hasattr(lake, "readiness") else {}
+        except Exception:  # noqa: BLE001
+            ready = {}
         return {
+            "readiness": ready,
             "profile": self.profile,
             "profile_switch": bool(self.architect_token),
             "uploads": len(self.uploads),

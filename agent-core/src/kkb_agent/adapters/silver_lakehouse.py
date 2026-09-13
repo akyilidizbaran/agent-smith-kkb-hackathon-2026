@@ -863,6 +863,27 @@ class SilverLakehouse:
     def gold_join(self, series_ids: list[str], target_frequency: str, *, allow_unverified: bool = False) -> QueryResult:
         return self._gold_call("join_on_period", list(series_ids), target_frequency, allow_unverified=allow_unverified)
 
+    def readiness(self) -> dict[str, int]:
+        """Katalog → anlamı doğrulanmış → yüklü → Gold'a hazır; her biri ayrı sayılır.
+
+        Gold'a hazır: yüklü, anlamı `verified`, ölçüm tipi bilinen (Gold toplama/hizalama kuralı
+        ölçüm tipinden gelir; `derived` seri Gold'da yalnız açık rızayla kullanılır, ADR-0039)."""
+        row = self._conn().execute(
+            f"""
+            WITH loaded AS (SELECT DISTINCT series_id FROM {SILVER_RELATION})
+            SELECT count(*) FILTER (WHERE s.source_id <> 'adhoc'),
+                   count(*) FILTER (WHERE s.source_id <> 'adhoc' AND s.semantic_confidence = 'verified'),
+                   count(*) FILTER (WHERE s.source_id <> 'adhoc' AND s.unit IS NOT NULL AND s.measure_type <> 'unknown'),
+                   count(*) FILTER (WHERE l.series_id IS NOT NULL),
+                   count(*) FILTER (WHERE l.series_id IS NOT NULL AND s.semantic_confidence = 'verified'
+                                    AND s.measure_type <> 'unknown')
+            FROM meta.series s LEFT JOIN loaded l USING (series_id)
+            WHERE s.status <> 'deprecated'
+            """
+        ).fetchone()
+        return {"catalog_total": int(row[0]), "semantics_verified": int(row[1]), "semantics_defined": int(row[2]),
+                "loaded_series": int(row[3]), "gold_ready_series": int(row[4])}
+
     def health(self) -> dict[str, Any]:
         n_obs = self._conn().execute(f"SELECT count(*) FROM {SILVER_RELATION}").fetchone()[0]
         n_adhoc = (self._conn().execute(f"SELECT count(*) FROM {ADHOC_RELATION}").fetchone()[0]
@@ -883,6 +904,8 @@ class SilverLakehouse:
             "draft_series": sum(1 for sid, rel in self._relation_by_series.items()
                                 if rel == ADHOC_RELATION and sid in self._catalog),
             "gold_tables": len(self._gold_meta),
+            # Ayrı sayılar (M08-T11): "681 anlamı tanımlı" ≠ "681 yüklü" ≠ "Gold'a hazır".
+            **self.readiness(),
             "stale_gold_tables": sum(1 for m in self._gold_meta.values() if m["stale"]),
             "gold_run_available": self.gold is not None,
             # Sayı önce, örnek sonra: 1600 kimliği ekrana dökmek teşhis değil gürültüdür.

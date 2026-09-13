@@ -67,7 +67,9 @@ class LakehouseSearchTool(Tool):
                              "tanımlı ama henüz çekilmemiş olduğunu söyle. Yeniden arama yapma.")
             else:
                 lines.append("YAPACAĞIN: soruyu farklı sözcüklerle EN FAZLA bir kez daha ara; yine yoksa "
-                             "kullanıcıya bu verinin havuzda bulunmadığını söyle.")
+                             "kullanıcıya bu verinin havuzda bulunmadığını söyle. Birden çok kalemi birlikte "
+                             "aradıysan her kalemi TEK TEK ara: biri yoksa "
+                             "diğerleriyle devam et, eksik olanı cevapta belirt (M02 bulgusu L3-02).")
             if self._empty_streak >= self.EMPTY_LIMIT or pending:
                 self._empty_streak = 0
                 return ToolResult.fail(

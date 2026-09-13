@@ -210,8 +210,10 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") { const g 
 async function openStatus() {       // veri havuzu kartları ve üst rozetler → sistem durumu (/api/status)
   const r = await fetch("/api/status"); const s = await r.json(); lastStatus = s;
   const rows = [["Model", s.model], ["Veri havuzu", `${fmtInt(s.catalog_series)} katalog serisi · ${fmtInt(s.loaded_series)} yüklü · ${fmtInt(s.silver_rows)} Silver gözlemi · ${fmtInt(s.gold_tables)} Gold tablosu`],
+    ["Hazır oluş", s.readiness && s.readiness.catalog_total ? `katalog ${fmtInt(s.readiness.catalog_total)} · anlamı doğrulanmış ${fmtInt(s.readiness.semantics_verified)} · birim+ölçüm tipi tanımlı ${fmtInt(s.readiness.semantics_defined)} · yüklü ${fmtInt(s.readiness.loaded_series)} · Gold'a hazır ${fmtInt(s.readiness.gold_ready_series)}` : "–"],
     ["Retrieval kademesi", s.retrieval_mode], ["Araç kapısı", s.tool_gate ? "açık (soruya göre alt küme)" : "kapalı"], ["Araçlar (" + s.tools.length + ")", s.tools.join(", ")],
     ["Arama bütçesi", s.search_budget_remaining === null ? "web_search kapalı" : `${s.search_budget_remaining} arama kaldı (süreç başına)`], ["Bu oturum", `${s.history.length} soru`],
+    ["Oturum", "bellekte tutulur; sunucu yeniden başlarsa sohbet, tablolar ve yüklenen dosyalar silinir (tek bilgisayar demosu)"],
     ["Uç noktalar", "GET /api/status · POST /api/ask · GET /api/answers · GET /api/answers/{i} · POST /api/reset · GET /static/…"]];
   showModal("Sistem durumu", `<div class="kv">${rows.map(([k, v]) => `<div class="k">${esc(k)}</div><div class="v">${esc(v ?? "–")}</div>`).join("")}</div>`);
 }

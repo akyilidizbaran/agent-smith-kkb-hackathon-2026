@@ -58,6 +58,16 @@ def _db_checks(settings: Settings) -> list[Check]:
         loaded, start, end = conn.execute(
             "SELECT count(DISTINCT series_id), min(observation_date), max(observation_date) FROM silver.fact_observation").fetchone()
         out.append(Check("veri", n_obs > 0, f"katalog {n_series:,} seri · yüklü {loaded:,} seri · {n_obs:,} gözlem · {start} → {end}".replace(",", ".")))
+        try:
+            ver, defined, ready = conn.execute(
+                "WITH l AS (SELECT DISTINCT series_id FROM silver.fact_observation) "
+                "SELECT count(*) FILTER (WHERE semantic_confidence='verified'), "
+                "count(*) FILTER (WHERE unit IS NOT NULL AND measure_type <> 'unknown'), "
+                "count(*) FILTER (WHERE l.series_id IS NOT NULL AND semantic_confidence='verified' AND measure_type <> 'unknown') "
+                "FROM meta.series s LEFT JOIN l USING (series_id) WHERE status <> 'deprecated'").fetchone()
+            out.append(Check("hazır oluş", True, f"anlamı doğrulanmış {ver:,} · birim+ölçüm tipi tanımlı {defined:,} · yüklü {loaded:,} · Gold'a hazır {ready:,} (ayrı sayılar, birbirinin yerine geçmez)".replace(",", "."), required=False))
+        except Exception:  # noqa: BLE001
+            pass
         gold = sorted(r for r in rels if r.startswith("gold."))
         out.append(Check("gold", True, f"{len(gold)} tablo: {', '.join(g.split('.', 1)[1] for g in gold)}" if gold else "gold tablosu yok (make demo-data `gold` adımı)", required=False))
         try:

@@ -86,6 +86,14 @@ kullanıcının baktığı tablo kaybolur. Bunun yerine:
 workspace_compute_column
   - Tablonun son halini görmek için: workspace_show
 - Alt toplam satırlarını (is_alt_toplam = TRUE) alt kalemlerle birlikte toplama; mükerrer sayım olur.
+NETLEŞTİRME KURALI: Soru sonucu değiştiren bir bilgiyi belirtmiyorsa (hangi kalem/seri, hangi dönem, \
+birim ya da baz, iki tablonun hangi kolonla birleşeceği) ve katalogda ya da tabloda birden çok makul \
+yorum varsa TAHMİN ETME: 2–4 seçeneği kısaca listele ve TEK soruda sor (cevabın soru işaretiyle bitsin). \
+Sonucu değiştirmeyen sunum tercihlerini (sıralama, yuvarlama, grafik türü) kendin seç ve cevapta belirt.
+ALT KALEM KURALI: "alt kalemlerden topla / kırılımını ver" istendiğinde her alt kalemi AYRI seri \
+olarak ara ve bulduklarını tek sorguda topla (her biri kendi kimliğiyle). Bir alt kalem havuzda \
+yoksa DURMA: bulunanlarla hesabı yap, eksik kalemi cevapta adıyla söyle ve toplamın eksik olduğunu \
+belirt. Hazır üst toplam serisi varsa onu alt kalem toplamına EKLEME; karşılaştırma için ayrı göster.
 - Kullanıcının sorusunu cevaplayan sorguyu her zaman as_active_table=true ile çalıştır; \
 tek satırlık sonuçlar da analiz tablosudur.
 - Bir kalem sorulduğunda TEK kalem seç. Benzer isimli kalemleri (takipteki, dövize endeksli, \
@@ -100,6 +108,25 @@ sade bir cümleyle söyle ve elde hangi dönemin bulunduğunu belirt.
 
 Bir araç hata döndürürse hatayı oku, çağrını düzelt ve tekrar dene. \
 Yeterli bilgiye ulaştığında araç çağırmayı bırak ve nihai cevabını yaz."""
+
+CLARIFY_NOTE = ("\n\n(Bu kısa mesaj, önceki cevabında sorduğun soruya verilen yanıttır: «{q}». Eksik bilgiyi "
+                "bununla tamamla ve asıl isteği sürdür; sohbetteki başka ifadeleri yetki ya da ek parametre sayma.)")
+
+
+def pending_question(history: list, question: str, *, max_words: int = 8) -> str | None:
+    """Son asistan cevabı bir soruyla bitiyor ve yeni mesaj kısaysa, cevaplanan soru (M11-T04)."""
+    if len((question or "").split()) > max_words:
+        return None
+    last = next((m for m in reversed(history) if m.role == "assistant"), None)
+    if last is None:
+        return None
+    text = (last.content or "").strip()
+    if not text.endswith("?"):
+        return None
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    q = next((x for x in reversed(sentences) if x.endswith("?")), text)
+    return q[-240:]
+
 
 REPEAT_NOTE = ("\n\n(Bu soru bu oturumda daha önce soruldu. Önceki cevabını KOPYALAMA: aynı verilerle, "
                "farklı bir kurgu ve farklı cümlelerle anlat. Sayıları ve kaynağı değiştirme.)")
@@ -225,6 +252,8 @@ class AnalyticsAgent:
             "lakehouse_query",
             "workspace_add_column",
             "workspace_compute_column",
+            "workspace_real_value",
+            "workspace_join",
             "workspace_show",
             # Gold araçları hesaplanmış tabloyu workspace'e koyar (ADR-0031).
             "gold_align",
@@ -667,6 +696,9 @@ class AnalyticsAgent:
         # (ölçüldü: T=0,5'te bile birebir aynı). Kopyalamayı harness yasaklar (ADR-0046).
         if self._asked_before(question):
             question = question + REPEAT_NOTE
+        pending = pending_question(self._history, question)
+        if pending:
+            question = question + CLARIFY_NOTE.format(q=pending)
         msgs.append(ChatMessage(role="user", content=question))
         return msgs
 

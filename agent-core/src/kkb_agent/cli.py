@@ -42,6 +42,8 @@ from .tools.promote import PromoteDraftTool
 from .tools.gold import GOLD_PROMPT_RULES, GoldAlignTool, GoldDecomposeTool, GoldJoinTool
 from .tools.chart import CHART_PROMPT_RULES, ChartTool
 from .tools.workspace_query import WorkspaceQueryTool
+from .tools.real_value import REAL_VALUE_PROMPT_RULES, WorkspaceRealValueTool
+from .tools.workspace_join import WorkspaceJoinTool
 from .vision.ocr import OcrClient
 from .adapters.mia_embedder import EmbeddingCache, MiaEmbedder
 from .core.retriever import RetrievalPolicy
@@ -164,6 +166,8 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
             WorkspaceComputeColumnTool(workspace),
             WorkspaceShowTool(workspace),
             WorkspaceQueryTool(workspace),
+            WorkspaceRealValueTool(lakehouse, workspace),   # M09: reel dönüşüm, Analyst yeteneği
+            WorkspaceJoinTool(workspace),                    # M11: iki oturum tablosu anahtarla
             # Analitik ailesi (ADR-0040): LLM yok, her adaptörde; veri ne olursa olsun aynı.
             AnomalyDetectTool(workspace),
             ChangePointsTool(workspace),
@@ -190,7 +194,7 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
     registry.register(
         ChartTool(lakehouse, workspace, chart_dir=settings.chart_dir, geo_dir=settings.geo_dir)
     )
-    system_prompt = SYSTEM_PROMPT + CHART_PROMPT_RULES + WORKSPACE_QUERY_RULES + ANALYTICS_PROMPT_RULES
+    system_prompt = SYSTEM_PROMPT + CHART_PROMPT_RULES + WORKSPACE_QUERY_RULES + ANALYTICS_PROMPT_RULES + REAL_VALUE_PROMPT_RULES
     # Dış kaynak (ADR-0034): web_url her zaman; web_search yalnız arama anahtarı varsa.
     settings.ingest_allowed_root.mkdir(parents=True, exist_ok=True)
     registry.register(WebUrlTool(workspace, allowed_local_root=settings.ingest_allowed_root, registry=registry, ocr=ocr))
