@@ -67,7 +67,7 @@ Bu test sayıları birbirleriyle toplanarak başarı oranı veya motor üstünl�
 | M02 | Güncel motor kıyası ve katkı aktarımı | P0 | M00; eşit test ortamı için M01 | Agent + değerlendirme | Planlandı |
 | M03 | Jenerik veri ve kaynak sözleşmeleri | P0 | M00 | Agent + veri | Planlandı |
 | M04 | Analyst/Architect yetki ve yayın sınırı | P0 | M03; profil uygulama kararı | Agent + veri + UI | Rol sınırı kesin; uygulama planlandı |
-| M05 | Güvenli kaynak erişimi | P0 | Mevcut erişim kodu; M03 sözleşmesi | Agent + veri | Planlandı |
+| M05 | Güvenli kaynak erişimi | P0 | Mevcut erişim kodu; M03 sözleşmesi | Agent + veri | Tamamlandı (13 Eyl, ADR-0051); T03 ortak sözleşme testi açık |
 | M06 | Tavily, crawl, yetkili erişim ve fallback | P1 | M05 | Kaynak erişimi + UI | Planlandı |
 | M07 | Ortak ingestion ve provenance | P0 | M01, M03 | Veri | Planlandı |
 | M08 | BDDK/EVDS semantik ve kapsam hazırlığı | P1 | M00 kapsam; M07 yayın kanıtı | Veri + alan doğrulaması | Planlandı |
@@ -192,13 +192,13 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Normal istek, robots ve indirme için tutarlı erişim politikası ve regresyon kanıtı.
 
-- [ ] **M05-T01:** Her redirect hedefini istekten önce doğrula; izinli şema/host/IP politikası bütün adımlarda uygulansın.
-- [ ] **M05-T02:** Robots isteğini de aynı güven sınırından geçir; robots üzerinden özel adrese veya sınırsız içeriğe erişilemesin.
+- [x] **M05-T01:** Her redirect hedefini istekten önce doğrula; izinli şema/host/IP politikası bütün adımlarda uygulansın.
+- [x] **M05-T02:** Robots isteğini de aynı güven sınırından geçir; robots üzerinden özel adrese veya sınırsız içeriğe erişilemesin.
 - [ ] **M05-T03:** Normal fetch ve veri generic connector'ı için ortak davranış vakaları oluştur; ayrı süreç sınırını bozmadan sözleşme uyumunu denetle.
-- [ ] **M05-T04:** İstek, yönlendirme sayısı, toplam süre ve byte sınırlarını birlikte uygula; akış okuma hatasında açık yanıt/bağlantı kapansın.
-- [ ] **M05-T05:** Yerel dosyada izinli kök, symlink çözümü, dosya boyutu ve desteklenen tür kontrollerini koru; upload dosya adı fiziksel yolu belirlemesin.
-- [ ] **M05-T06:** Yetkili bağlantı kimlik bilgisi farklı hosta yönlendirmede taşınmasın; hata ve trace metinlerine sızmasın.
-- [ ] **M05-T07:** Kontrollü sahte taşıma ile public→private, public→public, redirect döngüsü, DNS hatası ve yarım indirme vakalarını çalıştır.
+- [x] **M05-T04:** İstek, yönlendirme sayısı, toplam süre ve byte sınırlarını birlikte uygula; akış okuma hatasında açık yanıt/bağlantı kapansın.
+- [x] **M05-T05** (mevcut: izinli kök, symlink çözümü, boyut, tür; upload adı → M10-T02): Yerel dosyada izinli kök, symlink çözümü, dosya boyutu ve desteklenen tür kontrollerini koru; upload dosya adı fiziksel yolu belirlemesin.
+- [x] **M05-T06** (kimlik bilgisi taşınmıyor; başka hosta yalnız UA/Accept gider; hata metni sebep cümlesi): Yetkili bağlantı kimlik bilgisi farklı hosta yönlendirmede taşınmasın; hata ve trace metinlerine sızmasın.
+- [x] **M05-T07:** Kontrollü sahte taşıma ile public→private, public→public, redirect döngüsü, DNS hatası ve yarım indirme vakalarını çalıştır.
 
 **Kabul:** Engelli hedefe ağ isteği yapılmadan ret verilir; normal açık kaynaklar çalışır. Ret sebebi kullanıcıya anlamlı gelir. Güven testleri gerçek özel servislere erişerek yapılmaz.
 
@@ -655,3 +655,5 @@ Belgelendirme tamamlanması uygulama milestone'larının tamamlanması değildir
 - **2026-09-13 — M01 kapandı:** lakehouse-core repo ağacında, DATA_ROOT, LAKEHOUSE_MODE, `--preflight`, `make demo-data`; canlı kurulum 127/127, ön kontrol hazır; temiz klon provası. Bulgu: toplu ingest 0 run kaydı (M07). Kapanış formu `M01_ORTAM.md` §6. Sıradaki: M05/M13/M12/M14-T08 küçük düzeltmeler, ardından M02.
 
 - **2026-09-13 — M13 çekirdek:** sorudan sayı muaf değil, açık ters işaret eşleşmez, işaret uyarısı, üç kanıt durumu (sayılar/sorgu izi/dosya zinciri), RAW/Bronze diskte şart, kapsam notu; A13/A14/A23 regresyonu. Açık: T04 (dönem/birim/varlık bağı), T05 sınır testleri, T07 (eski sürüm kanıtı), T11 (kanıt türleri), T12 (yeniden üretim politikası — mevcut bir kez geri gönderme korunuyor). Sıradaki: M05.
+
+- **2026-09-13 — M05 kapandı (T03 hariç):** yönlendirme sekme sekme doğrulanır, robots aynı sınırdan, döngü/sekme/süre/bayt sınırları, yarım indirme kapanır; A19 testi. DNS rebinding kapsam dışı yazıldı. Sıradaki: M12.

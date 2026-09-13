@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urljoin, urlparse, urlunparse
 
 from ..contracts.access import AccessOutcome
 from ..core.access_policy import classify_access
@@ -68,6 +68,59 @@ def private_host(host: str) -> bool:
             return True
     return False
 
+MAX_REDIRECTS = 5
+ROBOTS_MAX_BYTES = 512 * 1024
+
+
+class RedirectRefused(FetchRefused):
+    """Yönlendirme hedefi güven sınırının dışında (özel adres, şema, döngü, sekme sayısı)."""
+
+
+def _check_target(url: str, *, allow_private: bool) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise RedirectRefused(f"desteklenmeyen şema: {parsed.scheme or '—'}")
+    if not allow_private and private_host(parsed.hostname or ""):
+        raise RedirectRefused("özel/loopback adreslere erişim yok")
+
+
+def guarded_get(session: Any, url: str, *, timeout: float, allow_private: bool = False,
+                robots: "RobotsCache | None" = None, stream: bool = True,
+                headers: Mapping[str, str] | None = None, max_redirects: int = MAX_REDIRECTS,
+                deadline: float | None = None) -> tuple[Any, str]:
+    """Yönlendirmeleri KENDİ takip eder: her hedef istekten ÖNCE doğrulanır (M05, ADR-0051).
+
+    İlk host izinli olsa bile `Location` özel adrese gidebilir; kütüphanenin otomatik takibi bunu
+    görmez. Döngü, sekme sınırı, şema ve toplam süre de burada. Kimlik bilgisi taşımıyoruz
+    (yalnız User-Agent/Accept), yine de başlıklar başka hosta olduğu gibi gitmez.
+    Döner: (yanıt, son_url). Kütüphane takibi kapalı (allow_redirects=False).
+    """
+    base_headers = dict(headers or {})
+    current, visited = url, [url]
+    for _hop in range(max_redirects + 1):
+        _check_target(current, allow_private=allow_private)
+        if robots is not None and current != url and not robots.allowed(current, session):
+            raise RedirectRefused(f"yönlendirme hedefi robots.txt ile kapalı: {current}")
+        if deadline is not None and time.monotonic() > deadline:
+            raise FetchRefused("toplam süre sınırı aşıldı (yönlendirmeler dâhil)")
+        hop_headers = base_headers if same_domain(current, url) else {k: v for k, v in base_headers.items() if k.lower() in ("user-agent", "accept")}
+        resp = session.get(current, timeout=timeout, allow_redirects=False, stream=stream, headers=hop_headers)
+        status = getattr(resp, "status_code", None)
+        location = (getattr(resp, "headers", {}) or {}).get("Location") or (getattr(resp, "headers", {}) or {}).get("location")
+        if status in (301, 302, 303, 307, 308) and location:
+            try:
+                resp.close()
+            except Exception:  # noqa: BLE001
+                pass
+            nxt = urljoin(current, location)
+            if nxt in visited:
+                raise RedirectRefused(f"yönlendirme döngüsü: {nxt}")
+            visited.append(nxt)
+            current = nxt
+            continue
+        return resp, current
+    raise RedirectRefused(f"{max_redirects} yönlendirmeden sonra hedefe varılamadı")
+
 
 def _under(path: Path, roots: Iterable[Path]) -> bool:
     resolved = path.resolve()
@@ -95,14 +148,20 @@ class RobotsCache:
         if host not in self._parsers:
             parser = urllib.robotparser.RobotFileParser()
             try:
-                resp = session.get(f"{host}/robots.txt", timeout=10, allow_redirects=True, headers={"User-Agent": self.user_agent})
+                # Aynı güven sınırı: robots yönlendirmesi de özel adrese gidemez; boyut sınırlı (M05-T02).
+                resp, _final = guarded_get(session, f"{host}/robots.txt", timeout=10, robots=None, stream=False,
+                                           headers={"User-Agent": self.user_agent})
                 status = getattr(resp, "status_code", None)
                 if status == 200:
-                    text = resp.content.decode("utf-8", errors="ignore") if isinstance(resp.content, bytes) else str(resp.content)
+                    raw = resp.content if isinstance(resp.content, bytes) else str(resp.content).encode()
+                    text = raw[:ROBOTS_MAX_BYTES].decode("utf-8", errors="ignore")
                     parser.parse(text.splitlines())
                     self._parsers[host] = parser
                 else:
                     self._parsers[host] = None  # robots yok → izinli
+            except RedirectRefused:
+                self._parsers[host] = None      # robots'a güvenli ulaşılamadı → izinli sayılır, kaydedilir
+                self.unreachable_hosts.add(host)
             except Exception:  # noqa: BLE001
                 self.unreachable_hosts.add(host)
                 self._parsers[host] = None
@@ -170,24 +229,37 @@ def fetch_url(
         return FetchResult(url=url, final_url=None, http_status=None, media_type="", content=b"",
                            sha256="", fetched_at=now, outcome=outcome)
     try:
-        resp = session.get(url, timeout=timeout, allow_redirects=True, stream=True,
-                           headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/json,text/csv,*/*"})
+        resp, final_url = guarded_get(
+            session, url, timeout=timeout, allow_private=allow_private, robots=robots, stream=True,
+            headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/json,text/csv,*/*"},
+            deadline=time.monotonic() + max(timeout, 1.0) * 3,
+        )
+    except FetchRefused:
+        raise                       # yönlendirme sınırı: ağ isteği yapılmadan ret, sebep kullanıcıya
     except Exception:  # noqa: BLE001 — DNS/TLS/timeout → unreachable
         return FetchResult(url=url, final_url=None, http_status=None, media_type="", content=b"", sha256="",
                            fetched_at=now, outcome=classify_access(url, http_status=None, environ=environ),
                            elapsed_ms=(time.perf_counter() - started) * 1000)
     chunks: list[bytes] = []
     size = 0
-    for chunk in resp.iter_content(65536):
-        size += len(chunk)
-        if size > max_bytes:
-            try:
-                resp.close()
-            finally:
+    try:
+        for chunk in resp.iter_content(65536):
+            size += len(chunk)
+            if size > max_bytes:
                 raise FetchRefused(f"kaynak {max_bytes} bayt sınırını aşıyor")
-        chunks.append(chunk)
+            chunks.append(chunk)
+    except FetchRefused:
+        resp.close()
+        raise
+    except Exception:  # noqa: BLE001 — yarım indirme: bağlantı kapanır, açık cevap (M05-T04)
+        try:
+            resp.close()
+        finally:
+            return FetchResult(url=url, final_url=final_url, http_status=getattr(resp, "status_code", None), media_type="",
+                               content=b"", sha256="", fetched_at=now,
+                               outcome=classify_access(url, http_status=None, environ=environ),
+                               elapsed_ms=(time.perf_counter() - started) * 1000)
     content = b"".join(chunks)
-    final_url = getattr(resp, "url", None)
     outcome = classify_access(
         url, http_status=resp.status_code, final_url=final_url,
         body_excerpt=content[:4096].decode("utf-8", errors="ignore"), environ=environ,
@@ -209,5 +281,5 @@ def canonical(url: str) -> str:
     return urlunparse((p.scheme.lower(), p.netloc.lower(), p.path or "/", "", p.query, ""))
 
 
-__all__ = ["DATA_SUFFIXES", "FetchRefused", "FetchResult", "RobotsCache", "USER_AGENT",
+__all__ = ["DATA_SUFFIXES", "FetchRefused", "FetchResult", "RedirectRefused", "RobotsCache", "USER_AGENT", "guarded_get",
            "canonical", "fetch_url", "private_host", "same_domain"]
