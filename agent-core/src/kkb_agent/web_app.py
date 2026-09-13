@@ -294,18 +294,86 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
 
 
+class ProfileRequest(BaseModel):
+    profile: str = Field(pattern="^(analyst|architect)$")
+    token: str = Field(default="", max_length=200)
+
+
+class ResetRequest(BaseModel):
+    confirm: str = Field(default="", max_length=64)
+
+
+# ---------------------------------------------------------------- Architect tam sıfırlama (M04-T06, ADR-0056)
+RESET_ITEMS = ("lakehouse.duckdb", "lakehouse.duckdb.wal", "raw", "bronze", "silver", "quarantine", "incoming/uploads", "cache")
+
+
+def plan_full_reset(data_root: Path, db_path: Path) -> list[Path]:
+    """Silinecek hedefler: yalnız DATA_ROOT altındakiler. Kod, kurulum dosyaları ve .env asla listede değil."""
+    root = data_root.resolve()
+    targets = [db_path, Path(str(db_path) + ".wal")] + [data_root / item for item in RESET_ITEMS if item not in ("lakehouse.duckdb", "lakehouse.duckdb.wal")]
+    out: list[Path] = []
+    for t in targets:
+        try:
+            t.resolve().relative_to(root)
+        except ValueError:
+            continue                      # veri kökü dışındaki hiçbir şey silinmez
+        if t.exists() and t not in out:
+            out.append(t)
+    return out
+
+
+def reset_token(targets: list[Path]) -> str:
+    import hashlib
+    return hashlib.sha256("\n".join(str(t) for t in targets).encode()).hexdigest()[:12]
+
+
+def execute_full_reset(targets: list[Path], data_root: Path, *, bootstrap: Callable[[], tuple[int, str]] | None = None) -> dict[str, Any]:
+    removed = []
+    for t in targets:
+        if t.is_dir():
+            shutil.rmtree(t, ignore_errors=True)
+        elif t.exists():
+            t.unlink()
+        removed.append(str(t))
+    data_root.mkdir(parents=True, exist_ok=True)
+    boot = {"ok": True, "detail": "bootstrap çalıştırılmadı"}
+    if bootstrap is not None:
+        code, out = bootstrap()
+        boot = {"ok": code == 0, "detail": out.strip()[-400:]}
+    return {"removed": removed, "bootstrap": boot}
+
+
 class Session:
     """Tek ajan, sıralı sorular. `reset` ajanı yeniden kurar (temiz workspace)."""
 
-    def __init__(self, agent_factory: Callable[[], Any]) -> None:
+    def __init__(self, agent_factory: Callable[..., Any], *, profile: str = "analyst", architect_token: str = "") -> None:
         self._factory = agent_factory
         self._lock = threading.Lock()
-        self.agent = agent_factory()
+        self.profile = profile
+        self.architect_token = architect_token
+        self.agent = self._build(profile)
         self.history: list[dict[str, Any]] = []
         self.answers: list[dict[str, Any]] = []   # tam cevap yükleri; sayfa yenilenince yeniden çizilir
         self.id = uuid.uuid4().hex[:8]
         self.uploads: list[dict[str, Any]] = []
         self.tables: dict[int, pd.DataFrame] = {}   # cevap sürümü → tam tablo (dışa aktarım önizlemeden değil)
+
+    def _build(self, profile: str) -> Any:
+        try:
+            return self._factory(profile=profile)
+        except TypeError:                 # sahte ajan fabrikaları profil almayabilir
+            return self._factory()
+
+    def switch_profile(self, profile: str, token: str) -> None:
+        """Profil başlatmada seçilir; oturumda geçiş yalnız operatör anahtarıyla (istek parametresi yetki vermez)."""
+        if not self.architect_token:
+            raise HTTPException(status_code=403, detail="profil geçişi kapalı: ARCHITECT_TOKEN tanımlı değil; profil başlatmada seçilir (AGENT_PROFILE)")
+        if profile == "architect" and token != self.architect_token:
+            raise HTTPException(status_code=403, detail="Architect anahtarı yanlış")
+        with self._lock:
+            self.profile = profile
+            self.agent = self._build(profile)
+            self.history, self.answers, self.tables = [], [], {}
 
     @property
     def upload_dir(self) -> Path:
@@ -356,7 +424,7 @@ class Session:
 
     def reset(self) -> None:
         with self._lock:
-            self.agent = self._factory()
+            self.agent = self._build(self.profile)
             self.history = []
             self.answers = []
             shutil.rmtree(self.upload_dir, ignore_errors=True)   # oturum dosyaları geçicidir (M10-T12)
@@ -386,6 +454,8 @@ class Session:
             silver_rows = None
         search_tool = agent.registry.get("web_search")
         return {
+            "profile": self.profile,
+            "profile_switch": bool(self.architect_token),
             "uploads": len(self.uploads),
             "upload_kinds": sorted(UPLOAD_KINDS),
             "catalog_series": len(specs) - gold - adhoc + uningested,
@@ -401,10 +471,40 @@ class Session:
         }
 
 
-def create_app(agent_factory: Callable[[], Any]) -> FastAPI:
+def create_app(agent_factory: Callable[..., Any], *, profile: str = "analyst", architect_token: str = "",
+               reset_paths: tuple[Path, Path] | None = None, bootstrap: Callable[[], tuple[int, str]] | None = None) -> FastAPI:
     app = FastAPI(title="Agent Smith", docs_url=None, redoc_url=None)
-    session = Session(agent_factory)
+    session = Session(agent_factory, profile=profile, architect_token=architect_token)
     app.state.session = session
+    pending_reset: dict[str, str] = {}
+
+    @app.post("/api/profile")
+    def set_profile(req: ProfileRequest) -> JSONResponse:
+        session.switch_profile(req.profile, req.token)
+        return JSONResponse({"ok": True, "profile": session.profile})
+
+    @app.post("/api/architect/reset")
+    def architect_reset(req: ResetRequest) -> JSONResponse:
+        """İki adım: önce hedef listesi + onay kodu; sonra aynı kodla silme + bootstrap. Yalnız Architect."""
+        if session.profile != "architect":
+            raise HTTPException(status_code=403, detail="tam sıfırlama yalnız Architect profilinde")
+        if reset_paths is None:
+            raise HTTPException(status_code=400, detail="sıfırlama yolları tanımlı değil")
+        data_root, db_path = reset_paths
+        targets = plan_full_reset(data_root, db_path)
+        token = reset_token(targets)
+        if not req.confirm:
+            pending_reset["token"] = token
+            return JSONResponse({"targets": [str(t) for t in targets], "confirm": token, "excluded": "kod, kurulum dosyaları, .env ve sırlar kapsam dışı",
+                                 "note": "Silme geri alınamaz; eski cevapların kanıt zinciri kopar."})
+        if req.confirm != token or pending_reset.get("token") != token:
+            raise HTTPException(status_code=409, detail="onay kodu eşleşmiyor ya da hedef listesi değişti; listeyi yeniden al")
+        pending_reset.clear()
+        with session._lock:
+            report = execute_full_reset(targets, data_root, bootstrap=bootstrap)
+            session.agent = session._build(session.profile)
+            session.history, session.answers, session.tables, session.uploads = [], [], {}, []
+        return JSONResponse(_json_safe(report))
     # Yerel dosyalar (three.js vb.); CDN yok, demo çevrimdışı da çalışır (ADR-0047).
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -502,8 +602,18 @@ def create_app(agent_factory: Callable[[], Any]) -> FastAPI:
 
 def build_default_app() -> FastAPI:
     from .cli import build_agent
+    from .config import load_settings
 
-    return create_app(lambda: build_agent(max_steps=12))
+    s = load_settings()
+
+    def bootstrap() -> tuple[int, str]:
+        import subprocess
+        cmd = [*s.lakehouse_cli.split(), "-m", "lakehouse", "bootstrap", "--database", str(s.lakehouse_path), "--data-root", str(s.data_root)]
+        proc = subprocess.run(cmd, cwd=str(s.lakehouse_core_dir), capture_output=True, text=True, timeout=600, check=False)
+        return proc.returncode, proc.stdout + proc.stderr
+
+    return create_app(lambda profile="analyst": build_agent(max_steps=12, profile=profile), profile=s.agent_profile,
+                      architect_token=s.architect_token, reset_paths=(s.data_root, s.lakehouse_path), bootstrap=bootstrap)
 
 
 __all__ = ["AskRequest", "Session", "answer_to_dict", "build_default_app", "create_app", "evidence_to_dict", "frame_to_dict",

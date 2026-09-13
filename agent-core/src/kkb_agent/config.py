@@ -61,6 +61,10 @@ class Settings:
     narrate_temperature: float   # nihai anlatı turu; araç turları hep 0 (ADR-0046)
     # Araç kapısı (ADR-0043): soruya göre araç alt kümesi sunulur; "off" ile ölçüm için kapatılır.
     tool_gate: bool
+    # Profil (M04, ADR-0056): analyst = yazma araçları kayıt defterine hiç girmez; architect = ingest/terfi/sıfırlama.
+    # Profil başlatmada seçilir; oturumda geçiş yalnız ARCHITECT_TOKEN ile (boşsa geçiş kapalı).
+    agent_profile: str
+    architect_token: str
 
     @property
     def provider_label(self) -> str:
@@ -96,4 +100,6 @@ def load_settings() -> Settings:
         embedding_cache_dir=_path("EMBEDDING_CACHE_DIR", data_root / "cache" / "embeddings"),
         narrate_temperature=float(os.getenv("LLM_NARRATE_TEMPERATURE", "0.5")),
         tool_gate=os.getenv("TOOL_GATE", "on").lower() != "off",
+        agent_profile=os.getenv("AGENT_PROFILE", "analyst").strip().lower(),
+        architect_token=os.getenv("ARCHITECT_TOKEN", "").strip(),
     )

@@ -66,7 +66,7 @@ Bu test sayıları birbirleriyle toplanarak başarı oranı veya motor üstünl�
 | M01 | Tek ve tekrar kurulabilir yerel ortam | P0 | M00 çalışma varsayımları | Entegrasyon | Tamamlandı (13 Eyl, ADR-0049; T08 arkadaş provası M17) |
 | M02 | Güncel motor kıyası ve katkı aktarımı | P0 | M00; eşit test ortamı için M01 | Agent + değerlendirme | Tamamlandı (13 Eyl, ADR-0053); T08 ertelendi |
 | M03 | Jenerik veri ve kaynak sözleşmeleri | P0 | M00 | Agent + veri | Planlandı |
-| M04 | Analyst/Architect yetki ve yayın sınırı | P0 | M03; profil uygulama kararı | Agent + veri + UI | Rol sınırı kesin; uygulama planlandı |
+| M04 | Analyst/Architect yetki ve yayın sınırı | P0 | M03; profil uygulama kararı | Agent + veri + UI | Tamamlandı (14 Eyl, ADR-0056); T05 koşula bağlı, pasifleştirme açık |
 | M05 | Güvenli kaynak erişimi | P0 | Mevcut erişim kodu; M03 sözleşmesi | Agent + veri | Tamamlandı (13 Eyl, ADR-0051); T03 ortak sözleşme testi açık |
 | M06 | Tavily, crawl, yetkili erişim ve fallback | P1 | M05 | Kaynak erişimi + UI | Planlandı |
 | M07 | Ortak ingestion ve provenance | P0 | M01, M03 | Veri | Planlandı |
@@ -171,16 +171,16 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Yetki matrisi, ayrı registry/işletim profilleri ve operator yayınlama akışı.
 
-- [ ] **M04-T01:** Analyst'in okuyabileceği, geçici oluşturabileceği ve kalıcı değiştiremeyeceği kaynakları kesinleştir.
-- [ ] **M04-T02:** Son kullanıcı registry'sinden kalıcı ingest/promotion/build araçlarını çıkar veya yalnız operator profiline kaydet; UI gizlemesiyle yetinme.
-- [ ] **M04-T03:** `tool_gate` ile yetki denetimini ayır: modelin araç adını elle üretmesi kapalı yeteneği açmamalı.
-- [ ] **M04-T04:** Kullanıcı dosyasını oturuma özel alanda hazırla; geçici dosya/SQL çalışması ortak katalog yayını sayılmasın.
-- [ ] **M04-T05:** Koşula bağlı: yayın talebi arayüzü yalnız ihtiyaç doğarsa oluşturulsun; mevcut operator akışında kaynak, profil/eşleme, semantik belirsizlik ve kalite kontrolü gösterilmesi korunur.
-- [ ] **M04-T06:** Architect için ADR-0039'un taslak → inceleme → aktif yayın akışını koru; kalıcı yazma/silme hedefini ve geri alma sınırını açık göster. Pasifleştirme ile fiziksel tam sıfırlamayı ayrı işlemler olarak tasarla: hedef katalog/DB, RAW/Bronze/Silver/Gold, oturum ve cache bağımlılıklarını göster; kesin kapsamlı işlem onayı al. Kod/kurulum/sırlar sıfırlama kapsamına girmez. Fiziksel silme eski kanıtlara erişimi kaldırır; eski cevaplar tam kanıt gösteremez. İnsan onayı otomatik verified yapmasın.
-- [ ] **M04-T07:** Derived veriyle Gold kullanım tercihini rol ve işlemle bağla; eski sohbetten kalan “onaylıyorum” yeni/başka işlemi yetkilendirmesin.
-- [ ] **M04-T08:** Yazıcı bağlantıları/ayrı süreç izinleri ve okuyucu kapat–aç davranışını koru; oturum resetinde bağlantılar temizlensin.
-- [ ] **M04-T09:** Analyst üzerinden doğrudan araç çağrısı ve prompt enjeksiyonuyla kalıcı yazma/silmenin yapılamadığını dene; normal dosya analizi çalışsın. Demo Architect akışında onaylı yayın ayrıca çalışsın. Geçmiş onay + güncel ret ve önceden izin verilmiş kaynak varyantlarını sınamaya ekle.
-- [ ] **M04-T10:** Karar sonrası ADR-0039, UI/CLI dokümanı ve ilgili eski rol açıklamalarını güncelle; tarihsel kaydı silme.
+- [x] **M04-T01** (ADR-0056 §1–3): Analyst'in okuyabileceği, geçici oluşturabileceği ve kalıcı değiştiremeyeceği kaynakları kesinleştir.
+- [x] **M04-T02** (Analyst kayıt defterinde yok; `architect_enabled`): Son kullanıcı registry'sinden kalıcı ingest/promotion/build araçlarını çıkar veya yalnız operator profiline kaydet; UI gizlemesiyle yetinme.
+- [x] **M04-T03** (kapı ≠ yetki; UNKNOWN_TOOL): `tool_gate` ile yetki denetimini ayır: modelin araç adını elle üretmesi kapalı yeteneği açmamalı.
+- [x] **M04-T04** (oturuma özel uploads/, M10): Kullanıcı dosyasını oturuma özel alanda hazırla; geçici dosya/SQL çalışması ortak katalog yayını sayılmasın.
+- [ ] **M04-T05** (koşula bağlı; mevcut taslak→onay korunur): Koşula bağlı: yayın talebi arayüzü yalnız ihtiyaç doğarsa oluşturulsun; mevcut operator akışında kaynak, profil/eşleme, semantik belirsizlik ve kalite kontrolü gösterilmesi korunur.
+- [~] **M04-T06** (tam sıfırlama iki adım + bootstrap ✓; pasifleştirme veri CLI'ında yok → koşula bağlı): Architect için ADR-0039'un taslak → inceleme → aktif yayın akışını koru; kalıcı yazma/silme hedefini ve geri alma sınırını açık göster. Pasifleştirme ile fiziksel tam sıfırlamayı ayrı işlemler olarak tasarla: hedef katalog/DB, RAW/Bronze/Silver/Gold, oturum ve cache bağımlılıklarını göster; kesin kapsamlı işlem onayı al. Kod/kurulum/sırlar sıfırlama kapsamına girmez. Fiziksel silme eski kanıtlara erişimi kaldırır; eski cevaplar tam kanıt gösteremez. İnsan onayı otomatik verified yapmasın.
+- [~] **M04-T07** (Gold rızası istek bazlı, ADR-0039; rol bağı: Analyst'te kalıcı Gold build yok): Derived veriyle Gold kullanım tercihini rol ve işlemle bağla; eski sohbetten kalan “onaylıyorum” yeni/başka işlemi yetkilendirmesin.
+- [x] **M04-T08** (yazma ayrı süreç; reset/geçiş oturumu ve bağlantıları yeniler): Yazıcı bağlantıları/ayrı süreç izinleri ve okuyucu kapat–aç davranışını koru; oturum resetinde bağlantılar temizlensin.
+- [x] **M04-T09** (A20/A21 testleri: anahtarsız 403, içerik yetki vermez; Architect akışı test ve canlı): Analyst üzerinden doğrudan araç çağrısı ve prompt enjeksiyonuyla kalıcı yazma/silmenin yapılamadığını dene; normal dosya analizi çalışsın. Demo Architect akışında onaylı yayın ayrıca çalışsın. Geçmiş onay + güncel ret ve önceden izin verilmiş kaynak varyantlarını sınamaya ekle.
+- [x] **M04-T10** (ADR-0056 not; ADR-0039 okunuşu güncellendi): Karar sonrası ADR-0039, UI/CLI dokümanı ve ilgili eski rol açıklamalarını güncelle; tarihsel kaydı silme.
 
 **Kabul:** Analyst akışının öncesi/sonrasında ortak DB ve katalog değişmez; dosya analizi/çıktı üretimi çalışır. Operator yetkisi açık bir çalışma sınırından gelir. Bir metin ifadesi yönetici yetkisi oluşturmaz.
 
@@ -665,3 +665,5 @@ Belgelendirme tamamlanması uygulama milestone'larının tamamlanması değildir
 - **2026-09-14 — M10 çekirdek:** yükleme ucu + 📎 ve sürükle-bırak, oturuma özel güvenli dizin, format matrisi, openpyxl + Excel sayfa seçimi, .xls reddi, ingest okuyucusunda yönlendirme sınırı. Açık: T04 profilci güveni, T06 sayfa/tablo seçim düğmesi. Sıradaki: M14.
 
 - **2026-09-14 — M14 çekirdek:** tam tablo CSV/XLSX, grafik PNG, HTML rapor (uyarılar, kanıt durumu, kaynaklar, commit), cevap sürümüne bağlı; oturum/ortak havuz rozeti. Açık: T11 demo bilgisayarı, T12 yolculuk kararı. Sıradaki: M04.
+
+- **2026-09-14 — M04 kapandı:** profiller (Analyst'te yazma aracı yok), anahtarlı geçiş, iki adımlı tam sıfırlama (yalnız DATA_ROOT), A20/A21/A28 testleri, canlı doğrulama. Açık: pasifleştirme (veri CLI'ı), yayın talebi arayüzü (koşula bağlı). Sıradaki: M08/M07.

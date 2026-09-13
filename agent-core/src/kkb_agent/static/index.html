@@ -100,6 +100,7 @@
 <header>
   <div style="display:flex;align-items:center;gap:10px"><img src="/static/agent-smith.svg" alt="Agent Smith" width="32" height="32" style="display:block;border-radius:8px"><span class="brand">Agent Smith</span><span class="sub">Lakehouse Agent · KKB Hackathon 2026</span></div>
   <div style="display:flex;align-items:center;gap:10px">
+    <span class="pill" id="pill-profile" title="Profil: Analyst okur; Architect kataloğa yazar. Geçiş operatör anahtarıyla.">profil …</span>
     <span class="pill" id="pill-model">bağlanıyor…</span>
     <span class="pill" id="pill-budget"></span>
   </div>
@@ -124,6 +125,7 @@
       <div class="label">Roller</div>
       <div style="font-size:12px;color:#4a463f;line-height:1.45">Analist okur, Architect yazar. Yazma yalnız taslak ve onayla.</div>
       <button class="ghost" id="btn-reset" style="height:32px;border:1px solid #d9d3c7;border-radius:6px;background:transparent;font:inherit;font-size:12px;color:var(--muted);cursor:pointer">Oturumu sıfırla</button>
+      <button class="ghost" id="btn-wipe" hidden style="height:32px;border:1px solid #e5b4b4;border-radius:6px;background:var(--red-bg);font:inherit;font-size:12px;color:var(--red);cursor:pointer" title="Yalnız Architect: veri kökündeki DB, RAW/Bronze/Silver, yüklemeler ve önbellek silinir; kod ve .env dokunulmaz">Tam veri sıfırlama…</button>
     </div>
   </aside>
 
@@ -186,6 +188,8 @@ async function loadStatus() {
     $("st-line").textContent = `retrieval: ${s.retrieval_mode || "–"} · araç: ${s.tools.length} · kapı: ${s.tool_gate ? "açık" : "kapalı"}`;
     $("pill-model").textContent = `Veri havuzu bağlı · ${s.model || "model"}`;
     $("pill-budget").textContent = s.search_budget_remaining === null || s.search_budget_remaining === undefined ? "web_search kapalı" : `Arama bütçesi ${s.search_budget_remaining}`;
+    const prof = s.profile || "analyst"; $("pill-profile").textContent = `Profil: ${prof === "architect" ? "Architect (yazma açık)" : "Analyst (salt-okunur)"}${s.profile_switch ? " ▾" : ""}`;
+    $("pill-profile").style.borderColor = prof === "architect" ? "var(--amber)" : "#d9d3c7"; $("btn-wipe").hidden = prof !== "architect";
     lastStatus = s;
   } catch (e) { $("pill-model").textContent = "durum alınamadı"; }
 }
@@ -212,6 +216,34 @@ async function openStatus() {       // veri havuzu kartları ve üst rozetler �
   showModal("Sistem durumu", `<div class="kv">${rows.map(([k, v]) => `<div class="k">${esc(k)}</div><div class="v">${esc(v ?? "–")}</div>`).join("")}</div>`);
 }
 ["st-catalog", "st-loaded", "st-silver", "st-gold", "pill-model", "pill-budget"].forEach((id) => { const el = $(id); (el.closest(".stat") || el).addEventListener("click", openStatus); });
+// ---- Profil geçişi (M04): istek parametresi yetki vermez; Architect için operatör anahtarı istenir
+$("pill-profile").addEventListener("click", () => {
+  if (!lastStatus || !lastStatus.profile_switch) { showModal("Profil", `<div class="kv"><div class="k">Durum</div><div class="v">Profil başlatmada seçilir (AGENT_PROFILE). Oturumda geçiş için ARCHITECT_TOKEN tanımlı değil.</div></div>`); return; }
+  const cur = lastStatus.profile || "analyst";
+  showModal("Profil değiştir", `<div class="kv"><div class="k">Şu an</div><div class="v">${esc(cur)}</div><div class="k">Hedef</div><div class="v"><select id="pf-sel"><option value="analyst" ${cur === "analyst" ? "selected" : ""}>Analyst — salt-okunur</option><option value="architect" ${cur === "architect" ? "selected" : ""}>Architect — kataloğa yazma, terfi, sıfırlama</option></select></div><div class="k">Operatör anahtarı</div><div class="v"><input id="pf-tok" type="password" placeholder="ARCHITECT_TOKEN" style="width:260px"></div><div class="k"></div><div class="v"><button id="pf-go" class="jbtn">Geç</button> <span id="pf-msg" class="status"></span></div><div class="k">Not</div><div class="v">Geçiş oturumu temizler (sohbet, tablolar, yüklemeler).</div></div>`);
+  $("pf-go").addEventListener("click", async () => {
+    const r = await fetch("/api/profile", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({profile: $("pf-sel").value, token: $("pf-tok").value})});
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { $("pf-msg").textContent = d.detail || r.status; return; }
+    $("gmodal").hidden = true; $("thread").innerHTML = ""; answers = []; activeIndex = -1; renderSession(); lastEvidence = null; $("btn-journey").disabled = true; $("ev-body").innerHTML = ""; loadStatus();
+  });
+});
+// ---- Architect tam sıfırlama: iki adım — hedef listesi + onay kodu, sonra silme + bootstrap
+$("btn-wipe").addEventListener("click", async () => {
+  const r = await fetch("/api/architect/reset", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { showModal("Tam veri sıfırlama", `<div class="kv"><div class="k">Ret</div><div class="v">${esc(d.detail || r.status)}</div></div>`); return; }
+  showModal("Tam veri sıfırlama — onay", `<div class="kv"><div class="k">Silinecek</div><div class="v">${(d.targets || []).map(esc).join("<br>") || "(hedef yok)"}</div><div class="k">Kapsam dışı</div><div class="v">${esc(d.excluded)}</div><div class="k">Uyarı</div><div class="v" style="color:var(--red)">${esc(d.note)}</div><div class="k">Onay kodu</div><div class="v"><code>${esc(d.confirm)}</code> → <input id="wp-code" placeholder="kodu yaz" style="width:140px"> <button id="wp-go" class="jbtn" style="border-color:#e5b4b4;background:var(--red-bg);color:var(--red)">Sil ve boş kataloğu kur</button> <span id="wp-msg" class="status"></span></div></div>`);
+  $("wp-go").addEventListener("click", async () => {
+    if ($("wp-code").value.trim() !== d.confirm) { $("wp-msg").textContent = "kod eşleşmiyor"; return; }
+    $("wp-go").disabled = true; $("wp-msg").textContent = "siliniyor ve bootstrap…";
+    const r2 = await fetch("/api/architect/reset", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({confirm: d.confirm})});
+    const d2 = await r2.json().catch(() => ({}));
+    if (!r2.ok) { $("wp-msg").textContent = d2.detail || r2.status; $("wp-go").disabled = false; return; }
+    $("gm-body").innerHTML = `<div class="kv"><div class="k">Silindi</div><div class="v">${(d2.removed || []).map(esc).join("<br>") || "—"}</div><div class="k">Bootstrap</div><div class="v">${d2.bootstrap && d2.bootstrap.ok ? "✓" : "✗"} ${esc((d2.bootstrap || {}).detail || "")}</div><div class="k">Sonra</div><div class="v">Yeni veriyi dosya/URL ile yükle; alan profili yeni kataloğa göre türetilir.</div></div>`;
+    $("thread").innerHTML = ""; answers = []; activeIndex = -1; renderSession(); loadStatus();
+  });
+});
 
 let answers = [];          // bu oturumun tam cevap yükleri (sunucudaki /api/answers ile aynı)
 let activeIndex = -1;

@@ -204,13 +204,16 @@ Büşra'nın koşucusu + 18 vaka + 5 görülmemiş soru; aynı DB (M01) ve model
 ### 2.31 M14 — dışa aktarım (14 Eylül, ADR-0055)
 Her cevabın tam tablosu sunucuda (`tables[index]`); `/api/answers/{i}/table.csv` (BOM, `;`, `,`), `table.xlsx` (gerçek hücreler + notlar sayfası), `chart/{k}.png`, `report.html` (soru, cevap, uyarılar, tam tablo, gömülü grafik, üç kanıt rozeti, kaynaklar, model+commit). Arayüzde bağlantılar ve "oturum verisi / ortak veri havuzu" rozeti. Testler 353 → 356. Açık: demo bilgisayarı provası, yolculuk görünümü kararı (K10).
 
+### 2.32 M04 — profiller ve tam sıfırlama (14 Eylül, ADR-0056)
+`AGENT_PROFILE=analyst|architect`: Analyst kayıt defterinde ingest/terfi yok (yokluk, kapı değil); `POST /api/profile` yalnız `ARCHITECT_TOKEN` ile (boşsa geçiş kapalı), geçiş oturumu temizler; `POST /api/architect/reset` iki adım (hedef listesi + onay kodu → silme + `lakehouse bootstrap`), hedefler yalnız DATA_ROOT altında, kod/.env hariç. Arayüzde profil rozeti, anahtar penceresi, "Tam veri sıfırlama…" düğmesi. Canlı: anahtarsız 403; Analyst 17 araç, Architect'te ingest+terfi ile 19. Pasifleştirme veri CLI'ında yok (açık). Testler 356 → 360.
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 356 |
+| Agent birim testi | 360 |
 | Lakehouse testi (r3 + genişlik dalı) | 1.079 |
-| ADR | 55 |
+| ADR | 56 |
 | Golden vakası | 21: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3, G18a/b 2/2; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 11 senaryo 11/11 |
 | Araç sayısı (gerçek DB'de) | 19: lakehouse ×4, workspace ×4 (query dâhil), analitik ×3 (anomaly_detect, change_points, lead_lag), ingest, promote_draft, gold ×3, chart, web_url, web_search (Tavily anahtarı .env'de) |
 | Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu (iş yapan araç/tablo varken susar), istenen yetenek zorunluluğu (grafik, analitik), frekans uyuşmazlığı (kabadan ince yok), grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, GOLD_REQUIRED, niyet kapısı, beyan kapısı, adım sınırı, reasoning temizliği |

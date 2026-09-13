@@ -101,9 +101,21 @@ def open_lakehouse(path, *, gold: GoldCLI | None = None, mode: str = "auto") -> 
         return DuckDBLakehouse(path)
 
 
-def build_agent(max_steps: int = 10) -> AnalyticsAgent:
+PROFILES = ("analyst", "architect")
+
+
+def architect_enabled(profile: str, *, silver: bool, cli: bool) -> bool:
+    """Architect araçları yalnız architect profilinde VE veri ekibinin şeması + CLI'ı varken (M04-T02).
+    Analyst'te araç kayıt defterine hiç girmez: kapı değil, yokluk — model adıyla çağırsa UNKNOWN_TOOL."""
+    return profile == "architect" and silver and cli
+
+
+def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAgent:
     """Motoru kurar. Yeni araçlar buraya eklenir; agent kodu değişmez."""
     settings = load_settings()
+    agent_profile_name = (profile or settings.agent_profile or "analyst").lower()
+    if agent_profile_name not in PROFILES:
+        raise ValueError(f"AGENT_PROFILE geçersiz: {agent_profile_name!r} (analyst | architect)")
     # Veri ekibinin Silver şeması varsa ona bağlan; yoksa kendi BDDK seed'imize.
     # Gerçek Lakehouse geldiğinde değişen tek şey LAKEHOUSE_PATH olur.
     system_prompt_extra = ""
@@ -166,7 +178,7 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
         data_root=settings.lakehouse_path.parent,
         launcher=settings.lakehouse_cli,
     )
-    if isinstance(lakehouse, SilverLakehouse) and cli.available:
+    if architect_enabled(agent_profile_name, silver=isinstance(lakehouse, SilverLakehouse), cli=cli.available):
         settings.ingest_allowed_root.mkdir(parents=True, exist_ok=True)
         registry.register(
             IngestFromUrlTool(lakehouse, cli, allowed_root=settings.ingest_allowed_root, registry=registry, ocr=ocr)
@@ -209,7 +221,7 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
     )
     print(
         f"[motor] sağlayıcı={settings.provider_label} model={settings.llm_model} "
-        f"alan={profile.domain!r} araçlar={len(registry)}",
+        f"alan={profile.domain!r} araçlar={len(registry)} profil={agent_profile_name}",
         file=sys.stderr,
     )
     # Ön-yükleme: soruya göre seçilen k serinin kartı + gerçek kırılım değerleri, bütçeyle.
@@ -220,12 +232,15 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
                 lakehouse, question, budget_tokens=settings.preload_budget_tokens, k=settings.preload_k,
                 retrieval_mode=settings.retrieval_mode, small_max=settings.retrieval_small_max,
             )
-    return AnalyticsAgent(
+    agent = AnalyticsAgent(
         llm, registry, workspace=workspace, max_steps=max_steps, profile=profile,
         system_prompt=system_prompt, evidence=EvidenceBuilder(lakehouse), preloader=preloader,
         tool_gate=settings.tool_gate, narrate_temperature=settings.narrate_temperature,
         profile_factory=profile_factory,
     )
+    agent.profile_name = agent_profile_name          # analyst | architect (M04)
+    agent.upload_root = settings.ingest_allowed_root
+    return agent
 
 
 def main() -> None:
