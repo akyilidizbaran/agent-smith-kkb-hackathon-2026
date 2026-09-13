@@ -76,7 +76,7 @@ Bu test sayıları birbirleriyle toplanarak başarı oranı veya motor üstünl�
 | M11 | Oturum, tablo korunması ve açıklama soruları | P1 | M03, M04; M10 ile entegrasyon | Agent + UI | Planlandı |
 | M12 | Anomali/kırılma/öncülük doğruluğu | P0/P1 | M03; M09/M11 ile entegrasyon | Analitik | Çekirdek tamamlandı (13 Eyl, ADR-0052); T03/T05/T06 kısmi |
 | M13 | İddia doğrulama ve kanıtın doğru sunulması | P0 | Mevcut kod; M03/M07/M11 ile entegrasyon | Agent + veri + UI | Çekirdek tamamlandı (13 Eyl, ADR-0050); T04/T07/T11/T12 açık |
-| M14 | Kullanıcı arayüzü ve tam çıktı indirme | P1 | M10, M11, M13 | UI + API | Planlandı |
+| M14 | Kullanıcı arayüzü ve tam çıktı indirme | P1 | M10, M11, M13 | UI + API | Çekirdek tamamlandı (14 Eyl, ADR-0055); T11/T12 açık |
 | M15 | Süre/çıktı bütçeleri ve otomatik kontroller | P1/P2 | M01; M02 ölçümleri | Agent + geliştirme altyapısı | Planlandı |
 | M16 | Birleşik kabul ve görülmemiş veri provası | P0 | Tüm zorunlu uygulama milestone'ları | Ekip + değerlendirme | Planlandı |
 | M17 | Teslim, belgeler, merge ve freeze | P0 | M16 | Ekip koordinasyonu | Planlandı |
@@ -391,19 +391,19 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Çalışan dosya yükleme, tablo/grafik/kanıt sunumu ve tam veri/rapor indirme yüzeyleri.
 
-- [ ] **M14-T01:** Dosya seçimi, yükleme durumu, parse ilerlemesi, tablo seçimi ve açıklama sorusunu tek anlaşılır kullanıcı akışına bağla.
-- [ ] **M14-T02:** Yeni veri oturumda mı ortak havuzda mı açık göster; operator yetkisi olmayan kullanıcıya yayınlama düğmesi veya yanıltıcı vaat sunma.
-- [ ] **M14-T03:** Önizleme sınırını ve gerçek satır sayısını göster; tam tablo export'u yalnız önizleme verisinden üretilmesin.
-- [ ] **M14-T04:** CSV ve XLSX tablo çıktısı başlangıç önerisini değerlendir; tarih/birim/Unicode/ondalık ve formül gibi yorumlanabilecek hücreler için doğru dışa aktarım davranışı belirle.
-- [ ] **M14-T05:** Grafik indirme için mevcut PNG/SVG yeteneğini ürünleştir; başlık, dönem, birim, uyarı ve kaynak bilgisi dosyada kaybolmasın.
-- [ ] **M14-T06:** Rapor formatlarını kararlaştır. HTML/PDF başlangıç önerisidir; rapor soruyu, varsayımları, hesapları, tablo/grafikleri, kaynakları ve uyarıları taşısın.
-- [ ] **M14-T07:** Export'u cevap/tablo sürümüne bağla; eski cevaptaki indirme düğmesi yeni tablonun verisini indirmesin.
+- [~] **M14-T01** (yükleme + soru tek akış; parse ilerlemesi ve tablo seçim düğmesi açık): Dosya seçimi, yükleme durumu, parse ilerlemesi, tablo seçimi ve açıklama sorusunu tek anlaşılır kullanıcı akışına bağla.
+- [x] **M14-T02** (oturum verisi / ortak havuz rozeti; Analyst'te yayın düğmesi yok): Yeni veri oturumda mı ortak havuzda mı açık göster; operator yetkisi olmayan kullanıcıya yayınlama düğmesi veya yanıltıcı vaat sunma.
+- [x] **M14-T03**: Önizleme sınırını ve gerçek satır sayısını göster; tam tablo export'u yalnız önizleme verisinden üretilmesin.
+- [x] **M14-T04** (CSV BOM+;+, · XLSX gerçek hücre, notlar sayfası, ±inf boş): CSV ve XLSX tablo çıktısı başlangıç önerisini değerlendir; tarih/birim/Unicode/ondalık ve formül gibi yorumlanabilecek hücreler için doğru dışa aktarım davranışı belirle.
+- [x] **M14-T05** (PNG indirme; başlık/dönem/birim grafik başlığında, uyarılar raporda): Grafik indirme için mevcut PNG/SVG yeteneğini ürünleştir; başlık, dönem, birim, uyarı ve kaynak bilgisi dosyada kaybolmasın.
+- [x] **M14-T06** (HTML; PDF K05'te yok): Rapor formatlarını kararlaştır. HTML/PDF başlangıç önerisidir; rapor soruyu, varsayımları, hesapları, tablo/grafikleri, kaynakları ve uyarıları taşısın.
+- [x] **M14-T07**: Export'u cevap/tablo sürümüne bağla; eski cevaptaki indirme düğmesi yeni tablonun verisini indirmesin.
 - [x] **M14-T08** (NaN ve ±Infinity → null; katı JSON testi): NaN ve ±Infinity JSON davranışını düzelt; eksik veya hesaplanamayan değeri sessiz sıfıra çevirme. Sayfa tüm cevap nedeniyle 500 vermesin.
-- [ ] **M14-T09:** Uzun işlemde işin sürdüğünü ve hangi aşamada olduğunu göster. SSE/iptal ayrı kapsam kararıdır; bütün akışı bloklayan kör bekleyiş azaltılsın.
-- [ ] **M14-T10:** Reset, tekrar yükleme, eski cevaba dönüş, modal aç/kapat, grafik büyütme ve klavye erişimini gerçek tarayıcıyla kontrol et.
-- [ ] **M14-T11:** Üç sütunlu ekranı demo bilgisayarında test et; kritik tablo/uyarı/soru kutusu erişilebilir olsun.
-- [ ] **M14-T12:** 2,5B/3B kanıt yolculuğu denemeleri için kapsam kararı ver; seçilmeyen görünüm ancak karar sonrası kaldırılır. Gösterimin kanıt düzeltmelerinin önüne geçmesine izin verme.
-- [ ] **M14-T13:** İndirilen tabloyu yeniden okuyup satır/kolon/değerlerini karşılaştır; raporu aç/render et; PNG/SVG'yi görsel olarak doğrula.
+- [~] **M14-T09** ('ajan çalışıyor' durumu var; aşama/SSE yok, kapsam kararı K07): Uzun işlemde işin sürdüğünü ve hangi aşamada olduğunu göster. SSE/iptal ayrı kapsam kararıdır; bütün akışı bloklayan kör bekleyiş azaltılsın.
+- [x] **M14-T10** (13 Eyl tarayıcı kontrolü): Reset, tekrar yükleme, eski cevaba dönüş, modal aç/kapat, grafik büyütme ve klavye erişimini gerçek tarayıcıyla kontrol et.
+- [ ] **M14-T11** (demo bilgisayarında M16'da): Üç sütunlu ekranı demo bilgisayarında test et; kritik tablo/uyarı/soru kutusu erişilebilir olsun.
+- [ ] **M14-T12** (K10: kullanıcı kararı bekliyor; 2,5B/3B ikisi de duruyor): 2,5B/3B kanıt yolculuğu denemeleri için kapsam kararı ver; seçilmeyen görünüm ancak karar sonrası kaldırılır. Gösterimin kanıt düzeltmelerinin önüne geçmesine izin verme.
+- [x] **M14-T13** (test: CSV/XLSX yeniden okunup karşılaştırıldı; canlı indirme doğrulandı): İndirilen tabloyu yeniden okuyup satır/kolon/değerlerini karşılaştır; raporu aç/render et; PNG/SVG'yi görsel olarak doğrula.
 
 **Kabul:** Kullanıcı dosya yükler, analizi tamamlar, tam tabloyu ve grafik/raporu indirir. İndirilen içerik görülen analizin aynı sürümüdür ve uyarıları taşır. Sadece HTTP 200 veya dosya oluşması başarı sayılmaz.
 
@@ -663,3 +663,5 @@ Belgelendirme tamamlanması uygulama milestone'larının tamamlanması değildir
 - **2026-09-13 — M02 kapandı:** 23 vaka × 2 motor × 3 tekrar, aynı DB/model. Ham 16/23 vs 17/23; bayat SQL sözcük kontrolleri düzeltilince içerik 20/23 vs 18/23; ekip daha hızlı (8,6 vs 10,5 s), daha az tur ve hata, grounding 54/57 vs 51/57. K01 değişmedi. Açılan işler: L3-02 alt kalem toplamı (M08-T01/M11), L10-01 netleştirme (M11-T07), U1/L6 kontrol tasarımı (M16). T08 paralellik M15'e.
 
 - **2026-09-14 — M10 çekirdek:** yükleme ucu + 📎 ve sürükle-bırak, oturuma özel güvenli dizin, format matrisi, openpyxl + Excel sayfa seçimi, .xls reddi, ingest okuyucusunda yönlendirme sınırı. Açık: T04 profilci güveni, T06 sayfa/tablo seçim düğmesi. Sıradaki: M14.
+
+- **2026-09-14 — M14 çekirdek:** tam tablo CSV/XLSX, grafik PNG, HTML rapor (uyarılar, kanıt durumu, kaynaklar, commit), cevap sürümüne bağlı; oturum/ortak havuz rozeti. Açık: T11 demo bilgisayarı, T12 yolculuk kararı. Sıradaki: M04.

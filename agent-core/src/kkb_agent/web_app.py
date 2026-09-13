@@ -24,7 +24,7 @@ from typing import Any, Callable
 
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -144,6 +144,14 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict
                            "lint_ok": art.get("lint_ok"), "lint": _json_safe(art.get("lint"))})
     table = getattr(agent.workspace, "table", None)
     show_table = _table_touched(answer, table_before, table)
+    ev = getattr(answer, "evidence", None)
+    sources = [str(src) for c in (getattr(ev, "columns", []) or []) for src in (getattr(c, "sources", []) or [])]
+    if not sources:
+        scope = None
+    elif any(src.startswith("web") for src in sources):
+        scope = "oturum verisi (dosya/sayfa; ortak havuza yazılmadı)"
+    else:
+        scope = "ortak veri havuzu"
     gate = getattr(agent, "last_gate", None)
     search = getattr(getattr(agent.registry.get("web_search"), "search", None), "remaining", None) if agent.registry.get("web_search") else None
     return {
@@ -151,6 +159,7 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict
         "steps": steps,
         "table": frame_to_dict(table) if show_table else None,
         "table_title": (getattr(agent.workspace, "title", "") or "") if show_table else "",
+        "table_scope": scope if show_table else None,
         "charts": charts,
         "evidence": evidence_to_dict(getattr(answer, "evidence", None)),
         "usage": dict(getattr(answer, "usage", {}) or {}),
@@ -160,6 +169,125 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict
         "gate": {"allowed": sorted(gate.allowed), "opened": list(gate.opened), "closed": list(gate.closed)} if gate else None,
         "search_budget_remaining": search,
     }
+
+
+# ---------------------------------------------------------------- dışa aktarım (M14, ADR-0055)
+def table_csv_bytes(frame: pd.DataFrame) -> bytes:
+    """Türkçe Excel'in doğrudan açtığı biçim: UTF-8 BOM, ';' ayraç, ',' ondalık; tarih ISO. Tam tablo."""
+    out = frame.copy()
+    for c in out.columns:
+        if pd.api.types.is_datetime64_any_dtype(out[c]):
+            out[c] = out[c].dt.strftime("%Y-%m-%d")
+    return ("\ufeff" + out.to_csv(index=False, sep=";", decimal=",", lineterminator="\n")).encode("utf-8")
+
+
+def table_xlsx_bytes(frame: pd.DataFrame, *, title: str = "Tablo", warnings: list[str] | None = None) -> bytes:
+    """Gerçek sayı ve tarih hücreleri; ikinci sayfada uyarılar ve kaynak notu (formül hücresi yazılmaz)."""
+    import io
+    buf = io.BytesIO()
+    out = frame.copy()
+    for c in out.columns:   # ±sonsuz Excel'e giremez; boş bırakılır
+        if pd.api.types.is_numeric_dtype(out[c]):
+            out[c] = out[c].replace([float("inf"), float("-inf")], None)
+    with pd.ExcelWriter(buf, engine="openpyxl") as w:
+        out.to_excel(w, sheet_name="tablo", index=False)
+        notes = pd.DataFrame({"not": [title, *(warnings or []), f"dışa aktarım {datetime.now():%Y-%m-%d %H:%M}"]})
+        notes.to_excel(w, sheet_name="notlar", index=False)
+    return buf.getvalue()
+
+
+def _md_to_html(md: str) -> str:
+    """Küçük ve kaçırılmış Markdown → HTML (paragraf, kalın, madde, boru tablosu); rapor için."""
+    import html as _h
+    lines = _h.escape(md or "").split("\n")
+    out: list[str] = []
+    i = 0
+    def inline(t: str) -> str:
+        return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", t)
+    while i < len(lines):
+        l = lines[i]
+        if l.strip().startswith("|") and i + 1 < len(lines) and re.match(r"^\s*\|?\s*:?-{2,}", lines[i + 1]):
+            rows = []
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                rows.append([c.strip() for c in lines[i].strip().strip("|").split("|")]); i += 1
+            head, body = rows[0], rows[2:]
+            out.append("<table><thead><tr>" + "".join(f"<th>{inline(h)}</th>" for h in head) + "</tr></thead><tbody>"
+                       + "".join("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in r) + "</tr>" for r in body) + "</tbody></table>")
+            continue
+        if re.match(r"^\s*[-*]\s", l):
+            items = []
+            while i < len(lines) and re.match(r"^\s*[-*]\s", lines[i]):
+                items.append(re.sub(r"^\s*[-*]\s", "", lines[i])); i += 1
+            out.append("<ul>" + "".join(f"<li>{inline(x)}</li>" for x in items) + "</ul>")
+            continue
+        if not l.strip():
+            i += 1; continue
+        para = []
+        while i < len(lines) and lines[i].strip() and not re.match(r"^\s*[-*]\s|^\s*\|", lines[i]):
+            para.append(lines[i]); i += 1
+        out.append(f"<p>{inline(' '.join(para))}</p>")
+    return "".join(out)
+
+
+def report_html(payload: dict[str, Any], frame: pd.DataFrame | None, *, model: str = "", version: str = "") -> str:
+    """Tek dosya HTML rapor: soru, cevap, varsayım/uyarılar, TAM tablo, grafikler (gömülü), kanıt durumu,
+    kaynaklar. Rapor cevabın sürümüne bağlıdır; uyarılar dışa aktarımda kaybolmaz (M14-T06/T07)."""
+    import html as _h
+    ev = payload.get("evidence") or {}
+    q = _h.escape(payload.get("question", "").split("\n\nDosya:")[0])
+    warns: list[str] = list(ev.get("gaps") or [])
+    for c in ev.get("columns") or []:
+        warns += list(c.get("warnings") or [])
+    for n in ev.get("numbers") or []:
+        if n.get("sign_warning"):
+            warns.append(f"{n.get('text')}: tabloda ters işaret")
+        if n.get("from_question") and not n.get("matched"):
+            warns.append(f"{n.get('text')}: sorudan geliyor, tabloda yok (doğrulanmadı)")
+    states = ev.get("states") or {}
+    charts = "".join(f'<figure><img alt="grafik" src="data:image/png;base64,{c["png"]}"><figcaption>{_h.escape(c.get("title") or "")}</figcaption></figure>'
+                     for c in payload.get("charts") or [] if c.get("png"))
+    table_html = ""
+    if frame is not None and len(frame):
+        show = frame.copy()
+        for c in show.columns:
+            if pd.api.types.is_datetime64_any_dtype(show[c]):
+                show[c] = show[c].dt.strftime("%Y-%m-%d")
+        table_html = show.to_html(index=False, na_rep="", border=0, classes="data", float_format=lambda v: f"{v:,.4f}".rstrip("0").rstrip("."))
+    srcs = []
+    for c in ev.get("columns") or []:
+        srcs += [str(x) for x in (c.get("sources") or [])]
+    for w in ev.get("web_sources") or []:
+        srcs.append(f"{w.get('url')} · sha256 {str(w.get('sha256') or '')[:16]}… · {w.get('fetched_at') or ''}")
+    obs = ev.get("observations") or []
+    if obs:
+        o = obs[0]
+        srcs.append(f"{ev.get('observation_count', len(obs))} gözlem → artifact {str(o.get('artifact_sha256') or '')[:16]}… · {o.get('locator') or ''} · çekim {o.get('fetched_at') or ''}")
+    srcs = list(dict.fromkeys(srcs))
+    css = ("body{font-family:'IBM Plex Sans',Arial,sans-serif;max-width:960px;margin:32px auto;padding:0 20px;color:#1f1d1a;background:#fff}"
+           "h1{font-size:20px}h2{font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:#6b665d;margin-top:28px}"
+           "table.data{border-collapse:collapse;font-size:13px}table.data th,table.data td{border:1px solid #e3ded4;padding:4px 10px;text-align:right}"
+           "table.data th:first-child,table.data td:first-child{text-align:left}.warn{background:#fff8e8;border:1px solid #e3c98f;padding:10px 12px;border-radius:6px}"
+           ".ok{color:#0a4f49}.gap{color:#a35a00}figure{margin:12px 0}img{max-width:100%}.meta{font-size:12px;color:#8a8478}")
+    state_html = " · ".join(f'<span class="{"ok" if v else "gap"}">{_h.escape(k)} {"✓" if v else "✗"}</span>' for k, v in states.items())
+    return (f"<!doctype html><html lang='tr'><head><meta charset='utf-8'><title>Agent Smith raporu</title><style>{css}</style></head><body>"
+            f"<h1>Agent Smith — analiz raporu</h1><div class='meta'>{_h.escape(datetime.now().strftime('%Y-%m-%d %H:%M'))} · cevap #{payload.get('index')} · model {_h.escape(model)} · sürüm {_h.escape(version)}</div>"
+            f"<h2>Soru</h2><p>{q}</p>"
+            f"<h2>Cevap</h2>{_md_to_html(payload.get('text', ''))}"
+            + (f"<h2>Uyarılar ve varsayımlar</h2><div class='warn'><ul>{''.join(f'<li>{_h.escape(w)}</li>' for w in warns)}</ul></div>" if warns else "")
+            + (f"<h2>Tablo ({len(frame)} satır{' · ' + _h.escape(payload.get('table_scope') or '') if payload.get('table_scope') else ''})</h2>{table_html}" if table_html else "")
+            + (f"<h2>Grafik</h2>{charts}" if charts else "")
+            + (f"<h2>Kanıt zinciri</h2><p>{_h.escape(ev.get('summary', ''))}</p><p>{state_html}</p>" if ev else "")
+            + (f"<h2>Kaynaklar</h2><ul>{''.join(f'<li>{_h.escape(x)}</li>' for x in srcs)}</ul>" if srcs else "")
+            + "</body></html>")
+
+
+def _git_version() -> str:
+    try:
+        import subprocess
+        return subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=5,
+                              cwd=str(Path(__file__).resolve().parents[2])).stdout.strip()
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 class AskRequest(BaseModel):
@@ -177,6 +305,7 @@ class Session:
         self.answers: list[dict[str, Any]] = []   # tam cevap yükleri; sayfa yenilenince yeniden çizilir
         self.id = uuid.uuid4().hex[:8]
         self.uploads: list[dict[str, Any]] = []
+        self.tables: dict[int, pd.DataFrame] = {}   # cevap sürümü → tam tablo (dışa aktarım önizlemeden değil)
 
     @property
     def upload_dir(self) -> Path:
@@ -221,6 +350,8 @@ class Session:
                                  "steps": len([s for s in payload["steps"] if s["tool"]]),
                                  "evidence": (payload["evidence"] or {}).get("summary")})
             self.answers.append(payload)
+            if payload.get("table") is not None and getattr(self.agent.workspace, "table", None) is not None:
+                self.tables[payload["index"]] = self.agent.workspace.table.copy()
             return payload
 
     def reset(self) -> None:
@@ -230,6 +361,7 @@ class Session:
             self.answers = []
             shutil.rmtree(self.upload_dir, ignore_errors=True)   # oturum dosyaları geçicidir (M10-T12)
             self.uploads = []
+            self.tables = {}
             self.id = uuid.uuid4().hex[:8]
 
     def status(self) -> dict[str, Any]:
@@ -319,6 +451,47 @@ def create_app(agent_factory: Callable[[], Any]) -> FastAPI:
     def uploads() -> JSONResponse:
         return JSONResponse(_json_safe(session.uploads))
 
+    def _answer_or_404(index: int) -> dict[str, Any]:
+        if index < 0 or index >= len(session.answers):
+            raise HTTPException(status_code=404, detail="böyle bir cevap yok")
+        return session.answers[index]
+
+    @app.get("/api/answers/{index}/table.csv")
+    def table_csv(index: int) -> Response:
+        _answer_or_404(index)
+        frame = session.tables.get(index)
+        if frame is None:
+            raise HTTPException(status_code=404, detail="bu cevabın tablosu yok")
+        return Response(table_csv_bytes(frame), media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": f'attachment; filename="agent-smith-cevap-{index}.csv"'})
+
+    @app.get("/api/answers/{index}/table.xlsx")
+    def table_xlsx(index: int) -> Response:
+        p = _answer_or_404(index)
+        frame = session.tables.get(index)
+        if frame is None:
+            raise HTTPException(status_code=404, detail="bu cevabın tablosu yok")
+        ev = p.get("evidence") or {}
+        warns = list(ev.get("gaps") or []) + [w for c in ev.get("columns") or [] for w in (c.get("warnings") or [])]
+        data = table_xlsx_bytes(frame, title=p.get("table_title") or p.get("question", "")[:120], warnings=warns)
+        return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        headers={"Content-Disposition": f'attachment; filename="agent-smith-cevap-{index}.xlsx"'})
+
+    @app.get("/api/answers/{index}/chart/{k}.png")
+    def chart_png(index: int, k: int) -> Response:
+        p = _answer_or_404(index)
+        charts = [c for c in p.get("charts") or [] if c.get("png")]
+        if k < 0 or k >= len(charts):
+            raise HTTPException(status_code=404, detail="grafik yok")
+        return Response(base64.b64decode(charts[k]["png"]), media_type="image/png",
+                        headers={"Content-Disposition": f'attachment; filename="agent-smith-cevap-{index}-grafik-{k}.png"'})
+
+    @app.get("/api/answers/{index}/report.html")
+    def report(index: int) -> HTMLResponse:
+        p = _answer_or_404(index)
+        st = session.status()
+        return HTMLResponse(report_html(p, session.tables.get(index), model=str(st.get("model") or ""), version=_git_version()))
+
     @app.post("/api/reset")
     def reset() -> JSONResponse:
         session.reset()
@@ -333,4 +506,5 @@ def build_default_app() -> FastAPI:
     return create_app(lambda: build_agent(max_steps=12))
 
 
-__all__ = ["AskRequest", "Session", "answer_to_dict", "build_default_app", "create_app", "evidence_to_dict", "frame_to_dict"]
+__all__ = ["AskRequest", "Session", "answer_to_dict", "build_default_app", "create_app", "evidence_to_dict", "frame_to_dict",
+           "report_html", "table_csv_bytes", "table_xlsx_bytes"]
