@@ -25,7 +25,8 @@ jobs:
         run: uv run --frozen --extra dev pytest -q -p no:cacheprovider
   lakehouse-core:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # Ölçüldü 14 Eyl: yerelde 12 dk, GitHub koşucusunda 34 dk; 40 dk sınırı bir koşuyu iptal ettirdi.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

@@ -232,6 +232,7 @@ Kullanıcı uyurken tüm milestone'ları sırayla kapatma görevi. Kod dalı yal
 - **İkinci kabul koşusu 11/14** (`acceptance_m16_2026-09-14_0133.json`): grafik ve birleştirme turları düzeldi. Kalan üç: (1) finans ilk turunda tek eşleşmeyen sayı "dosya zinciri"ni de ✗ yapıyordu → rozetler bağımsız; (2) ziyaret fikstüründe kırılma 2024-10 çıktı, beklenen 2025-01 → yüzde tabanında düzey sıçraması ayrı kırılma; (3) L10 not eklenmesine rağmen sormadı → netleştirme deterministik, LLM çağrılmıyor.
 - **Büşra'nın dalı (14 Eyl 00:15):** bizim dalı merge etmiş; ilgi kapısı, çapraz kontrol, birim tahmini eklemiş; bize not bırakmış. İki isteği yapıldı (`FILE_IRRELEVANT`, Windows sürücü harfi); kodunu bu dala alma kararı ekipte. Merge provası: onun dalı → bizim dal çatışmasız (84 dosya, V3 motoru kökte); main ← bizim dal çatışmasız (main ata commit).
 - Sır taraması (ca2bfe3): `.env` gizli değerleri ağaçta/tarihçede yok; tek eşleşmeler `.env.example`'daki değişken referansı ve test fikstüründeki sahte AKIA dizisi. Lakehouse testleri yerelde 1.086 geçti (12 dk).
+- **CI lakehouse işi GitHub'da düşüyordu:** 1.086 testin 1'i (`test_an_ipv4_mapped_loopback_is_refused`): `::ffff:127.0.0.1` yerelde (Python 3.12.13) "loopback", koşucudaki 3.12'de "private" sınıflanıyor. Adres sınıflamadan önce IPv4'e açılıyor; sebep yorumlayıcıya bağlı değil. Aynı iş GitHub'da 34 dk sürdü, 40 dk sınırı bir koşuyu iptal ettirdi → 60 dk.
 - Testler ajan 377 → 391.
 
 ## 3. Bugünkü sayılar

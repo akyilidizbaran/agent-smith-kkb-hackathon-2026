@@ -152,6 +152,13 @@ def read_local_file(path: str | Path, policy: LocalFilePolicy) -> tuple[Path, by
 def _address_is_blocked(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str | None:
     """Return why an address is off-limits, or None when it is a normal public address."""
 
+    # Unwrap IPv4-mapped IPv6 (::ffff:a.b.c.d) first. CPython 3.12 patch releases disagree on whether
+    # such an address reports is_loopback or is_private (measured 14 Sep 2026: local 3.12.13 says
+    # loopback, the GitHub runner's 3.12 said private), so the reason must not depend on the interpreter.
+    mapped_first = getattr(address, "ipv4_mapped", None)
+    if mapped_first is not None:
+        address = mapped_first
+
     if address.is_loopback:
         return "loopback"
     if address.is_private:
