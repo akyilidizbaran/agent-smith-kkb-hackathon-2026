@@ -24,6 +24,9 @@ from pydantic import BaseModel, Field
 from ..builder.ingest import LakehouseCLI
 from ..builder.profile import profile_table, propose
 from ..builder.read import ReadRefused, read_bytes_for_profiling, read_table_for_profiling
+from ..builder.crosscheck import cross_check, file_points
+from ..builder.relevance import assess as assess_relevance, catalog_entries, user_confirmed
+from ..builder.unit_guess import guess_unit
 from ..builder.verify import verify_mapping
 from ..adapters.duckdb_lakehouse import release_connections
 from ..contracts.lakehouse import LakehouseClient
@@ -59,6 +62,13 @@ class IngestParams(BaseModel):
     frequency: Literal["daily", "business_daily", "weekly", "biweekly", "monthly", "quarterly", "semiannual", "yearly"] | None = Field(
         default=None, description="Kullanıcı söylediyse frekans")
     date_format: str | None = Field(default=None, description="Kullanıcı söylediyse tarih biçimi, ör. '%d/%m/%Y' (belirsiz gün/ay için)")
+    # İlgi kapısı (V3 §3.9): dosya soruyla ilgisiz görünürse yazılmaz ve sorulur. Kullanıcı
+    # "yine de ekle / doğru dosya bu" derse model bu bayrağı açar; bayrak yalnız kullanıcı
+    # metninde onay sözü varsa geçerlidir (beyan kuralıyla aynı: modelin sözü yetmez).
+    user_confirmed: bool = Field(
+        default=False,
+        description="Kullanıcı 'yine de ekle' ya da 'doğru dosya bu' dediyse true; ilgi kapısını geçer.",
+    )
 
 
 def _slug(text: str) -> str:
@@ -259,17 +269,66 @@ class IngestFromUrlTool(Tool):
                 layer="data", retryable=False,
             )
 
+        # 2b. ilgi kapısı (V3 §3.9, builder/relevance.py): dosya BİÇİMİ doğru olabilir ama
+        # sorulan şeyle ilgisi olmayabilir (konut kredisi sorusuna otobüs tarifesi; 2023
+        # dosyası 2024 sorusuna). Üç deterministik ölçüt: dönem, terim, katalog alias'ı.
+        # Uygulanabilen ölçütlerin hiçbiri tutmuyorsa yazılmaz, kullanıcıya sorulur. Aynı
+        # oturumda bakılan öbür dosyaların puanları hatırlanır: "doğru + yanlış dosya"
+        # durumunda kart hangisinin daha uygun göründüğünü söyler (kanıt paneline de gider).
+        specs_all = list(self.lakehouse.list_datasets())
+        relevance = assess_relevance(
+            question, self._user_text(), params.locator, frame, mapping,
+            catalog=catalog_entries(s for s in specs_all if getattr(s, "source", "") != "adhoc"),
+        )
+        seen = self.__dict__.setdefault("_relevance_seen", {})
+        seen[params.locator] = relevance.score
+        better = [f"{loc} ({sc}/{relevance.applicable})" for loc, sc in seen.items()
+                  if loc != params.locator and sc > relevance.score]
+        confirmed = params.user_confirmed and user_confirmed(self._user_text())
+        if relevance.irrelevant and not confirmed:
+            return ToolResult.fail(
+                "FILE_IRRELEVANT",
+                (f"'{Path(params.locator.split('?')[0]).name}' dosyası sorulan şeyle ilgili görünmüyor: "
+                 + "; ".join(relevance.lines()[1:]) + "."),
+                hint=("Kullanıcıya sor: doğru dosya bu mu? Dosyada şu kolonlar var: "
+                      + ", ".join(map(str, frame.columns)) + ". "
+                      + (f"Daha uygun görünen dosya(lar): {', '.join(better)}. " if better else "")
+                      + "Kullanıcı 'yine de ekle / doğru dosya bu' derse aynı çağrıyı user_confirmed=true ile yap. "
+                        "Sayı uydurma, seriyi eklenmiş sayma."),
+                layer="policy", retryable=False,
+                candidates=[loc for loc, _ in sorted(seen.items(), key=lambda kv: -kv[1]) if loc != params.locator][:5],
+            )
+
+        # 2c. çapraz kontrol (builder/crosscheck.py): ilgi kapısı TEK bir katalog serisi bulduysa
+        # ve frekans aynıysa örtüşen dönemler yan yana konur — örtüşüyor / birim farkı / ÇELİŞİYOR.
+        # Engellemez; karta ve kanıt paneline gider. "Doğrulandı" değil "örtüşüyor" denir.
+        crosscheck = cross_check(self.lakehouse, specs_all, relevance.catalog_hit_ids, frame, mapping, semantics)
+        # 2d. birim tahmini (builder/unit_guess.py): belgede birim yoksa boş soru yerine kanıtlı aday;
+        # yine yazılmaz, kullanıcı onaylar (beyan kuralı: unit= yalnız kullanıcı metninde geçerse).
+        unit_hint = None
+        if semantics.unit is None:
+            unit_hint = guess_unit(
+                texts=[Path(params.locator.split("?")[0]).name, *map(str, frame.columns), doc_note or ""],
+                crosscheck=crosscheck, values=file_points(frame, mapping).values(),
+            )
+
         # 3. doğrulama — yayınlama kurallarıyla
         # Çakışma yalnız küratörlü/başka kaynaklı serilerle: aynı dosyanın ikinci ingest'i
         # kendi taslağına düşer ve veri ekibinin yayınlama kuralı onu çözer (aynı satır
         # "değişmeyen", aynı tarihe farklı değer "revizyon çatışması" — sessiz ezme yok).
-        existing = [s.dataset_id for s in self.lakehouse.list_datasets() if s.source != "adhoc"]
+        existing = [s.dataset_id for s in specs_all if s.source != "adhoc"]
         report = verify_mapping(frame, mapping, existing_series_ids=existing)
         asks: list[str] = []
         if not report.ok:
             asks += [f"{c.name}: {c.detail}" for c in report.failures]
         if semantics.unit is None:
-            asks.append("birim: veriden çıkarılamıyor; kaynağın birimi nedir (ör. milyon TL, %, adet)?")
+            if unit_hint is not None:
+                asks.append(f"birim: belgede yazmıyor. {unit_hint.line()}. Kullanıcıya 'birim {unit_hint.unit!r} mi?' "
+                            f"diye sor; onaylarsa aynı çağrıyı unit={unit_hint.unit!r} ile yap")
+            else:
+                asks.append("birim: veriden çıkarılamıyor; kaynağın birimi nedir (ör. milyon TL, %, adet)?")
+        if crosscheck is not None and crosscheck.verdict == "ÇELİŞİYOR":
+            asks.append("çapraz kontrol: " + crosscheck.lines()[0] + " — kullanıcıya söyle; dosya mı katalog mu doğru, o karar versin")
         if invented:
             asks.append("beyan kullanıcıdan gelmeli: " + ", ".join(invented) +
                         " kullanıcı mesajında geçmiyor (model uydurmuş olabilir); kullanıcıya sor")
@@ -346,8 +405,17 @@ class IngestFromUrlTool(Tool):
         ]
         if out.warnings:
             card.append(f"parser uyarısı: {out.warnings} (quality_flag='source_warning')")
+        card.append(relevance.lines()[0] + (" — kullanıcı onayıyla eklendi" if confirmed and relevance.irrelevant else ""))
+        if relevance.period_ok is False:
+            card.append("⚠ dosyanın tarih aralığı sorudaki yılı KAPSAMIYOR; o yıl için bu seriden sayı çıkmaz")
+        if better:
+            card.append(f"NOT: bu oturumda bakılan {', '.join(better)} bu soruya daha uygun görünüyor")
+        if crosscheck is not None:
+            card.extend(crosscheck.lines())
         card.append(render_for_model(outcome, decision).splitlines()[0])
-        return ToolResult(content="\n".join(card), artifacts={"ingest": out, "proposal": mapping})
+        return ToolResult(content="\n".join(card),
+                          artifacts={"ingest": out, "proposal": mapping, "relevance": relevance,
+                                     **({"crosscheck": crosscheck} if crosscheck is not None else {})})
 
 
 __all__ = ["IngestFromUrlTool", "IngestParams"]
