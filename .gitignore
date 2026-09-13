@@ -29,3 +29,6 @@ incoming/
 .DS_Store
 .idea/
 .vscode/
+
+# Seed edilmiş tasarım kanvası (2,5 MB, çalışma dosyalarından yeniden üretilir)
+docs/design/agentsmithler-arayuz.html

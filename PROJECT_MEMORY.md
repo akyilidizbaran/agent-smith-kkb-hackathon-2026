@@ -143,13 +143,21 @@ Demo günü PDF canlı verilecek. Borsa İstanbul'un 20 PDF'i indirilip OCR hatt
 - Yeni: `pages` parametresi (web_url ve ingest), belge başına 90 s zaman bütçesi, kart kalan sayfalar için `pages` ister; prompt kuralı.
 - Golden G18c (2 sayfalık yatay cevher belgesi, altın/gümüş ayrımı, 2025 altın 28.088,44 kg) eklendi; ilk 0/2: model gümüş tablosunu altın diye verdi → her OCR tablosu "sayfa n: <başlık>" etiketi taşır (kart + provenance). G18a/b 2/2; G18c etiketten sonra 3/3 doğru değer (bir koşuda kanıt paneli "27.07.2026" tarihini sayı sandı → tarih yazımları maskelenir). Testler 307 → 315.
 
+### 2.17 Arayüz D9 (13 Eylül, ADR-0044)
+Claude Design kanvasında üç yön çizildi (`docs/design/`: Main, Architect, PdfView + B/C düşük çözünürlüklü alternatifler; yayın: https://claude.ai/code/artifact/c00c1637-39d0-4d9b-a960-03c9f80fd897). Yön A (editoryal, veri-önce, üç sütun) ana ekran olarak uygulandı.
+- `kkb_agent/web_app.py` FastAPI: `POST /api/ask` ajan cevabını olduğu gibi JSON'a çevirir (metin, adımlar rol/araç/hata/süre, aktif tablo ilk 200 satır, grafik PNG base64 + denetçi sonucu, kanıt paneli, token, araç kapısı, kalan arama bütçesi); `GET /api/status` katalog/yüklü/Silver/Gold sayılarını canlı DB'den; `POST /api/reset`. Tek ajan, sorular kilitle sıralı. `create_app(agent_factory)` testte sahte ajan alır. Başlatma `python -m kkb_agent.serve` (`kkb_agent.web` paketi web araçlarına ait olduğu için `web.py` olmadı).
+- `static/index.html`: çerçeve yok, CDN yok (yalnız Google Fonts, yoksa sistem yazı tipi). Sol veri havuzu + oturum; orta soru → cevap (kaçırılmış mini-Markdown) → tablo ve grafik yan yana → araç izi çipleri (validate kehribar, hata kırmızı) → soru kutusu; sağ kanıt zinciri: "tam/EKSİK" rozeti, cevaptaki sayılar (eşleşen yeşil), kolon → SQL, Silver gözlemi → artifact/Bronze/RAW → kaynak, belge (OCR) kehribar, kopuk halkalar ve danışılıp kullanılmayanlar.
+- Ölçüldü (demo DB, 2025 konut kredisi tablo+grafik sorusu): 5 adım, 63.485 token, 31,9 s; kanıt 24/24 tam; tablo ile grafik yan yana; grounding MISS uyarısı (bir yuvarlama) izde göründü — gizlenmedi. `/api/status` 2.214 · 127 · 8.290 · 6, tasarımdaki sayılarla birebir.
+- Tasarım gözden geçirmesi (arka plan ajanı) sonrası düzeltmeler: "çekiliş" → "çekim" (çekiliş = piyango), aynı run id iki ayrı ingest'te, çelişen çekim zamanları, iz sayacı 2 → 4 adım, Haz etiketi veri noktasına, PdfView "13/13 sayı kolonu"; model adı `Qwen3.8-27B` gerçek ad, değiştirilmedi.
+- Sınır: tek oturum, kimlik yok, akış (SSE) yok — ajan bitince tek cevap. Testler 315 → 317.
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 315 |
+| Agent birim testi | 317 |
 | Lakehouse testi (r3 + genişlik dalı) | 1.079 |
-| ADR | 43 |
+| ADR | 44 |
 | Golden vakası | 21: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3, G18a/b 2/2; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 11 senaryo 11/11 |
 | Araç sayısı (gerçek DB'de) | 19: lakehouse ×4, workspace ×4 (query dâhil), analitik ×3 (anomaly_detect, change_points, lead_lag), ingest, promote_draft, gold ×3, chart, web_url, web_search (Tavily anahtarı .env'de) |
 | Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu (iş yapan araç/tablo varken susar), istenen yetenek zorunluluğu (grafik, analitik), frekans uyuşmazlığı (kabadan ince yok), grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, GOLD_REQUIRED, niyet kapısı, beyan kapısı, adım sınırı, reasoning temizliği |
@@ -177,7 +185,7 @@ Veri ekibi: RAW (içerik adresli) → Bronze (parquet) → Silver (fact_observat
 
 ## 5. Açık işler ve sıradaki adımlar
 
-**Yol haritası (sırayla):**
+**Yol haritası (sırayla):** D5–D9 ✅ (ADR-0035–0044); arayüz `python -m kkb_agent.serve`.
 1. ~~D1 sınırlı ön-yükleme~~ ✅ (ADR-0035).
 2. ~~D2 BM25 dizini ve yüklenmemiş seri cevabı~~ ✅ (ADR-0036).
 3. ~~D3 kararlılık + güçlendirme~~ ✅ (ADR-0037).

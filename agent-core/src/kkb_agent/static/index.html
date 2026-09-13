@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentSmithler</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root { --ink: #1f1d1a; --paper: #f6f4ef; --card: #fbfaf7; --line: #e3ded4; --line2: #efece5; --muted: #6b665d; --muted2: #8a8478;
+          --teal: #0f6b63; --teal-ink: #0a4f49; --teal-bg: #e9f3f1; --teal-line: #c7e0dc; --amber: #a35a00; --amber-ink: #6b4d00; --amber-bg: #fff8e8; --amber-line: #e3c98f; --red: #9b2c2c; --red-bg: #fbeaea; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; color: var(--ink); background: var(--paper); font-size: 14px; }
+  a { color: var(--teal); }
+  .mono { font-family: "IBM Plex Mono", monospace; }
+  header { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid var(--line); background: var(--card); }
+  header .brand { font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600; font-size: 18px; letter-spacing: -0.01em; }
+  header .sub { font-size: 12px; color: var(--muted); margin-left: 14px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid #d9d3c7; border-radius: 999px; background: #fff; font-size: 12px; color: var(--muted); }
+  .layout { display: grid; grid-template-columns: 248px minmax(0, 1fr) 392px; height: calc(100vh - 56px); min-height: 0; }
+  aside.left { border-right: 1px solid var(--line); padding: 20px 16px; display: flex; flex-direction: column; gap: 22px; background: var(--card); overflow: auto; }
+  aside.right { border-left: 1px solid var(--line); background: var(--card); display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+  .label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted2); }
+  .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .stat { padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+  .stat .v { font-family: "IBM Plex Mono", monospace; font-size: 18px; font-weight: 500; }
+  .stat .k { font-size: 11px; color: var(--muted); }
+  .session-item { padding: 8px 10px; border-radius: 6px; font-size: 13px; line-height: 1.35; color: #4a463f; cursor: pointer; }
+  .session-item.active { background: var(--teal-bg); border: 1px solid var(--teal-line); color: var(--ink); }
+  main { display: flex; flex-direction: column; min-height: 0; }
+  #thread { flex: 1; overflow: auto; padding: 28px 40px 12px 40px; display: flex; flex-direction: column; gap: 20px; }
+  .q { align-self: flex-end; max-width: 620px; padding: 12px 16px; background: var(--ink); color: var(--paper); border-radius: 12px 12px 2px 12px; font-size: 15px; line-height: 1.45; white-space: pre-wrap; }
+  .a { display: flex; flex-direction: column; gap: 14px; max-width: 820px; }
+  .a .text { font-size: 15px; line-height: 1.55; }
+  .a .text p { margin: 0 0 8px 0; } .a .text h1, .a .text h2, .a .text h3 { font-size: 15px; margin: 6px 0; } .a .text ul { margin: 4px 0 8px 18px; padding: 0; }
+  .a .text table { border-collapse: collapse; font-size: 12.5px; margin: 6px 0; } .a .text th, .a .text td { padding: 4px 10px; border: 1px solid var(--line2); }
+  .a .text .warn { color: var(--amber-ink); }
+  .grid2 { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 18px; align-items: start; }
+  .box { border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; }
+  .box .head { padding: 8px 12px; background: #f1eee7; font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+  table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.data th { text-align: left; padding: 6px 10px; font-weight: 500; color: var(--muted); background: #f1eee7; white-space: nowrap; }
+  table.data td { padding: 5px 10px; border-top: 1px solid var(--line2); font-family: "IBM Plex Mono", monospace; white-space: nowrap; }
+  table.data td.num { text-align: right; }
+  .tablewrap { max-height: 420px; overflow: auto; }
+  .chart img { display: block; width: 100%; height: auto; }
+  .chart .cap { padding: 8px 12px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--line2); }
+  .trace { padding: 12px 40px; border-top: 1px solid var(--line); background: var(--card); display: flex; flex-direction: column; gap: 10px; }
+  .chips { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #4a463f; flex-wrap: wrap; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 4px; background: #fff; border: 1px solid #d9d3c7; cursor: default; }
+  .chip .role { font-family: "IBM Plex Mono", monospace; color: var(--muted2); }
+  .chip.err { border-color: #e5b4b4; background: var(--red-bg); }
+  .chip.validate { border-color: var(--amber-line); background: var(--amber-bg); }
+  .askrow { display: flex; gap: 10px; align-items: center; }
+  .askrow textarea { flex: 1; height: 44px; resize: none; padding: 11px 14px; background: #fff; border: 1px solid #d9d3c7; border-radius: 8px; font: inherit; font-size: 14px; color: var(--ink); }
+  .askrow button { height: 44px; padding: 0 18px; background: var(--ink); color: var(--paper); border: 0; border-radius: 8px; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; }
+  .askrow button[disabled] { opacity: .5; cursor: wait; }
+  .askrow .ghost { background: transparent; color: var(--muted); border: 1px solid #d9d3c7; }
+  .ev-head { padding: 18px 20px 12px 20px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+  .badge.ok { background: var(--teal-bg); color: var(--teal-ink); } .badge.gap { background: var(--amber-bg); color: var(--amber-ink); } .badge.none { background: #f1eee7; color: var(--muted); }
+  .ev-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .chain { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 0 10px; }
+  .chain .dot { display: flex; flex-direction: column; align-items: center; } .chain .dot i { width: 10px; height: 10px; border-radius: 50%; background: var(--teal); margin-top: 5px; } .chain .dot b { flex: 1; width: 2px; background: var(--teal-line); }
+  .chain .dot.amber i { background: var(--amber); } .chain .dot.amber b { background: var(--amber-line); }
+  .chain .node { padding-bottom: 12px; } .chain .node .t { font-size: 13px; font-weight: 500; } .chain .node .d { font-size: 12px; color: #4a463f; line-height: 1.4; word-break: break-word; }
+  .note { padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 12px; color: #4a463f; line-height: 1.45; }
+  .note.amber { border-color: var(--amber-line); background: var(--amber-bg); color: var(--amber-ink); }
+  .numbers { display: flex; flex-wrap: wrap; gap: 6px; }
+  .num { font-family: "IBM Plex Mono", monospace; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--teal-line); background: var(--teal-bg); }
+  .num.miss { border-color: var(--amber-line); background: var(--amber-bg); }
+  .status { font-size: 12px; color: var(--muted2); }
+  .busy { font-size: 13px; color: var(--muted); padding: 6px 0; }
+  .err { padding: 10px 12px; background: var(--red-bg); border: 1px solid #e5b4b4; border-radius: 6px; color: var(--red); font-size: 13px; }
+  @media (max-width: 1100px) { .layout { grid-template-columns: minmax(0, 1fr); } aside.left, aside.right { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <div style="display:flex;align-items:center"><span class="brand">AgentSmithler</span><span class="sub">Lakehouse Agent · KKB Hackathon 2026</span></div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <span class="pill" id="pill-model">bağlanıyor…</span>
+    <span class="pill" id="pill-budget"></span>
+  </div>
+</header>
+<div class="layout">
+  <aside class="left">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div class="label">Veri havuzu</div>
+      <div class="stats">
+        <div class="stat"><div class="v" id="st-catalog">–</div><div class="k">katalog serisi</div></div>
+        <div class="stat"><div class="v" id="st-loaded">–</div><div class="k">yüklü seri</div></div>
+        <div class="stat"><div class="v" id="st-silver">–</div><div class="k">Silver gözlemi</div></div>
+        <div class="stat"><div class="v" id="st-gold">–</div><div class="k">Gold tablosu</div></div>
+      </div>
+      <div class="status" id="st-line"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div class="label">Bu oturum</div>
+      <div id="session" style="display:flex;flex-direction:column;gap:4px"></div>
+    </div>
+    <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px">
+      <div class="label">Roller</div>
+      <div style="font-size:12px;color:#4a463f;line-height:1.45">Analist okur, Architect yazar. Yazma yalnız taslak ve onayla.</div>
+      <button class="ghost" id="btn-reset" style="height:32px;border:1px solid #d9d3c7;border-radius:6px;background:transparent;font:inherit;font-size:12px;color:var(--muted);cursor:pointer">Oturumu sıfırla</button>
+    </div>
+  </aside>
+
+  <main>
+    <div id="thread"></div>
+    <div class="trace">
+      <div class="chips" id="trace"><span class="label" style="margin-right:4px">Araç izi</span><span class="status">henüz soru yok</span></div>
+      <div class="askrow">
+        <textarea id="q" placeholder="Soru sor, dosya ya da adres ver…"></textarea>
+        <button id="btn-ask">Sor</button>
+      </div>
+    </div>
+  </main>
+
+  <aside class="right">
+    <div class="ev-head">
+      <div style="display:flex;align-items:center;justify-content:space-between"><div class="label">Kanıt zinciri</div><span class="badge none" id="ev-badge">—</span></div>
+      <div style="font-size:13px;color:#4a463f;line-height:1.45" id="ev-summary">Cevap gelince her sayı hücreye, sorguya, gözleme ve kaynağa bağlanır.</div>
+    </div>
+    <div class="ev-body" id="ev-body"></div>
+  </aside>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtInt = (n) => (n === null || n === undefined) ? "–" : Number(n).toLocaleString("tr-TR");
+const fmtCell = (v) => { if (v === null || v === undefined) return ""; if (typeof v === "number") return Number.isInteger(v) ? v.toLocaleString("tr-TR") : v.toLocaleString("tr-TR", {maximumFractionDigits: 4}); return String(v); };
+
+function mdToHtml(md) {
+  // Küçük ve güvenli: paragraf, **kalın**, başlık, madde, boru tablosu. Her şey önce kaçırılır.
+  const lines = esc(md).split("\n"); let out = []; let i = 0;
+  const inline = (t) => t.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\((Not:[^)]*)\)/g, '<span class="warn">($1)</span>');
+  while (i < lines.length) {
+    const l = lines[i];
+    if (l.trim().startsWith("|") && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1])) {
+      const rows = []; while (i < lines.length && lines[i].trim().startsWith("|")) { rows.push(lines[i]); i++; }
+      const cells = (r) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      const head = cells(rows[0]); const body = rows.slice(2).map(cells);
+      out.push("<table><thead><tr>" + head.map((h) => `<th>${inline(h)}</th>`).join("") + "</tr></thead><tbody>" + body.map((r) => "<tr>" + r.map((c) => `<td>${inline(c)}</td>`).join("") + "</tr>").join("") + "</tbody></table>");
+      continue;
+    }
+    if (/^#{1,3}\s/.test(l)) { out.push(`<h3>${inline(l.replace(/^#{1,3}\s/, ""))}</h3>`); i++; continue; }
+    if (/^\s*[-*]\s/.test(l)) { const items = []; while (i < lines.length && /^\s*[-*]\s/.test(lines[i])) { items.push(lines[i].replace(/^\s*[-*]\s/, "")); i++; } out.push("<ul>" + items.map((x) => `<li>${inline(x)}</li>`).join("") + "</ul>"); continue; }
+    if (l.trim() === "") { i++; continue; }
+    const para = []; while (i < lines.length && lines[i].trim() !== "" && !/^\s*[-*]\s|^#{1,3}\s|^\s*\|/.test(lines[i])) { para.push(lines[i]); i++; }
+    out.push(`<p>${inline(para.join(" "))}</p>`);
+  }
+  return out.join("");
+}
+
+async function loadStatus() {
+  try {
+    const r = await fetch("/api/status"); const s = await r.json();
+    $("st-catalog").textContent = fmtInt(s.catalog_series); $("st-loaded").textContent = fmtInt(s.loaded_series);
+    $("st-silver").textContent = fmtInt(s.silver_rows); $("st-gold").textContent = fmtInt(s.gold_tables);
+    $("st-line").textContent = `retrieval: ${s.retrieval_mode || "–"} · araç: ${s.tools.length} · kapı: ${s.tool_gate ? "açık" : "kapalı"}`;
+    $("pill-model").textContent = `Veri havuzu bağlı · ${s.model || "model"}`;
+    $("pill-budget").textContent = s.search_budget_remaining === null || s.search_budget_remaining === undefined ? "web_search kapalı" : `Arama bütçesi ${s.search_budget_remaining}`;
+    renderSession(s.history);
+  } catch (e) { $("pill-model").textContent = "durum alınamadı"; }
+}
+
+let history = [];
+function renderSession(h) {
+  history = h || history;
+  $("session").innerHTML = history.map((x, i) => `<div class="session-item ${i === history.length - 1 ? "active" : ""}">${esc(x.question).slice(0, 90)}</div>`).join("") || `<div class="status">boş</div>`;
+}
+
+function renderAnswer(p) {
+  const thread = $("thread");
+  const q = document.createElement("div"); q.className = "q"; q.textContent = p.question; thread.appendChild(q);
+  const a = document.createElement("div"); a.className = "a";
+  let html = `<div class="text">${mdToHtml(p.text)}</div>`;
+  const hasTable = p.table && p.table.rows && p.table.rows.length;
+  const hasChart = p.charts && p.charts.length && p.charts.some((c) => c.png);
+  if (hasTable || hasChart) {
+    html += `<div class="${hasTable && hasChart ? "grid2" : ""}">`;
+    if (hasTable) {
+      const numeric = p.table.columns.map((c, j) => p.table.rows.some((r) => typeof r[j] === "number"));
+      html += `<div class="box"><div class="head"><span>${esc(p.table_title || "Aktif tablo")}</span><span>${fmtInt(p.table.row_count)} satır${p.table.truncated ? " (ilk 200)" : ""}</span></div><div class="tablewrap"><table class="data"><thead><tr>${p.table.columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${p.table.rows.slice(0, 60).map((r) => "<tr>" + r.map((v, j) => `<td class="${numeric[j] ? "num" : ""}">${esc(fmtCell(v))}</td>`).join("") + "</tr>").join("")}</tbody></table></div></div>`;
+    }
+    if (hasChart) {
+      html += p.charts.filter((c) => c.png).map((c) => `<div class="box chart"><img alt="grafik" src="data:image/png;base64,${c.png}"><div class="cap">${esc(c.title || "Grafik")} · belirtim araçta kuruldu, sayılar tablodan · denetçi: ${c.lint_ok === false ? "UYARI" : c.lint_ok ? "geçti" : "–"}</div></div>`).join("");
+    }
+    html += `</div>`;
+  }
+  a.innerHTML = html; thread.appendChild(a); thread.scrollTop = thread.scrollHeight;
+}
+
+function renderTrace(p) {
+  const chips = (p.steps || []).map((s) => {
+    const cls = s.tool ? (s.ok ? "" : "err") : "validate";
+    const body = s.tool ? `${esc(s.tool)}${s.error_code ? " · " + esc(s.error_code) : ""}${s.duration_ms ? " · " + (s.duration_ms / 1000).toFixed(1) + " s" : ""}` : esc(s.thought || "").slice(0, 60);
+    return `<span class="chip ${cls}" title="${esc(s.summary || s.thought || "")}"><span class="role">${esc(s.role)}</span> ${body}</span>`;
+  });
+  const u = p.usage || {}; const gate = p.gate ? ` · kapı: ${p.gate.closed.length ? "kapalı " + p.gate.closed.join(", ") : "hepsi açık"}` : "";
+  $("trace").innerHTML = `<span class="label" style="margin-right:4px">Araç izi</span>${chips.join("")}<span class="status mono" style="margin-left:auto">${(p.steps || []).filter((s) => s.tool).length} adım · ${fmtInt(u.prompt)} token · ${p.elapsed_s} s${gate}</span>`;
+}
+
+function renderEvidence(p) {
+  const ev = p.evidence; const body = $("ev-body"); const badge = $("ev-badge");
+  if (!ev) { badge.className = "badge none"; badge.textContent = "—"; $("ev-summary").textContent = "Bu cevap için tablo yok."; body.innerHTML = ""; return; }
+  badge.className = "badge " + (ev.complete ? "ok" : "gap"); badge.textContent = ev.complete ? "tam" : "EKSİK";
+  $("ev-summary").textContent = ev.summary;
+  let html = "";
+  if (ev.numbers && ev.numbers.length) {
+    html += `<div><div class="label" style="margin-bottom:6px">Cevaptaki sayılar</div><div class="numbers">${ev.numbers.map((n) => `<span class="num ${n.matched ? "" : "miss"}" title="${esc(n.column || "")} ${esc(n.row_key || "")}">${esc(n.text)}</span>`).join("")}</div></div>`;
+  }
+  const nodes = [];
+  (ev.columns || []).slice(0, 3).forEach((c) => nodes.push({t: `Kolon · ${c.column}`, d: c.sql || "provenance yok", amber: !c.sql}));
+  if (ev.observation_count) { const o = ev.observations[0] || {}; nodes.push({t: `Silver gözlemi · ${ev.observation_count} gözlem`, d: `${o.series_id || ""} · ${o.observation_date || ""} · quality ${o.quality_flag || ""}`}); nodes.push({t: "Artifact → Bronze → RAW", d: `${(o.artifact_sha256 || "").slice(0, 12)}… · run ${(o.run_id || "").slice(0, 8)} · HTTP ${o.http_status ?? "–"}`}); nodes.push({t: "Kaynak", d: `${o.locator || ""} · çekiliş ${o.fetched_at || ""}`}); }
+  (ev.web_sources || []).forEach((w) => nodes.push({t: w.ocr ? "Belge (OCR)" : "Web sayfası", d: `${w.url} · sha256 ${(w.sha256 || "").slice(0, 12)}… · ${w.fetched_at || ""}${w.ocr ? " · " + (w.ocr.model || "") + " · sayfa " + (w.ocr.pages || []).join(",") + " · kalite " + (w.ocr.quality || "") : ""}`, amber: !!w.ocr}));
+  if (nodes.length) {
+    html += `<div class="chain">${nodes.map((n, i) => `<div class="dot ${n.amber ? "amber" : ""}"><i></i>${i < nodes.length - 1 ? "<b></b>" : ""}</div><div class="node"><div class="t">${esc(n.t)}</div><div class="d mono">${esc(n.d)}</div></div>`).join("")}</div>`;
+  }
+  if (ev.gaps && ev.gaps.length) html += `<div class="note amber"><strong>Kopuk halkalar</strong><br>${ev.gaps.map(esc).join("<br>")}</div>`;
+  if (ev.consulted_unused && ev.consulted_unused.length) html += `<div class="note"><strong>Danışılıp kullanılmayan</strong><br>${ev.consulted_unused.map(esc).join(" · ")}</div>`;
+  if (ev.web_unused && ev.web_unused.length) html += `<div class="note"><strong>Taranıp kullanılmayan</strong><br>${ev.web_unused.map((w) => esc((w.url || "") + " · " + (w.note || ""))).join("<br>")}</div>`;
+  body.innerHTML = html;
+}
+
+async function ask() {
+  const q = $("q").value.trim(); if (!q) return;
+  $("btn-ask").disabled = true; $("q").value = "";
+  const busy = document.createElement("div"); busy.className = "busy"; busy.textContent = "ajan çalışıyor… (planla → araç çağır → doğrula)"; $("thread").appendChild(busy);
+  try {
+    const r = await fetch("/api/ask", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({question: q})});
+    busy.remove();
+    if (!r.ok) { const e = await r.json().catch(() => ({detail: r.statusText})); const d = document.createElement("div"); d.className = "err"; d.textContent = "Hata: " + (e.detail || r.status); $("thread").appendChild(d); return; }
+    const p = await r.json(); renderAnswer(p); renderTrace(p); renderEvidence(p);
+    history.push({question: q}); renderSession(history);
+    if (p.search_budget_remaining !== null && p.search_budget_remaining !== undefined) $("pill-budget").textContent = `Arama bütçesi ${p.search_budget_remaining}`;
+  } catch (e) { busy.remove(); const d = document.createElement("div"); d.className = "err"; d.textContent = "Bağlantı hatası: " + e; $("thread").appendChild(d); }
+  finally { $("btn-ask").disabled = false; $("q").focus(); }
+}
+$("btn-ask").addEventListener("click", ask);
+$("q").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.keyCode === 13) && !e.shiftKey) { e.preventDefault(); ask(); } });
+$("btn-reset").addEventListener("click", async () => { await fetch("/api/reset", {method: "POST"}); $("thread").innerHTML = ""; $("ev-body").innerHTML = ""; $("ev-badge").className = "badge none"; $("ev-badge").textContent = "—"; $("ev-summary").textContent = "Cevap gelince her sayı hücreye, sorguya, gözleme ve kaynağa bağlanır."; $("trace").innerHTML = `<span class="label" style="margin-right:4px">Araç izi</span><span class="status">henüz soru yok</span>`; history = []; loadStatus(); });
+loadStatus();
+</script>
+</body>
+</html>
