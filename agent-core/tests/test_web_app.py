@@ -44,7 +44,7 @@ def test_status_ask_reset_dongusu() -> None:
         made.append(FakeAgent()); return made[-1]
 
     client = TestClient(create_app(factory))
-    assert "AgentSmithler" in client.get("/").text
+    assert "Agent Smith" in client.get("/").text
     s = client.get("/api/status").json()
     assert s["model"] == "sahte" and s["tool_gate"] is True and s["history"] == []
     r = client.post("/api/ask", json={"question": "2025 Aralık konut kredisi bakiyesi?"}).json()

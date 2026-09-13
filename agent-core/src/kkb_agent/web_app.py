@@ -208,7 +208,7 @@ class Session:
 
 
 def create_app(agent_factory: Callable[[], Any]) -> FastAPI:
-    app = FastAPI(title="AgentSmithler", docs_url=None, redoc_url=None)
+    app = FastAPI(title="Agent Smith", docs_url=None, redoc_url=None)
     session = Session(agent_factory)
     app.state.session = session
     # Yerel dosyalar (three.js vb.); CDN yok, demo çevrimdışı da çalışır (ADR-0047).
@@ -217,6 +217,11 @@ def create_app(agent_factory: Callable[[], Any]) -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
         return (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+
+    @app.get("/favicon.ico")
+    def favicon():
+        from fastapi.responses import FileResponse
+        return FileResponse(STATIC_DIR / "agent-smith.svg", media_type="image/svg+xml")
 
     @app.get("/api/status")
     def status() -> JSONResponse:

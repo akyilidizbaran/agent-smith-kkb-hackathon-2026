@@ -174,6 +174,9 @@ Kullanıcı: tıklanan yerler bir yere gitmiyor, yolculuk penceresi X ile kapanm
 - Profil: katalog zaten dinamikti (adaptör reload), profil kurulumda bir kezdi → `profile_factory` + `refresh_profile()`; ingest/terfi başarılı olunca sistem promptu ve araç açıklamaları yeni kataloğa göre. Test: iki terfi → iki farklı alan.
 - Kanıt yolculuğu sonraya (ADR-0047 deneme). Testler 328 → 330.
 
+### 2.22 Ad: Agent Smith (13 Eylül)
+Proje görünen adı "AgentSmithler" → "Agent Smith" (arayüz başlığı, FastAPI başlığı, README, tasarım dosyaları, kanvas başlığı). Repo ve dizin adları değişmedi. Sol üstte özgün SVG amblem (`static/agent-smith.svg`: ajan silueti, koyu gözlük, kulaklık; film karesi değil, telif/likeness riski yok) ve aynı dosya favicon (`/favicon.ico` 404'ü kapandı).
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |

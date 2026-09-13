@@ -1,4 +1,4 @@
-# AgentSmithler — KKB Hackathon 2026
+# Agent Smith — KKB Hackathon 2026
 
 **Lakehouse Agent Builder and Data Analytics**
 
