@@ -302,7 +302,7 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 - [x] **M10-T01** (`M10_DOSYA_GIRISI.md` §1): Desteklenen uzantı/MIME/format matrisini çıkar: CSV/TSV, XLSX, JSON kayıtları, HTML tablo, PDF ve görsel; legacy XLS desteğini mevcut kütüphane varmış gibi varsayma.
 - [x] **M10-T02**: UI dosya seçicisi ve sunucu upload yüzeyi ekle; oturuma bağlı güvenli dosya kimliği kullan, kullanıcının yerel yolu sunucu tarafından biliniyor sayılmasın.
 - [x] **M10-T03** (25 MB; OCR sayfa 5 / 90 s mevcut): Dosya boyutu, satır/sütun, sayfa, süre ve bellek sınırlarını ölçüp yapılandır; limit aşımını anlamlı seçenekle bildir.
-- [~] **M10-T04** (profilci var; confidence/gerekçe alanı açık): Profilciyle ayraç, tarih biçimi, sayı biçimi, kolon tipleri ve aday anahtarları çıkar; belirsizliğe confidence/gerekçe ekle.
+- [x] **M10-T04** (tarih biçimi tanınır ve çevrilir, belirsizse sorulur; ayraç kuralı; güven puanı yerine gerekçe notu): Profilciyle ayraç, tarih biçimi, sayı biçimi, kolon tipleri ve aday anahtarları çıkar; belirsizliğe confidence/gerekçe ekle.
 - [x] **M10-T05** (çoklu sayfa sorulur, .xls ret; birleşik başlık uyarısı profilcide): XLSX sheet seçimi, formüllü hücreler, birleşik başlıklar ve null değerler için mevcut parser kısıtlarını UI'ye taşı; destek dışı dosyayı sessiz düzleştirme.
 - [~] **M10-T06** (sohbette `sheet`/`pages`/`table_index`; arayüz düğmesi açık): Çok tablolı HTML/PDF veya çok sayfalı belgede tablo/sayfa kimliği ve başlığı korunarak kullanıcı/model seçimi sağla.
 - [x] **M10-T07** (mevcut OCR akışı: bütçe, kalite bayrağı, ayraç kuralları): PDF/görsel OCR sayfa bütçesi, zaman sınırı, düşük kalite, ondalık/binlik ayraç ve toplam tutarlılığı kontrollerini ürün akışında göster.

@@ -278,6 +278,16 @@ class WorkspaceComputeColumnTool(Tool):
         table = self.workspace.table
         assert table is not None
 
+        # Metin kolonuna göre ORDER BY zaman sırası vermez (ölçüldü: "31.01.2025" sözlük sırası →
+        # LAG yanlış). Tarih kolonu tarih tipinde değilse hesap reddedilir (M12/M10).
+        for m in re.finditer(r'ORDER\s+BY\s+("([^"]+)"|([A-Za-z_][\w]*))', params.expression, re.I):
+            col = m.group(2) or m.group(3)
+            if col in table.columns and not (pd.api.types.is_numeric_dtype(table[col]) or pd.api.types.is_datetime64_any_dtype(table[col])):
+                return ToolResult.fail(
+                    "INVALID_ARGS", f"'{col}' metin kolonu; ORDER BY metne göre sözlük sırası verir, zaman sırası değil.",
+                    hint="Tarih kolonu tarih tipinde olmalı; dosyayı yeniden yükle (tarih biçimi tanınır) ya da tarihi CAST/strptime ile çevir.",
+                    layer="data", candidates=[c for c in table.columns if pd.api.types.is_datetime64_any_dtype(table[c])])
+
         # Adaptörle aynı sınırlar: dış dosya/ağ erişimi kapalı, yapılandırma kilitli.
         con = hardened_connection()
         try:

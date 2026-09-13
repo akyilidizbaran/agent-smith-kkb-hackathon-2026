@@ -19,7 +19,14 @@ sessizce ilk sayfa alınıyordu; ingest okuyucusu yönlendirmeleri kütüphaneye
 5. Format matrisi ve sınırlar `docs/M10_DOSYA_GIRISI.md`'de; "her belgeyi doğru okuma" vaadi yok,
    ret ve soru da başarılı davranıştır.
 
+6. **Tarih kolonu gerçek tarihe çevrilir** (`convert_dates`, tablo yüklemede): canlı provada "31.01.2025"
+   metin kalınca `LAG … OVER (ORDER BY "Tarih")` sözlük sırasına gitti ve aylık değişimler yanlış çıktı;
+   sayılar tabloda olduğundan kanıt paneli yakalayamadı. Profilcinin %100 ayrıştırdığı biçim çevrilir;
+   gün/ay belirsizse metin kalır ve söylenir. `workspace_compute_column` metin kolonuna göre ORDER BY'ı
+   reddeder (zaman sırası değil, sözlük sırası).
+
 ## Sonuçlar
-- Testler 348 → 351 (yükleme güvenliği, XLSX çoklu sayfa, .xls, okuyucu yönlendirme).
+- Canlı prova: jüri CSV yüklendi → tablo → aylık değişim 65,5 / 102,75 / … doğru, kanıt 12/12 tam.
+- Testler 348 → 353 (yükleme güvenliği, XLSX çoklu sayfa, .xls, okuyucu yönlendirme).
 - Açık: sayfa/tablo seçimi için arayüz düğmesi (bugün sohbette parametreyle); profilci güven puanı (T04).
 - Bağımlılık: `openpyxl`, `python-multipart` kilit dosyasında.

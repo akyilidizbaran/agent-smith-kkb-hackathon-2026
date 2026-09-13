@@ -85,3 +85,30 @@ def test_ingest_okuyucusu_ozel_adrese_yonlendirmeyi_takip_etmez(monkeypatch) -> 
     with pytest.raises(ReadRefused, match="özel/loopback"):
         read_table_for_profiling("https://public.test/veri.csv", allowed_roots=[], session=t)
     assert t.calls == ["https://public.test/veri.csv"]
+
+
+def test_tarih_kolonu_gercek_tarihe_cevrilir_belirsizse_metin_kalir() -> None:
+    from kkb_agent.web.html import convert_numbers
+
+    raw = pd.DataFrame({"Tarih": ["31.01.2025", "28.02.2025", "31.03.2025"], "Bakiye": ["1.234,5", "1.300,0", "1.402,75"]})
+    out, notes = convert_numbers(raw)
+    assert pd.api.types.is_datetime64_any_dtype(out["Tarih"]) and out["Tarih"].iloc[0].month == 1
+    assert out["Bakiye"].tolist() == [1234.5, 1300.0, 1402.75] and any("tarih kolonu" in n for n in notes)
+    amb = pd.DataFrame({"Tarih": ["01/02/2025", "03/04/2025", "05/06/2025"], "v": ["1", "2", "3"]})
+    out2, notes2 = convert_numbers(amb)
+    assert not pd.api.types.is_datetime64_any_dtype(out2["Tarih"]) and any("belirsiz" in n for n in notes2)
+
+
+def test_compute_column_metin_kolonuna_gore_siralamayi_reddeder() -> None:
+    from kkb_agent.core.workspace import AnalysisWorkspace
+    from kkb_agent.tools.workspace import ComputeColumnParams, WorkspaceComputeColumnTool
+
+    ws = AnalysisWorkspace()
+    ws.set_table(pd.DataFrame({"Tarih": ["31.01.2025", "28.02.2025"], "Bakiye": [1234.5, 1300.0]}), description="t")
+    tool = WorkspaceComputeColumnTool(ws)
+    r = tool.run(ComputeColumnParams(expression='"Bakiye" - LAG("Bakiye") OVER (ORDER BY "Tarih")', column_name="degisim", purpose="test"))
+    assert not r.ok and r.error.error_code == "INVALID_ARGS" and "sözlük sırası" in r.error.message
+    ws2 = AnalysisWorkspace()
+    ws2.set_table(pd.DataFrame({"Tarih": pd.to_datetime(["2025-02-28", "2025-01-31"]), "Bakiye": [1300.0, 1234.5]}), description="t")
+    r2 = WorkspaceComputeColumnTool(ws2).run(ComputeColumnParams(expression='"Bakiye" - LAG("Bakiye") OVER (ORDER BY "Tarih")', column_name="degisim", purpose="test"))
+    assert r2.ok and ws2.table["degisim"].tolist()[1] == 65.5, "zaman sırasına göre fark: Şubat − Ocak (satır hizası korunur)"

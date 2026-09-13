@@ -199,13 +199,13 @@ Transkriptteki 18 zorunlu davranış (R01–R18, zaman damgalı) kabul vakaları
 Büşra'nın koşucusu + 18 vaka + 5 görülmemiş soru; aynı DB (M01) ve model, anlatı sıcaklığı 0, 3 tekrar; V3 worktree'den `V3_SRC` ile, ortak paket bu repodan. Ham pass^3 ekip 16/23, V3 17/23; üç vakada kontrol bayat (SQL'de "konut" sözcüğü arıyor, motor seri kimliğiyle sorguluyor) + U1 pivot → düzeltilince ekip 20/23, V3 18/23. Süre 8,6/10,5 s, tur 3,4/4,9, araç hatası 23/82, grounding 54/57 vs 51/57. Ekipte gerçek açık: L3-02 alt kalem toplamı; ortak açık L10-01 netleştirme. K01 değişmedi. Aktarım: ön-yükleme ve grounding alınmıştı; koşucu alındı; max_tokens=700 M15'te; alan notları aday; paralellik ertelendi.
 
 ### 2.30 M10 — dosya girişi (14 Eylül, ADR-0054)
-`POST /api/upload` (tür kabul listesi, .xls/.doc/.html açık ret, 25 MB, boş dosya), oturuma özel `uploads/<oturum>/<8hex>_<güvenli-ad>`, sıfırlamada silinir; arayüzde 📎 + sürükle-bırak, soruya `Dosya: <yol>` eklenir (niyet kuralı korunur), balonda yalnız ad. openpyxl kuruldu (XLSX daha önce okunamıyordu!), çok sayfada `sheet` sorulur, `.xls` reddedilir; ingest okuyucusu HTTP'de `guarded_get`. Format matrisi `docs/M10_DOSYA_GIRISI.md`. Testler 348 → 351.
+`POST /api/upload` (tür kabul listesi, .xls/.doc/.html açık ret, 25 MB, boş dosya), oturuma özel `uploads/<oturum>/<8hex>_<güvenli-ad>`, sıfırlamada silinir; arayüzde 📎 + sürükle-bırak, soruya `Dosya: <yol>` eklenir (niyet kuralı korunur), balonda yalnız ad. openpyxl kuruldu (XLSX daha önce okunamıyordu!), çok sayfada `sheet` sorulur, `.xls` reddedilir; ingest okuyucusu HTTP'de `guarded_get`. Format matrisi `docs/M10_DOSYA_GIRISI.md`. **Canlı prova hatası:** tarih metin kalınca ORDER BY sözlük sırası → LAG yanlış (kanıt paneli yakalayamadı, sayılar tablodaydı) → `convert_dates` (yüklemede tarih tipine çevir, belirsizse sor) + compute_column metin ORDER BY reddi; ikinci prova doğru, kanıt 12/12. Testler 348 → 353.
 
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 351 |
+| Agent birim testi | 353 |
 | Lakehouse testi (r3 + genişlik dalı) | 1.079 |
 | ADR | 54 |
 | Golden vakası | 21: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3, G18a/b 2/2; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 11 senaryo 11/11 |

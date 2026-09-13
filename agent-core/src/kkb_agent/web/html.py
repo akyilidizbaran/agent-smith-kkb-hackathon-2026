@@ -201,6 +201,35 @@ def convert_numbers(frame: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
                          f"nokta binlik sayıldı")
             continue
         notes.append(f"'{name}' sayı biçimi belirsiz (ör. {sample!r}: binlik mi ondalık mı?); metin bırakıldı")
+    out, date_notes = convert_dates(out)
+    return out, notes + date_notes
+
+
+def convert_dates(frame: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """Tarih biçimi tanınan metin kolonlarını gerçek tarihe çevirir (M10-T04, ADR-0054).
+
+    Ölçüldü (jüri CSV provası): "31.01.2025" metin kalınca `LAG(...) OVER (ORDER BY "Tarih")` sözlük
+    sırasına göre sıralandı (28.02 < 30.04 < 31.01 …) ve aylık değişimler yanlış çıktı; sayılar
+    tabloda olduğu için kanıt paneli de yakalayamadı. Kural: profilci bir biçimi %100 ayrıştırıyorsa
+    çevir; gün/ay belirsizse (tüm günler ≤ 12, iki biçim de geçiyor) metin kalır ve söylenir.
+    """
+    from ..builder.profile import profile_table
+
+    out = frame.copy()
+    notes: list[str] = []
+    for col in profile_table(frame).columns:
+        if not col.date_formats or col.non_empty != col.rows or pd.api.types.is_datetime64_any_dtype(frame[col.name]):
+            continue
+        if col.date_ambiguous:
+            notes.append(f"'{col.name}' tarih ama gün/ay ayrımı belirsiz ({', '.join(col.date_formats)}); metin bırakıldı, kullanıcıya sorulmalı")
+            continue
+        fmt = col.date_formats[0]
+        try:
+            parsed = pd.to_datetime(frame[col.name].map(lambda t: "" if t is None else str(t).strip()), format=fmt, errors="raise")
+        except (ValueError, TypeError):
+            continue
+        out[col.name] = parsed
+        notes.append(f"'{col.name}' tarih kolonu ({fmt})")
     return out, notes
 
 
