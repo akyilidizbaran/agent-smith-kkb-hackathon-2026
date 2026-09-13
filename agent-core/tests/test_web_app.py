@@ -84,3 +84,15 @@ def test_statik_dosyalar_ve_three_js_yerelden_servis_edilir() -> None:
     r = client.get("/static/vendor/three.module.min.js")
     assert r.status_code == 200 and "three.js" in r.text[:200].lower() or "three" in r.text[:300]
     assert "Yolculuğu izle" in client.get("/").text
+
+
+def test_cevaplar_ucu_sayfa_yenilemede_sohbeti_geri_getirir() -> None:
+    client = TestClient(create_app(FakeAgent))
+    assert client.get("/api/answers").json() == []
+    client.post("/api/ask", json={"question": "2025 konut"})
+    lst = client.get("/api/answers").json()
+    assert len(lst) == 1 and lst[0]["index"] == 0 and lst[0]["question"] == "2025 konut" and lst[0]["table"]["columns"] == ["donem", "bakiye"]
+    assert client.get("/api/answers/0").json()["index"] == 0
+    assert client.get("/api/answers/5").status_code == 404
+    client.post("/api/reset")
+    assert client.get("/api/answers").json() == []

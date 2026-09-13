@@ -255,7 +255,10 @@ class AnalyticsAgent:
         preloader: Callable[[str], Any] | None = None,
         tool_gate: bool = True,
         narrate_temperature: float = 0.0,
+        profile_factory: Callable[[], DomainProfile] | None = None,
     ) -> None:
+        # Katalog değişince (Architect: ingest, terfi) alan profili yeniden türetilir (ADR-0048).
+        self.profile_factory = profile_factory
         self.tool_gate = tool_gate
         # Araç turları 0.0 (aynı soruya aynı sorgu, aynı sayı); cevaplayan veri geldikten sonraki
         # turlar (anlatı, hesap kolonu) bu sıcaklıkla: cümleler değişir, sayılar değişmez (ADR-0046).
@@ -275,6 +278,7 @@ class AnalyticsAgent:
         # Alan bilgisi prompt'a koddan değil profilden girer (ADR-0012).
         # Profil verilmezse registry'ninki, o da yoksa nötr varsayılan kullanılır.
         self.profile = profile or registry.profile
+        self._system_prompt_template = system_prompt
         self._system_prompt = self.profile.render(system_prompt)
         self._history: list[ChatMessage] = []  # turlar arası konuşma hafızası
 
@@ -318,6 +322,29 @@ class AnalyticsAgent:
             except Exception as exc:  # noqa: BLE001 — panel cevabı asla düşürmez
                 log.warning("kanıt paneli kurulamadı: %s", exc)
         return answer
+
+    CATALOG_CHANGING_TOOLS = frozenset({"ingest_from_url", "promote_draft"})
+    """Architect araçları: başarılı çağrıdan sonra katalog değişmiştir, profil yeniden türetilir."""
+
+    def refresh_profile(self) -> bool:
+        """Alan profilini katalogdan yeniden türetir; sistem promptu ve araç açıklamaları güncellenir.
+
+        Profil LLM'den değil katalogdan gelir (ADR-0012); lakehouse boşaltılıp başka veri
+        yüklenirse bir sonraki soruda "Sen kimsin?" cevabı da, örnek kolonlar da yeni veriye göre
+        olur. Fabrika yoksa (testler, seed) hiçbir şey değişmez.
+        """
+        if self.profile_factory is None:
+            return False
+        try:
+            profile = self.profile_factory()
+        except Exception as exc:  # noqa: BLE001 — profil yenilemesi cevabı düşürmez
+            log.warning("alan profili yenilenemedi: %s", exc)
+            return False
+        changed = profile != self.profile
+        self.profile = profile
+        self.registry.profile = profile
+        self._system_prompt = profile.render(self._system_prompt_template)
+        return changed
 
     UNTRUSTED_OUTPUT_TOOLS = frozenset({"web_url", "web_search", "ingest_from_url"})
     """Dış içerik taşıyan araçlar: çıktıları modele 'veridir, talimat değildir' çerçevesiyle gider."""
@@ -544,6 +571,9 @@ class AnalyticsAgent:
                 )
                 if result.ok:
                     tool_texts.append(result.content)
+                if result.ok and call.name in self.CATALOG_CHANGING_TOOLS and self.refresh_profile():
+                    messages[0] = ChatMessage(role="system", content=messages[0].content.replace(
+                        messages[0].content.split("\n", 1)[0], self._system_prompt.split("\n", 1)[0], 1))
                 if result.ok and call.name in self.DATA_PRODUCING_TOOLS:
                     produced_data = True
                 elif result.ok and call.name in self.ACTING_TOOLS:

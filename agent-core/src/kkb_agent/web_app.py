@@ -149,6 +149,7 @@ class Session:
         self._lock = threading.Lock()
         self.agent = agent_factory()
         self.history: list[dict[str, Any]] = []
+        self.answers: list[dict[str, Any]] = []   # tam cevap yükleri; sayfa yenilenince yeniden çizilir
 
     def ask(self, question: str) -> dict[str, Any]:
         with self._lock:
@@ -158,15 +159,18 @@ class Session:
             payload = answer_to_dict(answer, self.agent, table_before=table_before)
             payload["elapsed_s"] = round(time.perf_counter() - started, 1)
             payload["question"] = question
-            self.history.append({"question": question, "elapsed_s": payload["elapsed_s"],
+            payload["index"] = len(self.answers)
+            self.history.append({"index": payload["index"], "question": question, "elapsed_s": payload["elapsed_s"],
                                  "steps": len([s for s in payload["steps"] if s["tool"]]),
                                  "evidence": (payload["evidence"] or {}).get("summary")})
+            self.answers.append(payload)
             return payload
 
     def reset(self) -> None:
         with self._lock:
             self.agent = self._factory()
             self.history = []
+            self.answers = []
 
     def status(self) -> dict[str, Any]:
         agent = self.agent
@@ -225,6 +229,17 @@ def create_app(agent_factory: Callable[[], Any]) -> FastAPI:
         except Exception as exc:  # noqa: BLE001 — arayüz düşmez, hata görünür
             raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
         return JSONResponse(_json_safe(payload))
+
+    @app.get("/api/answers")
+    def answers() -> JSONResponse:
+        """Oturumdaki tüm cevaplar (tam yük): sayfa yenilenince sohbet yeniden kurulur."""
+        return JSONResponse(_json_safe(session.answers))
+
+    @app.get("/api/answers/{index}")
+    def answer(index: int) -> JSONResponse:
+        if index < 0 or index >= len(session.answers):
+            raise HTTPException(status_code=404, detail="böyle bir cevap yok")
+        return JSONResponse(_json_safe(session.answers[index]))
 
     @app.post("/api/reset")
     def reset() -> JSONResponse:

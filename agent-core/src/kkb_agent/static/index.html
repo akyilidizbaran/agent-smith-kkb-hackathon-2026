@@ -74,6 +74,11 @@
   /* Kanıt yolculuğu (ADR-0047) */
   .jbtn { height: 26px; padding: 0 10px; border: 1px solid var(--teal-line); background: var(--teal-bg); color: var(--teal-ink); border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer; }
   .jbtn[disabled] { opacity: .45; cursor: default; }
+  .modal[hidden] { display: none; }
+  .stat, .pill, .session-item, .chart img { cursor: pointer; }
+  .stat:hover, .pill:hover { border-color: var(--teal); }
+  .kv { display: grid; grid-template-columns: 160px minmax(0,1fr); gap: 6px 14px; font-size: 13px; padding: 16px; } .kv .k { color: var(--muted); } .kv .v { font-family: "IBM Plex Mono", monospace; word-break: break-word; }
+  .lightbox img { display: block; max-width: 100%; max-height: 78vh; margin: 0 auto; }
   .modal { position: fixed; inset: 0; background: rgba(31,29,26,.55); display: flex; align-items: center; justify-content: center; z-index: 50; }
   .modal .panel { width: min(1040px, 94vw); background: var(--paper); border-radius: 12px; border: 1px solid var(--line); box-shadow: 0 20px 60px rgba(0,0,0,.25); display: flex; flex-direction: column; overflow: hidden; }
   .modal .mhead { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--card); }
@@ -177,20 +182,58 @@ async function loadStatus() {
     $("st-line").textContent = `retrieval: ${s.retrieval_mode || "–"} · araç: ${s.tools.length} · kapı: ${s.tool_gate ? "açık" : "kapalı"}`;
     $("pill-model").textContent = `Veri havuzu bağlı · ${s.model || "model"}`;
     $("pill-budget").textContent = s.search_budget_remaining === null || s.search_budget_remaining === undefined ? "web_search kapalı" : `Arama bütçesi ${s.search_budget_remaining}`;
-    renderSession(s.history);
+    lastStatus = s;
   } catch (e) { $("pill-model").textContent = "durum alınamadı"; }
 }
+let lastStatus = null;
+function showModal(title, html, extraClass) {   // tek pencere kabuğu: X, arka plan tıklaması ve Esc kapatır
+  let m = $("gmodal");
+  if (!m) {
+    m = document.createElement("div"); m.className = "modal"; m.id = "gmodal";
+    m.innerHTML = `<div class="panel"><div class="mhead"><span class="t" id="gm-title"></span><button class="close" title="Kapat">×</button></div><div id="gm-body"></div></div>`;
+    document.body.appendChild(m);
+    m.querySelector(".close").addEventListener("click", () => { m.hidden = true; });
+    m.addEventListener("click", (e) => { if (e.target === m) m.hidden = true; });
+  }
+  m.querySelector(".panel").className = "panel " + (extraClass || "");
+  $("gm-title").textContent = title; $("gm-body").innerHTML = html; m.hidden = false;
+}
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") { const g = $("gmodal"); if (g) g.hidden = true; closeJourney(); } });
+async function openStatus() {       // veri havuzu kartları ve üst rozetler → sistem durumu (/api/status)
+  const r = await fetch("/api/status"); const s = await r.json(); lastStatus = s;
+  const rows = [["Model", s.model], ["Veri havuzu", `${fmtInt(s.catalog_series)} katalog serisi · ${fmtInt(s.loaded_series)} yüklü · ${fmtInt(s.silver_rows)} Silver gözlemi · ${fmtInt(s.gold_tables)} Gold tablosu`],
+    ["Retrieval kademesi", s.retrieval_mode], ["Araç kapısı", s.tool_gate ? "açık (soruya göre alt küme)" : "kapalı"], ["Araçlar (" + s.tools.length + ")", s.tools.join(", ")],
+    ["Arama bütçesi", s.search_budget_remaining === null ? "web_search kapalı" : `${s.search_budget_remaining} arama kaldı (süreç başına)`], ["Bu oturum", `${s.history.length} soru`],
+    ["Uç noktalar", "GET /api/status · POST /api/ask · GET /api/answers · GET /api/answers/{i} · POST /api/reset · GET /static/…"]];
+  showModal("Sistem durumu", `<div class="kv">${rows.map(([k, v]) => `<div class="k">${esc(k)}</div><div class="v">${esc(v ?? "–")}</div>`).join("")}</div>`);
+}
+["st-catalog", "st-loaded", "st-silver", "st-gold", "pill-model", "pill-budget"].forEach((id) => { const el = $(id); (el.closest(".stat") || el).addEventListener("click", openStatus); });
 
-let history = [];
-function renderSession(h) {
-  history = h || history;
-  $("session").innerHTML = history.map((x, i) => `<div class="session-item ${i === history.length - 1 ? "active" : ""}">${esc(x.question).slice(0, 90)}</div>`).join("") || `<div class="status">boş</div>`;
+let answers = [];          // bu oturumun tam cevap yükleri (sunucudaki /api/answers ile aynı)
+let activeIndex = -1;
+function renderSession() {
+  $("session").innerHTML = answers.map((p) => `<div class="session-item ${p.index === activeIndex ? "active" : ""}" data-i="${p.index}" title="${esc(p.elapsed_s)} s · ${(p.steps || []).filter((s) => s.tool).length} adım">${esc(p.question).slice(0, 90)}</div>`).join("") || `<div class="status">boş</div>`;
+  $("session").querySelectorAll(".session-item").forEach((el) => el.addEventListener("click", () => focusAnswer(Number(el.dataset.i))));
+}
+function focusAnswer(i) {           // sol listeden tıklanan cevap: kaydır, izi ve kanıtı o cevaba çevir
+  const p = answers.find((a) => a.index === i); if (!p) return;
+  activeIndex = i; renderSession(); renderTrace(p); renderEvidence(p);
+  const el = $("ans-" + i); if (el) el.scrollIntoView({behavior: "smooth", block: "start"});
+}
+async function loadAnswers() {      // sayfa yenilenince sohbet sunucudan geri gelir
+  try {
+    const r = await fetch("/api/answers"); const list = await r.json();
+    answers = list; $("thread").innerHTML = "";
+    list.forEach(renderAnswer);
+    if (list.length) { activeIndex = list[list.length - 1].index; renderTrace(list[list.length - 1]); renderEvidence(list[list.length - 1]); }
+    renderSession();
+  } catch (e) { /* sunucu yoksa sessiz */ }
 }
 
 function renderAnswer(p) {
   const thread = $("thread");
-  const q = document.createElement("div"); q.className = "q"; q.textContent = p.question; thread.appendChild(q);
-  const a = document.createElement("div"); a.className = "a";
+  const q = document.createElement("div"); q.className = "q"; q.id = "ans-" + p.index; q.textContent = p.question; thread.appendChild(q);
+  const a = document.createElement("div"); a.className = "a"; a.dataset.i = p.index;
   let html = `<div class="text">${mdToHtml(p.text)}</div>`;
   const hasTable = p.table && p.table.rows && p.table.rows.length;
   const hasChart = p.charts && p.charts.length && p.charts.some((c) => c.png);
@@ -206,6 +249,8 @@ function renderAnswer(p) {
     html += `</div>`;
   }
   a.innerHTML = html; thread.appendChild(a); thread.scrollTop = thread.scrollHeight;
+  a.querySelectorAll(".chart img").forEach((img) => img.addEventListener("click", () => showModal(p.table_title || "Grafik", `<div class="lightbox" style="padding:12px"><img alt="grafik" src="${img.src}"></div>`)));
+  a.addEventListener("click", () => { if (activeIndex !== p.index) { activeIndex = p.index; renderSession(); renderTrace(p); renderEvidence(p); } });
 }
 
 function renderTrace(p) {
@@ -251,8 +296,7 @@ async function ask() {
     const r = await fetch("/api/ask", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({question: q})});
     busy.remove();
     if (!r.ok) { const e = await r.json().catch(() => ({detail: r.statusText})); const d = document.createElement("div"); d.className = "err"; d.textContent = "Hata: " + (e.detail || r.status); $("thread").appendChild(d); return; }
-    const p = await r.json(); renderAnswer(p); renderTrace(p); renderEvidence(p);
-    history.push({question: q}); renderSession(history);
+    const p = await r.json(); answers.push(p); activeIndex = p.index; renderAnswer(p); renderTrace(p); renderEvidence(p); renderSession();
     if (p.search_budget_remaining !== null && p.search_budget_remaining !== undefined) $("pill-budget").textContent = `Arama bütçesi ${p.search_budget_remaining}`;
   } catch (e) { busy.remove(); const d = document.createElement("div"); d.className = "err"; d.textContent = "Bağlantı hatası: " + e; $("thread").appendChild(d); }
   finally { $("btn-ask").disabled = false; $("q").focus(); }
@@ -380,8 +424,8 @@ function makeThree(THREE, stage) {
 $("btn-journey").addEventListener("click", () => openJourney(null));
 $("btn-ask").addEventListener("click", ask);
 $("q").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.keyCode === 13) && !e.shiftKey) { e.preventDefault(); ask(); } });
-$("btn-reset").addEventListener("click", async () => { await fetch("/api/reset", {method: "POST"}); $("thread").innerHTML = ""; $("ev-body").innerHTML = ""; $("ev-badge").className = "badge none"; $("ev-badge").textContent = "—"; $("ev-summary").textContent = "Cevap gelince her sayı hücreye, sorguya, gözleme ve kaynağa bağlanır."; $("trace").innerHTML = `<span class="label" style="margin-right:4px">Araç izi</span><span class="status">henüz soru yok</span>`; history = []; loadStatus(); });
-loadStatus();
+$("btn-reset").addEventListener("click", async () => { await fetch("/api/reset", {method: "POST"}); $("thread").innerHTML = ""; $("ev-body").innerHTML = ""; $("ev-badge").className = "badge none"; $("ev-badge").textContent = "—"; $("ev-summary").textContent = "Cevap gelince her sayı hücreye, sorguya, gözleme ve kaynağa bağlanır."; $("trace").innerHTML = `<span class="label" style="margin-right:4px">Araç izi</span><span class="status">henüz soru yok</span>`; answers = []; activeIndex = -1; renderSession(); lastEvidence = null; $("btn-journey").disabled = true; loadStatus(); });
+loadStatus(); loadAnswers();
 </script>
 </body>
 </html>

@@ -403,3 +403,28 @@ def test_ayni_soru_tekrarinda_kopyalama_yasagi_notu_gider() -> None:
     assert asked("2025 Toplam"), "noktalama/büyük-küçük farkı tekrarı gizlememeli"
     assert not asked("2024 toplam")
     assert agent._history[2].content == "2025 Toplam", "tarihçeye not değil, ham soru yazılır"
+
+
+def test_architect_katalogu_degistirince_profil_yeniden_turetilir() -> None:
+    from kkb_agent.domain import DomainProfile
+
+    class _Promote(_CountingTool):
+        name = "promote_draft"
+        description = "terfi"
+
+    profiles = [DomainProfile(domain="bddk kaynaklı veriler"), DomainProfile(domain="hastane kaynaklı veriler")]
+    made: list[int] = []
+
+    def factory() -> DomainProfile:
+        made.append(1); return profiles[min(len(made), 2) - 1]
+
+    promote = LLMResponse(content="", tool_calls=[ToolCall(id="p1", name="promote_draft", arguments={"year": 2025})])
+    llm = _ScriptedLLM([promote, LLMResponse(content="Taslak terfi etti."), promote, LLMResponse(content="İkinci taslak da terfi etti.")])
+    registry = ToolRegistry(); registry.register(_Promote())
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=6, profile_factory=factory)
+    assert "yapılandırılmış veri" in agent._system_prompt          # başlangıç: jenerik profil
+    agent.ask("bu taslağı kataloğa al")
+    assert agent.profile.domain == "bddk kaynaklı veriler" and "bddk kaynaklı veriler" in agent._system_prompt
+    assert registry.profile is agent.profile, "araç açıklamaları da yeni profili görür"
+    agent.ask("bir daha terfi et")
+    assert agent.profile.domain == "hastane kaynaklı veriler", "her katalog değişiminde yeniden türetilir"

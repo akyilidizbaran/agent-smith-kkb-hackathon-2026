@@ -104,11 +104,12 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
 
     # Alan profili katalogdan deterministik olarak türetilir; üslup tercihleri
     # (.env'deki DOMAIN_DESCRIPTION / DOMAIN_AUDIENCE) varsa onlar geçerlidir.
-    profile = DomainProfile.from_catalog(
-        lakehouse.list_datasets(),
-        domain=settings.domain_description,
-        audience=settings.domain_audience,
-    )
+    def profile_factory() -> DomainProfile:
+        return DomainProfile.from_catalog(
+            lakehouse.list_datasets(), domain=settings.domain_description, audience=settings.domain_audience,
+        )
+
+    profile = profile_factory()
 
     # Retrieval kademesi (ADR-0043): politika ayarlardan; hybrid için MIA embedder + disk önbelleği.
     policy = RetrievalPolicy(mode=settings.retrieval_mode, small_max=settings.retrieval_small_max,
@@ -208,6 +209,7 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
         llm, registry, workspace=workspace, max_steps=max_steps, profile=profile,
         system_prompt=system_prompt, evidence=EvidenceBuilder(lakehouse), preloader=preloader,
         tool_gate=settings.tool_gate, narrate_temperature=settings.narrate_temperature,
+        profile_factory=profile_factory,
     )
 
 
