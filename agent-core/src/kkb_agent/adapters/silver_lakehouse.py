@@ -19,6 +19,8 @@ modele gösterir.
 
 from __future__ import annotations
 
+import hashlib
+
 import re
 import time
 from datetime import date, datetime
@@ -776,6 +778,26 @@ class SilverLakehouse:
                 return str(candidate)
         return raw_path
 
+    def _raw_digest_ok(self, artifact_sha256: str, raw_path: str | None) -> bool | None:
+        """RAW baytlarının sha256'sı kayıttaki artifact özetiyle aynı mı (A23). Dosya yoksa None (ayrı sayılır).
+        Önbellek (yol, boyut, mtime) anahtarlı: aynı cevapta yüzlerce gözlem aynı birkaç dosyaya iner."""
+        if not raw_path:
+            return None
+        p = Path(raw_path)
+        try:
+            st = p.stat()
+        except OSError:
+            return None
+        cache: dict[tuple[str, int, int], str] = self.__dict__.setdefault("_digest_cache", {})
+        key = (str(p), st.st_size, st.st_mtime_ns)
+        if key not in cache:
+            h = hashlib.sha256()
+            with p.open("rb") as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b""):
+                    h.update(chunk)
+            cache[key] = h.hexdigest()
+        return cache[key] == artifact_sha256
+
     def _bronze_path(self, artifact_sha256: str) -> str | None:
         """Bronze parquet: `<data>/bronze/**/artifact_sha256=<sha>.parquet`. Yoksa None, uydurulmaz."""
         root = self.db_path.parent / "bronze"
@@ -800,10 +822,11 @@ class SilverLakehouse:
             raise LakehouseError(f"meta.artifact okunamadı: {exc}") from exc
         out: dict[str, dict[str, Any]] = {}
         for sha, source_id, dataset_id, locator, status, fetched, raw_path in rows:
+            resolved = self._resolve_raw(raw_path)
             out[sha] = {
                 "source_id": source_id, "dataset_id": dataset_id, "locator": locator,
-                "http_status": status, "fetched_at": _parse_ts(fetched), "raw_path": self._resolve_raw(raw_path),
-                "bronze_path": self._bronze_path(sha),
+                "http_status": status, "fetched_at": _parse_ts(fetched), "raw_path": resolved,
+                "bronze_path": self._bronze_path(sha), "raw_digest_ok": self._raw_digest_ok(sha, resolved),
             }
         for sha in artifact_sha256s:
             out.setdefault(sha, {"locator": None, "fetched_at": None, "http_status": None,
@@ -867,7 +890,8 @@ class SilverLakehouse:
                 value=None if value is None else float(value), quality_flag=str(flag),
                 artifact_sha256=str(sha), vintage_id=vintage, run_id=run_id,
                 fetched_at=_parse_ts(fetched), locator=locator, http_status=status,
-                raw_path=self._resolve_raw(raw_path), bronze_path=self._bronze_path(str(sha)), relation=relation,
+                raw_path=(resolved := self._resolve_raw(raw_path)), bronze_path=self._bronze_path(str(sha)), relation=relation,
+                raw_digest_ok=self._raw_digest_ok(str(sha), resolved),
             ))
         return out
 

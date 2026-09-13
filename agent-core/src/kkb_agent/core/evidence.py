@@ -397,6 +397,10 @@ class EvidenceBuilder:
             incomplete = [o for o in panel.observations if not o.complete]
             if incomplete:
                 panel.gaps.append(f"{len(incomplete)} gözlemin artifact/locator/fetched_at izi eksik")
+            altered = sorted({o.artifact_sha256[:12] for o in panel.observations if o.raw_digest_ok is False})
+            if altered:
+                panel.gaps.append(f"{len(altered)} RAW dosyasının baytları kayıtlı özetle uyuşmuyor (dosya sonradan değişmiş): "
+                                  + ", ".join(altered[:4]))
         return panel
 
 

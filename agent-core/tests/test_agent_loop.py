@@ -459,3 +459,35 @@ def test_cok_kisa_donemsiz_soruda_netlestirme_notu() -> None:
     assert vague_candidates("Konut kredisi bakiyesi aylık", search) == []
     assert vague_candidates("Konut kredisi bakiyesi göster", search) == [], "3 içerik sözcüğü: yeterince belirli"
     assert vague_candidates("Kredi göster", lambda q, k: specs[:2]) == [], "iki aday: soru sormaya değmez"
+
+
+def test_a27_model_kesintisi_kontrollu_cevap_sayi_yok_istek_hatasi_yutulmaz() -> None:
+    """A27: bağlantı/5xx kesintisi açıklamalı cevap olur (sahte başarı, uydurma sayı yok); 400 isteği hatası yukarı çıkar."""
+    import httpx
+    from openai import APIConnectionError, BadRequestError, InternalServerError
+
+    req = httpx.Request("POST", "http://mia.local/v1/chat/completions")
+
+    class _Down:
+        model = "down"
+
+        def __init__(self, exc):
+            self.exc = exc
+
+        def supports_native_tools(self) -> bool:
+            return True
+
+        def chat(self, messages, *, tools=None, temperature=0.0, max_tokens=None):
+            raise self.exc
+
+    for exc in (APIConnectionError(request=req),
+                InternalServerError("bakımda", response=httpx.Response(503, request=req), body=None)):
+        agent, tool = _agent(_Down(exc))
+        ans = agent.ask("2025 konut kredisi ne kadar?")
+        assert "ulaşılamıyor" in ans.text and "Sayı üretmedim" in ans.text
+        assert ans.steps[-1].error_code == "LLM_UNAVAILABLE" and tool.calls == 0
+        assert not any(ch.isdigit() for ch in ans.text.split("(")[0]), "kesinti cevabında sayı yok"
+
+    agent, _ = _agent(_Down(BadRequestError("şema", response=httpx.Response(400, request=req), body=None)))
+    with pytest.raises(BadRequestError):
+        agent.ask("x")

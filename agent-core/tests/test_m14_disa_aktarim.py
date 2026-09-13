@@ -83,3 +83,31 @@ def test_yardimcilar_tarih_ve_sayi_bicimi() -> None:
     assert xb["v"].iloc[0] == 1234.5 and pd.Timestamp(xb["t"].iloc[0]).year == 2025
     html = report_html({"index": 3, "question": "q\n\nDosya: /x/y.csv", "text": "- a\n- b", "evidence": {"states": {"sayılar": True}, "gaps": []}}, None, model="m", version="abc")
     assert "/x/y.csv" not in html and "<li>a</li>" in html and "abc" in html
+
+
+def test_a26_eski_cevabin_tablosu_ve_a07_grafik_png_indirilir(monkeypatch) -> None:
+    """A26: ikinci cevap tabloyu değiştirse de 0. cevabın CSV'si kendi sürümüdür. A07: çizilen grafik PNG olarak iner."""
+    import base64
+    import kkb_agent.web_app as w
+
+    png = b"\x89PNG\r\n\x1a\n" + b"1" * 16
+    monkeypatch.setattr(w, "_png_base64", lambda path: base64.b64encode(png).decode() if path else None)
+
+    class TwoAgent(BigAgent):
+        def ask(self, question: str) -> AgentAnswer:
+            ans = super().ask(question)
+            if len(self.asked) == 2:
+                self.workspace.set_table(pd.DataFrame({"donem": ["2025-01-31"], "bakiye": [7.0]}), description="kısa")
+            else:
+                ans.artifacts = [{"kind": "line", "title": "Bakiye", "png_path": "/tmp/g.png", "spec_path": "g.json", "lint_ok": True}]
+            return ans
+
+    client = TestClient(create_app(TwoAgent))
+    client.post("/api/ask", json={"question": "uzun"})
+    client.post("/api/ask", json={"question": "kısa"})
+    first = pd.read_csv(io.BytesIO(client.get("/api/answers/0/table.csv").content), sep=";", decimal=",", encoding="utf-8-sig")
+    second = pd.read_csv(io.BytesIO(client.get("/api/answers/1/table.csv").content), sep=";", decimal=",", encoding="utf-8-sig")
+    assert len(first) == 300 and len(second) == 1
+    g = client.get("/api/answers/0/chart/0.png")
+    assert g.status_code == 200 and g.content == png and g.headers["content-type"] == "image/png"
+    assert client.get("/api/answers/1/chart/0.png").status_code == 404

@@ -225,7 +225,11 @@ Kullanıcı uyurken tüm milestone'ları sırayla kapatma görevi. Kod dalı yal
 - **Uydurulmuş işlem:** finans dışı birleştirme turunda model hiç araç çağırmadan "yüklendi ve birleştirildi, 24 il" yazdı; önceki turdan tablo olduğu için veri zorunluluğu susmuştu. Yeni guard: bu turda başarılı araç yokken işlem fiili ("yüklendi, birleştirdim, hesaplandı…") ya da soruda `Dosya:`/URL varsa cevap bir kez geri gönderilir.
 - **Belirsiz kısa soru netleştirilmedi (L10):** ≤2 içerik sözcüğü, dönem/sayı yok, aktif tablo yok ve katalogda ≥3 farklı adlı eşleşme varsa kullanıcı mesajına aday adlarıyla "tahmin etme, tek soruda sor" notu eklenir (alan bilgisi yok, ad sayar).
 - CI agent-core işi `PIL`/`lxml` eksikliğiyle düşüyordu → `pillow`, `lxml` bağımlılığa ve kilide eklendi. Eski demo verisi `data_prev_2021demo/` olarak saklandı, `.gitignore`'da.
-- Testler ajan 377 → 386.
+- **A23 RAW özeti:** gerçek veride RAW dosyasının sha256'sı artifact kimliğiyle aynı (6/6 örnek). Adaptör artık dosya baytlarını kayıtla karşılaştırıyor; değişmiş dosya zinciri yeşil göstermiyor.
+- Kabul matrisi A01–A33 test eşlemesi çıkarıldı (14 tam, 19 kısmi, 0 yok); kısmi kalanlardan A23 (özet), A26 (eski cevap tablosu), A07 (PNG indirme), A27 (model kesintisi) testle kapatıldı.
+- Arayüz uçtan uca betiği `scripts/ui_e2e_m16.py` (Playwright, önbellekteki Chromium, sunucu açıkken). İlk koşu 6/7: tek başarısızlık betiğin yanlış beklentisiydi (fikstürde İstanbul yok, ajan doğru "Ankara" dedi) → beklenen değer fikstürden hesaplanıyor.
+- CI: agent-core işi bağımlılık düzeltmesiyle yeşil; art arda push'ta eski koşu iptal (`concurrency`). README, AGENT.md, ARCHITECTURE durum/doğrulama/sınırlar bölümleri 14 Eylül gerçeğine göre güncellendi (M17-T04).
+- Testler ajan 377 → 387.
 
 ## 3. Bugünkü sayılar
 

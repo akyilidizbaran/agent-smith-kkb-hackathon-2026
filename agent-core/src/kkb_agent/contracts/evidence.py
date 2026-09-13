@@ -36,6 +36,8 @@ class ObservationEvidence:
     raw_path: str | None       # RAW: içerik adresli ham dosya
     bronze_path: str | None    # Bronze parquet; diskte bulunamadıysa None
     relation: str = "silver.fact_observation"
+    # A23 (M16): RAW içerik adreslidir; dosya baytlarının sha256'sı kayıttaki özetle aynı mı? None = denetlenmedi/dosya yok.
+    raw_digest_ok: bool | None = None
 
     @property
     def complete(self) -> bool:
@@ -46,6 +48,8 @@ class ObservationEvidence:
     def file_present(self) -> bool:
         """RAW ya da Bronze dosyası diskte var mı (M13-T09): metadata kaydı ile fiziksel kanıt ayrı."""
         from pathlib import Path
+        if self.raw_digest_ok is False:
+            return False  # dosya var ama değişmiş: fiziksel kanıt sayılmaz (sahte yeşil yok)
         if self.bronze_path:
             return True  # adaptör yalnız diskte bulduysa doldurur
         return bool(self.raw_path) and Path(self.raw_path).exists()

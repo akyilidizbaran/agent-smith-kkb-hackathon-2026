@@ -7,6 +7,8 @@ yalnız diskten gelir.
 
 from __future__ import annotations
 
+import hashlib
+
 import sys
 from datetime import date
 from pathlib import Path
@@ -266,3 +268,26 @@ def test_raw_yolu_veri_koku_tasininca_yeni_kokte_bulunur(tmp_path) -> None:
     assert lake._resolve_raw(old) == str(moved)
     assert lake._resolve_raw(str(tmp_path / "eski_kok" / "raw" / "yok.json")).endswith("yok.json")
     assert lake._resolve_raw(None) is None
+
+
+def test_a23_raw_baytlari_kayitli_ozetle_uyusmazsa_zincir_tam_degil(lake, tmp_path) -> None:
+    """A23: RAW içerik adreslidir. Dosya var ama baytları değişmişse Bronze bulunsa da fiziksel kanıt sayılmaz."""
+    ws = AnalysisWorkspace()
+    r = lake.execute_sql("SELECT observation_date, value AS bakiye FROM silver.fact_observation "
+                         "WHERE series_id = 'bddk_monthly:konut' AND observation_date < '2025-03-01' ORDER BY 1")
+    ws.set_table(r.data, description="iki ay", provenance=r.provenance)
+    raw = tmp_path / "data" / "raw" / "bddk_monthly" / "a.json"   # kayıttaki /data/raw/... yolu buraya çözülür
+    raw.parent.mkdir(parents=True)
+
+    raw.write_bytes(b'{"degismis": true}')
+    obs = lake.evidence_for_observations("bddk_monthly:konut", [date(2025, 1, 28)])
+    assert obs[0].raw_digest_ok is False and obs[0].bronze_path and not obs[0].file_present
+    bad = EvidenceBuilder(lake).build("soru", "Ocak 100, Şubat 110 milyon TL.", ws, [])
+    assert not bad.complete and any("uyuşmuyor" in g for g in bad.gaps), bad.gaps
+
+    # Aynı yol, doğru baytlar: özet tutar (içerik adresli sahte sha ile değil, gerçek sha256 ile)
+    lake2_sha = hashlib.sha256(b"dogru").hexdigest()
+    assert lake._raw_digest_ok(lake2_sha, str(raw)) is False
+    raw.write_bytes(b"dogru")
+    assert lake._raw_digest_ok(lake2_sha, str(raw)) is True, "önbellek boyut/mtime değişince yenilenir"
+    assert lake._raw_digest_ok(lake2_sha, str(tmp_path / "yok.json")) is None
