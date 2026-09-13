@@ -1,5 +1,8 @@
 """İki motoru AYNI veri ve AYNI sorularla karşılaştırır (M02, ADR-0053).
 
+M16 (14 Eyl): M02'de bayat çıkan SQL-sözcük kontrolleri (L1-01, L6-01, L6-04, L3-02, U1) durum kontrolüne çevrildi:
+doğru değer tabloda/cevapta mı, alt kalemler seri kimliğiyle mi ve alt toplam aynı hesapta mı, pivot tablo kabul.
+
 KAYNAK: feature/busra/agent-v3@479854c `scripts/run_benchmark.py` (yazar: Büşra) — koşucu ve 18 vaka
 olduğu gibi alındı (yazarlık korunur, M02-T07); değişen yalnız: kök yolu bu repo, V3 kaynağı
 `V3_SRC` ortam değişkeninden (worktree), 5 görülmemiş soru (`UNSEEN`), token/anlatı sıcaklığı notu.
@@ -36,6 +39,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 import os
+
+import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]          # agent-core
 sys.path.insert(0, str(ROOT / "src"))
@@ -138,6 +143,46 @@ def chk_answer_not_contains(*needles):
     return c
 
 
+def chk_table_value_near(expected: float, tol: float = 0.005, answer_text: str | None = None):
+    """Durum kontrolü (M16, M02 bulgusu): SQL'deki sözcük değil, tabloda ya da cevapta DOĞRU DEĞER."""
+    def c(agent, answer, steps):
+        t = agent.workspace.table
+        if t is not None:
+            for col in t.columns:
+                try:
+                    vals = pd.to_numeric(t[col], errors="coerce").dropna()
+                except Exception:  # noqa: BLE001
+                    continue
+                if ((vals - expected).abs() <= abs(expected) * tol).any():
+                    return []
+        if answer_text and answer_text in (answer.text or ""):
+            return []
+        return [f"beklenen değer ({expected:g}) tabloda/cevapta yok"]
+    return c
+
+
+def chk_series_ids_used(*ids: str, forbid: tuple[str, ...] = ()):
+    """Seri kimliğiyle (anlamla) sorgulandı mı; alt toplam aynı SQL'de toplanmış mı."""
+    def c(agent, answer, steps):
+        s = _sql_used(steps)
+        f = [f"SQL'de seri yok: {i}" for i in ids if i not in s]
+        f += [f"alt toplam aynı hesapta: {x}" for x in forbid if x in s]
+        return f
+    return c
+
+
+def chk_rows_or_wide(n_rows: int, n_numeric: int):
+    """Pivot kabul: ≥n satır ya da tek satırda ≥k sayısal değer (M02 U1 bulgusu)."""
+    def c(agent, answer, steps):
+        t = agent.workspace.table
+        if t is None:
+            return ["tablo yok"]
+        if len(t) >= n_rows or len(t.select_dtypes("number").columns) >= n_numeric:
+            return []
+        return [f"tablo < {n_rows} satır ve < {n_numeric} sayısal kolon"]
+    return c
+
+
 def chk_subtotal_excluded(agent, answer, steps):
     s = _sql_used(steps).lower()
     ok = ("is_alt_toplam" in s) or ("(2+3+4)" not in s and "konut" in s and "taşıt" in s.replace("tasit", "taşıt"))
@@ -168,7 +213,7 @@ def _chk_no_limit(a, ans, st):
     return ["adım limiti"] if getattr(ans, "hit_step_limit", False) else []
 
 UNSEEN = [
-    ("U1", "U", "Taşıt kredisi bakiyesi 2024 ve 2025'te yıllık ortalama olarak nasıl değişti?", [_chk_rows(2), _chk_numeric_cols(1), _chk_no_limit]),
+    ("U1", "U", "Taşıt kredisi bakiyesi 2024 ve 2025'te yıllık ortalama olarak nasıl değişti?", [chk_rows_or_wide(2, 2), _chk_no_limit]),
     ("U2", "U", "Ankara'da konut kredisi bakiyesi 2025 sonunda ne kadardı?", [_chk_rows(1), _chk_no_limit]),
     ("U3", "U", "2025'te dolar kuru ile konut kredisi faizi birlikte mi hareket etti, hangisi önden gidiyor?", [_chk_numeric_cols(2), _chk_tool("lead_lag"), _chk_no_limit]),
     ("U4", "U", "Mevduat faizi 2025'te en yüksek hangi ayda oldu?", [_chk_rows(1), _chk_no_limit]),
@@ -176,11 +221,11 @@ UNSEEN = [
 ]
 
 SUBSET = [
-    ("L1-01", "L1", "2024 Aralık ayında konut kredisi bakiyesi ne kadardı?", [chk_table_rows_min(1), chk_sql_contains("konut", "2024")]),
-    ("L3-02", "L3", "Tüketici kredilerinin toplamını alt kalemlerden hesapla (2025 Aralık).", [chk_subtotal_excluded]),
+    ("L1-01", "L1", "2024 Aralık ayında konut kredisi bakiyesi ne kadardı?", [chk_table_rows_min(1), chk_table_value_near(512_259, answer_text="512.259")]),
+    ("L3-02", "L3", "Tüketici kredilerinin toplamını alt kalemlerden hesapla (2025 Aralık).", [chk_series_ids_used("1534_Toplam", "1535_Toplam", forbid=("1533_Toplam",))]),
     ("L4-01", "L4", "Konut kredisi bakiyesinin 2025'teki aylık ve yıllık yüzde değişimini hesapla.", [chk_table_rows_min(12), chk_two_numeric]),
-    ("L6-01", "L6", "2025 için mortgage bakiyesini aylık göster.", [chk_table_rows_min(12), chk_sql_contains("konut")]),
-    ("L6-04", "L6", "Takipteki konut kredileri 2025'te nasıl değişti?", [chk_table_rows_min(2), chk_sql_contains("takipteki")]),
+    ("L6-01", "L6", "2025 için mortgage bakiyesini aylık göster.", [chk_table_rows_min(12), chk_table_value_near(678_970)]),
+    ("L6-04", "L6", "Takipteki konut kredileri 2025'te nasıl değişti?", [chk_table_value_near(1_128, answer_text="1.128")]),
     ("L9-01", "L9", "2019'daki konut kredisi bakiyesini göster.", [chk_no_table_mentions_coverage]),
     ("L9-02", "L9", "2026 Ağustos konut kredisi bakiyesi kaç?", [chk_no_table_mentions_coverage]),
     ("L10-01", "L10", "Kredi bakiyesini göster.", [chk_clarify]),
