@@ -75,7 +75,7 @@ Bu test sayıları birbirleriyle toplanarak başarı oranı veya motor üstünl�
 | M10 | Dosya/URL/PDF/OCR giriş akışı | P1 | M03, M04 sınırı, M05 | Agent + UI | Planlandı |
 | M11 | Oturum, tablo korunması ve açıklama soruları | P1 | M03, M04; M10 ile entegrasyon | Agent + UI | Planlandı |
 | M12 | Anomali/kırılma/öncülük doğruluğu | P0/P1 | M03; M09/M11 ile entegrasyon | Analitik | Planlandı |
-| M13 | İddia doğrulama ve kanıtın doğru sunulması | P0 | Mevcut kod; M03/M07/M11 ile entegrasyon | Agent + veri + UI | Planlandı |
+| M13 | İddia doğrulama ve kanıtın doğru sunulması | P0 | Mevcut kod; M03/M07/M11 ile entegrasyon | Agent + veri + UI | Çekirdek tamamlandı (13 Eyl, ADR-0050); T04/T07/T11/T12 açık |
 | M14 | Kullanıcı arayüzü ve tam çıktı indirme | P1 | M10, M11, M13 | UI + API | Planlandı |
 | M15 | Süre/çıktı bütçeleri ve otomatik kontroller | P1/P2 | M01; M02 ölçümleri | Agent + geliştirme altyapısı | Planlandı |
 | M16 | Birleşik kabul ve görülmemiş veri provası | P0 | Tüm zorunlu uygulama milestone'ları | Ekip + değerlendirme | Planlandı |
@@ -366,20 +366,20 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Değer/işaret/anlam eşlemesi, kapsamı açık kanıt durumları ve uyarıyla sunum politikası.
 
-- [ ] **M13-T01:** Kullanıcı sorusundaki sayı ile veriyle doğrulanan iddiayı ayır; `%300` örneğinde yalnız soruda geçmesi doğrulama sağlamasın.
-- [ ] **M13-T02:** Küçük tam sayılar/yıllar için genel muafiyetleri yeniden değerlendir; tarih/etiket ile ölçüm değerini bağlamına göre ayır.
-- [ ] **M13-T03:** Unicode eksi/binlik/ondalık normalizasyonunu tek yerde tut; ters işaretli değeri koşulsuz eşleştiren fallback'i kaldır veya doğru ayrıştırmayla sınırla.
+- [x] **M13-T01**: Kullanıcı sorusundaki sayı ile veriyle doğrulanan iddiayı ayır; `%300` örneğinde yalnız soruda geçmesi doğrulama sağlamasın.
+- [x] **M13-T02** (yıl/≤31/dönem sayısı filtre kaldı; sorudan diğer sayılar iddia): Küçük tam sayılar/yıllar için genel muafiyetleri yeniden değerlendir; tarih/etiket ile ölçüm değerini bağlamına göre ayır.
+- [x] **M13-T03**: Unicode eksi/binlik/ondalık normalizasyonunu tek yerde tut; ters işaretli değeri koşulsuz eşleştiren fallback'i kaldır veya doğru ayrıştırmayla sınırla.
 - [ ] **M13-T04:** Aynı sayının başka yıl/kolon/varlıkta bulunmasını yeterli kanıt sayma. İddianın dönem, birim, seri ve entity bağını kontrol et; çözülemeyen bağa doğrulanmış etiketi verme.
-- [ ] **M13-T05:** Yuvarlama toleransını gösterilen hassasiyete göre ele al; geniş toleransın maddi yanlışları kabul etmediğini sınır örnekleriyle test et.
-- [ ] **M13-T06:** SQL ve hesap araçlarının ürettiği türetilmiş kolonlara formül/girdi lineage ekle; metin içi serbest hesap yerine kayıtlı sonucu kullandır.
+- [~] **M13-T05** (tolerans %0,5 korundu; sınır örnekleri testi açık): Yuvarlama toleransını gösterilen hassasiyete göre ele al; geniş toleransın maddi yanlışları kabul etmediğini sınır örnekleriyle test et.
+- [~] **M13-T06** (workspace kolon provenance'ı var; formül/girdi lineage'i M09-T07 ile): SQL ve hesap araçlarının ürettiği türetilmiş kolonlara formül/girdi lineage ekle; metin içi serbest hesap yerine kayıtlı sonucu kullandır.
 - [ ] **M13-T07:** Önceki tablo/bakış sonucuna eşleşen iddianın hangi sürüm ve kaynakla doğrulandığını koru; güncel tablonun provenance'ıyla karıştırma.
-- [ ] **M13-T08:** Üç ayrı durumu tanımla: hesap/iddia doğruluğu, semantik güven, kaynak zinciri/dosya bütünlüğü. Tek yeşil “tam” rozeti hepsinin yerine geçmesin.
-- [ ] **M13-T09:** Gerekli RAW/Bronze dosyalarının varlığını ve uygun yerde hash bütünlüğünü denetle; metadata kaydı ile fiziksel kanıtı ayır.
-- [ ] **M13-T10:** İncelenen ilk 200 satır veya kısmi gözlem listesinin kapsamını açık göster; tüm tablo doğrulanmış gibi etiketleme.
+- [x] **M13-T08**: Üç ayrı durumu tanımla: hesap/iddia doğruluğu, semantik güven, kaynak zinciri/dosya bütünlüğü. Tek yeşil “tam” rozeti hepsinin yerine geçmesin.
+- [x] **M13-T09**: Gerekli RAW/Bronze dosyalarının varlığını ve uygun yerde hash bütünlüğünü denetle; metadata kaydı ile fiziksel kanıtı ayır.
+- [x] **M13-T10**: İncelenen ilk 200 satır veya kısmi gözlem listesinin kapsamını açık göster; tüm tablo doğrulanmış gibi etiketleme.
 - [ ] **M13-T11:** Gold katkı listeleri, OCR sayfa/tablo/hücreleri ve web hash/zaman zincirini farklı kanıt türleri olarak koru.
 - [ ] **M13-T12:** Yanlış iddia için sınırlı yeniden üretim/düzeltme, sonra doğru kısmi çıktı; eksik kanıt için kullanıcı tercihine uygun uyarılı çıktı sun.
-- [ ] **M13-T13:** Grounding hatası ile UI tamlık durumu çelişmesin; model metni, tablo ve rozet aynı kontrol sonucunu kullansın.
-- [ ] **M13-T14:** Kaynak dosyası eksik, hash uyuşmaz, yanlış yıl/birim/işaret, sorudan kopya sayı ve doğru yuvarlama için adversarial regresyon seti oluştur.
+- [x] **M13-T13**: Grounding hatası ile UI tamlık durumu çelişmesin; model metni, tablo ve rozet aynı kontrol sonucunu kullansın.
+- [x] **M13-T14** (A13, A14, A23; hash uyuşmazlığı ve yuvarlama sınırı açık): Kaynak dosyası eksik, hash uyuşmaz, yanlış yıl/birim/işaret, sorudan kopya sayı ve doğru yuvarlama için adversarial regresyon seti oluştur.
 
 **Kabul:** İncelemede yeniden üretilen `%300` ve `-0.54/+0.54` örnekleri yanlış doğrulanmaz. Eksik kaynak dosyası tam dosya zinciri gibi gösterilmez. Kullanıcı neyin hesaplandığını, neyin doğrulanamadığını ve uyarının hangi iddiaya ait olduğunu anlayabilir.
 
@@ -653,3 +653,5 @@ Belgelendirme tamamlanması uygulama milestone'larının tamamlanması değildir
 - **2026-09-13 — M00 kapandı:** transkript zorunlu davranışları R01–R18 kabul vakalarına eşlendi (A30–A33 ve A21a–c eklendi); rol sınırı ve silme kapsamı kabul metni yazıldı (`M00_GEREKSINIM_MATRISI_2026-09-13.md`). Sıradaki: M01.
 
 - **2026-09-13 — M01 kapandı:** lakehouse-core repo ağacında, DATA_ROOT, LAKEHOUSE_MODE, `--preflight`, `make demo-data`; canlı kurulum 127/127, ön kontrol hazır; temiz klon provası. Bulgu: toplu ingest 0 run kaydı (M07). Kapanış formu `M01_ORTAM.md` §6. Sıradaki: M05/M13/M12/M14-T08 küçük düzeltmeler, ardından M02.
+
+- **2026-09-13 — M13 çekirdek:** sorudan sayı muaf değil, açık ters işaret eşleşmez, işaret uyarısı, üç kanıt durumu (sayılar/sorgu izi/dosya zinciri), RAW/Bronze diskte şart, kapsam notu; A13/A14/A23 regresyonu. Açık: T04 (dönem/birim/varlık bağı), T05 sınır testleri, T07 (eski sürüm kanıtı), T11 (kanıt türleri), T12 (yeniden üretim politikası — mevcut bir kez geri gönderme korunuyor). Sıradaki: M05.

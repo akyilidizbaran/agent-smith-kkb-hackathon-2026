@@ -28,7 +28,7 @@ from ..contracts.evidence import (
     ColumnEvidence, EvidenceCapable, EvidencePanel, NumberEvidence, ObservationEvidence,
 )
 from ..contracts.lakehouse import LakehouseError
-from .grounding import _NUM_RE, _ascii_minus, numbers_in
+from .grounding import period_numbers, _NUM_RE, _ascii_minus, numbers_in
 from .workspace import AnalysisWorkspace
 
 _DATE_PREFERENCE = ("period_end", "observation_date", "donem", "dönem", "tarih", "date")
@@ -89,6 +89,18 @@ def _key_text(value: Any) -> str:
     return d.isoformat() if d is not None else str(value)
 
 
+_DIRECTION = re.compile(r"düş|azal|geril|küçül|negatif|eksi|ters|daral|kayb|çık(?!ış)|yükse|art|mutlak|\babs\b|büyüklü", re.I)
+
+
+def _direction_word_near(answer: str, token: str, window: int = 40) -> bool:
+    """Sayının ±40 karakter çevresinde yön sözcüğü var mı ("2,31 düştü", "negatif 0,54")."""
+    text = _ascii_minus(answer or "")
+    i = text.find(token)
+    if i < 0:
+        return False
+    return bool(_DIRECTION.search(text[max(0, i - window): i + len(token) + window]))
+
+
 def _number_texts(answer: str) -> list[tuple[str, float]]:
     """Metindeki sayılar, göründükleri yazımla; `numbers_in` ile aynı ayrıştırma."""
     out: list[tuple[str, float]] = []
@@ -114,8 +126,10 @@ class EvidenceBuilder:
                        peeks: list[tuple[str, pd.DataFrame]] | None = None,
                        question: str = "") -> list[NumberEvidence]:
         numeric_cols = [c for c in table.columns if pd.api.types.is_numeric_dtype(table[c])]
-        # Soruda geçen sayı (yıl, dönem) cevapta yankılanır; anlatı doğrulamayla aynı kural.
+        # Soruda geçen yıl/dönem cevapta yankılanır (filtre); soruda geçen DİĞER sayılar iddia
+        # sayılır ve tabloda aranır (M13-T01): "%300 arttı, öyle yaz" doğrulanmış olmaz.
         asked = {n for _, n in _number_texts(question or "")}
+        periods = period_numbers(question or "")
         # Metin kalmış hücreler (sayı biçimi belirsiz: "13.837") de sayıdır; Türkçe dilbilgisiyle
         # okunup karşılaştırılır (ölçüldü, G18b: model kartı aynen yazdı, panel "tabloda yok" dedi).
         text_parsed = _text_cells_as_numbers(table)
@@ -125,9 +139,9 @@ class EvidenceBuilder:
             if text in seen:
                 continue
             seen.add(text)
-            ev = NumberEvidence(number=number, text=text)
-            if number in asked:
-                ev.matched, ev.column, ev.row_key = True, "(soruda geçiyor)", text
+            ev = NumberEvidence(number=number, text=text, from_question=number in asked)
+            if number in asked and (number in periods or (float(number).is_integer() and 1900 <= number <= 2100)):
+                ev.matched, ev.column, ev.row_key = True, "(soruda geçiyor)", text   # dönem/yıl filtresi
                 out.append(ev)
                 continue
             # yıl/ay gibi tarih parçaları sayı değildir: dönem kolonunun yılı ile eşleşiyorsa geç
@@ -188,9 +202,10 @@ class EvidenceBuilder:
                             break
                     if found:
                         break
-            if not ev.matched and number != 0:
-                # İşaret yazımı: model "−2,31" (Unicode eksi) ya da "%-2,31" yazınca ayrıştırıcı
-                # işareti düşürür; değer tabloda ters işaretle varsa sayı yine araçtandır (ölçüldü, G15/G17).
+            if not ev.matched and number != 0 and not text.lstrip().startswith(("-", "+")):
+                # Büyüklük yazılmış ("2,31"), tabloda ters işaret. Yön sözcüğü varsa ("düştü", "negatif")
+                # sayı araçtandır; yoksa işaret uyarısı: eşleşti ama iddia doğrulanmış sayılmaz (M13-T03).
+                # Açık ters işaret ("+0,54" vs -0.54) burada değil: eşleşmez, TABLODA YOK.
                 frames = [table, *(previous or []), *[f for _, f in (peeks or [])]]
                 for frame in frames:
                     hit_col = next(
@@ -199,7 +214,11 @@ class EvidenceBuilder:
                         None,
                     )
                     if hit_col:
-                        ev.matched, ev.column, ev.row_key = True, hit_col, "işaret yazımı (−)"
+                        ev.matched, ev.column = True, hit_col
+                        if _direction_word_near(answer, text):
+                            ev.row_key = "işaret yazımı (yön sözcükle)"
+                        else:
+                            ev.row_key, ev.sign_warning = "tabloda ters işaret", True
                         break
             out.append(ev)
         return out
@@ -350,6 +369,7 @@ class EvidenceBuilder:
             panel.numbers = [NumberEvidence(number=n, text=t) for t, n in _number_texts(answer)]
             return panel
         panel.table_rows = len(table)
+        panel.inspected_rows = min(len(table), self.max_rows)
         time_col = _time_column(table)
         panel.numbers = self._match_numbers(answer, table, time_col, previous=workspace.previous_tables(),
                                             peeks=workspace.peeks(), question=question)

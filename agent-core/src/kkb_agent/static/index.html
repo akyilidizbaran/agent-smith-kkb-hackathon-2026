@@ -270,10 +270,15 @@ function renderEvidence(p) {
   lastEvidence = ev || null; $("btn-journey").disabled = !ev;
   if (!ev) { badge.className = "badge none"; badge.textContent = "—"; $("ev-summary").textContent = "Bu cevap için tablo yok."; body.innerHTML = ""; return; }
   badge.className = "badge " + (ev.complete ? "ok" : "gap"); badge.textContent = ev.complete ? "tam" : "EKSİK";
+  const st = ev.states || {};
+  badge.title = Object.entries(st).map(([k, v]) => `${k}: ${v ? "✓" : "✗"}`).join(" · ");
   $("ev-summary").textContent = ev.summary;
   let html = "";
+  if (ev.states && Object.keys(ev.states).length) {   // üç ayrı durum (M13): iddialar, sorgu izi, dosya zinciri
+    html += `<div class="numbers" style="margin-bottom:2px">${Object.entries(ev.states).map(([k, v]) => `<span class="badge ${v ? "ok" : "gap"}" style="font-size:11px">${esc(k)} ${v ? "✓" : "✗"}</span>`).join("")}${ev.inspected_rows && ev.table_rows > ev.inspected_rows ? `<span class="badge none" style="font-size:11px">ilk ${ev.inspected_rows}/${ev.table_rows} satır incelendi</span>` : ""}</div>`;
+  }
   if (ev.numbers && ev.numbers.length) {
-    html += `<div><div class="label" style="margin-bottom:6px">Cevaptaki sayılar <span style="font-weight:400;text-transform:none;letter-spacing:0">(tıkla → o sayının yolculuğu)</span></div><div class="numbers">${ev.numbers.map((n, i) => `<span class="num ${n.matched ? "" : "miss"}" data-i="${i}" title="${esc(n.column || "")} ${esc(n.row_key || "")}">${esc(n.text)}</span>`).join("")}</div></div>`;
+    html += `<div><div class="label" style="margin-bottom:6px">Cevaptaki sayılar <span style="font-weight:400;text-transform:none;letter-spacing:0">(tıkla → o sayının yolculuğu)</span></div><div class="numbers">${ev.numbers.map((n, i) => `<span class="num ${n.matched && !n.sign_warning ? "" : "miss"}" data-i="${i}" title="${esc(n.column || "")} ${esc(n.row_key || "")}${n.sign_warning ? " · tabloda ters işaret" : ""}${n.from_question && !n.matched ? " · sorudan, doğrulanmadı" : ""}">${esc(n.text)}${n.sign_warning ? " ⚠" : ""}${n.from_question && !n.matched ? " ?" : ""}</span>`).join("")}</div></div>`;
   }
   const nodes = [];
   (ev.columns || []).slice(0, 3).forEach((c) => nodes.push({t: `Kolon · ${c.column}`, d: c.sql || "provenance yok", amber: !c.sql}));

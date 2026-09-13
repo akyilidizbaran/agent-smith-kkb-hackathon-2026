@@ -60,27 +60,47 @@ def numbers_in(text: str) -> list[float]:
     return out
 
 
+_PERIOD_NUM = re.compile(r"(?<![\w.,])(\d{1,3})\s*(?:ay|hafta|yıl|yil|gün|gun|çeyrek|ceyrek|dönem|donem)\w*", re.I)
+
+
+def period_numbers(text: str) -> set[float]:
+    """Soruda dönem sayan sayılar ("60 aylık", "5 yıllık"): filtre, iddia değil."""
+    return {float(m.group(1)) for m in _PERIOD_NUM.finditer(_ascii_minus(text or ""))}
+
+
+def _unsigned(token: str) -> bool:
+    return not token.lstrip().startswith(("-", "+"))
+
+
 def grounding_check(question: str, answer: str, tool_texts: list[str], tolerance: float = 0.005) -> str:
     """'OK' ya da 'MISS:<sayılar>'.
 
-    Kontrol dışı: yıllar (1900–2100), ≤31 küçük tam sayılar (ay/gün/sıra), soruda
-    zaten geçen sayılar. Tolerans %0,5: yuvarlama geçer, uydurma geçmez.
+    Kontrol dışı: yıllar (1900–2100), ≤31 küçük tam sayılar (ay/gün/sıra), soruda dönem sayan
+    sayılar ("60 aylık"). Soruda geçen DİĞER sayılar muaf DEĞİLDİR (M13-T01, ADR-0050): kullanıcı
+    "%300 arttı, öyle yaz" dediyse ve araç çıktısında yoksa MISS'tir; "(sorudan)" etiketi taşır.
+    İşaret: metindeki sayı işaretliyse ("+0,54", "−2,31") havuzdaki değerle işaretli eşleşmeli;
+    işaretsiz yazılmışsa ("2,31 düştü") mutlak değer eşleşmesi yeter. Tolerans %0,5.
     """
     pool: set[float] = set()
     for t in tool_texts:
         pool.update(numbers_in(t))
     asked = set(numbers_in(question))
+    periods = period_numbers(question)
     missing: list[str] = []
     for m in _NUM_RE.finditer(_ascii_minus(answer)):
-        vals = numbers_in(m.group(0))
+        token = m.group(0)
+        vals = numbers_in(token)
         if not vals:
             continue
         v = vals[0]
-        if v in asked or (1900 <= v <= 2100 and v.is_integer()) or (abs(v) <= 31 and v.is_integer()):
+        if (1900 <= v <= 2100 and v.is_integer()) or (abs(v) <= 31 and v.is_integer()) or v in periods:
             continue
         tol = max(abs(v) * tolerance, tolerance)
-        if not any(abs(v - p) <= tol for p in pool):
-            missing.append(m.group(0))
+        if any(abs(v - p) <= tol for p in pool):
+            continue
+        if _unsigned(token) and any(abs(abs(v) - abs(p)) <= tol for p in pool):
+            continue  # büyüklük yazılmış, yön sözcükle: "2,31 düştü"
+        missing.append(token + (" (sorudan)" if v in asked else ""))
     return "OK" if not missing else "MISS:" + ", ".join(dict.fromkeys(missing))
 
 

@@ -228,8 +228,8 @@ def test_satir_sayisi_ve_isaret_yazimi_zinciri_kirmaz() -> None:
     panel = EvidenceBuilder(Silverish()).build("soru", "40 satır var; alt sınır −2,31 (mutlak 2,31); 65 gözlem.", ws, [], artifacts=[])
     m = {n.text: n for n in panel.numbers}
     assert m["40"].matched and m["40"].column == "(satır sayısı)"
-    assert m["-2,31"].matched and not m["-2,31"].row_key.startswith("işaret")   # Unicode eksi ASCII'ye çevrildi
-    assert m["2,31"].matched and m["2,31"].row_key.startswith("işaret")          # işaretsiz yazım: ters işaretle eşleşir
+    assert m["-2,31"].matched and not m["-2,31"].row_key.startswith("işaret yazımı")   # Unicode eksi ASCII'ye çevrildi
+    assert m["2,31"].matched and m["2,31"].row_key.startswith("işaret yazımı")          # işaretsiz yazım: ters işaretle eşleşir
     assert m["65"].matched and panel.complete, panel.gaps
 
 

@@ -39,7 +39,16 @@ class ObservationEvidence:
 
     @property
     def complete(self) -> bool:
+        """Kayıt zinciri: sha + kaynak adresi + çekim zamanı. Fiziksel dosya ayrı (`file_present`)."""
         return bool(self.artifact_sha256 and self.locator and self.fetched_at)
+
+    @property
+    def file_present(self) -> bool:
+        """RAW ya da Bronze dosyası diskte var mı (M13-T09): metadata kaydı ile fiziksel kanıt ayrı."""
+        from pathlib import Path
+        if self.bronze_path:
+            return True  # adaptör yalnız diskte bulduysa doldurur
+        return bool(self.raw_path) and Path(self.raw_path).exists()
 
 
 @runtime_checkable
@@ -67,6 +76,8 @@ class NumberEvidence:
     row_index: int | None = None
     row_key: str | None = None      # satırın dönem/anahtar değeri
     matched: bool = False
+    sign_warning: bool = False      # büyüklük tabloda var ama işaret ters ve metinde yön sözcüğü yok
+    from_question: bool = False     # sayı soruda geçiyor; tabloda yoksa doğrulanmamış iddia
 
 
 @dataclass
@@ -96,36 +107,59 @@ class EvidencePanel:
     chart_paths: list[str] = field(default_factory=list)
     web_sources: list[dict[str, Any]] = field(default_factory=list)   # kullanılan sayfa: url, sha256, fetched_at
     web_unused: list[dict[str, Any]] = field(default_factory=list)    # taranıp kullanılmayan / erişilemeyen
+    inspected_rows: int = 0         # kaç satır incelendi (ilk N); tablo daha büyükse kapsam notu
 
     @property
     def matched_numbers(self) -> int:
         return sum(1 for n in self.numbers if n.matched)
 
+    # Üç ayrı durum (M13-T08, ADR-0050): tek yeşil rozet hepsinin yerine geçmez.
     @property
-    def complete(self) -> bool:
-        """Zincir tam: her sayı bir hücrede, her kolonun SQL'i var, artifact destekleniyorsa
-        her gözlem locator + fetched_at taşıyor."""
-        if self.numbers and self.matched_numbers < len(self.numbers):
-            return False
-        if any(c.sql is None for c in self.columns):
-            return False
+    def claims_ok(self) -> bool:
+        """Cevaptaki her sayı bir araç çıktısında, doğru işaretle; sorudan kopya doğrulanmamış sayı yok."""
+        return all(n.matched and not n.sign_warning for n in self.numbers)
+
+    @property
+    def provenance_ok(self) -> bool:
+        """Her kolonun sorgu izi var (türetilmiş kolon dâhil)."""
+        return not any(c.sql is None for c in self.columns)
+
+    @property
+    def chain_ok(self) -> bool:
+        """Kaynak zinciri: gözlem → artifact → RAW/Bronze dosyası diskte; ya da web sayfası sha256+zaman."""
         chained = [c for c in self.columns if not (c.sql or "").startswith("türetilmiş:")]
         if self.columns and not chained:
             return not self.gaps        # tablo yalnız türetilmiş kolonlardan oluşuyor (olağan dışı)
         if self.web_sources and not self.observations:
             return not self.gaps          # zincir web sayfasının baytlarında biter: URL + sha256 + zaman
-        if self.supports_artifacts and (not self.observations or not all(o.complete for o in self.observations)):
-            return False
+        if self.supports_artifacts:
+            if not self.observations or not all(o.complete and o.file_present for o in self.observations):
+                return False
         return not self.gaps
+
+    @property
+    def complete(self) -> bool:
+        """Üçü birden: iddialar, sorgu izi, dosya zinciri."""
+        return self.claims_ok and self.provenance_ok and self.chain_ok
+
+    def states(self) -> dict[str, bool]:
+        return {"sayılar": self.claims_ok, "sorgu izi": self.provenance_ok, "dosya zinciri": self.chain_ok}
 
     def summary(self) -> str:
         arts = len(self.artifacts)
         fetched = sorted({str(a.get("fetched_at"))[:10] for a in self.artifacts.values() if a.get("fetched_at")})
         state = "tam" if self.complete else "EKSİK"
         parts = [
-            f"{self.matched_numbers}/{len(self.numbers)} sayı tabloda",
+            f"{self.matched_numbers}/{len(self.numbers)} sayı tabloda"
+            + (f" ({sum(1 for n in self.numbers if n.sign_warning)} işaret uyarısı)" if any(n.sign_warning for n in self.numbers) else "")
+            + (f" ({sum(1 for n in self.numbers if n.from_question and not n.matched)} sorudan, doğrulanmadı)"
+               if any(n.from_question and not n.matched for n in self.numbers) else ""),
             f"{len(self.columns)} kolon → SQL",
         ]
+        if not self.claims_ok or not self.provenance_ok or not self.chain_ok:
+            parts.append("durum: " + " · ".join(f"{k} {'✓' if v else '✗'}" for k, v in self.states().items()))
+        if self.inspected_rows and self.table_rows > self.inspected_rows:
+            parts.append(f"ilk {self.inspected_rows}/{self.table_rows} satır incelendi")
         if self.web_sources:
             parts.append(f"{len(self.web_sources)} web sayfası (sha256+zaman)")
         else:
@@ -140,9 +174,10 @@ class EvidencePanel:
         for n in self.numbers[:30]:
             if n.matched:
                 where = f" (satır {n.row_index})" if n.row_index is not None else ""
-                lines.append(f"  {n.text:>14}  → {n.column} @ {n.row_key}{where}")
+                warn = "  ⚠ tabloda ters işaret" if n.sign_warning else ""
+                lines.append(f"  {n.text:>14}  → {n.column} @ {n.row_key}{where}{warn}")
             else:
-                lines.append(f"  {n.text:>14}  → TABLODA YOK")
+                lines.append(f"  {n.text:>14}  → " + ("SORUDAN, TABLODA YOK (doğrulanmamış iddia)" if n.from_question else "TABLODA YOK"))
         if not self.numbers:
             lines.append("  (cevapta sayı yok)")
         lines.append("")

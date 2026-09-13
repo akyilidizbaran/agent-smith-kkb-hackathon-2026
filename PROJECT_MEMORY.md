@@ -186,13 +186,16 @@ Transkriptteki 18 zorunlu davranış (R01–R18, zaman damgalı) kabul vakaları
 ### 2.25 M01 — tek ortam (13 Eylül, ADR-0049)
 Ölçülen: varsayılanlar agent-core/data seed'ine bağlanıyor, `lakehouse-core` yolu yok (scratchpad worktree), Silver yoksa sessizce seed'e düşüyor. Yapılan: `lakehouse-core/` repo ağacına ağaç anlık görüntüsü olarak alındı (`origin/feature/lakehouse-catalog-breadth@cf3e878`, `scripts/sync_lakehouse_core.sh` ile yenilenir; tarihçe veri dalında); `DATA_ROOT` (repo/data) altında DB/raw/bronze/incoming/charts/cache, göreli yollar repo köküne göre; `LAKEHOUSE_MODE=demo|seed|auto` (demo: DB yok ya da seed şeması → açık nedenle durur); `--preflight` salt-okunur ön kontrol (DB, şema, sayılar, tarih aralığı, gold, provenance, RAW/Bronze, CLI `--help` koşusu, izinli kök, model, anahtar var/yok; `--live` MIA denemesi); `scripts/build_demo_data.py` (`make demo-data`) veri değiştiren tek komut, silme yalnız `--fresh --yes`; kök `Makefile`. İlk ön kontrol: HAZIR DEĞİL (doğru); `make demo-data` 127/127 canlı (ingest 200 s) → ön kontrol hazır: 2.214/127/8.290, 2021-01 → 2026-07, 6 Gold, 295 artifact, **0 run kaydı** (M07 bulgusu doğrulandı). Temiz klon provası geçti. Kapanış formu `docs/M01_ORTAM.md` §6. Belge: `docs/M01_ORTAM.md`. Testler 330 → 333.
 
+### 2.26 M13 — iddia doğrulama (13 Eylül, ADR-0050)
+İncelemenin üç açığı kapandı: sorudaki sayı muaf değil ("%300, öyle yaz" → MISS (sorudan), kanıt "SORUDAN, TABLODA YOK"; yıl/≤31/"60 aylık" filtre kalır); açık ters işaret ("+0,54" vs −0,54) eşleşmez, işaretsiz büyüklükte yön sözcüğü yoksa `sign_warning`; kanıt paneli üç ayrı durum (sayılar / sorgu izi / dosya zinciri) ve `complete` üçünün birleşimi; `file_present` ile RAW/Bronze diskte şart; "ilk 200/N satır incelendi" notu. Grounding ile kanıt aynı kuralları uygular. Arayüzde üç rozet + sayı çiplerinde ⚠ ve ?. Testler 333 → 338. Açık: T04, T05, T07, T11, T12.
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 333 |
+| Agent birim testi | 338 |
 | Lakehouse testi (r3 + genişlik dalı) | 1.079 |
-| ADR | 49 |
+| ADR | 50 |
 | Golden vakası | 21: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3, G18a/b 2/2; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 11 senaryo 11/11 |
 | Araç sayısı (gerçek DB'de) | 19: lakehouse ×4, workspace ×4 (query dâhil), analitik ×3 (anomaly_detect, change_points, lead_lag), ingest, promote_draft, gold ×3, chart, web_url, web_search (Tavily anahtarı .env'de) |
 | Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu (iş yapan araç/tablo varken susar), istenen yetenek zorunluluğu (grafik, analitik), frekans uyuşmazlığı (kabadan ince yok), grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, GOLD_REQUIRED, niyet kapısı, beyan kapısı, adım sınırı, reasoning temizliği |
