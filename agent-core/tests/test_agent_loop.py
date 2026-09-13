@@ -545,3 +545,31 @@ def test_grafik_istegi_tablo_varken_aracsiz_retle_bitmez() -> None:
     agent.workspace.set_table(pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]}), description="önceki tur")
     ans = agent.ask("Bunu bana karşılaştırmalı grafik olarak göster.")
     assert chart.calls == 1 and ans.text == "Grafik hazır."
+
+
+def test_aracsiz_turda_tabloda_olmayan_sayilar_geri_gonderilir() -> None:
+    """M16 beşinci koşu: 'faiz düşerken kredi artmayan dönemler' turunda model hiç araç çağırmadan farklar ve yıllarca
+    tekrarlanan uydurma satırlar yazdı. Aktif tabloda olmayan ≥2 sayı + araçsız tur → bir kez geri gönderilir."""
+    from kkb_agent.core.agent import unverified_numbers
+
+    class _SeeingLLM(_ScriptedLLM):
+        def __init__(self, turns):
+            super().__init__(turns); self.users: list[list[str]] = []
+
+        def chat(self, messages, *, tools=None, temperature=0.0, max_tokens=None):
+            self.users.append([m.content for m in messages if m.role == "user"])
+            return super().chat(messages, tools=tools, temperature=temperature, max_tokens=max_tokens)
+
+    llm = _SeeingLLM([
+        LLMResponse(content="Şubat 2021: faiz −0,403 puan, bakiye −522 milyon TL; Mayıs: −1.196."),
+        LLMResponse(content="", tool_calls=[_call(1)]),
+        LLMResponse(content="Tablo hazır."),
+    ])
+    agent, tool = _agent(llm)
+    agent.workspace.set_table(pd.DataFrame({"faiz": [18.388, 17.985], "bakiye": [276785.0, 276263.0]}), description="önceki tur")
+    ans = agent.ask("Faiz düşerken bakiyenin artmadığı aylar var mı?")
+    assert tool.calls == 1 and ans.text.startswith("Tablo hazır")
+    assert any("aktif tabloda yok" in u and "−0,403" in u.replace("-", "−") for u in llm.users[1])
+    # Tablodaki sayıları yorumlayan araçsız cevap geri gönderilmez (farklı işaretle yazılmış mutlak değer de sayılır).
+    assert unverified_numbers("Bakiye 276.263 ve 276.785 milyon TL; faiz 17,99.", agent.workspace.table) == []
+    assert unverified_numbers("2021 ve 2025 arasında 12 ay.", agent.workspace.table) == []

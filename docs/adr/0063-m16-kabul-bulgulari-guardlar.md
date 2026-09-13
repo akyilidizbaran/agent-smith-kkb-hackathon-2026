@@ -67,6 +67,16 @@ dört kusur buldu. Rapor rapordan çıkarılmadı: `docs/experiments/acceptance_
 - **Kabul kontrolü düzeltmesi.** Birleştirme turunda ajan, fikstür belgesinin beklediği gibi yinelenen Van anahtarında
   reddedip sordu; kontrol yalnız başarılı birleştirmeyi kabul ediyordu. Koşu kaydı değiştirilmedi.
 
+### Beşinci koşu sonrası (12/14) — iki uydurma sayı
+
+- **Yanlış bakiye notla çıktı.** "Ara 2025: 1.048.900 milyon TL" (gerçek 678.970) grounding'e takıldı, bir geri göndermeden
+  sonra da kaldı ve yalnız "doğrulanamadı" notuyla gitti. Karar: MISS de nedensellik gibi iki geri gönderme hakkı alır.
+- **Araçsız uydurma tablo.** Faiz sorusunda hiç araç çağrılmadı; model farkları kafadan hesapladı ve yıllarca aynı değerle
+  tekrarlanan satırlar yazdı. Aktif tablo olduğu için veri zorunluluğu, işlem fiili olmadığı için araçsız işlem guard'ı
+  susuyordu. Karar: bu turda başarılı araç yoksa ve cevaptaki ≥2 sayı aktif tabloda (işaretten bağımsız, hassasiyet
+  toleransıyla) yoksa cevap bir kez geri gönderilir; fark/oran/filtre workspace_query'ye. Tablodaki sayıları yorumlayan
+  araçsız cevap etkilenmez.
+
 ## Reddedilenler
 
 - **İşlem iddiasında cevabı doğrudan reddetmek:** "eklendi" gibi fiiller önceki turdaki gerçek işi anlatırken de geçer;

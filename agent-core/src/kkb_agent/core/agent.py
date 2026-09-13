@@ -25,7 +25,7 @@ from typing import Any, Callable
 from ..domain import DomainProfile
 from ..llm.base import ChatMessage, LLMClient, ToolCall
 from .errors import ToolError
-from .grounding import causal_language, grounding_check
+from .grounding import causal_language, grounding_check, _NUM_RE, _ascii_minus, numbers_in
 from .small_talk import is_small_talk, small_talk_reply, trim_unsolicited_offers
 from . import tool_gate
 
@@ -153,6 +153,40 @@ def vague_candidates(question: str, search) -> list[str]:
         if name and name.casefold() not in {h.casefold() for h in heads}:
             heads.append(name)
     return heads[:4] if len(heads) >= 3 else []
+
+
+def unverified_numbers(answer: str, table) -> list[str]:
+    """Aktif tabloda bulunmayan cevap sayıları (yıl ve ≤31 küçük tam sayı hariç). Tolerans: göreli %0,5 ya da virgüllü
+    yazımda gösterilen hassasiyetin yarım birimi; tek noktalı üç haneli yazım binlik ve ondalık olarak iki kez denenir."""
+    if table is None or len(table) == 0:
+        return []
+    import numpy as np
+    numeric = table.select_dtypes("number")
+    if numeric.empty:
+        return []
+    values = numeric.to_numpy(dtype=float).ravel()
+    values = values[np.isfinite(values)]
+    out: list[str] = []
+    for m in _NUM_RE.finditer(_ascii_minus(answer or "")):
+        raw = m.group(0)
+        parsed = numbers_in(raw)
+        if not parsed:
+            continue
+        n = parsed[0]
+        if float(n).is_integer() and (1900 <= abs(n) <= 2100 or (abs(n) <= 31 and len(raw.lstrip("+-")) <= 2)):
+            continue
+        cands = [n] + ([float(raw)] if re.fullmatch(r"[-+]?\d{1,3}\.\d{3}", raw) else [])
+        half = 0.5 * 10 ** -len(raw.rsplit(",", 1)[1]) if "," in raw else 0.0
+        if not any(np.any(np.abs(values - c) <= max(abs(c) * 0.005, half, 1e-9)) or
+                   np.any(np.abs(np.abs(values) - abs(c)) <= max(abs(c) * 0.005, half, 1e-9)) for c in cands):
+            if raw not in out:
+                out.append(raw)
+    return out
+
+
+NO_TOOL_NUMBERS_NOTE = ("Bu turda HİÇBİR ARAÇ ÇALIŞMADI ve cevabındaki şu sayılar aktif tabloda yok: {nums}. Sayı uydurma ve "
+                        "kafadan hesaplama yapma: fark, oran ya da filtre gerekiyorsa workspace_query ile tabloda hesaplat, "
+                        "sonra yalnız araç çıktısındaki sayılarla cevabını yaz.")
 
 
 CLARIFY_NOTE = ("\n\n(Bu kısa mesaj, önceki cevabında sorduğun soruya verilen yanıttır: «{q}». Eksik bilgiyi "
@@ -510,6 +544,7 @@ class AnalyticsAgent:
         tool_texts: list[str] = []           # grounding havuzu: araçların gerçekten söyledikleri
         regenerated = False                  # cevap bir kez geri gönderildi mi
         causal_rounds = 0                    # nedensellik dili için geri gönderme sayısı (en çok 2)
+        miss_rounds = 0                      # araç çıktısında olmayan sayı için geri gönderme sayısı (en çok 2)
         grounding = ""                       # son ölçüm; AgentAnswer'a taşınır
         action_claim_nudged = False          # araçsız işlem iddiası / okunmamış dosya bir kez geri gönderilir
 
@@ -579,15 +614,20 @@ class AnalyticsAgent:
                     continue
 
                 acted_this_turn = any(s.tool_name and s.ok for s in steps)
+                loose_numbers = ([] if acted_this_turn or action_claim_nudged
+                                 else unverified_numbers(self._strip_reasoning(response.content or ""), self.workspace.table))
                 if not acted_this_turn and not action_claim_nudged and (
-                    _ACTION_CLAIM.search(response.content or "") or _FILE_REF.search(question)
+                    _ACTION_CLAIM.search(response.content or "") or _FILE_REF.search(question) or len(loose_numbers) >= 2
                 ):
                     action_claim_nudged = True
                     steps.append(AgentStep(index=i, role="validate", ok=False,
                                            thought="araç çağrılmadan işlem iddiası ya da okunmamış dosya — geri gönderildi",
                                            duration_ms=(time.perf_counter() - started) * 1000))
                     messages.append(ChatMessage(role="assistant", content=response.content))
-                    messages.append(ChatMessage(role="user", content=ACTION_CLAIM_NOTE))
+                    messages.append(ChatMessage(role="user", content=(
+                        NO_TOOL_NUMBERS_NOTE.format(nums=", ".join(loose_numbers[:10])) if len(loose_numbers) >= 2
+                        and not (_ACTION_CLAIM.search(response.content or "") or _FILE_REF.search(question))
+                        else ACTION_CLAIM_NOTE)))
                     continue
 
                 answer_text = self._strip_reasoning(response.content)
@@ -605,10 +645,14 @@ class AnalyticsAgent:
                     # Nedensellik iddiası için ikinci bir geri gönderme hakkı: ölçüldü (G17), model
                     # kartın "neden deme" uyarısına rağmen ilk yeniden yazımda da nedensellik dili kullandı.
                     causal_retry = causal and causal_rounds < 2
-                    if (not regenerated and (grounding.startswith("MISS") or causal)) or causal_retry:
+                    # M16 beşinci koşu: tek geri göndermeden sonra da doğrulanamayan bakiye cevaba notla çıktı; MISS de iki hak alır.
+                    miss_retry = grounding.startswith("MISS") and miss_rounds < 2
+                    if miss_retry or causal_retry:
                         regenerated = True
                         if causal:
                             causal_rounds += 1
+                        if grounding.startswith("MISS"):
+                            miss_rounds += 1
                         steps.append(
                             AgentStep(
                                 index=i,

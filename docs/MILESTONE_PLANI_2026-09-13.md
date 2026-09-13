@@ -489,6 +489,7 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 - [ ] **EK-08** Büşra'nın ilgi kapısı/çapraz kontrol/birim tahmini kodunu bu dala alma kararı ve G12a–d golden vakaları (ekip kararı).
 - [x] **EK-09** CI: agent-core işi pillow/lxml eksikliğiyle düşüyordu → bağımlılık; art arda push'ta eski koşu iptal.
 - [x] **EK-11** M16 dördüncü koşu: yuvarlanmış değişim tolerans dışı sayılıyordu (M13-T05) ve birleştirme kontrolü fikstürün beklediği reddi başarısız sayıyordu → ikisi düzeltildi.
+- [x] **EK-12** M16 beşinci koşu: yanlış bakiye (1.048.900 ↔ gerçek 678.970) notla cevaba çıktı ve araçsız turda uydurma tablo yazıldı → grounding MISS iki geri gönderme, araçsız turda tabloda olmayan ≥2 sayı geri gönderilir (ADR-0063). Canlı teyit altıncı koşuda.
 - [x] **EK-10** CI lakehouse işi GitHub'da tek testte düşüyordu (IPv4-eşlemeli loopback etiketi Python yamasına bağlı) → adres önce açılır; iş 34 dk sürdüğü için süre sınırı 60 dk.
 
 ## 6. Asgari birleşik kabul matrisi

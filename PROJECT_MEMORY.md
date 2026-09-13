@@ -237,7 +237,8 @@ Kullanıcı uyurken tüm milestone'ları sırayla kapatma görevi. Kod dalı yal
 - **Üçüncü kabul koşusu 11/14, senaryo 5/6** (`acceptance_m16_2026-09-14_0154.json`, ae7fb01): L10 (0,2 s, LLM yok), ziyaret kırılması (2025-01) ve birleştirme düzeldi. Kalan: finans 1. turda "50" eşleşmedi (bağlam kırpılmış), 3. turda faiz "17.985" binlik okundu → iki okuma; grafik turunda model chart'ı çağırmadan reddetti → tablo varken de grafik zorunluluğu. Arayüz uçtan uca ae7fb01'de 7/7.
 - **Dördüncü kabul koşusu 12/14** (`acceptance_m16_2026-09-14_0205.json`, b33c03f): grafik turu chart'ı çağırdı ve geçti. Kalan iki: finans 3. turda yuvarlanmış değişim "−0,40" (−0,403) göreli %0,5'e takıldı → tolerans gösterilen hassasiyetin yarım birimi (M13-T05); birleştirme turu kontrol hatası (ajan fikstürün beklediği gibi Van yinelemesinde reddedip sordu) → kontrol düzeltildi, kayıt değiştirilmedi. Arayüz uçtan uca b33c03f'de 7/7.
 - Sabah raporu: kararlar (Büşra dalı, main/freeze, ARCHITECT_TOKEN, K10, boş katalog provası, ekip eşikleri/mentör/arkadaş provası) ve açıklar `docs/M16_KABUL_RAPORU.md` ile artifact sayfasında.
-- Testler ajan 377 → 417.
+- **Beşinci kabul koşusu 12/14** (`acceptance_m16_2026-09-14_0214.json`, b05cea3) — ciddi bulgu: iki uydurma sayı cevaba girdi. (1) "Ara 2025: 1.048.900 milyon TL", gerçek 678.970; tek geri göndermeden sonra notla gitti → MISS iki hak. (2) Faiz sorusunda araç çağrılmadan kafadan farklar ve tekrarlanan uydurma satırlar → araçsız turda tabloda olmayan ≥2 sayı geri gönderilir. Kanıt paneli ikisini de kırmızı gösterdi.
+- Testler ajan 377 → 418.
 
 ## 3. Bugünkü sayılar
 

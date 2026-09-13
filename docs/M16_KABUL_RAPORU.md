@@ -13,7 +13,7 @@ sütunlardır; biri diğerinin yerine yazılmaz (M16 risk notu).
 | Ajan birim/sözleşme testleri | 416 geçti | `make test`, CI agent-core işi yeşil |
 | Lakehouse testleri | 1.086 geçti (yerel, 12 dk) | GitHub'da tek düşen test düzeltildi (§6) |
 | Kabul matrisi A01–A33 test eşlemesi | 14 tam · 19 kısmi · 0 yok | §3 |
-| Canlı çok turlu kabul (14 tur × 4 koşu) | 10 → 11 → 11 → 12 | `docs/experiments/acceptance_m16_*.json` |
+| Canlı çok turlu kabul (14 tur × 5 koşu) | 10 → 11 → 11 → 12 → 12 | `docs/experiments/acceptance_m16_*.json` |
 | Arayüz uçtan uca (Playwright) | 6/7 → 7/7 → 7/7 → 7/7 (son kod b33c03f) | `docs/experiments/ui_e2e_m16_*/rapor.json` + ekran görüntüleri |
 
 Her koşunun bulduğu kusur harness'te kapatıldı ve bir sonraki koşu yeni commit'te yapıldı (ADR-0063). Aynı tur farklı
@@ -31,6 +31,7 @@ puanlanmaz; tablo, kolon, satır sayısı, araç yolu, bilinen değer ve kanıt 
 | 2 (01:33) | 320905f | 11/14 | 5/6 | 3/4 | ✓ | ✓ | ✓ | ✗ |
 | 3 (01:54) | ae7fb01 | 11/14 | 3/6 | 4/4 | ✓ | ✓ | ✓ | ✓ |
 | 4 (02:05) | b33c03f | 12/14 | 5/6 | 3/4* | ✓ | ✓ | ✓ | ✓ |
+| 5 (02:14) | b05cea3 | 12/14 | 4/6 | 4/4 | ✓ | ✓ | ✓ | ✓ |
 
 \* Dördüncü koşudaki birleştirme turu kontrol hatasıdır: ajan, fikstür belgesinin beklediği gibi hastane tablosunda iki kez
 geçen Van anahtarında `workspace_join` reddini aldı ve kullanıcıya nasıl ilerleyeceğini sordu. Kontrol yalnız başarılı
@@ -50,6 +51,8 @@ birleştirmeyi kabul ediyordu; artık "birleştirme ya da yinelenen anahtarda re
 | Grafik turunda chart hiç çağrılmadı (3) | O turda veri üretilmediği için grafik zorunluluğu susuyordu | Aktif tablo varken de geri gönderilir |
 | Yuvarlanmış değişim "−0,40" tabloda yok sayıldı (4) | Göreli %0,5 tolerans, iki haneye yuvarlanan −0,403'ü reddetti | Tolerans gösterilen hassasiyetin yarım birimi (M13-T05); maddi fark hâlâ ret |
 | Birleştirme turu ✗ (4) | Kontrol yalnız başarılı birleştirmeyi kabul ediyordu | Kontrol fikstür beklentisine göre düzeltildi |
+| **Yanlış bakiye cevaba çıktı (5):** "Ara 2025: 1.048.900 milyon TL"; gerçek değer 678.970 | Grounding bir kez geri gönderdi, ikinci yazımda da sayı kaldı ve yalnız "doğrulanamadı" notuyla gitti | MISS iki kez geri gönderilir, sonra not |
+| **Araçsız uydurma tablo (5):** faiz sorusunda hiç araç çağrılmadı; farklar ve 2021–2023 boyunca aynı değerle tekrarlanan satırlar | Aktif tablo varken veri zorunluluğu susuyor; işlem fiili olmadığı için araçsız işlem guard'ı da çalışmadı | Araçsız turda aktif tabloda olmayan ≥2 sayı → bir kez geri gönderilir, hesap workspace_query'ye |
 | Finans 1. turda eşleşmeyen "50" (2, 3) | Bağlam kayıtta 240 karakterde kırpılmıştı | 4. koşuda tekrarlamadı; betik artık tam cevabı yazıyor |
 
 ### Süre (M15-T01, koşu 1–3, n = 28 tur)
@@ -127,7 +130,7 @@ Architect geçişinin 403 reddi · arayüzden oturum sıfırlama. Her adımda ek
   tam sıfırlaması gerektirir, demo verisini korumak için yapılmadı. Önerilen: ayrı `DATA_ROOT` ile prova.
 - **M16-T07:** model kesintisi ve süre bütçesi birim testleriyle; canlı ağ kesintisi denemesi yapılmadı.
 - **M16-T10/T11:** sayısal eşik ve başka ekip üyesinin tarifi izlemesi ekip işi.
-- **Canlı teyit bekleyen:** finans 3. turun hassasiyet toleransıyla geçmesi (düzeltme 4. koşudan sonra yapıldı).
+- **Canlı teyit bekleyen:** beşinci koşuda iki uydurma sayı bulundu (yanlış bakiye, araçsız tablo); ikisi için guard eklendi, altıncı koşu sonucu `acceptance_m16_*` kayıtlarında. Kanıt paneli iki durumda da sayıları kırmızı gösterdi; yanlış sayı kullanıcıdan saklanmadı ama cevaba girdi.
 
 ## 6. CI, bütünleştirme ve güvenlik (M17 hazırlığı)
 
