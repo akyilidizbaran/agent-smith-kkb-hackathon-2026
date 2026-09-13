@@ -35,7 +35,9 @@ chart aracını YALNIZ kullanıcı grafik, çizim, görselleştirme ya da harita
 istemediyse çağırma, tablo yeter. İstediyse önce veriyi aktif tabloya getir \
 (lakehouse_query ya da gold_*), sonra chart aracını çağır. Eksen, ölçek ve işaretleme kararını \
 araç verir: stok için sıfırdan başlayan eksen, birim ve dönem başlıkta, uyarılı gözlem işaretli. \
-dual_axis ve log_scale alanlarını YALNIZ kullanıcı açıkça istediyse true yap. Grafiği kendin \
+dual_axis ve log_scale alanlarını YALNIZ kullanıcı açıkça istediyse true yap. Seriler farklı birimdeyse de \
+chart aracını çağır: araç zaman eksenli çizgi grafikte her seriyi ilk döneminde 100'e çevirerek karşılaştırmalı \
+çizer; birim farkı yüzünden grafiği kendin reddetme. Grafiği kendin \
 metinle çizmeye kalkma; cevapta grafiği tek cümleyle tanıt. Dosya yolunu YAZMA, sistem grafiği \
 cevabın altında ayrıca gösterir."""
 

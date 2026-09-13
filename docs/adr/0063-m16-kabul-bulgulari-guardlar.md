@@ -50,6 +50,15 @@ dört kusur buldu. Rapor rapordan çıkarılmadı: `docs/experiments/acceptance_
 - **Ekip notu (Büşra, 13 Eyl):** `FILE_IRRELEVANT` hata kodu listede ve tekrar denenemez; okuyucu tek harfli URL şemasını
   Windows sürücü harfi sayar (izinli kök kuralı aynen uygulanır).
 
+### Üçüncü koşu sonrası (11/14, senaryo 5/6)
+
+- **Grafik zorunluluğu tablo varken de çalışır.** Model "karşılaştırmalı grafik" turunda chart'ı hiç çağırmadan "farklı
+  birimler, çizilemez" yazdı; o turda veri üretilmediği için zorunluluk susuyordu. Artık aktif tablo varsa da bir kez geri
+  gönderilir; grafik kuralı farklı birimde de aracı çağırmasını, ilk dönem = 100 geri dönüşünü söyler.
+- **Noktalı üç haneli sayı iki okumayla aranır.** "17.985" Türkçe binlik (17985) okunuyordu; faiz tablosunda 17,985 olduğu
+  için "tabloda yok" dendi. Tek noktalı üç haneli yazımda iki okumadan biri tabloda varsa sayı eşleşir.
+- **Açık:** finans ilk turunda eşleşmeyen tek sayı "50"; bağlam kayıtta kırpılmıştı, betik artık tam cevabı yazıyor.
+
 ## Reddedilenler
 
 - **İşlem iddiasında cevabı doğrudan reddetmek:** "eklendi" gibi fiiller önceki turdaki gerçek işi anlatırken de geçer;

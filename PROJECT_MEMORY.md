@@ -234,7 +234,8 @@ Kullanıcı uyurken tüm milestone'ları sırayla kapatma görevi. Kod dalı yal
 - Sır taraması (ca2bfe3): `.env` gizli değerleri ağaçta/tarihçede yok; tek eşleşmeler `.env.example`'daki değişken referansı ve test fikstüründeki sahte AKIA dizisi. Lakehouse testleri yerelde 1.086 geçti (12 dk).
 - **CI lakehouse işi GitHub'da düşüyordu:** 1.086 testin 1'i (`test_an_ipv4_mapped_loopback_is_refused`): `::ffff:127.0.0.1` yerelde (Python 3.12.13) "loopback", koşucudaki 3.12'de "private" sınıflanıyor. Adres sınıflamadan önce IPv4'e açılıyor; sebep yorumlayıcıya bağlı değil. Aynı iş GitHub'da 34 dk sürdü, 40 dk sınırı bir koşuyu iptal ettirdi → 60 dk.
 - **M05-T03 (ADR-0064):** ajan ile lakehouse bağlayıcısı karşılaştırıldı; ajan multicast, site-local ve `.internal`/`.localhost` adlarını geçiriyordu. Tek adres modülü (`web/addresses.py`) ve iki paketin okuduğu ortak vaka dosyası `docs/sozlesmeler/url_erisim_vakalari.json` (17 adres, 5 ad). Lakehouse tarafı 22 test, ajan tarafı 23 test.
-- Testler ajan 377 → 414.
+- **Üçüncü kabul koşusu 11/14, senaryo 5/6** (`acceptance_m16_2026-09-14_0154.json`, ae7fb01): L10 (0,2 s, LLM yok), ziyaret kırılması (2025-01) ve birleştirme düzeldi. Kalan: finans 1. turda "50" eşleşmedi (bağlam kırpılmış), 3. turda faiz "17.985" binlik okundu → iki okuma; grafik turunda model chart'ı çağırmadan reddetti → tablo varken de grafik zorunluluğu. Arayüz uçtan uca ae7fb01'de 7/7.
+- Testler ajan 377 → 416.
 
 ## 3. Bugünkü sayılar
 

@@ -559,7 +559,7 @@ class AnalyticsAgent:
                 # bir kez geri gönderilir; veri hazırsa araç çağrısı tek adımdır.
                 missing = next(
                     (cap for cap in requested
-                     if cap[0] not in capability_nudged and produced_data
+                     if cap[0] not in capability_nudged and (produced_data or self.workspace.has_table)
                      and not any(s.tool_name in cap[2] and s.ok for s in steps)),
                     None,
                 )

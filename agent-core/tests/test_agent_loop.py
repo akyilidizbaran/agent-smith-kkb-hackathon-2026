@@ -516,3 +516,32 @@ def test_l10_kisa_belirsiz_soruda_llm_cagrilmadan_netlestirme_ve_yanitta_kapi_su
     assert ans.text.rstrip().endswith("?") and "- Tüketici Kredileri" in ans.text and ans.steps[0].candidates
     agent.ask("Konut kredisi")            # bizim soruya kısa yanıt: kapı susar, model çalışır
     assert llm.seen_tool_offers, "bekleyen soruya yanıt modele gitti"
+
+
+def test_grafik_istegi_tablo_varken_aracsiz_retle_bitmez() -> None:
+    """M16 üçüncü koşu: 'karşılaştırmalı grafik' turunda model chart'ı hiç çağırmadan 'çizilemez' yazdı; bu turda veri
+    üretilmediği için grafik zorunluluğu susuyordu. Tablo varken de bir kez geri gönderilir."""
+
+    class _Chart(Tool):
+        name = "chart"
+        description = "grafik"
+        Params = _Params
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def run(self, params):
+            self.calls += 1
+            return ToolResult(content="GRAFİK: çizildi")
+
+    llm = _ScriptedLLM([
+        LLMResponse(content="Seriler farklı birimde olduğu için grafik çizilemez."),
+        LLMResponse(content="", tool_calls=[ToolCall(id="g1", name="chart", arguments={"year": 2025})]),
+        LLMResponse(content="Grafik hazır."),
+    ])
+    agent, _ = _agent(llm)
+    chart = _Chart()
+    agent.registry.register(chart)
+    agent.workspace.set_table(pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]}), description="önceki tur")
+    ans = agent.ask("Bunu bana karşılaştırmalı grafik olarak göster.")
+    assert chart.calls == 1 and ans.text == "Grafik hazır."

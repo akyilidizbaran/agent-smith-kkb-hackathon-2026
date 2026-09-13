@@ -121,6 +121,14 @@ class EvidenceBuilder:
         self.max_rows = max_rows
 
     # ------------------------------------------------------------------ halkalar
+    def _hits(self, series: pd.Series, candidates: list[float]) -> pd.Series:
+        """Adaylardan ilki tabloda tolerans içinde bulunursa eşleşen satırlar; yoksa boş seri."""
+        for n in candidates:
+            hits = series[(series - n).abs() <= max(abs(n) * self.tolerance, 1e-9)]
+            if not hits.empty:
+                return hits
+        return series.iloc[0:0]
+
     def _match_numbers(self, answer: str, table: pd.DataFrame, time_col: str | None,
                        previous: list[pd.DataFrame] | None = None,
                        peeks: list[tuple[str, pd.DataFrame]] | None = None,
@@ -140,6 +148,9 @@ class EvidenceBuilder:
                 continue
             seen.add(text)
             ev = NumberEvidence(number=number, text=text, from_question=number in asked)
+            # "17.985": Türkçe binlik (17985) mi, noktalı ondalık (17,985) mı? Yazım ikisini de taşır; biri tabloda
+            # varsa sayı oradadır (M16 üçüncü koşu: faiz 17.985 yazıldı, 17985 aranıp "tabloda yok" dendi).
+            candidates = [number] + ([float(text)] if re.fullmatch(r"[-+]?\d{1,3}\.\d{3}", text) else [])
             if number in asked and (number in periods or (float(number).is_integer() and 1900 <= number <= 2100)):
                 ev.matched, ev.column, ev.row_key = True, "(soruda geçiyor)", text   # dönem/yıl filtresi
                 out.append(ev)
@@ -160,7 +171,7 @@ class EvidenceBuilder:
                 continue
             for col in numeric_cols:
                 series = table[col]
-                hits = series[(series - number).abs() <= max(abs(number) * self.tolerance, 1e-9)]
+                hits = self._hits(series, candidates)
                 if not hits.empty:
                     idx = int(hits.index[0])
                     ev.matched, ev.column, ev.row_index = True, str(col), idx
@@ -168,7 +179,7 @@ class EvidenceBuilder:
                     break
             if not ev.matched:
                 for col, series in text_parsed.items():
-                    hits = series[(series - number).abs() <= max(abs(number) * self.tolerance, 1e-9)]
+                    hits = self._hits(series, candidates)
                     if not hits.empty:
                         idx = int(hits.index[0])
                         ev.matched, ev.column, ev.row_index = True, col, idx
@@ -182,7 +193,7 @@ class EvidenceBuilder:
                     found = False
                     for col in [c for c in old.columns if pd.api.types.is_numeric_dtype(old[c])]:
                         series = old[col]
-                        hits = series[(series - number).abs() <= max(abs(number) * self.tolerance, 1e-9)]
+                        hits = self._hits(series, candidates)
                         if not hits.empty:
                             ev.matched, ev.column, ev.row_key = True, str(col), f"önceki tablo (-{depth})"
                             found = True
@@ -195,7 +206,7 @@ class EvidenceBuilder:
                     found = False
                     for col in [c for c in frame.columns if pd.api.types.is_numeric_dtype(frame[c])]:
                         series = frame[col]
-                        hits = series[(series - number).abs() <= max(abs(number) * self.tolerance, 1e-9)]
+                        hits = self._hits(series, candidates)
                         if not hits.empty:
                             ev.matched, ev.column, ev.row_key = True, str(col), f"bakış sorgusu: {sql[:80]}"
                             found = True

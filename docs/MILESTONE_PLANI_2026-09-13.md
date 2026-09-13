@@ -67,14 +67,14 @@ Bu test sayıları birbirleriyle toplanarak başarı oranı veya motor üstünl�
 | M02 | Güncel motor kıyası ve katkı aktarımı | P0 | M00; eşit test ortamı için M01 | Agent + değerlendirme | Tamamlandı (13 Eyl, ADR-0053); T08 ertelendi |
 | M03 | Jenerik veri ve kaynak sözleşmeleri | P0 | M00 | Agent + veri | Tamamlandı (14 Eyl, ADR-0060); T06 kısmi |
 | M04 | Analyst/Architect yetki ve yayın sınırı | P0 | M03; profil uygulama kararı | Agent + veri + UI | Tamamlandı (14 Eyl, ADR-0056); T05 koşula bağlı, pasifleştirme açık |
-| M05 | Güvenli kaynak erişimi | P0 | Mevcut erişim kodu; M03 sözleşmesi | Agent + veri | Tamamlandı (13 Eyl, ADR-0051); T03 ortak sözleşme testi açık |
+| M05 | Güvenli kaynak erişimi | P0 | Mevcut erişim kodu; M03 sözleşmesi | Agent + veri | Tamamlandı (13 Eyl, ADR-0051; T03 14 Eyl ADR-0064 ortak vaka dosyası) |
 | M06 | Tavily, crawl, yetkili erişim ve fallback | P1 | M05 | Kaynak erişimi + UI | Tamamlandı (14 Eyl, ADR-0061); T07 M17, T09 uygulanmadı |
 | M07 | Ortak ingestion ve provenance | P0 | M01, M03 | Veri | Tamamlandı (14 Eyl, ADR-0057) |
 | M08 | BDDK/EVDS semantik ve kapsam hazırlığı | P1 | M00 kapsam; M07 yayın kanıtı | Veri + alan doğrulaması | Tamamlandı (14 Eyl, ADR-0062, `M08_KAPSAM_RAPORU.md`); T06/T10 kısmi |
 | M09 | Gold, hizalama ve reel dönüşüm | P1 | M07, M08 | Veri + agent | Tamamlandı (14 Eyl, ADR-0058); T07 kısmi |
 | M10 | Dosya/URL/PDF/OCR giriş akışı | P1 | M03, M04 sınırı, M05 | Agent + UI | Çekirdek tamamlandı (14 Eyl, ADR-0054); T04/T06 kısmi |
-| M11 | Oturum, tablo korunması ve açıklama soruları | P1 | M03, M04; M10 ile entegrasyon | Agent + UI | Tamamlandı (14 Eyl, ADR-0059); T07/T08 canlı ölçüm M16 |
-| M12 | Anomali/kırılma/öncülük doğruluğu | P0/P1 | M03; M09/M11 ile entegrasyon | Analitik | Çekirdek tamamlandı (13 Eyl, ADR-0052); T03/T05/T06 kısmi |
+| M11 | Oturum, tablo korunması ve açıklama soruları | P1 | M03, M04; M10 ile entegrasyon | Agent + UI | Tamamlandı (14 Eyl, ADR-0059; T07 deterministik netleştirme ADR-0063); T08 kısmi |
+| M12 | Anomali/kırılma/öncülük doğruluğu | P0/P1 | M03; M09/M11 ile entegrasyon | Analitik | Çekirdek tamamlandı (13 Eyl, ADR-0052; T06 gerçek veri ve düzey sıçraması 14 Eyl ADR-0063); T03 kısmi |
 | M13 | İddia doğrulama ve kanıtın doğru sunulması | P0 | Mevcut kod; M03/M07/M11 ile entegrasyon | Agent + veri + UI | Çekirdek tamamlandı (13 Eyl, ADR-0050); T04/T07/T11/T12 açık |
 | M14 | Kullanıcı arayüzü ve tam çıktı indirme | P1 | M10, M11, M13 | UI + API | Çekirdek tamamlandı (14 Eyl, ADR-0055); T11/T12 açık |
 | M15 | Süre/çıktı bütçeleri ve otomatik kontroller | P1/P2 | M01; M02 ölçümleri | Agent + geliştirme altyapısı | Çekirdek tamamlandı (14 Eyl, ADR-0061); ölçüm T01/T02 M16'dan |
@@ -376,8 +376,8 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 - [x] **M13-T08**: Üç ayrı durumu tanımla: hesap/iddia doğruluğu, semantik güven, kaynak zinciri/dosya bütünlüğü. Tek yeşil “tam” rozeti hepsinin yerine geçmesin.
 - [x] **M13-T09**: Gerekli RAW/Bronze dosyalarının varlığını ve uygun yerde hash bütünlüğünü denetle; metadata kaydı ile fiziksel kanıtı ayır.
 - [x] **M13-T10**: İncelenen ilk 200 satır veya kısmi gözlem listesinin kapsamını açık göster; tüm tablo doğrulanmış gibi etiketleme.
-- [ ] **M13-T11:** Gold katkı listeleri, OCR sayfa/tablo/hücreleri ve web hash/zaman zincirini farklı kanıt türleri olarak koru.
-- [ ] **M13-T12:** Yanlış iddia için sınırlı yeniden üretim/düzeltme, sonra doğru kısmi çıktı; eksik kanıt için kullanıcı tercihine uygun uyarılı çıktı sun.
+- [~] **M13-T11** (web kaynağı URL+sha256+zaman ve OCR bayrağıyla ayrı; Gold satırı katkı artifact listesinden zincire iner; OCR sayfa/tablo/hücre ayrı kanıt türü olarak panelde değil): Gold katkı listeleri, OCR sayfa/tablo/hücreleri ve web hash/zaman zincirini farklı kanıt türleri olarak koru.
+- [~] **M13-T12** (grounding MISS ya da nedensellik dilinde cevap bir kez (nedensellikte iki kez) geri gönderilir; ikinci yazımda da doğrulanamayan değerler cevaba görünür notla eklenir; kullanıcı tercihine göre uyarılı/uyarısız çıktı ayarı yok): Yanlış iddia için sınırlı yeniden üretim/düzeltme, sonra doğru kısmi çıktı; eksik kanıt için kullanıcı tercihine uygun uyarılı çıktı sun.
 - [x] **M13-T13**: Grounding hatası ile UI tamlık durumu çelişmesin; model metni, tablo ve rozet aynı kontrol sonucunu kullansın.
 - [x] **M13-T14** (A13, A14, A23; hash uyuşmazlığı ve yuvarlama sınırı açık): Kaynak dosyası eksik, hash uyuşmaz, yanlış yıl/birim/işaret, sorudan kopya sayı ve doğru yuvarlama için adversarial regresyon seti oluştur.
 
@@ -415,17 +415,17 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Ölçüm raporu, seçilmiş bütçeler ve tekrar çalıştırılabilir offline/canlı doğrulama komutları.
 
-- [ ] **M15-T01:** Normal soru, çok turlu analiz, web ve OCR için ayrı süre/token dağılımları ölç; p50/p95 ve başarısız/timeout koşularını birlikte raporla.
+- [~] **M15-T01** (14 Eyl ölçüldü, canlı model: M16 kabul turları n=28 p50 16,4 s / p95 122,9 s (finans çok turlu p50 18,2 / p95 112,6; dosya p50 18,0 / p95 147,6; sınır p50 15,6 / p95 35,2), arayüz soru adımı 26–196 s, dışa aktarım 0,2 s; OCR tek PDF 1,9–5,8 s (ADR-0041); token dağılımı ayrıca raporlanmadı, zaman aşımı 0): Normal soru, çok turlu analiz, web ve OCR için ayrı süre/token dağılımları ölç; p50/p95 ve başarısız/timeout koşularını birlikte raporla.
 - [ ] **M15-T02:** Ekipçe kabul edilebilir süre, çıktı ve tekrar başarısı eşiklerini belirle; bu planda uydurma SLA veya resmî kota yazma.
 - [x] **M15-T03** (SDK tekrarı kapalı, yalnız geçici hatada tekrar, LLM_TIMEOUT): LLM çağrısı için çıktı sınırı, timeout ve retry/backoff toplam etkisini incele; SDK ile dış retry döngülerinin birleşik davranışını doğrula.
 - [x] **M15-T04** (AGENT_TIME_BUDGET_S, kısmi cevap turu): Soru genelinde süre/adım/araç/arama bütçesi oluştur; limitte doğru kısmi sonuç ve sonraki seçenek dön.
 - [x] **M15-T05** (kapı ≠ yetki): Tool gating'in yetki değil performans optimizasyonu olduğunu koru; yanlış kapatılan yetenek, belirsiz takip sorusu ve yeni alan vakalarını ölç.
 - [ ] **M15-T06:** BM25/facet/hybrid recall ölçümünü finans dışı ve görülmemiş sorgularla genişlet; katalog boyutu tek başarı göstergesi olmasın.
-- [ ] **M15-T07:** Embedding/arama servisi yokluğunda fallback ve cache tutarlılığını doğrula; katalog değişince eski cache yanlış seri getirmesin.
+- [~] **M15-T07** (embedding düşerse BM25 ile devam, sessiz değil (retriever); embedding önbellek anahtarı model + kayıt kimlikleri + metinler, katalog değişince eski vektör dönmez; katalog değiştiren araçtan sonra profil yenilenir. Retriever kayıtlarının aynı süreçte yeniden kurulduğunu gösteren test yok): Embedding/arama servisi yokluğunda fallback ve cache tutarlılığını doğrula; katalog değişince eski cache yanlış seri getirmesin.
 - [ ] **M15-T08:** V3'ün sınırlı ön-yükleme, alan notları ve bağımsız salt-okunur paralelliğini ölçerek değerlendir; peşinen uygulama zorunluluğu sayma.
 - [x] **M15-T09** (`.github/workflows/tests.yml`): Deterministik unit/contract testlerini PR/CI kontrolüne al; canlı MIA/Tavily/EVDS testlerini anahtarlı ayrı çalıştırma olarak tut.
 - [x] **M15-T10** (`make ci`, lakehouse Makefile adları): Agent ve lakehouse kilitli kurulum, ilgili lint/build ve sözleşme kontrollerini tek doğrulama tarifinde topla. Makefile'daki eski “build/demo-check” isimlerini gerçek davranışla uyumlu hâle getir.
-- [ ] **M15-T11:** Lakehouse tam testinin ölçülen 12 dk 43 sn maliyetini profille; tekrarlanan katalog parse/DB kurulumunu doğrulama anlamını zayıflatmadan iyileştir.
+- [~] **M15-T11** (14 Eyl profil: yerelde 1.086 test 12 dk 08 s, GitHub'da 34 dk; en yavaş tek test 6,4 s, maliyet çok sayıda ~2 s'lik DB kurulumlu testte; iyileştirme yapılmadı, CI süre sınırı 60 dk): Lakehouse tam testinin ölçülen 12 dk 43 sn maliyetini profille; tekrarlanan katalog parse/DB kurulumunu doğrulama anlamını zayıflatmadan iyileştir.
 - [x] **M15-T12** (CI canlı anahtar kullanmaz; hata maskeleme): CI ve yerel rapor artefaktları sır/gizli yanıt içermesin; hata redaksiyonu ve sonuç kayıt sınırı korunsun.
 
 **Kabul:** Bütçe aşımı sonsuz bekleyiş veya kontrolsüz tekrar üretmez. Ölçüm aynı koşullarda yeniden alınabilir; değişiklik sonrası ilgili testler otomatik çalışır. Sayısal eşikler kararlaştırılmadan performans milestone'u “hedefi geçti” diye kapatılmaz.

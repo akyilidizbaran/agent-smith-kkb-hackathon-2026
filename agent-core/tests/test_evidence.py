@@ -302,3 +302,15 @@ def test_eslesmeyen_sayi_dosya_zinciri_rozetini_kirmizi_yapmaz(lake) -> None:
     panel = EvidenceBuilder(lake).build("soru", "Ocak 100, Şubat 110, fark 999 milyon TL.", ws, [])
     assert panel.states() == {"sayılar": False, "sorgu izi": True, "dosya zinciri": True}, panel.gaps
     assert not panel.complete and any(g.startswith("tabloda bulunmayan sayılar") for g in panel.gaps)
+
+
+def test_noktali_uc_haneli_sayi_hem_binlik_hem_ondalik_okunur(lake) -> None:
+    """M16 üçüncü koşu: model faizi '17.985' yazdı (ondalık), bakiyeyi '276.263' (binlik); ikisi de tablodaysa eşleşir."""
+    ws = AnalysisWorkspace()
+    ws.set_table(pd.DataFrame({"observation_date": [date(2025, 1, 28)], "bakiye": [276263.0], "faiz": [17.985]}),
+                 description="iki kolon")
+    panel = EvidenceBuilder(lake).build("soru", "Bakiye 276.263 milyon TL, faiz 17.985.", ws, [])
+    got = {n.text: n.matched for n in panel.numbers}
+    assert got == {"276.263": True, "17.985": True}, panel.numbers
+    miss = EvidenceBuilder(lake).build("soru", "Faiz 19.450.", ws, [])
+    assert [n.matched for n in miss.numbers] == [False]
