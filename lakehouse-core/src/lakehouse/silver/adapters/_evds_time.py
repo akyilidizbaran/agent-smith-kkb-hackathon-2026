@@ -8,7 +8,13 @@ frequency             web application       documented keyed API
 ===================== ===================== =====================
 weekly / daily        ``01-08-2021``        ``08-01-2021``
 monthly               ``01-2021``           ``2021-1``
+quarterly             (not captured)        ``2021-Q1``
 ===================== ===================== =====================
+
+The quarterly row was read from real Bronze rows of ``TP.BIRIMFIYAT.TR`` and ``TP.BK.TR``
+fetched from the keyed endpoint on 2026-09-10: ``Tarih`` is ``YYYY-Qn`` and ``UNIXTIME`` is
+the first day of that quarter (``2021-Q1`` ↔ ``1609455600`` = 2021-01-01 Istanbul). Only that
+spelling is accepted; the web application's quarterly spelling has never been observed.
 
 Both rows are the same observation — 8 January 2021 and January 2021. The committed fixtures
 came from the web application, because no API key existed when they were captured; their
@@ -24,6 +30,7 @@ third spelling is a failure rather than a surprise.
 
 from __future__ import annotations
 
+import re
 from calendar import monthrange
 from datetime import date, datetime, timedelta, timezone
 
@@ -123,4 +130,41 @@ def evds_month_bounds(row: pd.Series, row_number: int) -> tuple[date, date]:
     return period_start, period_start.replace(day=last_day)
 
 
-__all__ = ["ISTANBUL", "evds_month_bounds", "evds_point_date"]
+_QUARTER_RE = re.compile(r"^(?P<year>\d{4})-Q(?P<quarter>[1-4])$")
+
+
+def evds_quarter_bounds(row: pd.Series, row_number: int) -> tuple[date, date]:
+    """The first and last calendar day of a quarterly EVDS observation's quarter.
+
+    ``Tarih`` must be ``YYYY-Qn`` and, when ``UNIXTIME`` is present, it must fall inside that
+    quarter (the keyed endpoint sends the quarter's first day). Any other spelling is refused
+    so that a new one is a failure rather than a silently wrong period.
+    """
+
+    raw_date = row.get("date_raw")
+    text = str(raw_date).strip() if isinstance(raw_date, str) else ""
+    match = _QUARTER_RE.match(text)
+    if match is None:
+        raise SilverValidationError(
+            f"invalid EVDS quarterly date_raw at row {row_number}: {raw_date!r}; "
+            "expected 'YYYY-Qn' as the keyed endpoint publishes it"
+        )
+    year, quarter = int(match["year"]), int(match["quarter"])
+    if year < _EARLIEST_PLAUSIBLE_YEAR:
+        raise SilverValidationError(
+            f"invalid EVDS quarterly date_raw at row {row_number}: {raw_date!r}"
+        )
+    period_start = date(year, 3 * quarter - 2, 1)
+    end_month = 3 * quarter
+    period_end = date(year, end_month, monthrange(year, end_month)[1])
+
+    from_unixtime = _unixtime_date(row.get("unixtime"))
+    if from_unixtime is not None and not (period_start <= from_unixtime <= period_end):
+        raise SilverValidationError(
+            f"EVDS date_raw {raw_date!r} at row {row_number} disagrees with UNIXTIME "
+            f"({from_unixtime.isoformat()}); the source changed a field this mapping relies on"
+        )
+    return period_start, period_end
+
+
+__all__ = ["ISTANBUL", "evds_month_bounds", "evds_point_date", "evds_quarter_bounds"]

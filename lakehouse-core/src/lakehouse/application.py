@@ -24,6 +24,7 @@ from .adhoc import (
 from .catalog.artifacts import ArtifactRepository
 from .catalog.promotion import PromotionResult, promote_draft_series
 from .catalog.registration import register_series
+from .catalog.series import DEFAULT_CATALOG_ROOT, SeriesRecord, load_catalog_files
 from .connectors.base import BaseConnector
 from .connectors.evds import EvdsConnector
 from .contracts.identifiers import new_run_id
@@ -67,10 +68,10 @@ class KnownSourceDefinition:
     frequency: str = "daily"
 
 
-def _evds_cpi_connector(
+def _evds_connector(
     storage: RawStorage, *, session: Any = None, clock: Clock = _utc_now
 ) -> EvdsConnector:
-    """Build the existing generic EVDS connector for the registered CPI dataset."""
+    """Build the existing generic EVDS connector; the dataset decides which series it asks for."""
 
     kwargs: dict[str, Any] = {"clock": clock}
     if session is not None:
@@ -81,12 +82,52 @@ def _evds_cpi_connector(
 KNOWN_SOURCES: dict[tuple[str, str], KnownSourceDefinition] = {
     ("evds", "evds_cpi"): KnownSourceDefinition(
         series="TP.FG.J0",
-        connector_factory=_evds_cpi_connector,
+        connector_factory=_evds_connector,
         parser_factory=EvdsParser,
         frequency="monthly",
     ),
 }
-"""Supported source/dataset dispatch entries for this CLI version."""
+"""Hand-verified source/dataset entries. Consulted first; the catalog is the fallback."""
+
+CATALOG_SOURCE_FACTORIES: dict[str, tuple[ConnectorFactory, ParserFactory]] = {
+    "evds": (_evds_connector, EvdsParser),
+}
+"""Sources whose datasets may be resolved from ``catalog/series/*.yml`` instead of
+``KNOWN_SOURCES``. The catalog already states everything a FetchSpec needs for these
+sources (``native_code`` and ``frequency``); only the connector/parser pair is code."""
+
+
+def _definition_from_catalog(
+    source_id: str, dataset_id: str, records: list[SeriesRecord]
+) -> KnownSourceDefinition | None:
+    """Compose a definition from the catalog rows of one active dataset, or None."""
+
+    factories = CATALOG_SOURCE_FACTORIES.get(source_id)
+    if factories is None:
+        return None
+    rows = [
+        record
+        for record in records
+        if record.source_id == source_id
+        and record.dataset_id == dataset_id
+        and record.status == "active"
+    ]
+    if not rows:
+        return None
+    frequencies = sorted({record.frequency for record in rows})
+    if len(frequencies) != 1:
+        raise ValueError(
+            f"dataset {dataset_id!r} mixes frequencies {frequencies}; one EVDS request "
+            "cannot window two frequencies, split the dataset in the catalog"
+        )
+    connector_factory, parser_factory = factories
+    # EvdsConnector joins several codes into one request with "-" (see requested_series).
+    return KnownSourceDefinition(
+        series="-".join(record.native_code for record in rows),
+        connector_factory=connector_factory,
+        parser_factory=parser_factory,
+        frequency=frequencies[0],
+    )
 
 
 @dataclass(frozen=True)
@@ -133,18 +174,41 @@ class AdhocIngestionSummary:
     publication: AdhocPublicationResult
 
 
-def _resolve_known_source(source_id: str, dataset_id: str) -> KnownSourceDefinition:
-    key = (source_id, dataset_id)
-    definition = KNOWN_SOURCES.get(key)
+def _resolve_known_source(
+    source_id: str,
+    dataset_id: str,
+    *,
+    catalog_root: Path = DEFAULT_CATALOG_ROOT,
+) -> KnownSourceDefinition:
+    """Resolve a dataset: hand-verified table first, then the Git-versioned catalog.
+
+    The catalog files are read directly rather than ``meta.series`` so that an unknown
+    dataset is rejected before any database is created or touched.
+    """
+
+    definition = KNOWN_SOURCES.get((source_id, dataset_id))
     if definition is not None:
         return definition
 
-    sources = sorted({source for source, _ in KNOWN_SOURCES})
+    sources = sorted({source for source, _ in KNOWN_SOURCES} | set(CATALOG_SOURCE_FACTORIES))
     if source_id not in sources:
         raise ValueError(
             f"unknown source {source_id!r}; supported sources: {', '.join(sources)}"
         )
-    datasets = sorted(dataset for source, dataset in KNOWN_SOURCES if source == source_id)
+
+    records = load_catalog_files(catalog_root) if source_id in CATALOG_SOURCE_FACTORIES else []
+    definition = _definition_from_catalog(source_id, dataset_id, records)
+    if definition is not None:
+        return definition
+
+    datasets = sorted(
+        {dataset for source, dataset in KNOWN_SOURCES if source == source_id}
+        | {
+            record.dataset_id
+            for record in records
+            if record.source_id == source_id and record.status == "active"
+        }
+    )
     raise ValueError(
         f"unknown dataset {dataset_id!r} for source {source_id!r}; "
         f"supported datasets: {', '.join(datasets)}"

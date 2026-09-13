@@ -232,3 +232,22 @@ Ham yanıtlar ve kalem ağacı bu turda ölçüldü; katalog girişleri `catalog
 "Genişletme" bloğunda. Bilanço, Mevduat ve Rasyolar tablolarının kalemleri aynı uçtan aynı
 sözleşmeyle döner; frekans aylık, Sektör tarafı, TL. Alınmayan: KOBİ kredileri (sütun belirsiz),
 haftalık bültenin ek kalemleri (konumsal kimlik, `docs/sources/bddk_weekly.md`).
+
+## Kümülatif kalemler (2026-09-14): Kar Zarar tablosu yıl içi birikimlidir
+
+Brief'in "bazı BDDK verileri yıllık bazda kümülatif gider; ayrıştırılmalı" notu için Kar Zarar
+tablosundan iki kalem canlı ölçüldü (`GelismisRaporGetir`, 2025-01 → 2026-02, `taraf=10001`,
+`paraBirimi=TL`; kalem ağacı `Gelismis` sayfasının `<optgroup label="Kar Zarar">` listesinden).
+Her iki kalem de **yılbaşından itibaren birikir ve Ocak'ta sıfırlanır**:
+
+| Kalem | `kalemSutun` | 2025-01 | 2025-06 | 2025-12 | 2026-01 | 2026-02 |
+|---|---|---|---|---|---|---|
+| Dönem Net Kârı (Zararı) | `194?Toplam` | 47347 | 422459 | 940183 | 87249 | 169401 |
+| Toplam Faiz (Kar Payı) Gelirleri | `158?Toplam` | 621187 | 3855642 | 8355475 | 789354 | 1497867 |
+
+Bilanço tablosundaki `1715?Toplam` ("Bilanço - Dönem Karı (Zararı)") 194 ile aynı değerleri
+döndürüyor (aynı ölçümün ikinci adresi); katalogda yalnız 194 var. Katalog: `measure_type:
+flow_ytd`, `cumulative_reset: yearly`; aylık akım Gold `decompose_cumulative` ile türetilir
+(`catalog/gold/kredi_kirilimi.yml`, `net_kar_aylik`). "Paylaşım başlangıcından itibaren
+kümülatif" giden bir kalem bu turda bulunamadı; Kar Zarar tablosundaki tüm kalemler aynı yıl içi
+kalıptadır (yalnız 194 ve 158 ölçüldü).

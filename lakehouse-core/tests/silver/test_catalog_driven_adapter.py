@@ -327,7 +327,12 @@ def test_unreviewed_source_unit_label_is_refused(
 def test_evds_frequency_without_a_verified_date_policy_is_refused(
     tmp_path: Path,
 ) -> None:
-    """EVDS has 233 quarterly series catalogued and no verified quarterly response shape."""
+    """A frequency this adapter has never seen a real EVDS payload for is refused, not guessed.
+
+    Quarterly used to be the example here; its ``YYYY-Qn`` shape was then read from real
+    Bronze rows and reviewed (see ``_evds_time.evds_quarter_bounds``). Semiannual has no
+    captured payload, so it is the unverified case now.
+    """
 
     frame, identity = _bronze(
         tmp_path,
@@ -337,11 +342,11 @@ def test_evds_frequency_without_a_verified_date_policy_is_refused(
         parser=EvdsParser(),
         metadata={"requested_series": ["TP.KTF12"]},
     )
-    quarterly = {
+    semiannual = {
         "evds:TP.KTF12": SeriesSemantics(
             series_id="evds:TP.KTF12",
             source_id="evds",
-            frequency="quarterly",
+            frequency="semiannual",
             unit="pct",
             measure_type="rate",
             status="active",
@@ -349,7 +354,7 @@ def test_evds_frequency_without_a_verified_date_policy_is_refused(
     }
 
     with pytest.raises(SilverValidationError, match="no reviewed EVDS date policy"):
-        catalog_driven_to_staging(frame, identity=identity, semantics=quarterly)
+        catalog_driven_to_staging(frame, identity=identity, semantics=semiannual)
 
 
 def test_series_from_another_source_is_refused(
