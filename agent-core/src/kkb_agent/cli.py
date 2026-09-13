@@ -207,7 +207,7 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
     return AnalyticsAgent(
         llm, registry, workspace=workspace, max_steps=max_steps, profile=profile,
         system_prompt=system_prompt, evidence=EvidenceBuilder(lakehouse), preloader=preloader,
-        tool_gate=settings.tool_gate,
+        tool_gate=settings.tool_gate, narrate_temperature=settings.narrate_temperature,
     )
 
 

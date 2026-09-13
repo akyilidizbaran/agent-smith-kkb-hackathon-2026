@@ -101,6 +101,14 @@ sade bir cümleyle söyle ve elde hangi dönemin bulunduğunu belirt.
 Bir araç hata döndürürse hatayı oku, çağrını düzelt ve tekrar dene. \
 Yeterli bilgiye ulaştığında araç çağırmayı bırak ve nihai cevabını yaz."""
 
+REPEAT_NOTE = ("\n\n(Bu soru bu oturumda daha önce soruldu. Önceki cevabını KOPYALAMA: aynı verilerle, "
+               "farklı bir kurgu ve farklı cümlelerle anlat. Sayıları ve kaynağı değiştirme.)")
+
+
+def _norm_question(text: str) -> str:
+    return re.sub(r"[\W_]+", " ", text.casefold()).strip()
+
+
 # Native tool-calling desteklemeyen modeller için yedek protokol.
 JSON_PROTOCOL_PROMPT = """
 ARAÇ KULLANIMI: Bir araç çağırmak istediğinde SADECE şu formatta JSON döndür, \
@@ -246,8 +254,12 @@ class AnalyticsAgent:
         evidence: Any = None,
         preloader: Callable[[str], Any] | None = None,
         tool_gate: bool = True,
+        narrate_temperature: float = 0.0,
     ) -> None:
         self.tool_gate = tool_gate
+        # Araç turları 0.0 (aynı soruya aynı sorgu, aynı sayı); cevaplayan veri geldikten sonraki
+        # turlar (anlatı, hesap kolonu) bu sıcaklıkla: cümleler değişir, sayılar değişmez (ADR-0046).
+        self.narrate_temperature = max(0.0, float(narrate_temperature))
         self.last_gate = None
         self.llm = llm
         self.registry = registry
@@ -345,7 +357,8 @@ class AnalyticsAgent:
 
         for i in range(1, self.max_steps + 1):
             started = time.perf_counter()
-            response = self._chat(messages, tools=tools)
+            temperature = self.narrate_temperature if produced_data else 0.0
+            response = self._chat(messages, tools=tools, temperature=temperature)
 
             calls = response.tool_calls if native else self._parse_json_call(response.content)
 
@@ -559,7 +572,8 @@ class AnalyticsAgent:
                             "kullanıcıya durumu tek paragrafta açıkla: neyi isteyemediğini "
                             "ve elinde ne olduğunu söyle. Sayı uydurma.",
                         )
-                    ]
+                    ],
+                    temperature=self.narrate_temperature,
                 )
                 text = self._strip_reasoning(final.content)
                 self._history.append(ChatMessage(role="user", content=question))
@@ -583,9 +597,10 @@ class AnalyticsAgent:
                            hit_step_limit=True, grounding=grounding, artifacts=artifacts)
 
     # ------------------------------------------------------------------
-    def _chat(self, messages: list[ChatMessage], *, tools: Any = None) -> LLMResponse:
+    def _chat(self, messages: list[ChatMessage], *, tools: Any = None, temperature: float = 0.0) -> LLMResponse:
         """Tek LLM çağrısı noktası: token kullanımı toplanır (ön-yüklemenin ölçüsü)."""
-        response = self.llm.chat(messages, tools=tools) if tools is not None else self.llm.chat(messages)
+        response = (self.llm.chat(messages, tools=tools, temperature=temperature) if tools is not None
+                    else self.llm.chat(messages, temperature=temperature))
         usage = getattr(response, "usage", None) or {}
         self._usage["prompt"] = self._usage.get("prompt", 0) + int(usage.get("prompt", 0) or 0)
         self._usage["completion"] = self._usage.get("completion", 0) + int(usage.get("completion", 0) or 0)
@@ -618,8 +633,16 @@ class AnalyticsAgent:
 
         msgs = [ChatMessage(role="system", content=system)]
         msgs += self._history[-8:]  # son turlar — bağlamı korur, pencereyi şişirmez
+        # Aynı soru oturumda tekrar sorulduysa model tarihçedeki kendi cevabını kopyalıyor
+        # (ölçüldü: T=0,5'te bile birebir aynı). Kopyalamayı harness yasaklar (ADR-0046).
+        if self._asked_before(question):
+            question = question + REPEAT_NOTE
         msgs.append(ChatMessage(role="user", content=question))
         return msgs
+
+    def _asked_before(self, question: str) -> bool:
+        key = _norm_question(question)
+        return any(m.role == "user" and _norm_question(m.content) == key for m in self._history)
 
     def _result_message(self, call: ToolCall, result: ToolResult, *, native: bool) -> ChatMessage:
         """Araç sonucunu modele geri verir.

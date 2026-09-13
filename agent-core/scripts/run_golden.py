@@ -18,6 +18,8 @@ karşılaştırılmalıdır — "iyileştirdim" iddiasının tek objektif kanıt
 
 from __future__ import annotations
 
+import os
+
 import re
 
 import json
@@ -31,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tests.golden.cases import CASES, GoldenCase  # noqa: E402
 
+os.environ.setdefault("LLM_NARRATE_TEMPERATURE", "0")  # golden deterministik: anlatı da 0 (ADR-0046)
 from kkb_agent.cli import build_agent  # noqa: E402
 
 

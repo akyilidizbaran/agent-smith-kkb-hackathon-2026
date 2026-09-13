@@ -44,6 +44,7 @@ class Settings:
     retrieval_small_max: int
     retrieval_hybrid_min: int
     embedding_cache_dir: Path
+    narrate_temperature: float   # nihai anlatı turu; araç turları hep 0 (ADR-0046)
     # Araç kapısı (ADR-0043): soruya göre araç alt kümesi sunulur; "off" ile ölçüm için kapatılır.
     tool_gate: bool
 
@@ -76,5 +77,6 @@ def load_settings() -> Settings:
         retrieval_small_max=int(os.getenv("RETRIEVAL_SMALL_MAX", "60")),
         retrieval_hybrid_min=int(os.getenv("RETRIEVAL_HYBRID_MIN", "5000")),
         embedding_cache_dir=Path(os.getenv("EMBEDDING_CACHE_DIR", PROJECT_ROOT / "data" / "cache" / "embeddings")),
+        narrate_temperature=float(os.getenv("LLM_NARRATE_TEMPERATURE", "0.5")),
         tool_gate=os.getenv("TOOL_GATE", "on").lower() != "off",
     )

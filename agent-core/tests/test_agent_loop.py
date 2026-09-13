@@ -361,3 +361,45 @@ def test_oneri_kuyrugu_cevaptan_kirpilir_tarihce_de_guncellenir() -> None:
     assert answer.text == "Cevap: veri yok."
     assert any("kırpıldı" in (s.thought or "") for s in answer.steps if s.role == "narrate")
     assert agent._history[-1].content == "Cevap: veri yok."
+
+
+def test_arac_turlari_sifir_anlati_turu_ayarli_sicaklik() -> None:
+    class _TempLLM(_ScriptedLLM):
+        def __init__(self, turns):
+            super().__init__(turns); self.temps: list[float] = []
+
+        def chat(self, messages, *, tools=None, temperature=0.0, max_tokens=None):
+            self.temps.append(temperature); return super().chat(messages, tools=tools, temperature=temperature, max_tokens=max_tokens)
+
+    llm = _TempLLM([LLMResponse(content="", tool_calls=[_call(1)]), LLMResponse(content="Cevap: 2025 toplam 1.")])
+    tool = _CountingTool(); registry = ToolRegistry(); registry.register(tool)
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=10, narrate_temperature=0.5)
+    agent.ask("2025 toplam")
+    assert llm.temps[0] == 0.0, "araç seçimi turu deterministik kalmalı"
+    assert llm.temps[-1] == 0.5, "veri geldikten sonraki anlatı turu ayarlı sıcaklıkla"
+    llm2 = _TempLLM([LLMResponse(content="", tool_calls=[_call(1)]), LLMResponse(content="Cevap: 2025 toplam 1.")])
+    registry2 = ToolRegistry(); registry2.register(_CountingTool())
+    AnalyticsAgent(llm=llm2, registry=registry2, workspace=AnalysisWorkspace(), max_steps=10).ask("2025 toplam")
+    assert llm2.temps == [0.0, 0.0], "varsayılan: her tur 0 (testler ve golden deterministik)"
+
+
+def test_ayni_soru_tekrarinda_kopyalama_yasagi_notu_gider() -> None:
+    class _SeeingLLM(_ScriptedLLM):
+        def __init__(self, turns):
+            super().__init__(turns); self.user_msgs: list[str] = []
+
+        def chat(self, messages, *, tools=None, temperature=0.0, max_tokens=None):
+            self.user_msgs += [m.content for m in messages if m.role == "user"]
+            return super().chat(messages, tools=tools, temperature=temperature, max_tokens=max_tokens)
+
+    llm = _SeeingLLM([LLMResponse(content="Cevap: 2025 toplam 1.")])
+    agent, _ = _agent(llm)
+
+    def asked(q: str) -> bool:  # bu sorunun modele giden hâli tekrar notu taşıyor mu? (nudge mesajları ayrı)
+        llm.user_msgs.clear(); agent.ask(q)
+        return any(m.startswith(q) and "daha önce soruldu" in m for m in llm.user_msgs)
+
+    assert not asked("2025 toplam?")
+    assert asked("2025 Toplam"), "noktalama/büyük-küçük farkı tekrarı gizlememeli"
+    assert not asked("2024 toplam")
+    assert agent._history[2].content == "2025 Toplam", "tarihçeye not değil, ham soru yazılır"
