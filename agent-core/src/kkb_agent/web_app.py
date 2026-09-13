@@ -88,7 +88,19 @@ def evidence_to_dict(panel: Any) -> dict[str, Any] | None:
     }
 
 
-def answer_to_dict(answer: Any, agent: Any) -> dict[str, Any]:
+DATA_TOOLS_PREFIX = ("lakehouse_query", "workspace_", "anomaly_detect", "change_points", "lead_lag", "gold_", "ingest")
+
+
+def _table_touched(answer: Any, before: Any, after: Any) -> bool:
+    """Tablo bu cevapta üretildi ya da ele alındı mı? Aksi hâlde eski tablo cevaba iliştirilmez."""
+    if after is None:
+        return False
+    if before is not after:
+        return True
+    return any(s.tool_name and s.ok and s.tool_name.startswith(DATA_TOOLS_PREFIX) for s in getattr(answer, "steps", []))
+
+
+def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict[str, Any]:
     steps = []
     for s in getattr(answer, "steps", []):
         steps.append({
@@ -104,13 +116,15 @@ def answer_to_dict(answer: Any, agent: Any) -> dict[str, Any]:
         if png or art.get("spec_path"):
             charts.append({"png": png, "title": art.get("title"), "kind": art.get("kind"), "spec_path": art.get("spec_path"),
                            "lint_ok": art.get("lint_ok"), "lint": _json_safe(art.get("lint"))})
+    table = getattr(agent.workspace, "table", None)
+    show_table = _table_touched(answer, table_before, table)
     gate = getattr(agent, "last_gate", None)
     search = getattr(getattr(agent.registry.get("web_search"), "search", None), "remaining", None) if agent.registry.get("web_search") else None
     return {
         "text": answer.text,
         "steps": steps,
-        "table": frame_to_dict(getattr(agent.workspace, "table", None)),
-        "table_title": getattr(agent.workspace, "title", "") or "",
+        "table": frame_to_dict(table) if show_table else None,
+        "table_title": (getattr(agent.workspace, "title", "") or "") if show_table else "",
         "charts": charts,
         "evidence": evidence_to_dict(getattr(answer, "evidence", None)),
         "usage": dict(getattr(answer, "usage", {}) or {}),
@@ -138,8 +152,9 @@ class Session:
     def ask(self, question: str) -> dict[str, Any]:
         with self._lock:
             started = time.perf_counter()
+            table_before = getattr(self.agent.workspace, "table", None)
             answer = self.agent.ask(question)
-            payload = answer_to_dict(answer, self.agent)
+            payload = answer_to_dict(answer, self.agent, table_before=table_before)
             payload["elapsed_s"] = round(time.perf_counter() - started, 1)
             payload["question"] = question
             self.history.append({"question": question, "elapsed_s": payload["elapsed_s"],

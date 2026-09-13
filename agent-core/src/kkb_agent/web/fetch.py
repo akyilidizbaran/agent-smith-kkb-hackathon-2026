@@ -3,7 +3,7 @@
 Mentörün çizgisi kod olarak: bot denetimi ve CAPTCHA aşılmaz (sınıflandırılır ve
 söylenir), robots.txt'ye uyulur, kimlik bilgisi yalnız ortam değişkeninden aranır ve
 değeri hiç görülmez. Özel/loopback adreslere gidilmez (SSRF); yerel dosya yalnız izinli
-kökten. Her çekiliş sha256 ve zaman damgası taşır: kanıt paneli buna iner.
+kökten. Her çekim sha256 ve zaman damgası taşır: kanıt paneli buna iner.
 """
 
 from __future__ import annotations

@@ -179,7 +179,7 @@ class WebUrlTool(Tool):
                 sources=[f"web — {page.page.title or page.url}"],  # type: ignore[union-attr]
                 source_urls=[page.url],
                 row_count=len(table),
-                warnings=[f"Kaynak web sayfası; içerik sha256 {page.fetch.sha256[:12]}…, çekiliş "
+                warnings=[f"Kaynak web sayfası; içerik sha256 {page.fetch.sha256[:12]}…, çekim "
                           f"{page.fetch.fetched_at:%Y-%m-%d %H:%M} UTC, HTTP {page.fetch.http_status}. "
                           "Birimler sayfanın kendi beyanı; katalog doğrulaması yok."]
                          + ([page.page.notes[0]] if page.page.ocr and page.page.notes else []),  # type: ignore[union-attr]
@@ -192,7 +192,7 @@ class WebUrlTool(Tool):
                 + (f" — {table_label}" if table_label else ""),
                 f"Sütunlar: {', '.join(map(str, table.columns))}",
                 _plain(table.head(10)),
-                f"Kaynak: {page.page.title or page.url} | sha256 {page.fetch.sha256[:12]}… | çekiliş {page.fetch.fetched_at:%Y-%m-%d %H:%M} UTC",
+                f"Kaynak: {page.page.title or page.url} | sha256 {page.fetch.sha256[:12]}… | çekim {page.fetch.fetched_at:%Y-%m-%d %H:%M} UTC",
                 *[f"NOT: {n}" for n in page.page.notes],  # type: ignore[union-attr]
                 self._year_note(question, [page]),
                 ("YAPACAĞIN: sayıları bu tablodan ver; birimi belgenin yazdığı gibi aktar; kullanıcıya bunun "
@@ -206,7 +206,7 @@ class WebUrlTool(Tool):
         decision = decide(first.fetch.outcome, constraint)
         lines = [f"SAYFA: {first.page.title or first.url}" + (f" — {first.url}" if first.page.title else "")]  # type: ignore[union-attr]
         lines.append(f"HTTP {first.fetch.http_status} | {len(first.fetch.content)} bayt | sha256 {first.fetch.sha256[:12]}… | "
-                     f"çekiliş {first.fetch.fetched_at:%Y-%m-%d %H:%M} UTC | {result.summary()}")
+                     f"çekim {first.fetch.fetched_at:%Y-%m-%d %H:%M} UTC | {result.summary()}")
         index = 0
         for p in pages_with_tables:
             labels = getattr(p.page, "table_labels", []) or []

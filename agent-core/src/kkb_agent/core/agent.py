@@ -26,6 +26,7 @@ from ..domain import DomainProfile
 from ..llm.base import ChatMessage, LLMClient, ToolCall
 from .errors import ToolError
 from .grounding import causal_language, grounding_check
+from .small_talk import is_small_talk, small_talk_reply, trim_unsolicited_offers
 from . import tool_gate
 
 # Kullanıcının grafik isteği (Türkçe çekimli: grafiği, grafiğini, çiz, çizer misin, görselleştir).
@@ -91,6 +92,8 @@ tek satırlık sonuçlar da analiz tablosudur.
 alt toplam) kullanıcı istemedikçe aynı sorguya katma; aynı döneme birden çok satır düşerse \
 tablo bozulur.
 - Kullanıcıya Türkçe, net ve kısa cevap ver. Ara adımları anlatma; sonucu ve gerekçesini anlat.
+- YALNIZ sorulana cevap ver. İstenmemiş öneri, seçenek listesi, "başka ne yapabilirim", \
+"ne yapmak istersin" kapanışı ve emoji yazma. Sorunun cevabı bitince dur.
 - Muhatabın bir {audience}, geliştirici DEĞİL. Nihai cevapta SQL, kolon adı, araç adı, \
 hata mesajı veya "sorgunuzu kontrol edin" türü teknik yönlendirme YAZMA. Veri yoksa bunu \
 sade bir cümleyle söyle ve elde hangi dönemin bulunduğunu belirt.
@@ -275,7 +278,23 @@ class AnalyticsAgent:
         """Bir soruyu uçtan uca cevaplar; cevaba kanıt panelini iliştirir."""
         self._usage = {"prompt": 0, "completion": 0, "calls": 0}
         self._last_context = None
+        if is_small_talk(question):
+            # Harness kuralı: selamlaşma LLM'e gitmez; tablo ve kanıt paneli yok (ADR-0045).
+            text = small_talk_reply(question, has_table=self.workspace.has_table)
+            self._history.append(ChatMessage(role="user", content=question))
+            self._history.append(ChatMessage(role="assistant", content=text))
+            step = AgentStep(index=1, role="narrate", thought="selamlaşma — LLM çağrılmadı", result_summary=text)
+            return AgentAnswer(text=text, steps=[step], workspace=self.workspace, usage=dict(self._usage))
         answer = self._ask(question)
+        trimmed_text, trimmed = trim_unsolicited_offers(answer.text)
+        if trimmed:
+            answer.text = trimmed_text
+            if self._history and self._history[-1].role == "assistant":
+                self._history[-1] = ChatMessage(role="assistant", content=trimmed_text)
+            for step in reversed(answer.steps):
+                if step.role == "narrate":
+                    step.thought = (step.thought or "nihai cevap") + " · öneri kuyruğu kırpıldı"
+                    break
         answer.usage = dict(self._usage)
         answer.context = self._last_context.summary() if self._last_context is not None else ""
         if self.evidence_builder is not None:

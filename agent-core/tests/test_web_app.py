@@ -63,3 +63,17 @@ def test_tablo_serilestirme_nan_ve_kirpma() -> None:
     d = frame_to_dict(frame)
     assert d["row_count"] == 302 and d["truncated"] and len(d["rows"]) == 200 and d["rows"][1][0] is None
     assert frame_to_dict(None) is None and frame_to_dict(pd.DataFrame()) is None
+
+
+def test_tabloya_dokunmayan_cevap_eski_tabloyu_gostermez() -> None:
+    class Greeter(FakeAgent):
+        def ask(self, question: str) -> AgentAnswer:  # ilk soru tablo kurar, ikincisi selam
+            if question == "selam":
+                return AgentAnswer(text="Selam. Sorunu yazabilirsin.", steps=[AgentStep(index=1, role="narrate", thought="selamlaşma")], usage={})
+            return super().ask(question)
+
+    client = TestClient(create_app(Greeter))
+    first = client.post("/api/ask", json={"question": "2025 konut"}).json()
+    assert first["table"] is not None
+    second = client.post("/api/ask", json={"question": "selam"}).json()
+    assert second["table"] is None and second["table_title"] == "" and second["text"] == "Selam. Sorunu yazabilirsin."

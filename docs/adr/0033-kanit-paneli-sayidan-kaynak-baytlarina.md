@@ -5,7 +5,7 @@
 ## Bağlam
 Yarışmanın güven katmanı slaytı üç şey istiyor: kaynak gösterimi, izlenebilirlik, doğruluk
 kontrolü. Bugüne kadar bunlar parça parça vardı: `QueryProvenance` sorgunun SQL'ini ve
-serilerini taşıyordu, Silver satırı `artifact_sha256`'yı, `meta.artifact` URL'yi ve çekiliş
+serilerini taşıyordu, Silver satırı `artifact_sha256`'yı, `meta.artifact` URL'yi ve çekim
 zamanını, Bronze parquet adında sha'yı. Ama jürinin sorusu "bu rakam nereden geliyor?"
 tek bir zincir ister ve o zinciri kimse kurmuyordu. Cevaptaki "623.765" ile
 `https://www.bddk.org.tr/...` arasındaki yol vardı, görünür değildi.
@@ -41,7 +41,7 @@ biter ve panel bunu "eksik halka" olarak yazar. Sunan adaptör `SilverLakehouse`
 workspace, adımlar, grafik artefaktları → `EvidencePanel`. İnşacı patlarsa uyarı loglanır,
 cevap yine döner. Panel `AgentAnswer.evidence`'ta; CLI her cevabın altında tek satır özet
 basar (`[kanıt] kanıt zinciri tam: 2/2 sayı tabloda · 2 kolon → SQL · 1 gözlem → 1
-artifact · çekiliş 2026-09-12`), `--evidence` tam paneli açar.
+artifact · çekim 2026-09-12`), `--evidence` tam paneli açar.
 
 **"Tam" tanımı ölçülebilir:** her sayı bir hücrede; her kolonun SQL'i var; adaptör artifact
 izi sunuyorsa her gözlem `locator + fetched_at` taşıyor; kopuk halka yok. Eksikse `gaps`

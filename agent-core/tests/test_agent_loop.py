@@ -342,3 +342,22 @@ def test_aykirilik_soruldu_analitik_arac_cagrilmadan_cevap_bir_kez_geri_gonderil
     answer = agent.ask("2025'te değerde aykırı ay var mı?")
     assert anom.calls == 1 and any("analitik istendi" in (s.thought or "") for s in answer.steps)
     assert answer.text.startswith("Bir aykırı dönem var")
+
+
+def test_selamlasma_llm_e_gitmez() -> None:
+    llm = _ScriptedLLM([LLMResponse(content="olmamalı")])
+    agent, tool = _agent(llm)
+    answer = agent.ask("selam")
+    assert answer.text == "Selam. Sorunu yazabilirsin."
+    assert len(llm.seen_tool_offers) == 0 and tool.calls == 0
+    assert answer.steps[0].role == "narrate" and "LLM çağrılmadı" in answer.steps[0].thought
+    assert answer.usage["calls"] == 0 and answer.evidence is None
+
+
+def test_oneri_kuyrugu_cevaptan_kirpilir_tarihce_de_guncellenir() -> None:
+    llm = _ScriptedLLM([LLMResponse(content="Cevap: veri yok.\n\nBaşka bir analiz istersen buradayım. Örneğin:\n- x")])
+    agent, _ = _agent(llm)
+    answer = agent.ask("2025 konut kredisi bakiyesi")
+    assert answer.text == "Cevap: veri yok."
+    assert any("kırpıldı" in (s.thought or "") for s in answer.steps if s.role == "narrate")
+    assert agent._history[-1].content == "Cevap: veri yok."

@@ -21,7 +21,7 @@ uv run python scripts/demo_acceptance.py --skip-ingest --reuse-db <yol>     # ya
    `scripts/run_catalog_ingestion.py --only <5 seri>`, `python -m lakehouse silver`,
    `python -m lakehouse gold`. Agent paketi lakehouse-core'u import etmez (ADR-0024).
 2. Demo serileri sabit ve beş: aylık ve haftalık konut stoku (BDDK), haftalık konut faizi
-   (EVDS), İstanbul ve Ankara konut kredisi (FinTürk). Ölçüldü: canlı çekiliş **26 s**.
+   (EVDS), İstanbul ve Ankara konut kredisi (FinTürk). Ölçüldü: canlı çekim **26 s**.
 3. Jüri dosyası ve web fikstürleri (`konut_test.csv`, `tufe_*.html`) izinli köke kopyalanır;
    ortam değişkenleri (`LAKEHOUSE_PATH`, `LAKEHOUSE_CORE_DIR`, `INGEST_ALLOWED_ROOT`,
    `CHART_DIR`) kabul köküne işaret eder.

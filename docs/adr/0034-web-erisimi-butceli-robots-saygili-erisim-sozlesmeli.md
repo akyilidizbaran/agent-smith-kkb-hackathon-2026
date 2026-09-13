@@ -29,7 +29,7 @@ bunları erişim sözleşmesi olarak yazmıştı; C3 sözleşmenin üstüne arac
   sonra soru ve amaç sözcükleriyle örtüşen bağlantılar; sayfa, derinlik ve süre sınırı;
   taranıp kullanılmayan ve erişilemeyen sayfalar `artifacts["web"]` ile **kanıt paneline**
   gider, cevaba değil.
-- **Liste modu** (ilk çağrı): başlık, HTTP, bayt, sha256, çekiliş zamanı, tablolar
+- **Liste modu** (ilk çağrı): başlık, HTTP, bayt, sha256, çekim zamanı, tablolar
   (numara, boyut, kolonlar, ilk 3 satır), metin özeti, sayı biçimi notları, **yıl
   denetimi** (soruda geçen yıl sayfada hiç geçmiyorsa "DİKKAT: … GEÇMİYOR — kaynak sabitse
   bulunmadığını söyle, uydurma") ve erişim satırı.
@@ -47,7 +47,7 @@ UNKNOWN_TOOL üretir, taklit etmek sözleşmeyi bozar. Anahtar varsa sonuçlar b
 alıntıdır; sayı oradan okunmaz, sayfa `web_url` ile açılır. 401/429/ulaşılamaz → aynı zarf.
 
 ## Karar 3 — Kanıt zinciri web'de sayfanın baytlarında biter
-Web tablosunun kolonları için Silver gözlemi aranmaz; zincir `URL + sha256 + çekiliş zamanı
+Web tablosunun kolonları için Silver gözlemi aranmaz; zincir `URL + sha256 + çekim zamanı
 + HTTP` ile **tam** sayılır ve panelde "WEB KAYNAĞI" satırı olur. Taranıp kullanılmayan
 sayfalar "TARANDI, KULLANILMADI / ERİŞİLEMEDİ" altında.
 

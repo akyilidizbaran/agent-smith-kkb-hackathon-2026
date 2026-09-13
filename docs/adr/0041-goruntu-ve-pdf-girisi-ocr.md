@@ -26,7 +26,7 @@ ADR-0022 (10 Eylül) MIA `Unlimited-OCR`'ın bu PDF'lerde metin katmanından üs
    - Kart tablosu bilimsel gösterim yazmaz (93.824.682.381 kartta 9.38e+10 çıkıyordu).
 4. **OCR bir okumadır, doğrulama değil.** Sayfa notu ve provenance uyarısı "görüntüden OCR ile
    okundu (model, sayfa), sayılar doğrulanmadı" der; kart modele bunu kullanıcıya söylemesini
-   emreder. Kanıt paneli web zinciriyle aynı: URL + belge sha256 + çekiliş zamanı + OCR bilgisi.
+   emreder. Kanıt paneli web zinciriyle aynı: URL + belge sha256 + çekim zamanı + OCR bilgisi.
 5. **OCR yoksa uydurma yok.** `VISION_MODEL` tanımsızsa belge "OCR olmadan okunamaz" der;
    servis hatası sayfa notuna düşer, tablo boş kalır.
 6. **Ingest provenance.** RAW'a OCR tablosunun CSV'si girer (veri ekibinin CLI'ı tablo dosyası

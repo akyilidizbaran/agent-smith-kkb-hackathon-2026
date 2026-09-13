@@ -1,7 +1,7 @@
 """Profilleme için tablo okuma — kalıcı hiçbir şey yazmaz, yetkisiz hiçbir yere gitmez.
 
 Bu okuma **danışma** amaçlıdır: profilci öneri üretsin diye. Kaynağın gerçek
-çekilişi, ayrıştırılması, RAW/Bronze'a yazılması ve provenance'ı veri ekibinin
+çekimi, ayrıştırılması, RAW/Bronze'a yazılması ve provenance'ı veri ekibinin
 sertleştirilmiş yolunda (`python -m lakehouse ingest-file`) olur; buradaki
 okuma o yolun yerine geçmez, ondan önce gelir.
 

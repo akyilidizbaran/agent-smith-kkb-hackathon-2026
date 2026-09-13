@@ -1,4 +1,4 @@
-# ADR-0042: Veri genişliği — 2.214 katalog serisi, 127 serilik demo seti, aynı çekilişi bir kez
+# ADR-0042: Veri genişliği — 2.214 katalog serisi, 127 serilik demo seti, aynı çekimi bir kez
 
 **Durum:** Kabul edildi · **Tarih:** 2026-09-13 · **Sıradaki:** D9 arayüz, E kapanış
 
@@ -28,12 +28,12 @@ ekibinin işini gerekirse bizim devralmamızı istedi; bu iş `feature/lakehouse
    TÜFE genel endeksi üretilmiş girdiden küratörlü hâle getirildi. Kanıt EVDS'nin kendi
    `/datagroups` ve `/serieList` yanıtları (`docs/sources/evds.md`). Üretilmiş blok
    yeniden üretilmedi: dosya zaten elle birleştirilmiş (KTF12, KFE küratörlü), aynı yol izlendi.
-4. **Aynı çekiliş bir kez.** `scripts/run_catalog_ingestion.py` aynı FetchSpec'i paylaşan
-   serileri (bir ilin 8 sütunu) bir kez çeker; ölçüldü, 12 il × 8 sütun 96 seri → 12 çekiliş.
+4. **Aynı çekim bir kez.** `scripts/run_catalog_ingestion.py` aynı FetchSpec'i paylaşan
+   serileri (bir ilin 8 sütunu) bir kez çeker; ölçüldü, 12 il × 8 sütun 96 seri → 12 çekim.
 5. **Gold: 3 → 6 metrik.** Tüketici kredisi kırılımı (konut/taşıt/ihtiyaç/kart, aylık),
    takipteki kırılımı, kur + AOFM + konut faizi aylık ortalama (join).
 6. **Demo seti 5 → 127 seri** (`scripts/demo_acceptance.py`): 20 aylık kalem, haftalık konut,
-   10 EVDS, 12 ilin 8'er FinTürk sütunu; ~43 çekiliş grubu.
+   10 EVDS, 12 ilin 8'er FinTürk sütunu; ~43 çekim grubu.
 7. **Alınmayanlar, sebebiyle.** BDDK haftalık ek kalemleri (konumsal kimlik canlı gözlem
    ister, `docs/sources/bddk_weekly.md`), KOBİ kredileri (toplam sütunu doğrulanmadı), EVDS
    üretilmiş bloğun `unknown` serileri (Gold onları rızasız birleştirmez, doğru).
@@ -43,13 +43,13 @@ ekibinin işini gerekirse bizim devralmamızı istedi; bu iş `feature/lakehouse
 | Adım | Süre | Sonuç |
 |---|---|---|
 | bootstrap | 2 s | 2.214 katalog serisi (BDDK aylık 20, haftalık 1, FinTürk 648, EVDS 1.545) |
-| ingest (canlı) | **197 s** | 127/127 seri; artifact: aylık 20, haftalık 1, EVDS 10, FinTürk 264 (12 il × 22 çeyrek; 96 seri 12 çekilişte) |
+| ingest (canlı) | **197 s** | 127/127 seri; artifact: aylık 20, haftalık 1, EVDS 10, FinTürk 264 (12 il × 22 çeyrek; 96 seri 12 çekimte) |
 | silver | 2 s | **8.290 satır**, 8.290 yayımlandı, tutulan yok |
 | gold | 1 s | 6 tablo, red 0 (kırılım 66 ay, takipteki kırılımı 66 ay, kur+faiz 67 ay, konut çeyreklik 22, aylık-haftalık 66, konut faizi 67) |
 
 İki kaçak ölçülüp kapatıldı: (1) rasyoların "(%)" kolon birimi Silver'ın incelenmiş birim
-tablosunda yoktu (`% → pct` eklendi, test); (2) bir ilin 8 serisi tek çekilişte gelince Bronze
-satırları o çekilişin `dataset_id`'sini taşıyor, Silver katalogla birebir istiyor → 7 yeni
+tablosunda yoktu (`% → pct` eklendi, test); (2) bir ilin 8 serisi tek çekimte gelince Bronze
+satırları o çekimin `dataset_id`'sini taşıyor, Silver katalogla birebir istiyor → 7 yeni
 sütunun serileri ilin konut girdisiyle aynı `dataset_id`'yi aldı (ad tarihsel, `docs/sources/
 bddk_finturk.md`).
 

@@ -131,7 +131,7 @@ class EvidencePanel:
         else:
             parts.append(f"{len(self.observations)} gözlem → {arts} artifact")
         if fetched:
-            parts.append(f"çekiliş {', '.join(fetched)}")
+            parts.append(f"çekim {', '.join(fetched)}")
         return f"kanıt zinciri {state}: " + " · ".join(parts)
 
     def render(self, *, max_observations: int = 12) -> str:
@@ -181,7 +181,7 @@ class EvidencePanel:
             lines.append("")
             lines.append("WEB KAYNAĞI (kullanılan sayfa):")
             for w in self.web_sources:
-                lines.append(f"  {w.get('url')} | sha256 {str(w.get('sha256'))[:12]}… | çekiliş {w.get('fetched_at')} | HTTP {w.get('status')}")
+                lines.append(f"  {w.get('url')} | sha256 {str(w.get('sha256'))[:12]}… | çekim {w.get('fetched_at')} | HTTP {w.get('status')}")
         if self.web_unused:
             lines.append("")
             lines.append("TARANDI, KULLANILMADI / ERİŞİLEMEDİ:")

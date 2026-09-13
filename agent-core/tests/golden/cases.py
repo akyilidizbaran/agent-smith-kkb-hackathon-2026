@@ -304,7 +304,7 @@ CASES: list[GoldenCase] = [
         id="G11a_web_var",
         question="Şu sayfadan 2025 yıllık TÜFE enflasyonunu söyle: " + _fixture("tufe_2025.html"),
         why="C3 (ADR-0034), erişim hâli VAR: kullanıcının verdiği sayfa okunur, tablo yüklenir, sayı "
-        "tablodan verilir; kanıt zinciri URL + sha256 + çekiliş zamanında biter. Fikstür yerel: "
+        "tablodan verilir; kanıt zinciri URL + sha256 + çekim zamanında biter. Fikstür yerel: "
         "ağ olmadan deterministik. 2025 yıllık TÜFE fikstürde 31,07.",
         table_checks=[("2025 satırı ve %31,07 tabloda", _value_near(31.07))],
         must_use_tools=["web_url"],

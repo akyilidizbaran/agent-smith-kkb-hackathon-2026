@@ -213,7 +213,7 @@ function renderEvidence(p) {
   }
   const nodes = [];
   (ev.columns || []).slice(0, 3).forEach((c) => nodes.push({t: `Kolon · ${c.column}`, d: c.sql || "provenance yok", amber: !c.sql}));
-  if (ev.observation_count) { const o = ev.observations[0] || {}; nodes.push({t: `Silver gözlemi · ${ev.observation_count} gözlem`, d: `${o.series_id || ""} · ${o.observation_date || ""} · quality ${o.quality_flag || ""}`}); nodes.push({t: "Artifact → Bronze → RAW", d: `${(o.artifact_sha256 || "").slice(0, 12)}… · run ${(o.run_id || "").slice(0, 8)} · HTTP ${o.http_status ?? "–"}`}); nodes.push({t: "Kaynak", d: `${o.locator || ""} · çekiliş ${o.fetched_at || ""}`}); }
+  if (ev.observation_count) { const o = ev.observations[0] || {}; nodes.push({t: `Silver gözlemi · ${ev.observation_count} gözlem`, d: `${o.series_id || ""} · ${o.observation_date || ""} · quality ${o.quality_flag || ""}`}); nodes.push({t: "Artifact → Bronze → RAW", d: `${(o.artifact_sha256 || "").slice(0, 12)}… · run ${(o.run_id || "").slice(0, 8)} · HTTP ${o.http_status ?? "–"}`}); nodes.push({t: "Kaynak", d: `${o.locator || ""} · çekim ${o.fetched_at || ""}`}); }
   (ev.web_sources || []).forEach((w) => nodes.push({t: w.ocr ? "Belge (OCR)" : "Web sayfası", d: `${w.url} · sha256 ${(w.sha256 || "").slice(0, 12)}… · ${w.fetched_at || ""}${w.ocr ? " · " + (w.ocr.model || "") + " · sayfa " + (w.ocr.pages || []).join(",") + " · kalite " + (w.ocr.quality || "") : ""}`, amber: !!w.ocr}));
   if (nodes.length) {
     html += `<div class="chain">${nodes.map((n, i) => `<div class="dot ${n.amber ? "amber" : ""}"><i></i>${i < nodes.length - 1 ? "<b></b>" : ""}</div><div class="node"><div class="t">${esc(n.t)}</div><div class="d mono">${esc(n.d)}</div></div>`).join("")}</div>`;

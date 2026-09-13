@@ -88,7 +88,7 @@ erişim (ADR-0028) → danışma okuması → profil → öneri (kanıtla) → d
   ve o da yalnız `adhoc` + `draft` yazabilir. Curated Silver'a bu yoldan girilemez.
 - **Danışma okuması** (`builder/read.py`) kalıcı hiçbir şey yazmaz; yerel dosya yalnız
   izinli kökten (`INGEST_ALLOWED_ROOT`), URL yalnız http(s), özel IP yok, boyut sınırı;
-  erişim sonucu ADR-0028 zarfıyla. Kaynağın gerçek çekilişi ve Bronze'a yazılışı CLI'da.
+  erişim sonucu ADR-0028 zarfıyla. Kaynağın gerçek çekimi ve Bronze'a yazılışı CLI'da.
 - **Birim yoksa yazılmaz.** Veriden çıkarılamaz; kaynak belgesi ya da kullanıcı söyler.
   `measure_type: unknown` ise yazılır ve kartta söylenir — dürüst kayıt.
 - **Aynı dosya ikinci kez:** çakışma kontrolü yalnız küratörlü/başka kaynaklı serilerle;

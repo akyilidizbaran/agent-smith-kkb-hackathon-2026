@@ -46,7 +46,7 @@ DEMO_SERIES = (
 )
 """Demo serileri (13 Eyl, veri genişliği): 20 BDDK aylık kalem (bakiye + oran), haftalık konut, 10 EVDS
 (konut faizi, kur, politika faizi, AOFM, mevduat faizi, kart harcaması, M2/M3, TÜFE) ve 12 ilin 8'er
-FinTürk sütunu (bir ilin 8 serisi tek çekiliştir). Toplam 127 seri, ~43 çekiliş grubu."""
+FinTürk sütunu (bir ilin 8 serisi tek çekimtir). Toplam 127 seri, ~43 çekim grubu."""
 
 SCENARIO_CASES = (
     "G1_tek_deger",          # 1. tek değer, kaynak gösterimi

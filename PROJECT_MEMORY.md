@@ -124,9 +124,9 @@ Demo DB'de 5 seri vardı; BDDK aylık/haftalık kataloglarında birer seri, FinT
 - **Keşif canlı ve kanıtlı:** BDDK aylık kalem ağacı Gelişmiş sayfanın `<option>` listesinden (ilk kimlik kararlı); 19 kalem 2025-12 için tek tek çağrıldı, birim yanıtın kolon başlığından; rasyoların sütunu `KalemSutunGetir` ile `?Rasyo`. EVDS 678 veri grubu listelendi, 8 seri seçildi (kur, politika faizi, AOFM, mevduat faizi, kart harcaması, M2/M3), TÜFE küratörlü.
 - **Katalog:** BDDK aylık 1 → 20, FinTürk 81 → 648 (7 sütun × 81 il, ek istek yok: aynı yanıtın kolonları), EVDS 1.537 → 1.545; toplam 2.214 seri yükleniyor (bootstrap doğrulandı, katalog testleri 54/54). Gold 3 → 6 metrik (tüketici kırılımı, takipteki kırılımı, kur+faiz).
 - **Ingest betiği:** aynı FetchSpec'i paylaşan seriler bir kez çekilir (bir ilin 8 sütunu = 1 istek/dönem).
-- **Demo seti** 5 → 127 seri (~43 çekiliş grubu). G12 "yüklenmemiş seri" vakası taşıttan Van iline taşındı (taşıt artık yüklü).
+- **Demo seti** 5 → 127 seri (~43 çekim grubu). G12 "yüklenmemiş seri" vakası taşıttan Van iline taşındı (taşıt artık yüklü).
 - Alınmayan: haftalık ek kalemler (konumsal kimlik), KOBİ (sütun belirsiz), üretilmiş EVDS `unknown` serileri.
-- **Ölçüm (sıfırdan):** bootstrap 2 s, canlı ingest **197 s** (127/127; FinTürk 264 artifact = 12 il × 22 çeyrek), Silver 2 s **8.290 satır**, Gold 1 s **6 tablo** red 0. İki kaçak: rasyo "(%)" birimi Silver'ın incelenmiş birim tablosunda yoktu (`% → pct`); FinTürk'te bir çekilişin 8 serisi Bronze'da çekilişin `dataset_id`'sini taşıyor → yeni sütunlar ilin konut `dataset_id`'sini aldı. Senaryolar 10/11 → G17 düzeltmeleri (Unicode eksi, olumsuz nedensellik, p eşiği, ikinci geri gönderme) → G17 3/3, G9 3/3, G12 (Van) 2/2. Adım sayıları arttı (G1 1 → 3, G14 4 → 8): büyük katalogda model daha çok arıyor; araç kapısı sıradaki iş. Lakehouse: `% → pct` birim eşlemesi; üç test yeni katalog durumuna uyarlandı (kataloglanmayan sütun sentetik, Gold refused sayısı katalogdan türetilir); paket 1.079 test. Dal `feature/lakehouse-catalog-breadth` itildi (r3 üstüne, main değil).
+- **Ölçüm (sıfırdan):** bootstrap 2 s, canlı ingest **197 s** (127/127; FinTürk 264 artifact = 12 il × 22 çeyrek), Silver 2 s **8.290 satır**, Gold 1 s **6 tablo** red 0. İki kaçak: rasyo "(%)" birimi Silver'ın incelenmiş birim tablosunda yoktu (`% → pct`); FinTürk'te bir çekimin 8 serisi Bronze'da çekimin `dataset_id`'sini taşıyor → yeni sütunlar ilin konut `dataset_id`'sini aldı. Senaryolar 10/11 → G17 düzeltmeleri (Unicode eksi, olumsuz nedensellik, p eşiği, ikinci geri gönderme) → G17 3/3, G9 3/3, G12 (Van) 2/2. Adım sayıları arttı (G1 1 → 3, G14 4 → 8): büyük katalogda model daha çok arıyor; araç kapısı sıradaki iş. Lakehouse: `% → pct` birim eşlemesi; üç test yeni katalog durumuna uyarlandı (kataloglanmayan sütun sentetik, Gold refused sayısı katalogdan türetilir); paket 1.079 test. Dal `feature/lakehouse-catalog-breadth` itildi (r3 üstüne, main değil).
 
 ### 2.15 Kademeli retrieval, yüzler, araç kapısı (13 Eylül, ADR-0043)
 Kullanıcı: proje çok kataloglu sistemlere göre kurulmalı; küçükte basit, büyükte güçlü çözüm, eşikler ölçülerek. Önerilen ve onaylanan: modele giden kart sayısı sabit, aday havuzu ölçekle büyür.
@@ -148,16 +148,22 @@ Claude Design kanvasında üç yön çizildi (`docs/design/`: Main, Architect, P
 - `kkb_agent/web_app.py` FastAPI: `POST /api/ask` ajan cevabını olduğu gibi JSON'a çevirir (metin, adımlar rol/araç/hata/süre, aktif tablo ilk 200 satır, grafik PNG base64 + denetçi sonucu, kanıt paneli, token, araç kapısı, kalan arama bütçesi); `GET /api/status` katalog/yüklü/Silver/Gold sayılarını canlı DB'den; `POST /api/reset`. Tek ajan, sorular kilitle sıralı. `create_app(agent_factory)` testte sahte ajan alır. Başlatma `python -m kkb_agent.serve` (`kkb_agent.web` paketi web araçlarına ait olduğu için `web.py` olmadı).
 - `static/index.html`: çerçeve yok, CDN yok (yalnız Google Fonts, yoksa sistem yazı tipi). Sol veri havuzu + oturum; orta soru → cevap (kaçırılmış mini-Markdown) → tablo ve grafik yan yana → araç izi çipleri (validate kehribar, hata kırmızı) → soru kutusu; sağ kanıt zinciri: "tam/EKSİK" rozeti, cevaptaki sayılar (eşleşen yeşil), kolon → SQL, Silver gözlemi → artifact/Bronze/RAW → kaynak, belge (OCR) kehribar, kopuk halkalar ve danışılıp kullanılmayanlar.
 - Ölçüldü (demo DB, 2025 konut kredisi tablo+grafik sorusu): 5 adım, 63.485 token, 31,9 s; kanıt 24/24 tam; tablo ile grafik yan yana; grounding MISS uyarısı (bir yuvarlama) izde göründü — gizlenmedi. `/api/status` 2.214 · 127 · 8.290 · 6, tasarımdaki sayılarla birebir.
-- Tasarım gözden geçirmesi (arka plan ajanı) sonrası düzeltmeler: "çekiliş" → "çekim" (çekiliş = piyango), aynı run id iki ayrı ingest'te, çelişen çekim zamanları, iz sayacı 2 → 4 adım, Haz etiketi veri noktasına, PdfView "13/13 sayı kolonu"; model adı `Qwen3.8-27B` gerçek ad, değiştirilmedi.
+- Tasarım gözden geçirmesi (arka plan ajanı) sonrası düzeltmeler: "çekim" → "çekim" (çekim = piyango), aynı run id iki ayrı ingest'te, çelişen çekim zamanları, iz sayacı 2 → 4 adım, Haz etiketi veri noktasına, PdfView "13/13 sayı kolonu"; model adı `Qwen3.8-27B` gerçek ad, değiştirilmedi.
 - Sınır: tek oturum, kimlik yok, akış (SSE) yok — ajan bitince tek cevap. Testler 315 → 317.
+
+### 2.18 Yalnız sorulana cevap (13 Eylül, ADR-0045)
+Arayüzde "selam" → emoji + öneri menüsü + eski tablo. Sebep: promptta "istenmemişi yazma" kuralı yoktu ve her turda modele aktif tablo/tarihçe/katalog gidiyor, veri sorusu olmayınca model bunu "devam menüsü" yapıyor; arayüz de her cevapta workspace tablosunu çiziyordu.
+- `core/small_talk.py`: dar sözlükle selam/teşekkür/onay tanınır, LLM çağrılmaz, tek cümle, tablo/kanıt yok (iz: "selamlaşma — LLM çağrılmadı"). Prompt kuralı: yalnız sorulana cevap, öneri/emoji yok. Cevap sonundaki öneri kuyruğu ("Başka bir soru istersen… Örneğin:… Ne yapmak istersin?") deterministik kırpılır; ortadaki "Örneğin…" cümleleri kalır; tümüyle öneri olan cevap boş bırakılmaz.
+- Arayüz: tablo yalnız bu cevap ürettiyse/ele aldıysa gösterilir.
+- Testler 317 → 325.
 
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 317 |
+| Agent birim testi | 325 |
 | Lakehouse testi (r3 + genişlik dalı) | 1.079 |
-| ADR | 44 |
+| ADR | 45 |
 | Golden vakası | 21: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3, G18a/b 2/2; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 11 senaryo 11/11 |
 | Araç sayısı (gerçek DB'de) | 19: lakehouse ×4, workspace ×4 (query dâhil), analitik ×3 (anomaly_detect, change_points, lead_lag), ingest, promote_draft, gold ×3, chart, web_url, web_search (Tavily anahtarı .env'de) |
 | Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu (iş yapan araç/tablo varken susar), istenen yetenek zorunluluğu (grafik, analitik), frekans uyuşmazlığı (kabadan ince yok), grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, GOLD_REQUIRED, niyet kapısı, beyan kapısı, adım sınırı, reasoning temizliği |
