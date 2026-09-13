@@ -72,7 +72,7 @@ Bu test sayıları birbirleriyle toplanarak başarı oranı veya motor üstünl�
 | M07 | Ortak ingestion ve provenance | P0 | M01, M03 | Veri | Planlandı |
 | M08 | BDDK/EVDS semantik ve kapsam hazırlığı | P1 | M00 kapsam; M07 yayın kanıtı | Veri + alan doğrulaması | Planlandı |
 | M09 | Gold, hizalama ve reel dönüşüm | P1 | M07, M08 | Veri + agent | Planlandı |
-| M10 | Dosya/URL/PDF/OCR giriş akışı | P1 | M03, M04 sınırı, M05 | Agent + UI | Planlandı |
+| M10 | Dosya/URL/PDF/OCR giriş akışı | P1 | M03, M04 sınırı, M05 | Agent + UI | Çekirdek tamamlandı (14 Eyl, ADR-0054); T04/T06 kısmi |
 | M11 | Oturum, tablo korunması ve açıklama soruları | P1 | M03, M04; M10 ile entegrasyon | Agent + UI | Planlandı |
 | M12 | Anomali/kırılma/öncülük doğruluğu | P0/P1 | M03; M09/M11 ile entegrasyon | Analitik | Çekirdek tamamlandı (13 Eyl, ADR-0052); T03/T05/T06 kısmi |
 | M13 | İddia doğrulama ve kanıtın doğru sunulması | P0 | Mevcut kod; M03/M07/M11 ile entegrasyon | Agent + veri + UI | Çekirdek tamamlandı (13 Eyl, ADR-0050); T04/T07/T11/T12 açık |
@@ -299,18 +299,18 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Dosya seç/yükle → profil/tablo seç → gerekirse açıklama sor → oturum tablosu → analiz akışı.
 
-- [ ] **M10-T01:** Desteklenen uzantı/MIME/format matrisini çıkar: CSV/TSV, XLSX, JSON kayıtları, HTML tablo, PDF ve görsel; legacy XLS desteğini mevcut kütüphane varmış gibi varsayma.
-- [ ] **M10-T02:** UI dosya seçicisi ve sunucu upload yüzeyi ekle; oturuma bağlı güvenli dosya kimliği kullan, kullanıcının yerel yolu sunucu tarafından biliniyor sayılmasın.
-- [ ] **M10-T03:** Dosya boyutu, satır/sütun, sayfa, süre ve bellek sınırlarını ölçüp yapılandır; limit aşımını anlamlı seçenekle bildir.
-- [ ] **M10-T04:** Profilciyle ayraç, tarih biçimi, sayı biçimi, kolon tipleri ve aday anahtarları çıkar; belirsizliğe confidence/gerekçe ekle.
-- [ ] **M10-T05:** XLSX sheet seçimi, formüllü hücreler, birleşik başlıklar ve null değerler için mevcut parser kısıtlarını UI'ye taşı; destek dışı dosyayı sessiz düzleştirme.
-- [ ] **M10-T06:** Çok tablolı HTML/PDF veya çok sayfalı belgede tablo/sayfa kimliği ve başlığı korunarak kullanıcı/model seçimi sağla.
-- [ ] **M10-T07:** PDF/görsel OCR sayfa bütçesi, zaman sınırı, düşük kalite, ondalık/binlik ayraç ve toplam tutarlılığı kontrollerini ürün akışında göster.
-- [ ] **M10-T08:** OCR sonucu ile doğrulanmış veri arasındaki farkı kaybetme; riskli hücrelerin nedenlerini kullanıcıya göster ve daha net dosya/sayfa seçimi isteyebil.
-- [ ] **M10-T09:** Bozuk/şifreli/boş/destek dışı dosya ve VISION_MODEL erişimi yokluğunu ayrı hata sınıflarıyla ele al.
-- [ ] **M10-T10:** Belge/sayfa/tablo/hücre, kaynak hash ve okuma zamanı oturum provenance'ına bağlansın; kopyalanan veri kaynağını kaybetmesin.
-- [ ] **M10-T11:** Dosya içindeki talimatları veri olarak tut; dış URL çağrısı, yetki değişimi veya kalıcı yayınlama niyeti sayma.
-- [ ] **M10-T12:** Reset/temizlik/yeniden yükleme davranışını belirle; geçici dosya silinince eski indirilebilir kanıtın durumu açık olsun.
+- [x] **M10-T01** (`M10_DOSYA_GIRISI.md` §1): Desteklenen uzantı/MIME/format matrisini çıkar: CSV/TSV, XLSX, JSON kayıtları, HTML tablo, PDF ve görsel; legacy XLS desteğini mevcut kütüphane varmış gibi varsayma.
+- [x] **M10-T02**: UI dosya seçicisi ve sunucu upload yüzeyi ekle; oturuma bağlı güvenli dosya kimliği kullan, kullanıcının yerel yolu sunucu tarafından biliniyor sayılmasın.
+- [x] **M10-T03** (25 MB; OCR sayfa 5 / 90 s mevcut): Dosya boyutu, satır/sütun, sayfa, süre ve bellek sınırlarını ölçüp yapılandır; limit aşımını anlamlı seçenekle bildir.
+- [~] **M10-T04** (profilci var; confidence/gerekçe alanı açık): Profilciyle ayraç, tarih biçimi, sayı biçimi, kolon tipleri ve aday anahtarları çıkar; belirsizliğe confidence/gerekçe ekle.
+- [x] **M10-T05** (çoklu sayfa sorulur, .xls ret; birleşik başlık uyarısı profilcide): XLSX sheet seçimi, formüllü hücreler, birleşik başlıklar ve null değerler için mevcut parser kısıtlarını UI'ye taşı; destek dışı dosyayı sessiz düzleştirme.
+- [~] **M10-T06** (sohbette `sheet`/`pages`/`table_index`; arayüz düğmesi açık): Çok tablolı HTML/PDF veya çok sayfalı belgede tablo/sayfa kimliği ve başlığı korunarak kullanıcı/model seçimi sağla.
+- [x] **M10-T07** (mevcut OCR akışı: bütçe, kalite bayrağı, ayraç kuralları): PDF/görsel OCR sayfa bütçesi, zaman sınırı, düşük kalite, ondalık/binlik ayraç ve toplam tutarlılığı kontrollerini ürün akışında göster.
+- [x] **M10-T08** ("OCR ile okundu, doğrulanmadı"; riskli hücre notu): OCR sonucu ile doğrulanmış veri arasındaki farkı kaybetme; riskli hücrelerin nedenlerini kullanıcıya göster ve daha net dosya/sayfa seçimi isteyebil.
+- [x] **M10-T09** (415/400/413 + araç katmanı hata zarfı): Bozuk/şifreli/boş/destek dışı dosya ve VISION_MODEL erişimi yokluğunu ayrı hata sınıflarıyla ele al.
+- [x] **M10-T10** (belge sha256 + sayfa/tablo etiketi + zaman, kanıt panelinde): Belge/sayfa/tablo/hücre, kaynak hash ve okuma zamanı oturum provenance'ına bağlansın; kopyalanan veri kaynağını kaybetmesin.
+- [x] **M10-T11** (DIŞ İÇERİK çerçevesi; niyet yalnız kullanıcı metninden): Dosya içindeki talimatları veri olarak tut; dış URL çağrısı, yetki değişimi veya kalıcı yayınlama niyeti sayma.
+- [x] **M10-T12** (sıfırlama siler; eski kanıt sha256 kalır, dosya açılmaz): Reset/temizlik/yeniden yükleme davranışını belirle; geçici dosya silinince eski indirilebilir kanıtın durumu açık olsun.
 
 **Kabul:** Kullanıcı sunucu dosya yolu bilmeden yeni dosyayı yükleyip analiz ettirir. Birden fazla tablo arasında seçim yapılır; belirsiz birim/tarih uydurulmaz; ortak lakehouse Analyst yüklemesiyle değişmez.
 
@@ -661,3 +661,5 @@ Belgelendirme tamamlanması uygulama milestone'larının tamamlanması değildir
 - **2026-09-13 — M12 çekirdek + M14-T08:** zaman ekseni doğrulama, tekrar tarih reddi, gecikme sınırı, sonsuz/sabit davranışı, kart notları; Infinity JSON. A15/A16/A29 testleri. Sıradaki: M02 kıyas seti.
 
 - **2026-09-13 — M02 kapandı:** 23 vaka × 2 motor × 3 tekrar, aynı DB/model. Ham 16/23 vs 17/23; bayat SQL sözcük kontrolleri düzeltilince içerik 20/23 vs 18/23; ekip daha hızlı (8,6 vs 10,5 s), daha az tur ve hata, grounding 54/57 vs 51/57. K01 değişmedi. Açılan işler: L3-02 alt kalem toplamı (M08-T01/M11), L10-01 netleştirme (M11-T07), U1/L6 kontrol tasarımı (M16). T08 paralellik M15'e.
+
+- **2026-09-14 — M10 çekirdek:** yükleme ucu + 📎 ve sürükle-bırak, oturuma özel güvenli dizin, format matrisi, openpyxl + Excel sayfa seçimi, .xls reddi, ingest okuyucusunda yönlendirme sınırı. Açık: T04 profilci güveni, T06 sayfa/tablo seçim düğmesi. Sıradaki: M14.

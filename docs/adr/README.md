@@ -78,3 +78,4 @@ sıfırdan başlatmamak için kayıt tutulur.
 | [0051](0051-web-erisim-siniri-yonlendirme.md) | M05: yönlendirme sekme sekme doğrulanır (özel adres, şema, döngü, 5 sekme, süre), robots aynı sınırdan, başlık başka hosta taşınmaz, yarım indirme kapanır | Kabul edildi |
 | [0052](0052-analitik-zaman-ekseni-ve-onkosullar.md) | M12: zaman ekseni doğrulama (sıralama, tekrar tarih reddi, boşluk, frekans), gecikme sınırı n/3, NaN/sonsuz/sabit davranışı, kartta yöntem/önkoşul notu | Kabul edildi |
 | [0053](0053-motor-kiyasi-ve-katki-aktarimi.md) | M02: Büşra'nın koşucusu ve 18 vakası + 5 görülmemiş soru, aynı DB/model, 3 tekrar; baseline agent-engine (K01); V3 katkı aktarım listesi | Kabul edildi |
+| [0054](0054-dosya-girisi-yukleme-yuzeyi.md) | M10: oturuma özel yükleme ucu (tür/boyut/ad güvenliği, sıfırlamada silinir), soruya sunucu yolu eklenir (niyet kuralı korunur), openpyxl + Excel sayfa seçimi, .xls reddi, ingest okuyucusu guarded_get | Kabul edildi |

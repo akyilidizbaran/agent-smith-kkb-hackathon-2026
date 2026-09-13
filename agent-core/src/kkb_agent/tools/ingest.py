@@ -43,6 +43,7 @@ class IngestParams(BaseModel):
     locator: str = Field(description="Yerel dosya yolu ya da http(s) URL'i (CSV, TSV, XLSX, JSON; PDF/PNG/JPG belgeler OCR ile okunur)")
     table_index: int | None = Field(default=None, description="PDF/görselde birden çok tablo varsa hangisi (0 tabanlı); boşsa en büyük tablo")
     pages: str | None = Field(default=None, description="PDF için hangi sayfalar: '3', '2-4' (varsayılan ilk 5)")
+    sheet: str | None = Field(default=None, description="Excel'de sayfa adı ya da 0 tabanlı indeks; birden çok sayfa varsa zorunlu")
     name: str = Field(description="Serinin okunabilir adı, ör. 'İl bazında konut satışları'")
     series_key: str | None = Field(
         default=None,
@@ -224,8 +225,7 @@ class IngestFromUrlTool(Tool):
                 frame, outcome, doc_note, cli_locator = self._read_document(params)
             else:
                 frame, outcome = read_table_for_profiling(
-                    params.locator, allowed_roots=[self.allowed_root], session=self.session
-                )
+                    params.locator, allowed_roots=[self.allowed_root], session=self.session, sheet=params.sheet)
         except ReadRefused as exc:
             return ToolResult.fail(
                 "ACCESS_BLOCKED", f"Kaynak okunamadı: {exc}",

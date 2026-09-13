@@ -12,21 +12,44 @@ from __future__ import annotations
 
 import base64
 import json
+import re
+import shutil
 import threading
 import time
+import uuid
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Callable
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 MAX_ROWS = 200
+
+# Dosya girişi (M10, ADR-0054): desteklenen türler ve sınır. Legacy .xls bilerek yok (xlrd yok);
+# .html/.htm dosyası web_url ile açılır (tablo çıkarımı orada). Kullanıcının yerel yolu sunucuya gelmez:
+# dosya oturuma özel dizine güvenli adla yazılır, ajana verilen yol o kopyadır.
+UPLOAD_KINDS = {".csv": "tablo", ".tsv": "tablo", ".txt": "tablo", ".xlsx": "tablo (Excel)", ".xlsm": "tablo (Excel)",
+                ".json": "tablo (JSON)", ".pdf": "belge (OCR)", ".png": "görsel (OCR)", ".jpg": "görsel (OCR)",
+                ".jpeg": "görsel (OCR)", ".webp": "görsel (OCR)"}
+UPLOAD_REFUSED = {".xls": "eski Excel (.xls) desteklenmiyor; dosyayı .xlsx olarak kaydedin",
+                  ".html": "HTML dosyası için sayfa adresini verin ya da tabloyu CSV olarak kaydedin",
+                  ".htm": "HTML dosyası için sayfa adresini verin ya da tabloyu CSV olarak kaydedin",
+                  ".doc": "Word desteklenmiyor; tabloyu CSV/XLSX ya da PDF olarak verin",
+                  ".docx": "Word desteklenmiyor; tabloyu CSV/XLSX ya da PDF olarak verin"}
+UPLOAD_MAX_BYTES = 25 * 1024 * 1024
+_SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def safe_filename(name: str) -> str:
+    base = Path(name or "dosya").name
+    base = _SAFE_NAME.sub("_", base).strip("._") or "dosya"
+    return base[:80]
 
 
 def _json_safe(value: Any) -> Any:
@@ -152,6 +175,38 @@ class Session:
         self.agent = agent_factory()
         self.history: list[dict[str, Any]] = []
         self.answers: list[dict[str, Any]] = []   # tam cevap yükleri; sayfa yenilenince yeniden çizilir
+        self.id = uuid.uuid4().hex[:8]
+        self.uploads: list[dict[str, Any]] = []
+
+    @property
+    def upload_dir(self) -> Path:
+        root = getattr(self.agent, "upload_root", None)
+        if root is None:
+            tool = self.agent.registry.get("web_url")
+            root = getattr(tool, "allowed_local_root", None)
+        if root is None:
+            root = Path.cwd() / "data" / "incoming"
+        return Path(root) / "uploads" / self.id
+
+    def save_upload(self, name: str, content: bytes) -> dict[str, Any]:
+        suffix = Path(name or "").suffix.lower()
+        if suffix in UPLOAD_REFUSED:
+            raise HTTPException(status_code=415, detail=UPLOAD_REFUSED[suffix])
+        if suffix not in UPLOAD_KINDS:
+            raise HTTPException(status_code=415, detail=f"desteklenmeyen tür {suffix or '(uzantısız)'}; "
+                                f"kabul: {', '.join(sorted(UPLOAD_KINDS))}")
+        if not content:
+            raise HTTPException(status_code=400, detail="dosya boş")
+        if len(content) > UPLOAD_MAX_BYTES:
+            raise HTTPException(status_code=413, detail=f"dosya {UPLOAD_MAX_BYTES // (1024 * 1024)} MB sınırını aşıyor; "
+                                "PDF ise yalnız gerekli sayfaları, tabloysa yalnız gerekli kolonları verin")
+        self.upload_dir.mkdir(parents=True, exist_ok=True)
+        safe = safe_filename(name)
+        target = self.upload_dir / f"{uuid.uuid4().hex[:8]}_{safe}"
+        target.write_bytes(content)
+        info = {"name": safe, "path": str(target), "size": len(content), "kind": UPLOAD_KINDS[suffix], "session": self.id}
+        self.uploads.append(info)
+        return info
 
     def ask(self, question: str) -> dict[str, Any]:
         with self._lock:
@@ -173,6 +228,9 @@ class Session:
             self.agent = self._factory()
             self.history = []
             self.answers = []
+            shutil.rmtree(self.upload_dir, ignore_errors=True)   # oturum dosyaları geçicidir (M10-T12)
+            self.uploads = []
+            self.id = uuid.uuid4().hex[:8]
 
     def status(self) -> dict[str, Any]:
         agent = self.agent
@@ -196,6 +254,8 @@ class Session:
             silver_rows = None
         search_tool = agent.registry.get("web_search")
         return {
+            "uploads": len(self.uploads),
+            "upload_kinds": sorted(UPLOAD_KINDS),
             "catalog_series": len(specs) - gold - adhoc + uningested,
             "loaded_series": len(specs) - gold - adhoc,
             "gold_tables": gold,
@@ -247,6 +307,17 @@ def create_app(agent_factory: Callable[[], Any]) -> FastAPI:
         if index < 0 or index >= len(session.answers):
             raise HTTPException(status_code=404, detail="böyle bir cevap yok")
         return JSONResponse(_json_safe(session.answers[index]))
+
+    @app.post("/api/upload")
+    async def upload(file: UploadFile = File(...)) -> JSONResponse:
+        """Dosya girişi: tür/boyut denetimi, oturuma özel güvenli ad; kullanıcının yerel yolu hiç görülmez."""
+        content = await file.read()
+        info = session.save_upload(file.filename or "", content)
+        return JSONResponse(_json_safe(info))
+
+    @app.get("/api/uploads")
+    def uploads() -> JSONResponse:
+        return JSONResponse(_json_safe(session.uploads))
 
     @app.post("/api/reset")
     def reset() -> JSONResponse:

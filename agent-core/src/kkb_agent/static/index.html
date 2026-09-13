@@ -131,7 +131,10 @@
     <div id="thread"></div>
     <div class="trace">
       <div class="chips" id="trace"><span class="label" style="margin-right:4px">Araç izi</span><span class="status">henüz soru yok</span></div>
+      <div id="attach" class="chips" hidden></div>
       <div class="askrow">
+        <input type="file" id="file" hidden accept=".csv,.tsv,.txt,.xlsx,.xlsm,.json,.pdf,.png,.jpg,.jpeg,.webp">
+        <button class="ghost" id="btn-file" title="Dosya yükle (CSV, XLSX, JSON, PDF, görsel; en çok 25 MB)" style="background:transparent;color:var(--muted);border:1px solid #d9d3c7">📎 Dosya</button>
         <textarea id="q" placeholder="Soru sor, dosya ya da adres ver…"></textarea>
         <button id="btn-ask">Sor</button>
       </div>
@@ -233,7 +236,8 @@ async function loadAnswers() {      // sayfa yenilenince sohbet sunucudan geri g
 
 function renderAnswer(p) {
   const thread = $("thread");
-  const q = document.createElement("div"); q.className = "q"; q.id = "ans-" + p.index; q.textContent = p.question; thread.appendChild(q);
+  const q = document.createElement("div"); q.className = "q"; q.id = "ans-" + p.index;
+  q.textContent = (p.question || "").replace(/\n\nDosya: (\S+)/g, (m, path) => "\n📎 " + path.split("/").pop().replace(/^[0-9a-f]{8}_/, "")); thread.appendChild(q);
   const a = document.createElement("div"); a.className = "a"; a.dataset.i = p.index;
   let html = `<div class="text">${mdToHtml(p.text)}</div>`;
   const hasTable = p.table && p.table.rows && p.table.rows.length;
@@ -294,9 +298,33 @@ function renderEvidence(p) {
   body.querySelectorAll(".num").forEach((el) => el.addEventListener("click", () => openJourney(Number(el.dataset.i))));
 }
 
+// ---- Dosya girişi (M10): dosya oturuma özel dizine yüklenir; soruya sunucudaki kopyanın yolu eklenir
+// (Architect/web_url yalnız kullanıcı metninde geçen adresi açar — bu yol kullanıcının mesajıdır).
+let pending = [];
+async function uploadFile(file) {
+  const fd = new FormData(); fd.append("file", file, file.name);
+  const chip = document.createElement("span"); chip.className = "chip"; chip.textContent = `⏳ ${file.name}`; $("attach").hidden = false; $("attach").appendChild(chip);
+  try {
+    const r = await fetch("/api/upload", {method: "POST", body: fd});
+    const d = await r.json();
+    if (!r.ok) { chip.className = "chip err"; chip.textContent = `✗ ${file.name}: ${d.detail || r.status}`; return; }
+    pending.push(d); chip.textContent = `📎 ${d.name} · ${d.kind} · ${(d.size / 1024).toFixed(0)} KB`; chip.title = d.path;
+    const x = document.createElement("button"); x.textContent = "×"; x.style.cssText = "border:0;background:transparent;cursor:pointer;color:var(--muted);margin-left:4px"; x.addEventListener("click", () => { pending = pending.filter((p) => p.path !== d.path); chip.remove(); if (!pending.length) $("attach").hidden = true; }); chip.appendChild(x);
+    if (!$("q").value.trim()) $("q").value = d.kind.startsWith("belge") || d.kind.startsWith("görsel") ? "Bu belgedeki tabloyu oku ve özetle." : "Bu dosyayı analiz et.";
+    $("q").focus();
+  } catch (e) { chip.className = "chip err"; chip.textContent = `✗ ${file.name}: ${e}`; }
+}
+$("btn-file").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", async (e) => { for (const f of e.target.files) await uploadFile(f); e.target.value = ""; });
+document.addEventListener("dragover", (e) => { e.preventDefault(); });
+document.addEventListener("drop", async (e) => { e.preventDefault(); for (const f of e.dataTransfer.files) await uploadFile(f); });
+
 async function ask() {
-  const q = $("q").value.trim(); if (!q) return;
+  let q = $("q").value.trim(); if (!q && !pending.length) return;
+  const shown = q || "Bu dosyayı analiz et.";
+  if (pending.length) q = (q || shown) + "\n\n" + pending.map((p) => `Dosya: ${p.path}`).join("\n");
   $("btn-ask").disabled = true; $("q").value = "";
+  pending = []; $("attach").innerHTML = ""; $("attach").hidden = true;
   const busy = document.createElement("div"); busy.className = "busy"; busy.textContent = "ajan çalışıyor… (planla → araç çağır → doğrula)"; $("thread").appendChild(busy);
   try {
     const r = await fetch("/api/ask", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({question: q})});
