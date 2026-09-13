@@ -52,4 +52,21 @@ Adımlar: `git clone` → `make setup` → `.env` (örnekten) → `make prefligh
 
 Bilinen terminal bağımlılıkları: yok. Gizli override: yok; tüm yollar .env'de.
 
-**Kayıt:** (arkadaş provası tarih/sonuç buraya yazılır)
+**Kayıt 13 Eylül (Claude, temiz klon, scratchpad):** `git clone --branch feature/agent-engine` → `make setup` (iki ortam kilitten kuruldu, hata yok) → `.env` kopyalandı → `make preflight` → "HAZIR DEĞİL — veri kökü, veritabanı, izinli dosya kökü"; lakehouse-core CLI çalışıyor, model ve anahtarlar var. Beklenen sonuç. Arkadaş provası (başka bilgisayar) M17'de tekrarlanır.
+
+## 6. Kapanış formu
+
+| Alan | Değer |
+|---|---|
+| Milestone ve durum | M01 — tamamlandı (13 Eylül); T08 arkadaş provası M17'de tekrarlanacak |
+| Sorumlu / gözden geçiren | Baran (bu hat); ekip sonra |
+| Başlangıç / bitiş | 13 Eylül 2026, aynı gün |
+| Kod/veri sürümü | agent `6247991`+; lakehouse-core `cf3e878` anlık görüntüsü; DB `data/lakehouse.duckdb` 6,6 MB |
+| Yapılan işler | T01 sürümler, T02 repo içi lakehouse-core, T03 iki ortam kilitten (`make setup`), T04 DATA_ROOT ve yol değişkenleri, T05 LAKEHOUSE_MODE, T06 `--preflight`, T07 salt-okunur/veri değiştiren ayrımı (`preflight` vs `demo-data`), T08 temiz klon provası (Claude) |
+| Karar | ADR-0049 |
+| Test | `make test` 333 geçti; `make demo-data` 127/127 seri canlı (ingest 200 s, silver 4 s, gold 1 s, 6 metrik, 0 ret); `make preflight` → hazır |
+| Kullanıcı akışı | A01: temiz klon → setup → preflight (HAZIR DEĞİL, sebep) → demo-data → preflight (hazır) → serve (arayüz 2.214/127/8.290/6 gösterdi) |
+| Kanıt | Bu belge §5; ön kontrol çıktısı: katalog 2.214 · yüklü 127 · 8.290 gözlem · 2021-01-01 → 2026-07-03 · 295 artifact |
+| Kalan sınırlama | Ön kontrol "0 run kaydı" gösterdi: toplu ingest run kaydı yazmıyor (M07 bulgusu doğrulandı). Yüklü kapsam 2021'den; 2016+ kapsam M08'de. Arkadaş provası başka bilgisayarda yapılmadı |
+| Geri alma | `make demo-data --fresh --yes` yalnız data/ altını siler; kod ve .env dokunulmaz. Eski agent-core/data seed'i `LAKEHOUSE_MODE=seed` ile hâlâ açılır |
+| Hafıza | PROJECT_MEMORY §2.25 |

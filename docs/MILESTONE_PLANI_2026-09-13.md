@@ -63,7 +63,7 @@ Bu test sayıları birbirleriyle toplanarak başarı oranı veya motor üstünl�
 | Kimlik | Milestone | Öncelik | Temel bağımlılık | Sahiplik alanı | Durum |
 |---|---|---|---|---|---|
 | M00 | Kapsam, açık kararlar ve iş bölümü | P0 | Yok | Ekip koordinasyonu | Tamamlandı (13 Eyl; `M00_GEREKSINIM_MATRISI_2026-09-13.md`) |
-| M01 | Tek ve tekrar kurulabilir yerel ortam | P0 | M00 çalışma varsayımları | Entegrasyon | Planlandı |
+| M01 | Tek ve tekrar kurulabilir yerel ortam | P0 | M00 çalışma varsayımları | Entegrasyon | Tamamlandı (13 Eyl, ADR-0049; T08 arkadaş provası M17) |
 | M02 | Güncel motor kıyası ve katkı aktarımı | P0 | M00; eşit test ortamı için M01 | Agent + değerlendirme | Planlandı |
 | M03 | Jenerik veri ve kaynak sözleşmeleri | P0 | M00 | Agent + veri | Planlandı |
 | M04 | Analyst/Architect yetki ve yayın sınırı | P0 | M03; profil uygulama kararı | Agent + veri + UI | Rol sınırı kesin; uygulama planlandı |
@@ -110,14 +110,14 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Sabit kod sürümleri, kalıcı dizin düzeni, gerçek çalışma DB'si, kurulum/başlatma komutları ve başlangıç doğrulama raporu.
 
-- [ ] **M01-T01:** Agent ve veri commitlerini kayıt altına al; bu çalışma hattında catalog-breadth'i başlangıç kabul et, takımın son kararı olduğunu iddia etme.
-- [ ] **M01-T02:** Lakehouse kodunu geçici scratchpad bağımlılığı olmadan erişilebilir hâle getir; izolasyon/entegrasyon yöntemi mevcut kullanıcı değişikliklerini korusun.
-- [ ] **M01-T03:** Agent/veri ayrı bağımlılık ortamlarını kilit dosyalarıyla kur; desteklenen Python sürümünü temiz ortamda doğrula.
-- [ ] **M01-T04:** `LAKEHOUSE_PATH`, `LAKEHOUSE_CORE_DIR`, `LAKEHOUSE_CLI`, `INGEST_ALLOWED_ROOT`, `CHART_DIR`, `GEO_DIR` yollarını açık ve taşınabilir biçimde düzenle; gizli değerler ayrı kalsın.
-- [ ] **M01-T05:** Demo ve geliştirme seed modlarını başlangıçta ayırt et; yanlışlıkla seed açıldığında bunu görünür kıl. Demo modu beklediği yetenek yoksa sebebiyle başarısız olsun.
-- [ ] **M01-T06:** Ön kontrol: DB şeması, yüklü veri, katalog, Gold güncelliği, CLI erişimi, izinli dosya alanı ve gerekli servis yapılandırması. Anahtarların yalnız kullanılabilirlik durumu gösterilsin.
-- [ ] **M01-T07:** Salt-okunur kontrolleri canlı veri indiren veya kalıcı veri değiştiren komutlardan ayır; başlatma işlemi farkında olmadan bütün kataloğu çekmesin.
-- [ ] **M01-T08:** Temiz klasörden kurulum ve yeniden başlatma provasını başka bir ekip üyesine yaptır; gizli terminal override'larını dokümante et.
+- [x] **M01-T01:** Agent ve veri commitlerini kayıt altına al; bu çalışma hattında catalog-breadth'i başlangıç kabul et, takımın son kararı olduğunu iddia etme.
+- [x] **M01-T02:** Lakehouse kodunu geçici scratchpad bağımlılığı olmadan erişilebilir hâle getir; izolasyon/entegrasyon yöntemi mevcut kullanıcı değişikliklerini korusun.
+- [x] **M01-T03:** Agent/veri ayrı bağımlılık ortamlarını kilit dosyalarıyla kur; desteklenen Python sürümünü temiz ortamda doğrula.
+- [x] **M01-T04:** `LAKEHOUSE_PATH`, `LAKEHOUSE_CORE_DIR`, `LAKEHOUSE_CLI`, `INGEST_ALLOWED_ROOT`, `CHART_DIR`, `GEO_DIR` yollarını açık ve taşınabilir biçimde düzenle; gizli değerler ayrı kalsın.
+- [x] **M01-T05:** Demo ve geliştirme seed modlarını başlangıçta ayırt et; yanlışlıkla seed açıldığında bunu görünür kıl. Demo modu beklediği yetenek yoksa sebebiyle başarısız olsun.
+- [x] **M01-T06:** Ön kontrol: DB şeması, yüklü veri, katalog, Gold güncelliği, CLI erişimi, izinli dosya alanı ve gerekli servis yapılandırması. Anahtarların yalnız kullanılabilirlik durumu gösterilsin.
+- [x] **M01-T07:** Salt-okunur kontrolleri canlı veri indiren veya kalıcı veri değiştiren komutlardan ayır; başlatma işlemi farkında olmadan bütün kataloğu çekmesin.
+- [~] **M01-T08** (Claude temiz klon provası yapıldı; başka ekip üyesi M17'de): Temiz klasörden kurulum ve yeniden başlatma provasını başka bir ekip üyesine yaptır; gizli terminal override'larını dokümante et.
 
 **Kabul:** Belgelenmiş komutlarla beklenen adaptör ve araç yetkileri açılır; veri/Gold yeteneği eksikse açık neden görünür. Sadece `--health` veya UI açılışı, tam demo kabulü sayılmaz. Var olan veri yanlışlıkla sıfırlanmaz.
 
@@ -651,3 +651,5 @@ Belgelendirme tamamlanması uygulama milestone'larının tamamlanması değildir
 - **2026-09-13 — M00 kararları (kullanıcı):** K01 baseline `feature/agent-engine`; K04 81 il, yüklü kapsam 2016-01'den itibaren (odak 2021–2026), istenen başka dönem sorulursa kaynaktan çekilebilir; K05 CSV+XLSX/PNG/HTML; K02 jüri iki profilde dosya yükler, Architect tam sıfırlama ve başka alan verisiyle jeneriklik sınaması; sorumlu: tüm milestone'lar bu çalışma hattında, ekip sonra gözden geçirir; push edilmemiş iş yok; K11 kota/arama/yardımcı model kısıtı yok; K07 paylaşılan sunucu yok, 10 kullanıcılık örneklem, demo kullanıcının bilgisayarında, internet var, PDF canlı; K08 JS siteleri opsiyonel; K09 harita istenirse, lisans kullanıcıdan. M00-T02/T04/T05/T06/T07/T08 bu kayıtla kapandı; T01 ve T03 kabul senaryolarına işlenecek.
 
 - **2026-09-13 — M00 kapandı:** transkript zorunlu davranışları R01–R18 kabul vakalarına eşlendi (A30–A33 ve A21a–c eklendi); rol sınırı ve silme kapsamı kabul metni yazıldı (`M00_GEREKSINIM_MATRISI_2026-09-13.md`). Sıradaki: M01.
+
+- **2026-09-13 — M01 kapandı:** lakehouse-core repo ağacında, DATA_ROOT, LAKEHOUSE_MODE, `--preflight`, `make demo-data`; canlı kurulum 127/127, ön kontrol hazır; temiz klon provası. Bulgu: toplu ingest 0 run kaydı (M07). Kapanış formu `M01_ORTAM.md` §6. Sıradaki: M05/M13/M12/M14-T08 küçük düzeltmeler, ardından M02.
