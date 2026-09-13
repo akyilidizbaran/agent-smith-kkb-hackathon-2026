@@ -252,3 +252,17 @@ def test_sorudaki_yil_ve_metin_kalmis_hucre_sayi_sayilir() -> None:
     assert m["1.017"].matched and m["93.824.682.381"].matched
     assert panel.complete, panel.gaps
     assert panel.web_sources[0]["ocr"]["model"] == "ocr"
+
+
+def test_raw_yolu_veri_koku_tasininca_yeni_kokte_bulunur(tmp_path) -> None:
+    """Veri kökü taşınınca kayıtlı mutlak RAW yolu bayatlar; adaptör aynı göreli yolu yeni kökte bulur (14 Eyl bulgusu)."""
+    from kkb_agent.adapters.silver_lakehouse import SilverLakehouse
+
+    lake = SilverLakehouse.__new__(SilverLakehouse)
+    lake.db_path = tmp_path / "data" / "lakehouse.duckdb"
+    moved = tmp_path / "data" / "raw" / "kaynak" / "2026-09-13" / "abc.json"
+    moved.parent.mkdir(parents=True); moved.write_text("{}")
+    old = str(tmp_path / "eski_kok" / "raw" / "kaynak" / "2026-09-13" / "abc.json")
+    assert lake._resolve_raw(old) == str(moved)
+    assert lake._resolve_raw(str(tmp_path / "eski_kok" / "raw" / "yok.json")).endswith("yok.json")
+    assert lake._resolve_raw(None) is None

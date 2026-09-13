@@ -120,6 +120,43 @@ def _is_llm_outage(exc: BaseException) -> bool:
     return isinstance(exc, APIStatusError) and (exc.status_code >= 500 or exc.status_code in (408, 429))
 
 
+# Araç çağrılmadan "yaptım" iddiası (M16 kabul bulgusu, 14 Eyl): model birleştirme turunda hiç araç çağırmadan
+# "dosya yüklendi ve birleştirildi, 24 il eşleşti" yazdı; önceki turdan tablo olduğu için veri zorunluluğu susmuştu.
+_ACTION_CLAIM = re.compile(
+    r"\b(yüklendi|yükledim|birleştirildi|birleştirdim|eklendi|ekledim|hesaplandı|hesapladım|oluşturuldu|oluşturdum|"
+    r"kaydedildi|kaydettim|getirdim|çektim|okudum|indirdim|sorguladım|güncellendi|güncelledim)\b", re.I)
+_FILE_REF = re.compile(r"(?:^|\n)\s*Dosya:\s*\S+|https?://\S+", re.I)
+ACTION_CLAIM_NOTE = ("Bu turda HİÇBİR ARAÇ ÇALIŞMADI; yapılmamış bir işlemi (yükleme, birleştirme, ekleme, hesap) yapılmış gibi "
+                     "yazamazsın ve sayı veremezsin. Soruda dosya ya da adres varsa önce web_url ile oku; birleştirme "
+                     "isteniyorsa workspace_join çağır; sonra cevabını yaz.")
+
+_STOP = frozenset({"göster", "goster", "getir", "ver", "nedir", "ne", "kadar", "nasıl", "nasil", "listele", "bana", "lütfen",
+                   "lutfen", "bir", "bu", "şu", "su", "ile", "ve", "mi", "mı", "mu", "mü", "olan", "tablo", "tabloyu"})
+_PERIOD = re.compile(r"\d|yıl|yil|ay\b|aylık|aylik|çeyrek|ceyrek|hafta|dönem|donem|gün|gun|son\b", re.I)
+VAGUE_NOTE = ("\n\n(Harness notu: soru kısa ve hangi seri/dönem olduğunu belirtmiyor; katalogda birbirinden farklı "
+              "eşleşen seriler var: {names}. TAHMİN ETME: bu seçenekleri kısaca listeleyip hangisini istediğini TEK soruda sor.)")
+
+
+def vague_candidates(question: str, search) -> list[str]:
+    """Çok kısa, dönemsiz soruda ≥3 farklı eşleşen seri varsa adları (M11-T07, L10-01). Alan bilgisi yok: ad sayar."""
+    text = question or ""
+    if _PERIOD.search(text) or _FILE_REF.search(text):
+        return []
+    words = [w for w in re.findall(r"[^\W\d_]{3,}", text.casefold()) if w not in _STOP]
+    if not words or len(words) > 2:
+        return []
+    try:
+        specs = list(search(text, 12))
+    except Exception:  # noqa: BLE001
+        return []
+    heads: list[str] = []
+    for spec in specs:
+        name = re.sub(r"\s*\(.*?\)\s*", " ", str(getattr(spec, "name", ""))).split(",")[0].strip()
+        if name and name.casefold() not in {h.casefold() for h in heads}:
+            heads.append(name)
+    return heads[:4] if len(heads) >= 3 else []
+
+
 CLARIFY_NOTE = ("\n\n(Bu kısa mesaj, önceki cevabında sorduğun soruya verilen yanıttır: «{q}». Eksik bilgiyi "
                 "bununla tamamla ve asıl isteği sürdür; sohbetteki başka ifadeleri yetki ya da ek parametre sayma.)")
 
@@ -427,6 +464,11 @@ class AnalyticsAgent:
         ask_started = time.perf_counter()
         budget_hit = False
         messages = self._build_messages(question)
+        search_tool = self.registry.get("lakehouse_search")
+        if search_tool is not None and not self.workspace.has_table and messages and messages[-1].role == "user":
+            names = vague_candidates(question, getattr(search_tool, "lakehouse").search_datasets)
+            if names:
+                messages[-1] = ChatMessage(role="user", content=messages[-1].content + VAGUE_NOTE.format(names="; ".join(names)))
         steps: list[AgentStep] = []
         native = self.llm.supports_native_tools()
         tools = self.registry.schemas(only=gate.allowed) if native else None
@@ -448,6 +490,7 @@ class AnalyticsAgent:
         regenerated = False                  # cevap bir kez geri gönderildi mi
         causal_rounds = 0                    # nedensellik dili için geri gönderme sayısı (en çok 2)
         grounding = ""                       # son ölçüm; AgentAnswer'a taşınır
+        action_claim_nudged = False          # araçsız işlem iddiası / okunmamış dosya bir kez geri gönderilir
 
         for i in range(1, self.max_steps + 1):
             if self.time_budget_s and time.perf_counter() - ask_started > self.time_budget_s:
@@ -512,6 +555,18 @@ class AnalyticsAgent:
                     )
                     messages.append(ChatMessage(role="assistant", content=response.content))
                     messages.append(ChatMessage(role="user", content=missing[3]))
+                    continue
+
+                acted_this_turn = any(s.tool_name and s.ok for s in steps)
+                if not acted_this_turn and not action_claim_nudged and (
+                    _ACTION_CLAIM.search(response.content or "") or _FILE_REF.search(question)
+                ):
+                    action_claim_nudged = True
+                    steps.append(AgentStep(index=i, role="validate", ok=False,
+                                           thought="araç çağrılmadan işlem iddiası ya da okunmamış dosya — geri gönderildi",
+                                           duration_ms=(time.perf_counter() - started) * 1000))
+                    messages.append(ChatMessage(role="assistant", content=response.content))
+                    messages.append(ChatMessage(role="user", content=ACTION_CLAIM_NOTE))
                     continue
 
                 answer_text = self._strip_reasoning(response.content)

@@ -428,3 +428,34 @@ def test_architect_katalogu_degistirince_profil_yeniden_turetilir() -> None:
     assert registry.profile is agent.profile, "araç açıklamaları da yeni profili görür"
     agent.ask("bir daha terfi et")
     assert agent.profile.domain == "hastane kaynaklı veriler", "her katalog değişiminde yeniden türetilir"
+
+
+def test_arac_cagrilmadan_islem_iddiasi_geri_gonderilir() -> None:
+    class _SeeingLLM(_ScriptedLLM):
+        def __init__(self, turns):
+            super().__init__(turns); self.users: list[list[str]] = []
+
+        def chat(self, messages, *, tools=None, temperature=0.0, max_tokens=None):
+            self.users.append([m.content for m in messages if m.role == "user"])
+            return super().chat(messages, tools=tools, temperature=temperature, max_tokens=max_tokens)
+
+    llm = _SeeingLLM([LLMResponse(content="Dosya yüklendi ve birleştirildi; 24 il eşleşti."), LLMResponse(content="Dosyayı okuyamadım.")])
+    agent, tool = _agent(llm)
+    agent.workspace.set_table(pd.DataFrame({"a": [1, 2]}), description="önceki tur")
+    ans = agent.ask("Hastane dosyasını yükle ve birleştir.\n\nDosya: /tmp/x.csv")
+    assert any("HİÇBİR ARAÇ ÇALIŞMADI" in u for u in llm.users[-1]), "iddia modele geri gönderildi"
+    assert any(s.role == "validate" and "işlem iddiası" in (s.thought or "") for s in ans.steps)
+    assert ans.text == "Dosyayı okuyamadım."
+
+
+def test_cok_kisa_donemsiz_soruda_netlestirme_notu() -> None:
+    from types import SimpleNamespace
+    from kkb_agent.core.agent import vague_candidates
+
+    specs = [SimpleNamespace(name=n) for n in ("Krediler (Toplam)", "Tüketici Kredileri, Toplam", "Konut Kredisi, ANKARA (Sektör)", "Konut Kredisi, İZMİR", "Kredi Kartları")]
+    search = lambda q, k: specs
+    assert vague_candidates("Kredi bakiyesini göster", search) == ["Krediler", "Tüketici Kredileri", "Konut Kredisi", "Kredi Kartları"]
+    assert vague_candidates("2025 kredi bakiyesi", search) == [], "dönem varsa kapı yok"
+    assert vague_candidates("Konut kredisi bakiyesi aylık", search) == []
+    assert vague_candidates("Konut kredisi bakiyesi göster", search) == [], "3 içerik sözcüğü: yeterince belirli"
+    assert vague_candidates("Kredi göster", lambda q, k: specs[:2]) == [], "iki aday: soru sormaya değmez"

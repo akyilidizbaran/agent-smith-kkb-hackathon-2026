@@ -218,6 +218,15 @@ Kullanıcı uyurken tüm milestone'ları sırayla kapatma görevi. Kod dalı yal
 - **Bulgu:** M14 arayüz dışa aktarım bağlantıları önceki commit'te yazılmamıştı (API uçları vardı) → eklendi ve doğrulandı.
 - Testler: ajan 360 → 377; lakehouse 1.085 (+EVDS pencere testi).
 
+### 2.34 M16 ilk kabul koşusu bulguları ve düzeltmeler (14 Eylül gece)
+İlk canlı `scripts/acceptance_m16.py` koşusu 10/14 tur (rapor `docs/experiments/acceptance_m16_2026-09-14_0118.json`, başarısızlar rapordan çıkarılmadı). Dört kusur, dördü de harness'te kapatıldı:
+- **Kanıt zinciri ✗:** veri kökü `data_build_2016/` → `data/` taşınınca artifact'teki mutlak RAW yolları bayatladı. Adaptör RAW yolunu bulamazsa aynı `raw/…` kuyruğunu güncel DB kökünde arıyor (`_resolve_raw`).
+- **Karşılaştırmalı grafik yok:** iki farklı birimli seri L9'a takıldı, model grafiksiz özür yazdı. Çift eksen kendiliğinden açılmaz (ADR-0034 kuralı korunur); zaman ekseninde çizgi grafikte tek kusur birim farkıysa araç her seriyi ilk döneminde 100'e çevirir, kartta ve artifact'te `rebased_to_100` yazar.
+- **Uydurulmuş işlem:** finans dışı birleştirme turunda model hiç araç çağırmadan "yüklendi ve birleştirildi, 24 il" yazdı; önceki turdan tablo olduğu için veri zorunluluğu susmuştu. Yeni guard: bu turda başarılı araç yokken işlem fiili ("yüklendi, birleştirdim, hesaplandı…") ya da soruda `Dosya:`/URL varsa cevap bir kez geri gönderilir.
+- **Belirsiz kısa soru netleştirilmedi (L10):** ≤2 içerik sözcüğü, dönem/sayı yok, aktif tablo yok ve katalogda ≥3 farklı adlı eşleşme varsa kullanıcı mesajına aday adlarıyla "tahmin etme, tek soruda sor" notu eklenir (alan bilgisi yok, ad sayar).
+- CI agent-core işi `PIL`/`lxml` eksikliğiyle düşüyordu → `pillow`, `lxml` bağımlılığa ve kilide eklendi. Eski demo verisi `data_prev_2021demo/` olarak saklandı, `.gitignore`'da.
+- Testler ajan 377 → 386.
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |

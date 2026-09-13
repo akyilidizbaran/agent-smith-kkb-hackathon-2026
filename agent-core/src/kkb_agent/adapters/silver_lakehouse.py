@@ -759,6 +759,23 @@ class SilverLakehouse:
         )
 
     # ---------- Kanıt zinciri (EvidenceCapable, ADR-0033) ----------
+    def _resolve_raw(self, raw_path: str | None) -> str | None:
+        """RAW yolu kayıtta mutlak; veri kökü taşınınca (demo köküne alma, başka makinede kurulum) bayatlar.
+        Kayıtlı yol yoksa aynı göreli yol bu veritabanının `raw/` kökünde aranır; bulunamazsa kayıt olduğu gibi
+        döner (file_present yanlış kalır, uydurulmaz). Ölçüldü 14 Eyl: kök taşındıktan sonra dosya zinciri ✗."""
+        if not raw_path:
+            return raw_path
+        p = Path(raw_path)
+        if p.exists():
+            return raw_path
+        parts = p.parts
+        if "raw" in parts:
+            tail = parts[len(parts) - 1 - list(reversed(parts)).index("raw") + 1:]
+            candidate = self.db_path.parent / "raw" / Path(*tail)
+            if candidate.exists():
+                return str(candidate)
+        return raw_path
+
     def _bronze_path(self, artifact_sha256: str) -> str | None:
         """Bronze parquet: `<data>/bronze/**/artifact_sha256=<sha>.parquet`. Yoksa None, uydurulmaz."""
         root = self.db_path.parent / "bronze"
@@ -785,7 +802,7 @@ class SilverLakehouse:
         for sha, source_id, dataset_id, locator, status, fetched, raw_path in rows:
             out[sha] = {
                 "source_id": source_id, "dataset_id": dataset_id, "locator": locator,
-                "http_status": status, "fetched_at": _parse_ts(fetched), "raw_path": raw_path,
+                "http_status": status, "fetched_at": _parse_ts(fetched), "raw_path": self._resolve_raw(raw_path),
                 "bronze_path": self._bronze_path(sha),
             }
         for sha in artifact_sha256s:
@@ -850,7 +867,7 @@ class SilverLakehouse:
                 value=None if value is None else float(value), quality_flag=str(flag),
                 artifact_sha256=str(sha), vintage_id=vintage, run_id=run_id,
                 fetched_at=_parse_ts(fetched), locator=locator, http_status=status,
-                raw_path=raw_path, bronze_path=self._bronze_path(str(sha)), relation=relation,
+                raw_path=self._resolve_raw(raw_path), bronze_path=self._bronze_path(str(sha)), relation=relation,
             ))
         return out
 
