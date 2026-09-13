@@ -207,13 +207,24 @@ Her cevabın tam tablosu sunucuda (`tables[index]`); `/api/answers/{i}/table.csv
 ### 2.32 M04 — profiller ve tam sıfırlama (14 Eylül, ADR-0056)
 `AGENT_PROFILE=analyst|architect`: Analyst kayıt defterinde ingest/terfi yok (yokluk, kapı değil); `POST /api/profile` yalnız `ARCHITECT_TOKEN` ile (boşsa geçiş kapalı), geçiş oturumu temizler; `POST /api/architect/reset` iki adım (hedef listesi + onay kodu → silme + `lakehouse bootstrap`), hedefler yalnız DATA_ROOT altında, kod/.env hariç. Arayüzde profil rozeti, anahtar penceresi, "Tam veri sıfırlama…" düğmesi. Canlı: anahtarsız 403; Analyst 17 araç, Architect'te ingest+terfi ile 19. Pasifleştirme veri CLI'ında yok (açık). Testler 356 → 360.
 
+### 2.33 Gece koşusu — M07, M08, M09, M03, M11, M06, M15 (14 Eylül, ADR-0057…0061)
+Kullanıcı uyurken tüm milestone'ları sırayla kapatma görevi. Kod dalı yalnız `feature/agent-engine`, main'e dokunulmadı.
+- **M07 (ADR-0057):** toplu ingest artık run/artifact bağı/uyarı kaydı tutuyor (öncesi: 295 artifact, 0 run); bayat run kapatma, `--start/--end`, `--only-file`, eksik seri çıkış 1, JSON kapsam raporu. 6 test; lakehouse 1.079 → 1.085.
+- **M08:** zorunlu set katalogdan 681 seri (20 aylık, 1 haftalık, 648 FinTürk = 81 il × 8, 12 anlamı tanımlı EVDS). 2016-01'den ayrı köke (`data_build_2016/`) canlı kurulum: 681/681 (104 uyarılı), ingest 1.659 s (FinTürk 3.402 istek), 36.424 gözlem, 114 run, 3.435 artifact (hepsi run'a bağlı), Gold 6 tablo 126 satır. Boşluklu seri 0; 81 il toplamı ↔ ulusal aylık konut 42 çeyrekte medyan |fark| %0,013, en çok %0,19. **Bulgu:** EVDS 1.000 gözlem sınırı günlük serileri sessizce kırptı (USD/EUR 2023-10'dan, APIFON4 2022-08'den) → toplu betikte ≤365 günlük pencere + limit-dolu yanıt kırpılma sayılıyor. **Bulgu:** BDDK aylık 1676/1688/1717 kaynakta 2018-01'den, 1746_Rasyo 2018-08'den yayınlanıyor (istek 2016'dan). **Bulgu:** run kaydı sayesinde BDDK "grid defaultValue 0" uyarısı artık Silver'a `source_warning` olarak taşınıyor (36.424 gözlemin 31.964'ü) — doğru ama gürültülü. Ayrı hazır oluş sayaçları (katalog / doğrulanmış / tanımlı / yüklü / Gold'a hazır) ön kontrol, API ve arayüzde. L3-02 alt kalem kuralı (alandan bağımsız).
+- **M09 (ADR-0058):** `workspace_real_value` (endeks tipi, baz kapsamı, aylık hizalama, endeks kolonu görünür, lineage). Canlı prova hatası: yüklü TÜFE 2025=100 serisi "Genel Endeks" adıyla aranamıyordu → katalog küratörlüğü (ad, açıklama, takma ad, etiket; TP.FG.J0 2003=100 ile splice yok) + aday listesi anlamdan (yüklü INDEX serileri).
+- **M03 (ADR-0060):** kaynak ipuçları (`source_words`, host→anahtar adı, kurum adları) çekirdekten `config_data/source_hints.json`'a; boş yapılandırmada motor çalışıyor. Bellek-içi finans dışı adaptörle uyum testi iki alan sızıntısı yakaladı ("bakiye" araç açıklamasında, "kredi|bakiye" selam dedektöründe) → düzeltildi. Sözleşme belgesi `docs/M03_VERI_SOZLESMESI.md`, fikstürler `agent-core/tests/fixtures/generic/`.
+- **M11 (ADR-0059):** oturum tabloları `k1…k8`, `workspace_join` (anahtar belirsizse sorar, sağda yineleme reddi, eşleşmeyenler iki yönde sayılır, ad çakışması sonek, provenance kolon başına), `workspace_query` kN okur, netleştirme kuralı, bekleyen soruya kısa yanıt notu.
+- **M06/M15 (ADR-0061):** `js_required` sebebi; "ekip hesabı" seçeneği yalnız anahtarı kullanan bağlayıcıda (ajan hiçbir web isteğinde anahtar göndermiyordu → eski seçenek sahte vaatti); erişim seçenekleri arayüz düğmesi. OpenAI SDK tekrarı kapalı (bizim döngüyle çarpılıyordu), yalnız geçici hatada tekrar, `LLM_TIMEOUT`/`LLM_MAX_TOKENS`/`AGENT_TIME_BUDGET_S`, model kesintisi 500 yerine açıklamalı cevap, uzunluk kesintisi notu. GitHub Actions (`tests.yml`), `make ci`, lakehouse Makefile hedefleri gerçek adlarıyla.
+- **Bulgu:** M14 arayüz dışa aktarım bağlantıları önceki commit'te yazılmamıştı (API uçları vardı) → eklendi ve doğrulandı.
+- Testler: ajan 360 → 377; lakehouse 1.085 (+EVDS pencere testi).
+
 ## 3. Bugünkü sayılar
 
 | Ölçüm | Değer |
 |---|---|
-| Agent birim testi | 360 |
+| Agent birim testi | 377 |
 | Lakehouse testi (r3 + genişlik dalı) | 1.079 |
-| ADR | 56 |
+| ADR | 61 |
 | Golden vakası | 21: seed G1–G7 5/5; gerçek DB G8, G10, G11a–c, G12, G13 5/5, G14 3/3, G15–G17 3/3, G18a/b 2/2; G9 4/5. Demo kabul sıfırdan 8/8; 13 Eyl 11 senaryo 11/11 |
 | Araç sayısı (gerçek DB'de) | 19: lakehouse ×4, workspace ×4 (query dâhil), analitik ×3 (anomaly_detect, change_points, lead_lag), ingest, promote_draft, gold ×3, chart, web_url, web_search (Tavily anahtarı .env'de) |
 | Harness guard'ları | cevap guard'ı, veri üreten araç zorunluluğu (iş yapan araç/tablo varken susar), istenen yetenek zorunluluğu (grafik, analitik), frekans uyuşmazlığı (kabadan ince yok), grounding, nedensellik filtresi, tekrar kilidi + döngü kırma, araçsız son tur, dönem filtresi, ay çözünürlüklü kapsam, GOLD_REQUIRED, niyet kapısı, beyan kapısı, adım sınırı, reasoning temizliği |

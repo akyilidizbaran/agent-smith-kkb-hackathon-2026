@@ -165,3 +165,39 @@ def test_only_with_a_missing_series_is_not_success(tmp_path, monkeypatch) -> Non
     assert data["start"] == "2016-01-01"
     assert rci.main(["--database", str(tmp_path / "db.duckdb"), "--data-root", str(tmp_path / "data"),
                      "--start", "2026-01-01", "--end", "2025-01-01"]) == 2
+
+
+def test_evds_is_windowed_and_a_full_limit_response_is_truncation(env, monkeypatch) -> None:
+    """EVDS silently truncates at 1,000 observations (measured: daily FX started in 2023 instead of 2016)."""
+    requested: list[tuple[date, date]] = []
+
+    class EvdsConn(BaseConnector):
+        def __init__(self, raw, session=None):
+            pass
+
+        def fetch(self, spec):
+            requested.append((spec.start_date, spec.end_date))
+            payload = f'{{"w":"{spec.start_date}"}}'.encode()
+            return [_asset(env["tmp"], payload, source="evds", dataset="evds_fx")]
+
+    rows = {"n": 300}
+
+    class P:
+        def parse(self, asset):
+            return _batch(asset, rows=rows["n"])
+
+    monkeypatch.setitem(rci.CONNECTOR_REGISTRY, "evds", ConnectorBinding(
+        connector_cls=EvdsConn, parser_cls=P,
+        build_spec=lambda row, s, e: FetchSpec(source_id="evds", dataset_id="evds_fx", locator="evds", start_date=s, end_date=e,
+                                               parameters={"series": row.native_code})))
+    row = SeriesRow(series_id="evds:FX", source_id="evds", native_code="FX", dataset_id="evds_fx", name_tr="fx")
+    out = rci._run_one(row, env["raw"], None, env["arts"], env["bronze"], start=date(2016, 1, 1), end=date(2018, 12, 31))
+    # 365 günlük pencereler (2016 artık yıl → 3 yıl 4 pencere): bitişik, boşluksuz, aralığı tam kapsar
+    assert requested[0][0] == date(2016, 1, 1) and requested[-1][1] == date(2018, 12, 31) and len(requested) == 4
+    assert all((b - a).days <= 364 for a, b in requested)
+    assert all((nxt[0] - prev[1]).days == 1 for prev, nxt in zip(requested, requested[1:]))
+    assert out.status == "ok" and out.new == len(requested)
+    rows["n"] = 1000
+    requested.clear()
+    out2 = rci._run_one(row, env["raw"], None, env["arts"], env["bronze"], start=date(2019, 1, 1), end=date(2019, 6, 30))
+    assert out2.status == "failed" and "per-request limit" in out2.error and out2.new == 0

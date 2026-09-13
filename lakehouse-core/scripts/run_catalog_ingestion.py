@@ -55,6 +55,7 @@ from src.lakehouse.ingestion.observability import (
 from src.lakehouse.contracts.models import FetchSpec
 from src.lakehouse.db.bootstrap import bootstrap_database
 from src.lakehouse.errors import ErrorPayload, LakehouseError
+from src.lakehouse.ingestion.windowing import plan_evds_windows, windowed_fetch_specs
 from src.lakehouse.storage.parquet import ParquetConflictError, ParquetStorage
 from src.lakehouse.storage.raw import RawStorage
 
@@ -65,6 +66,18 @@ DEFAULT_END = date(2026, 6, 30)
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+# EVDS tek istekte en çok 1.000 gözlem döndürür ve fazlasını SESSİZCE kırpar (bitiş tarihinden geriye sayar).
+# Ölçüldü (14 Eyl, 2016+ kurulum): günlük kur ve fonlama serileri tek pencereyle istendi, tam 1.000 gözlemle
+# 2022–2023'te "başladı". Pencere ≤365 gün (bağlayıcı sözleşmesi); limit dolu dönen yanıt kırpılmış sayılır.
+EVDS_OBSERVATION_LIMIT = 1000
+
+
+def _fetch_specs(spec: FetchSpec) -> tuple[FetchSpec, ...]:
+    if spec.source_id == "evds" and spec.start_date is not None and spec.end_date is not None:
+        return windowed_fetch_specs(spec, plan_evds_windows(spec.start_date, spec.end_date))
+    return (spec,)
 
 
 @dataclass
@@ -268,7 +281,9 @@ def _run_one(
     parser = binding.parser_cls()
 
     try:
-        assets = connector.fetch(spec)
+        assets = []
+        for window_spec in _fetch_specs(spec):
+            assets.extend(connector.fetch(window_spec))
     except LakehouseError as exc:
         payload = exc.payload
         print("  FAILED (fetch)")
@@ -305,6 +320,12 @@ def _run_one(
             ))
             parsed_batch = parser.parse(asset)
             _validate_batch(asset, parsed_batch)
+            if asset.source_id == "evds" and len(parsed_batch.dataframe) >= EVDS_OBSERVATION_LIMIT:
+                raise LakehouseError(ErrorPayload(
+                    error_code="SCHEMA_MISMATCH",
+                    message=(f"EVDS response has {len(parsed_batch.dataframe)} observations: reached the EVDS per-request "
+                             f"limit ({EVDS_OBSERVATION_LIMIT}); the window was truncated and is not landed"),
+                    source_id=asset.source_id, dataset_id=asset.dataset_id, retryable=False))
             if parsed_batch.warnings:
                 records = []
                 for message in parsed_batch.warnings:
