@@ -36,6 +36,13 @@ class Lake:
     def search_datasets(self, q, limit=6):
         return []
 
+    def list_datasets(self):
+        idx = SimpleNamespace(dataset_id="evds:TUFE", name="Genel Endeks",
+                              columns=[SimpleNamespace(name="value", role=ColumnRole.MEASURE, semantic_type=SemanticType.INDEX)])
+        stock = SimpleNamespace(dataset_id="bddk:x", name="Bakiye",
+                                columns=[SimpleNamespace(name="value", role=ColumnRole.MEASURE, semantic_type=SemanticType.STOCK)])
+        return [idx, stock]
+
 
 def _ws(dates, values):
     ws = AnalysisWorkspace()
@@ -73,7 +80,7 @@ def test_baz_kapsam_disi_ve_endeks_olmayan_seri_reddedilir() -> None:
     err = WorkspaceRealValueTool(Lake(IDX, semantic=SemanticType.STOCK), ws).validate_refs(_p())
     assert err is not None and "fiyat endeksi değil" in err.message
     err2 = WorkspaceRealValueTool(Lake(IDX), ws).validate_refs(_p(index_dataset_id="evds:YOK"))
-    assert err2.error_code == "DATASET_NOT_FOUND"
+    assert err2.error_code == "DATASET_NOT_FOUND" and err2.candidates == ["evds:TUFE"] and "Genel Endeks" in err2.hint, "aday anlamdan: yalnız yüklü endeks"
 
 
 def test_kapsam_disi_satir_bos_kalir_haftalik_tablo_reddedilir() -> None:

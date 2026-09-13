@@ -19351,11 +19351,16 @@ series:
   - series_id: evds:TP.TUKFIY2025.GENEL
     native_code: TP.TUKFIY2025.GENEL
     dataset_id: evds_bie_tukfiy2025
-    name_tr: "Genel Endeks"
+    name_tr: "Tüketici Fiyat Endeksi (TÜFE, genel, 2025=100)"
     description: >-
-      TCMB EVDS, "bie_tukfiy2025" veri grubu (kod: bie_tukfiy2025). Kaynagin kendi API metadata'sindan
-      otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
-    tags: [evds, konut, otomatik]
+      TCMB EVDS, "bie_tukfiy2025" veri grubu: TÜİK Tüketici Fiyat Endeksi genel seviyesi, 2025=100 bazlı,
+      aylık. ENDEKS SEVİYESİDİR; aylık ya da yıllık değişim oranı değildir. Reel (enflasyondan arındırılmış)
+      dönüşümde kullanılır: reel_t = nominal_t × endeks(baz) / endeks(t). Kaynak seriyi 2025 öncesine de
+      2025=100 bazında yayınlıyor (ölçüldü: 2021-01 = 16,13). ESKİ SERİ evds:TP.FG.J0 (2003=100) ile
+      AYNI BAZDA DEĞİLDİR; ikisi birbirine eklenmez/birleştirilmez. Küratörlü 14 Eylül 2026
+      (docs/sources/evds.md "TÜFE 2025=100 küratörlüğü").
+    aliases: ["tüfe", "tufe", "enflasyon", "tüketici fiyat endeksi", "fiyat endeksi", "TÜFE 2025", "genel fiyat endeksi"]
+    tags: [enflasyon, fiyat, endeks, tcmb, tuik]
     frequency: monthly
     unit: index
     measure_type: index

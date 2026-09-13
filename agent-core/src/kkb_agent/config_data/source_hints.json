@@ -1,0 +1,14 @@
+{
+  "_note": "Kaynağa özel ipuçları (M03-T04, ADR-0060). Çekirdek kod bu dosyayı okur; kaynak adı kodda yazılı değildir. Başka bir alan için bu dosya değiştirilir ya da SOURCE_HINTS_FILE ile başka dosya verilir; boş dosyada motor yine çalışır, yalnız kaynak yüzü ve kurum sabitleme ipucu olmaz.",
+  "source_words": {
+    "bddk_finturk": ["finturk", "illere gore", "il bazinda", "il bazli"],
+    "bddk_monthly": ["aylik bulten", "bddk aylik"],
+    "bddk_weekly": ["haftalik bulten", "bddk haftalik"],
+    "evds": ["evds", "tcmb", "merkez bankasi"]
+  },
+  "credential_env_by_host": {
+    "evds2.tcmb.gov.tr": "EVDS_API_KEY",
+    "evds3.tcmb.gov.tr": "EVDS_API_KEY"
+  },
+  "institutions": ["TCMB", "BDDK", "TÜİK", "TUİK", "TUIK", "EVDS", "Borsa İstanbul", "BİST", "Hazine", "SPK", "TBB"]
+}

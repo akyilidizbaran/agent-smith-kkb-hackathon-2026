@@ -225,3 +225,13 @@ stok → last, akım → sum).
 
 Alınmayan: `bie_kt100h`/`bie_kt210a` kredi faizlerinin diğer serileri (üretilmiş blokta
 `unknown` olarak duruyor; TP.KTF12 küratörlü), TLREF (`bie_bisttlref`), rezervler.
+
+## TÜFE 2025=100 küratörlüğü (14 Eylül 2026)
+
+`evds:TP.TUKFIY2025.GENEL` otomatik üretilmiş adıyla ("Genel Endeks", etiket `konut`) katalogdaydı. Ölçülen
+sonuç (agent canlı prova, 14 Eylül): "enflasyondan arındır" isteğinde arama bu seriyi bulamadı, model yüklü
+olmayan `TP.FG.J0`'ı seçti ve "TÜFE yüklenmemiş" dedi. Birim/ölçüm tipi/baz zaten yukarıdaki tabloda
+(`bie_tukfiy2025 TÜFE (2025=100)`, monthly, index) kayıtlıydı; bu küratörlük yalnız **ad, açıklama, takma ad
+ve etiketleri** düzeltir, veriyi değiştirmez. Seri 2025 öncesini de 2025=100 bazında taşır (2021-01 = 16,13).
+`TP.FG.J0` (2003=100) ile birleştirme (splice) yapılmaz: iki baz arasında dönüşüm katsayısı kaynakta
+yayınlanmadıkça ikisi ayrı seri olarak kalır.

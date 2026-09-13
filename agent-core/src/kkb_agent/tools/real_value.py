@@ -54,6 +54,21 @@ class WorkspaceRealValueTool(Tool):
         self.workspace = workspace
 
     # ------------------------------------------------------------ doğrulama
+    def loaded_index_series(self) -> list[tuple[str, str]]:
+        """Adayları metinle değil anlamla bul (canlı prova, 14 Eyl): yüklü endeks serisinin adı "Genel Endeks"
+        olunca metin araması onu bulamadı, model yüklenmemiş eski seriyi seçti. Katalogda ölçüm tipi INDEX
+        olan ve gözlemi bulunan seriler aday olarak döner — alan bilgisi yok, yalnız anlam."""
+        out: list[tuple[str, str]] = []
+        try:
+            specs = list(self.lakehouse.list_datasets())
+        except Exception:  # noqa: BLE001
+            return out
+        for spec in specs:
+            measures = [c for c in getattr(spec, "columns", []) if c.role == ColumnRole.MEASURE]
+            if measures and measures[0].semantic_type == SemanticType.INDEX and str(spec.dataset_id).find("gold.") != 0:
+                out.append((spec.dataset_id, spec.name))
+        return out
+
     def _index_spec(self, dataset_id: str):
         spec = self.lakehouse.get_dataset(dataset_id)
         measures = [c for c in spec.columns if c.role == ColumnRole.MEASURE]
@@ -79,13 +94,10 @@ class WorkspaceRealValueTool(Tool):
         try:
             spec, measure = self._index_spec(params.index_dataset_id)
         except LakehouseError as exc:
-            near = []
-            try:
-                near = [s.dataset_id for s in self.lakehouse.search_datasets("fiyat endeksi", limit=6)]
-            except Exception:  # noqa: BLE001
-                near = []
-            return ToolError(error_code="DATASET_NOT_FOUND", layer="reference", candidates=near, message=str(exc),
-                             hint="lakehouse_search ile fiyat endeksi serisini bul.")
+            near = self.loaded_index_series()
+            return ToolError(error_code="DATASET_NOT_FOUND", layer="reference", candidates=[sid for sid, _ in near], message=str(exc),
+                             hint=("Yüklü ve ölçüm tipi endeks olan seriler: " + "; ".join(f"{sid} — {name}" for sid, name in near[:6])
+                                   if near else "Havuzda yüklü bir fiyat endeksi serisi yok; kullanıcıya bunu söyle."))
         if measure is None:
             return ToolError(error_code="INVALID_ARGS", layer="reference", message=f"'{params.index_dataset_id}' ölçüm kolonu yok.")
         if measure.semantic_type != SemanticType.INDEX:

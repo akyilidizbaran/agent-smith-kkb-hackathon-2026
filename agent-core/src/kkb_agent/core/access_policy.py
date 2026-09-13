@@ -59,10 +59,10 @@ _LOGIN_URL_MARKERS = ("login", "signin", "sign-in", "sign_in", "giris", "giriş"
 
 # ------------------------------------------------------------------ credential varlığı
 # Host → env anahtar adı. Değer hiçbir zaman buradan geçmez; yalnız "var mı" sorulur.
-_KNOWN_CREDENTIAL_ENV: dict[str, str] = {
-    "evds2.tcmb.gov.tr": "EVDS_API_KEY",
-    "evds3.tcmb.gov.tr": "EVDS_API_KEY",
-}
+def _known_credential_env() -> dict[str, str]:
+    """Host → anahtar adı, yapılandırmadan (M03-T04); kaynak hostu çekirdek kodda yazılı değil."""
+    from ..source_hints import load_source_hints
+    return load_source_hints()["credential_env_by_host"]
 
 
 def _host(source: str) -> str:
@@ -74,8 +74,8 @@ def credential_env_name(source: str) -> str:
     """Bu kaynak için beklenen env anahtarının ADI. `KKB_CREDENTIAL_WWW_EXAMPLE_COM` gibi."""
 
     host = _host(source)
-    if host in _KNOWN_CREDENTIAL_ENV:
-        return _KNOWN_CREDENTIAL_ENV[host]
+    if host in _known_credential_env():
+        return _known_credential_env()[host]
     slug = re.sub(r"[^A-Z0-9]+", "_", host.upper()).strip("_")
     return f"KKB_CREDENTIAL_{slug}"
 
@@ -178,11 +178,16 @@ _PIN_PHRASES = re.compile(
     r"(?:site|link|url|kaynak|adres|sayfa)(?:'?[dt][ae]n)\b",
     re.I,
 )
-_INSTITUTIONS = ("TCMB", "BDDK", "TÜİK", "TUİK", "TUIK", "EVDS", "Borsa İstanbul", "BİST", "Hazine", "SPK", "TBB")
-_INSTITUTION_PIN = re.compile(
-    r"\b(" + "|".join(re.escape(i) for i in _INSTITUTIONS) + r")(?:'?[dt][ae]n|\s+(?:kaynağından|sitesinden|verisinden))\b",
-    re.I,
-)
+def _institution_pin() -> re.Pattern[str] | None:
+    """Kurum adları yapılandırmadan (M03-T04); liste boşsa kurum sabitleme ipucu yok."""
+    from ..source_hints import load_source_hints
+    names = load_source_hints()["institutions"]
+    if not names:
+        return None
+    return re.compile(
+        r"\b(" + "|".join(re.escape(i) for i in names) + r")(?:'?[dt][ae]n|\s+(?:kaynağından|sitesinden|verisinden))\b",
+        re.I,
+    )
 _ONLY = re.compile(r"\b(?:sadece|yalnızca|yalnız)\b", re.I)
 
 
@@ -201,7 +206,8 @@ def detect_source_constraint(question: str) -> SourceConstraint:
     phrase = _PIN_PHRASES.search(text)
     if phrase:
         return SourceConstraint(pinned=True, source_ref=None, phrase=phrase.group(0))
-    inst = _INSTITUTION_PIN.search(text)
+    pin = _institution_pin()
+    inst = pin.search(text) if pin is not None else None
     if inst:
         return SourceConstraint(pinned=True, source_ref=inst.group(1), phrase=inst.group(0))
     return SourceConstraint(pinned=False)

@@ -183,7 +183,7 @@ class AnomalyDetectTool(_AnalyticsTool):
     name = "anomaly_detect"
     description = (
         "Aktif tablodaki bir sayısal sütunda olağandışı (aykırı) gözlemleri deterministik olarak bulur: "
-        "IQR ya da z-skoru; trendli seride (bakiye, endeks) dönemlik yüzde değişim üzerinde. Tabloya "
+        "IQR ya da z-skoru; trendli seride (stok ya da endeks düzeyi) dönemlik yüzde değişim üzerinde. Tabloya "
         "<sütun>_anomali ('ok'/'aykırı') ve <sütun>_skor sütunlarını ekler, satır sayısı değişmez. "
         "Kullanıcı olağandışı, aykırı, anomali, sıra dışı dönem sorduğunda veriyi getirdikten SONRA çağır."
     )

@@ -25,7 +25,7 @@ _GREETING_WORDS = frozenset({
     "kral", "hocam", "canım", "canim", "çok", "cok", "ya", "be", "efendim", "evet", "hayır", "hayir", "yok",
 })
 _TOKEN = re.compile(r"[a-zçğıöşüâîû]+", re.I)
-_QUESTION_HINT = re.compile(r"\d|%|\?.*\w|kredi|bakiye|tablo|grafik|veri|seri|dönem|donem|yıl|ay\b|hesapla|göster|goster|ekle|analiz", re.I)
+_QUESTION_HINT = re.compile(r"\d|%|\?.*\w|tablo|grafik|veri|seri|dönem|donem|yıl|ay\b|hesapla|göster|goster|ekle|analiz|dosya|kaynak", re.I)
 
 
 def is_small_talk(question: str) -> bool:
