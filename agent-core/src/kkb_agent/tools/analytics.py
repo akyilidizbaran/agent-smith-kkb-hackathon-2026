@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field
 
-from ..analytics.methods import detect_anomalies, detect_change_points, lead_lag
+from ..analytics.methods import detect_anomalies, detect_change_points, lead_lag, has_non_positive
 from ..contracts.lakehouse import QueryProvenance
 from ..core.errors import ToolError
 from dataclasses import dataclass
@@ -202,6 +202,10 @@ class AnomalyDetectTool(_AnalyticsTool):
         if "seri sabit" in fin:
             return ToolResult.fail("INVALID_ARGS", f"'{col}' sabit seri: aykırılık tanımsız.", layer="data", retryable=False)
         res = detect_anomalies(vals, method=params.method, basis=params.basis)
+        if params.basis == "auto" and has_non_positive(vals):
+            fin = fin + ["seride sıfır/negatif değer var: yüzde değişim tabanı kullanılmadı, düzey üzerinde bakıldı"]
+        elif res.basis == "change" and has_non_positive(vals):
+            fin = fin + ["seride sıfır/negatif değer var: işaret değiştiren dönemlerde yüzde değişim hesaplanmadı (boş)"]
         tcol, labels = _labels(table)
         flag_col, score_col = f"{col}_anomali", f"{col}_skor"
         desc = f"anomali({res.method}, {res.basis}, k={res.threshold:g}) {col}"

@@ -83,3 +83,20 @@ def test_a29_sonsuz_ve_sabit_seri_kontrollu() -> None:
     assert not out2.ok and "sabit" in out2.error.message
     out3 = ChangePointsTool(_ws(const)).run(ChangePointsParams(column="v", purpose="test"))
     assert not out3.ok
+
+
+def test_m12_t05_negatif_ve_sifir_tabanda_yuzde_degisim() -> None:
+    from kkb_agent.analytics.methods import choose_basis, pct_changes
+
+    out = pct_changes(np.array([-10.0, -5.0, 5.0, 0.0, 2.0, 4.0]))
+    assert np.isnan(out[0]) and out[1] == 50.0, "−10 → −5 artıştır (+%50), eski hesap −%50 diyordu"
+    assert np.isnan(out[2]), "işaret değişimi: yüzde anlamsız"
+    assert np.isnan(out[4]), "sıfır taban"
+    assert out[5] == 100.0
+    trend = np.arange(1, 25, dtype=float)
+    assert choose_basis(trend)[0] == "change"
+    assert choose_basis(trend - 5)[0] == "level", "sıfır/negatif içeren trendli seride otomatik taban düzey"
+    dates = _monthly(12)
+    frame = pd.DataFrame({"donem": dates, "net": [-3.0, -2.5, -2.0, -1.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 20.0]})
+    r = AnomalyDetectTool(_ws(frame)).run(AnomalyParams(column="net", purpose="test"))
+    assert r.ok and "yüzde değişim tabanı kullanılmadı" in r.content

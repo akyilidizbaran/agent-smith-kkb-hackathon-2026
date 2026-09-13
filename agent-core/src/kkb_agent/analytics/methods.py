@@ -30,13 +30,24 @@ _EPS = 1e-12
 
 # ----------------------------------------------------------------------------- yardımcılar
 def pct_changes(values: np.ndarray) -> np.ndarray:
-    """Yüzde değişim (×100); ilk eleman NaN. Sıfıra bölme NaN olur, aykırı değil."""
+    """Yüzde değişim (×100); ilk eleman NaN.
+
+    M12-T05: payda |önceki| (negatif tabanda yön doğru kalır: −10 → −5 artıştır, +%50); işaret değiştiren
+    dönemde (−5 → +5) ya da sıfır tabanda yüzde değişim anlamsızdır → NaN (aykırı değil, hesaplanamadı).
+    """
     v = np.asarray(values, dtype=float)
     out = np.full(v.shape, np.nan)
-    prev = v[:-1]
+    prev, cur = v[:-1], v[1:]
+    crosses = (np.sign(prev) * np.sign(cur)) < 0
     with np.errstate(divide="ignore", invalid="ignore"):
-        out[1:] = np.where(np.abs(prev) > _EPS, (v[1:] - prev) / prev * 100.0, np.nan)
+        out[1:] = np.where((np.abs(prev) > _EPS) & ~crosses, (cur - prev) / np.abs(prev) * 100.0, np.nan)
     return out
+
+
+def has_non_positive(values: np.ndarray) -> bool:
+    v = np.asarray(values, dtype=float)
+    v = v[~np.isnan(v)]
+    return bool(len(v)) and bool((v <= 0).any())
 
 
 def trend_strength(values: np.ndarray) -> float:
@@ -53,6 +64,8 @@ def choose_basis(values: np.ndarray, basis: str = "auto") -> tuple[str, float]:
     rho = trend_strength(values)
     if basis in ("level", "change"):
         return basis, rho
+    if has_non_positive(values):
+        return "level", rho          # sıfır/negatif içeren seride yüzde değişim tabanı anlamsız (M12-T05)
     return ("change" if rho >= TREND_RHO else "level"), rho
 
 

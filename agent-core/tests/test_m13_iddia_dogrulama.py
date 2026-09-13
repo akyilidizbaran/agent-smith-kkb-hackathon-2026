@@ -88,3 +88,14 @@ def test_kapsam_notu_ilk_200_satir() -> None:
     frame = pd.DataFrame({"donem": range(500), "v": [float(i) for i in range(500)]})
     panel = EvidenceBuilder(_Seed()).build("q", "Değer 7.", _ws(frame), [])
     assert panel.table_rows == 500 and panel.inspected_rows == 200 and "ilk 200/500 satır incelendi" in panel.summary()
+
+
+def test_m13_t05_tolerans_yuvarlamayi_gecirir_maddi_farki_gecirmez() -> None:
+    """Tolerans %0,5: gösterim yuvarlaması geçer, maddi fark geçmez (M13-T05 sınır örnekleri)."""
+    pool = ["bakiye: 678970.0", "oran: 3.066321", "r=-0.5437"]
+    assert grounding_check("q", "Bakiye 678.970 milyon TL.", pool) == "OK"
+    assert grounding_check("q", "Aylık artış %3,07.", pool) == "OK", "iki ondalık yuvarlama geçer"
+    assert grounding_check("q", "Korelasyon −0,54.", pool) == "OK", "iki ondalık yuvarlama geçer"
+    assert grounding_check("q", "Bakiye 685.000 milyon TL.", pool).startswith("MISS"), "%0,89 fark maddi"
+    assert grounding_check("q", "Aylık artış %3,2.", pool).startswith("MISS"), "3,066 → 3,2 yuvarlama değil"
+    assert grounding_check("q", "Korelasyon −0,60.", pool).startswith("MISS"), "0,54 → 0,60 maddi"
