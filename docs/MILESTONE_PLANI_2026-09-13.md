@@ -69,8 +69,8 @@ Bu test sayıları birbirleriyle toplanarak başarı oranı veya motor üstünl�
 | M04 | Analyst/Architect yetki ve yayın sınırı | P0 | M03; profil uygulama kararı | Agent + veri + UI | Tamamlandı (14 Eyl, ADR-0056); T05 koşula bağlı, pasifleştirme açık |
 | M05 | Güvenli kaynak erişimi | P0 | Mevcut erişim kodu; M03 sözleşmesi | Agent + veri | Tamamlandı (13 Eyl, ADR-0051); T03 ortak sözleşme testi açık |
 | M06 | Tavily, crawl, yetkili erişim ve fallback | P1 | M05 | Kaynak erişimi + UI | Tamamlandı (14 Eyl, ADR-0061); T07 M17, T09 uygulanmadı |
-| M07 | Ortak ingestion ve provenance | P0 | M01, M03 | Veri | Tamamlandı (14 Eyl, ADR-0057); T08 2016 kurulumunda ölçülüyor |
-| M08 | BDDK/EVDS semantik ve kapsam hazırlığı | P1 | M00 kapsam; M07 yayın kanıtı | Veri + alan doğrulaması | Planlandı |
+| M07 | Ortak ingestion ve provenance | P0 | M01, M03 | Veri | Tamamlandı (14 Eyl, ADR-0057) |
+| M08 | BDDK/EVDS semantik ve kapsam hazırlığı | P1 | M00 kapsam; M07 yayın kanıtı | Veri + alan doğrulaması | Tamamlandı (14 Eyl, ADR-0062, `M08_KAPSAM_RAPORU.md`); T06/T10 kısmi |
 | M09 | Gold, hizalama ve reel dönüşüm | P1 | M07, M08 | Veri + agent | Tamamlandı (14 Eyl, ADR-0058); T07 kısmi |
 | M10 | Dosya/URL/PDF/OCR giriş akışı | P1 | M03, M04 sınırı, M05 | Agent + UI | Çekirdek tamamlandı (14 Eyl, ADR-0054); T04/T06 kısmi |
 | M11 | Oturum, tablo korunması ve açıklama soruları | P1 | M03, M04; M10 ile entegrasyon | Agent + UI | Tamamlandı (14 Eyl, ADR-0059); T07/T08 canlı ölçüm M16 |
@@ -240,7 +240,7 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 - [x] **M07-T05** (`describe_exception`): Hata metinlerinde redaksiyon ve uzunluk sınırlarını koru; kontrolsüz response/credential yazma.
 - [x] **M07-T06** (mevcut test `silver/test_build.py`): Silver rebuild sonrası run_id, source_warning ve diğer kalite işaretlerinin sessizce iyileştirilmediğini doğrula; kayıtsız artifacti uyarısız kaynak sayma.
 - [x] **M07-T07** (mevcut `infrastructure/test_artifacts.py`, `test_parquet.py`): Aynı içeriğin farklı çekim zamanı, farklı dataset metadata'sı ve farklı parser konfigürasyonu için kimlik kurallarını test et.
-- [ ] **M07-T08:** Tarihsel 95 artifact çatışması iddiasını hedef DB üzerinde yeniden envanterle; güncel sayı gibi kopyalama. Çözüm her çatışma türüne gerekçe taşısın.
+- [x] **M07-T08** (2016 kurulumu: kimlik çatışması 0, revizyon çatışması 0; 81 'aynı adres farklı sha' FinTürk form isteği, çatışma değil): Tarihsel 95 artifact çatışması iddiasını hedef DB üzerinde yeniden envanterle; güncel sayı gibi kopyalama. Çözüm her çatışma türüne gerekçe taşısın.
 - [x] **M07-T09** (mevcut `_deduplicate_boundaries`, revizyon kurulumu durdurur): Pencere sınırı tekrarlarını tekilleştir; değer revizyonu çatışmasını ayrı raporla, sessiz son-kayıt seçme.
 - [x] **M07-T10** (`--report`, eksik seri çıkış 1): `--only` ile istenen seri bulunamadığında veya hiç işlenmediğinde başarı sayılmasın; kapsam raporu istenen/işlenen/atlananın farkını açıklasın.
 - [x] **M07-T11** (`close_stale_runs`): Kesinti sonrası bayat running kaydı, yarım RAW/Bronze ve yeniden deneme davranışını belgeleyip test et.
@@ -256,15 +256,15 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 **Teslimat:** Gereksinim→seri→semantik kanıt→yüklü gözlem→Gold hazır matrisi ve güncel kapsama raporu.
 
 - [x] **M08-T01** (681 zorunlu seri katalogdan; L3-02 alt kalem kuralı prompt'ta, alandan bağımsız): BDDK aylık/haftalık/FinTürk ve EVDS için zorunlu soru ailelerinin gerektirdiği seri kimliklerini çıkar.
-- [ ] **M08-T02:** Her seri için birim/çarpan, frekans, stok/akım/endeks/oran, toplama kuralı, kaynak kapsamı ve kanıtı kaydet.
-- [ ] **M08-T03:** 1.533 unknown/birimsiz seriyi doğrulanacak öncelikli aileler ve keşif için saklanacaklar olarak ayır; katalogdan topluca silmeyi varsayılan çözüm yapma.
-- [ ] **M08-T04:** 2021-01–2026-06 için yayın takvimine göre beklenen ve mevcut gözlemleri karşılaştır; veri yokluğu/erişim yokluğu/anlamı belirsiz ayrımı yap.
-- [ ] **M08-T05:** FinTürk 12 il demo alt-kümesi ile 81 il katalog kapsamını ayır; il soruları ve harita kabulüne göre gerekli veriyi tamamla.
-- [ ] **M08-T06:** EVDS çeyreklik canlı yanıt biçimini doğrula; güncel katalogda 152 çeyreklik kayıt olduğu bilgisini kullan. Kod desteklemiyorsa açık destek eksikliği kaydet.
+- [x] **M08-T02** (katalog alanları; M08 raporu §1): Her seri için birim/çarpan, frekans, stok/akım/endeks/oran, toplama kuralı, kaynak kapsamı ve kanıtı kaydet.
+- [x] **M08-T03** (1.533 keşif serisi silinmedi, 'tanımlı ama yüklü değil' cevabı): 1.533 unknown/birimsiz seriyi doğrulanacak öncelikli aileler ve keşif için saklanacaklar olarak ayır; katalogdan topluca silmeyi varsayılan çözüm yapma.
+- [x] **M08-T04** (rapor §3: boşluk 0; kaynak geç yayını ve EVDS kırpılması ayrıldı, kırpılma düzeltildi): 2021-01–2026-06 için yayın takvimine göre beklenen ve mevcut gözlemleri karşılaştır; veri yokluğu/erişim yokluğu/anlamı belirsiz ayrımı yap.
+- [x] **M08-T05** (81 il tamamı yüklü; harita lisansı K09): FinTürk 12 il demo alt-kümesi ile 81 il katalog kapsamını ayır; il soruları ve harita kabulüne göre gerekli veriyi tamamla.
+- [~] **M08-T06** (bağlayıcı destekliyor; canlı çeyreklik yanıt ölçülmedi): EVDS çeyreklik canlı yanıt biçimini doğrula; güncel katalogda 152 çeyreklik kayıt olduğu bilgisini kullan. Kod desteklemiyorsa açık destek eksikliği kaydet.
 - [x] **M08-T07** (TP.TUKFIY2025.GENEL 2025=100 küratörlüğü; TP.FG.J0 2003=100; splice yok; KFE bazı doğrulanmamış notu): TP.FG.J0, TP.TUKFIY2025.GENEL ve KFE için baz/kapsam/yayın durumu kanıtlarını karşılaştır; farklı bazlı endeksleri kendiliğinden ekleme/splice etme.
-- [ ] **M08-T08:** TÜFE terfi için eski açıkların hangi adımlarının gerçekten kapandığını kaydet; eski belgeyi güncel canlı doğrulama yerine kullanma.
-- [ ] **M08-T09:** Aylık/haftalık/il kaynakları arasında karşılaştırılabilir alanlarda mutabakat kontrolü yap; farklı tanım/frekans varsa farkı açıklamadan eşitlik bekleme.
-- [ ] **M08-T10:** Source schema değişimi, eksik ay ve anlamsız birim için yayın reddi/uyarı testleri oluştur.
+- [x] **M08-T08** (rapor §5): TÜFE terfi için eski açıkların hangi adımlarının gerçekten kapandığını kaydet; eski belgeyi güncel canlı doğrulama yerine kullanma.
+- [x] **M08-T09** (81 il ↔ ulusal: medyan %0,013): Aylık/haftalık/il kaynakları arasında karşılaştırılabilir alanlarda mutabakat kontrolü yap; farklı tanım/frekans varsa farkı açıklamadan eşitlik bekleme.
+- [~] **M08-T10** (şema/birim reddi mevcut testler; eksik ay testi yok, kapsam ölçüldü): Source schema değişimi, eksik ay ve anlamsız birim için yayın reddi/uyarı testleri oluştur.
 - [x] **M08-T11** (ön kontrol, /api/status, durum penceresi: katalog/doğrulanmış/tanımlı/yüklü/Gold'a hazır): Katalog, semantiği doğrulanmış, yüklü, sorgulanabilir ve Gold'a hazır sayıları UI/status raporunda ayrı göster.
 
 **Kabul:** Zorunlu soruların verisi yüklenmiş ve semantik kararı izlenebilirdir; eksikler isimleri ve nedenleriyle raporlanır. “681 anlamı tanımlı” sayısı “681 yüklü/verified” diye sunulmaz.
@@ -669,3 +669,5 @@ Belgelendirme tamamlanması uygulama milestone'larının tamamlanması değildir
 - **2026-09-14 — M04 kapandı:** profiller (Analyst'te yazma aracı yok), anahtarlı geçiş, iki adımlı tam sıfırlama (yalnız DATA_ROOT), A20/A21/A28 testleri, canlı doğrulama. Açık: pasifleştirme (veri CLI'ı), yayın talebi arayüzü (koşula bağlı). Sıradaki: M08/M07.
 
 - **2026-09-14 (gece) — M07, M03, M06, M09, M11, M15 çekirdek kapandı; M08 sürüyor:** toplu ingest run kaydı (ADR-0057), 2016+ zorunlu set (681 seri) ayrı veri köküne kuruluyor; reel değer aracı + TÜFE küratörlüğü (ADR-0058, canlı prova hatası: seri adı aranabilir değildi); oturum tabloları + denetimli birleştirme + netleştirme (ADR-0059); kaynak ipuçları yapılandırmaya + finans dışı uyum testi (ADR-0060, iki alan sızıntısı yakalandı); erişim seçenekleri, LLM bütçeleri, kesinti cevabı, CI (ADR-0061). Bulgu: M14 arayüz dışa aktarım bağlantıları önceki commit'te yazılmamıştı (API vardı) — eklendi.
+
+- **2026-09-14 (gece) — M08 kapandı:** 681 zorunlu seri 2016'dan kuruldu (43.830 gözlem, 117 run), EVDS 1.000 sınırı kırpılması bulundu ve düzeltildi, 81 il ↔ ulusal mutabakat %0,013, eski DB `data_prev_2021demo/` olarak korunarak `data/` değişti. Rapor `M08_KAPSAM_RAPORU.md`.
