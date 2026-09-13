@@ -1,5 +1,5 @@
 # Agent Smith — tek giriş noktası (M01, ADR-0049). Yollar .env ve DATA_ROOT ile; varsayılan repo/data.
-.PHONY: setup preflight demo-data serve test test-data health
+.PHONY: setup preflight demo-data serve test test-data health ci
 
 setup:            ## iki ortamı kilit dosyalarıyla kur (agent-core Python ≥3.11, lakehouse-core 3.12)
 	cd agent-core && uv sync --frozen --extra dev
@@ -22,3 +22,7 @@ test:             ## agent birim testleri (deterministik, ağ yok)
 
 test-data:        ## lakehouse testleri (~13 dk)
 	cd lakehouse-core && uv run --frozen pytest -q
+
+ci:               ## CI ile aynı: iki paket kilitli kurulum + deterministik testler
+	cd agent-core && uv sync --frozen --extra dev && uv run --frozen --extra dev pytest -q
+	cd lakehouse-core && uv sync --frozen && uv run --frozen pytest -q

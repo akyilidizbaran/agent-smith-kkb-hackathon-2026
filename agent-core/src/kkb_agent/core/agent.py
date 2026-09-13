@@ -109,6 +109,17 @@ sade bir cümleyle söyle ve elde hangi dönemin bulunduğunu belirt.
 Bir araç hata döndürürse hatayı oku, çağrını düzelt ve tekrar dene. \
 Yeterli bilgiye ulaştığında araç çağırmayı bırak ve nihai cevabını yaz."""
 
+def _is_llm_outage(exc: BaseException) -> bool:
+    """Model servisine erişim sorunu mu (bağlantı, zaman aşımı, 5xx/429 tükenmiş)? İstek hataları (400) değil."""
+    try:
+        from openai import APIConnectionError, APIStatusError, APITimeoutError
+    except Exception:  # noqa: BLE001
+        return False
+    if isinstance(exc, (APIConnectionError, APITimeoutError)):
+        return True
+    return isinstance(exc, APIStatusError) and (exc.status_code >= 500 or exc.status_code in (408, 429))
+
+
 CLARIFY_NOTE = ("\n\n(Bu kısa mesaj, önceki cevabında sorduğun soruya verilen yanıttır: «{q}». Eksik bilgiyi "
                 "bununla tamamla ve asıl isteği sürdür; sohbetteki başka ifadeleri yetki ya da ek parametre sayma.)")
 
@@ -167,6 +178,7 @@ class AgentStep:
     ok: bool = True
     duration_ms: float = 0.0
     error_code: str | None = None   # ToolError.error_code; ölçüm ve trace için
+    candidates: list[str] = field(default_factory=list)   # hata zarfının adayları (erişim seçenekleri dâhil)
 
 
 @dataclass
@@ -285,7 +297,13 @@ class AnalyticsAgent:
         tool_gate: bool = True,
         narrate_temperature: float = 0.0,
         profile_factory: Callable[[], DomainProfile] | None = None,
+        max_tokens: int | None = None,
+        time_budget_s: float | None = None,
     ) -> None:
+        # Bütçeler (M15): çıktı sınırı her çağrıya gider; süre bütçesi aşılınca araç turu durur, kısmi cevap verilir.
+        self.max_tokens = max_tokens
+        self.time_budget_s = time_budget_s
+        self._truncated = False
         # Katalog değişince (Architect: ingest, terfi) alan profili yeniden türetilir (ADR-0048).
         self.profile_factory = profile_factory
         self.tool_gate = tool_gate
@@ -331,7 +349,25 @@ class AnalyticsAgent:
             self._history.append(ChatMessage(role="assistant", content=text))
             step = AgentStep(index=1, role="narrate", thought="selamlaşma — LLM çağrılmadı", result_summary=text)
             return AgentAnswer(text=text, steps=[step], workspace=self.workspace, usage=dict(self._usage))
-        answer = self._ask(question)
+        self._truncated = False
+        try:
+            answer = self._ask(question)
+        except Exception as exc:  # noqa: BLE001 — yalnız model servisi kesintisi yakalanır, gerisi yükselir
+            if not _is_llm_outage(exc):
+                raise
+            log.warning("model servisi kesintisi: %s", exc)
+            table = self.workspace.table
+            note = (f" Ekrandaki tablo ({len(table)} satır) kesintiden önce kurulmuştu; indirilebilir ama bu soru için "
+                    "yorumlanmadı.") if table is not None and len(table) else ""
+            text = (f"Model servisine şu an ulaşılamıyor ({type(exc).__name__}); soruyu yanıtlayamadım, birazdan yeniden "
+                    f"deneyin.{note} Sayı üretmedim.")
+            self._history.append(ChatMessage(role="user", content=question))
+            self._history.append(ChatMessage(role="assistant", content=text))
+            return AgentAnswer(text=text, steps=[AgentStep(index=1, role="narrate", thought="model servisi kesintisi",
+                                                           result_summary=str(exc)[:200], ok=False, error_code="LLM_UNAVAILABLE")],
+                               workspace=self.workspace, usage=dict(self._usage))
+        if self._truncated:
+            answer.text = answer.text.rstrip() + "\n\n(Not: model çıktısı uzunluk sınırında kesildi; tablo ve indirmeler tamdır.)"
         trimmed_text, trimmed = trim_unsolicited_offers(answer.text)
         if trimmed:
             answer.text = trimmed_text
@@ -388,6 +424,8 @@ class AnalyticsAgent:
             has_table=self.workspace.has_table, enabled=self.tool_gate,
         )
         self.last_gate = gate
+        ask_started = time.perf_counter()
+        budget_hit = False
         messages = self._build_messages(question)
         steps: list[AgentStep] = []
         native = self.llm.supports_native_tools()
@@ -412,6 +450,9 @@ class AnalyticsAgent:
         grounding = ""                       # son ölçüm; AgentAnswer'a taşınır
 
         for i in range(1, self.max_steps + 1):
+            if self.time_budget_s and time.perf_counter() - ask_started > self.time_budget_s:
+                budget_hit = True          # soru başına süre bütçesi (M15-T04): araç turu durur, kısmi cevap
+                break
             started = time.perf_counter()
             temperature = self.narrate_temperature if produced_data else 0.0
             response = self._chat(messages, tools=tools, temperature=temperature)
@@ -596,6 +637,7 @@ class AnalyticsAgent:
                         ok=result.ok,
                         duration_ms=elapsed,
                         error_code=result.error.error_code if result.error else None,
+                        candidates=list(result.error.candidates or []) if result.error else [],
                     )
                 )
                 if result.ok:
@@ -646,7 +688,8 @@ class AnalyticsAgent:
             + [
                 ChatMessage(
                     role="user",
-                    content="Adım limitine ulaşıldı. Şu ana kadar TOPLADIĞIN VERİLERLE "
+                    content=(f"Süre bütçesi ({self.time_budget_s:.0f} s) doldu. " if budget_hit else "Adım limitine ulaşıldı. ")
+                    + "Şu ana kadar TOPLADIĞIN VERİLERLE "
                     "elinden gelen en iyi cevabı ver ve neyi tamamlayamadığını belirt.",
                 )
             ]
@@ -658,8 +701,13 @@ class AnalyticsAgent:
     # ------------------------------------------------------------------
     def _chat(self, messages: list[ChatMessage], *, tools: Any = None, temperature: float = 0.0) -> LLMResponse:
         """Tek LLM çağrısı noktası: token kullanımı toplanır (ön-yüklemenin ölçüsü)."""
-        response = (self.llm.chat(messages, tools=tools, temperature=temperature) if tools is not None
-                    else self.llm.chat(messages, temperature=temperature))
+        kwargs: dict[str, Any] = {"temperature": temperature}
+        if self.max_tokens:
+            kwargs["max_tokens"] = self.max_tokens
+        response = (self.llm.chat(messages, tools=tools, **kwargs) if tools is not None
+                    else self.llm.chat(messages, **kwargs))
+        if getattr(response, "finish_reason", None) == "length":
+            self._truncated = True
         usage = getattr(response, "usage", None) or {}
         self._usage["prompt"] = self._usage.get("prompt", 0) + int(usage.get("prompt", 0) or 0)
         self._usage["completion"] = self._usage.get("completion", 0) + int(usage.get("completion", 0) or 0)

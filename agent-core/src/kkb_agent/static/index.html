@@ -280,14 +280,27 @@ function renderAnswer(p) {
     html += `<div class="${hasTable && hasChart ? "grid2" : ""}">`;
     if (hasTable) {
       const numeric = p.table.columns.map((c, j) => p.table.rows.some((r) => typeof r[j] === "number"));
-      html += `<div class="box"><div class="head"><span>${esc(p.table_title || "Aktif tablo")}</span><span>${fmtInt(p.table.row_count)} satır${p.table.truncated ? " (ilk 200)" : ""}</span></div><div class="tablewrap"><table class="data"><thead><tr>${p.table.columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${p.table.rows.slice(0, 60).map((r) => "<tr>" + r.map((v, j) => `<td class="${numeric[j] ? "num" : ""}">${esc(fmtCell(v))}</td>`).join("") + "</tr>").join("")}</tbody></table></div></div>`;
+      html += `<div class="box"><div class="head"><span>${esc(p.table_title || "Aktif tablo")}${p.table_scope ? ` <span class="badge ${p.table_scope.startsWith("oturum") ? "gap" : "ok"}" style="font-size:11px;margin-left:6px">${esc(p.table_scope)}</span>` : ""}</span><span>${fmtInt(p.table.row_count)} satır${p.table.truncated ? " (ilk 200 gösteriliyor; indirme tam tablo)" : ""} · <a href="/api/answers/${p.index}/table.csv">CSV</a> · <a href="/api/answers/${p.index}/table.xlsx">XLSX</a></span></div><div class="tablewrap"><table class="data"><thead><tr>${p.table.columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${p.table.rows.slice(0, 60).map((r) => "<tr>" + r.map((v, j) => `<td class="${numeric[j] ? "num" : ""}">${esc(fmtCell(v))}</td>`).join("") + "</tr>").join("")}</tbody></table></div></div>`;
     }
     if (hasChart) {
-      html += p.charts.filter((c) => c.png).map((c) => `<div class="box chart"><img alt="grafik" src="data:image/png;base64,${c.png}"><div class="cap">${esc(c.title || "Grafik")} · belirtim araçta kuruldu, sayılar tablodan · denetçi: ${c.lint_ok === false ? "UYARI" : c.lint_ok ? "geçti" : "–"}</div></div>`).join("");
+      html += p.charts.filter((c) => c.png).map((c, k) => `<div class="box chart"><img alt="grafik" src="data:image/png;base64,${c.png}"><div class="cap">${esc(c.title || "Grafik")} · belirtim araçta kuruldu, sayılar tablodan · denetçi: ${c.lint_ok === false ? "UYARI" : c.lint_ok ? "geçti" : "–"} · <a href="/api/answers/${p.index}/chart/${k}.png">PNG indir</a></div></div>`).join("");
     }
     html += `</div>`;
   }
+  if (p.access_options && p.access_options.length) {   // erişim engelinde seçenekler (M06): eyleme bağlı düğmeler
+    const label = {upload_file: "📎 Dosyayı yükle", use_credential: "Ekip hesabı (tanımlı bağlayıcı)", alternative_source: "Başka kaynakta ara", retry_later: "Tekrar dene"};
+    html += `<div class="chips"><span class="label">Seçenekler</span>${p.access_options.map((k) => `<button class="jbtn" data-opt="${esc(k)}">${esc(label[k] || k)}</button>`).join("")}</div>`;
+  }
+  html += `<div class="status" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span>Bu cevap:</span><a href="/api/answers/${p.index}/report.html" target="_blank">HTML rapor</a>${hasTable ? `<a href="/api/answers/${p.index}/table.csv">tam tablo CSV</a><a href="/api/answers/${p.index}/table.xlsx">XLSX</a>` : ""}<span>· cevap #${p.index}, sürüme bağlı</span></div>`;
   a.innerHTML = html; thread.appendChild(a); thread.scrollTop = thread.scrollHeight;
+  a.querySelectorAll("[data-opt]").forEach((b) => b.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    const base = (p.question || "").split("\n\nDosya:")[0];
+    if (b.dataset.opt === "upload_file") { $("btn-file").click(); return; }
+    if (b.dataset.opt === "retry_later") { $("q").value = base; ask(); return; }
+    if (b.dataset.opt === "alternative_source") { $("q").value = base + "\n\nBelirttiğim kaynağa erişilemiyorsa aynı veriyi başka bir kaynakta ara ve kaynak değişikliğini cevapta açıkça belirt."; ask(); return; }
+    if (b.dataset.opt === "use_credential") { $("q").value = base + "\n\nBu veri tanımlı bağlayıcıyla (ekip anahtarı) çekilebiliyorsa o yoldan getir."; ask(); }
+  }));
   a.querySelectorAll(".chart img").forEach((img) => img.addEventListener("click", () => showModal(p.table_title || "Grafik", `<div class="lightbox" style="padding:12px"><img alt="grafik" src="${img.src}"></div>`)));
   a.addEventListener("click", () => { if (activeIndex !== p.index) { activeIndex = p.index; renderSession(); renderTrace(p); renderEvidence(p); } });
 }

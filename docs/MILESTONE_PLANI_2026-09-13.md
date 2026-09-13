@@ -65,19 +65,19 @@ Bu test sayıları birbirleriyle toplanarak başarı oranı veya motor üstünl�
 | M00 | Kapsam, açık kararlar ve iş bölümü | P0 | Yok | Ekip koordinasyonu | Tamamlandı (13 Eyl; `M00_GEREKSINIM_MATRISI_2026-09-13.md`) |
 | M01 | Tek ve tekrar kurulabilir yerel ortam | P0 | M00 çalışma varsayımları | Entegrasyon | Tamamlandı (13 Eyl, ADR-0049; T08 arkadaş provası M17) |
 | M02 | Güncel motor kıyası ve katkı aktarımı | P0 | M00; eşit test ortamı için M01 | Agent + değerlendirme | Tamamlandı (13 Eyl, ADR-0053); T08 ertelendi |
-| M03 | Jenerik veri ve kaynak sözleşmeleri | P0 | M00 | Agent + veri | Planlandı |
+| M03 | Jenerik veri ve kaynak sözleşmeleri | P0 | M00 | Agent + veri | Tamamlandı (14 Eyl, ADR-0060); T06 kısmi |
 | M04 | Analyst/Architect yetki ve yayın sınırı | P0 | M03; profil uygulama kararı | Agent + veri + UI | Tamamlandı (14 Eyl, ADR-0056); T05 koşula bağlı, pasifleştirme açık |
 | M05 | Güvenli kaynak erişimi | P0 | Mevcut erişim kodu; M03 sözleşmesi | Agent + veri | Tamamlandı (13 Eyl, ADR-0051); T03 ortak sözleşme testi açık |
-| M06 | Tavily, crawl, yetkili erişim ve fallback | P1 | M05 | Kaynak erişimi + UI | Planlandı |
-| M07 | Ortak ingestion ve provenance | P0 | M01, M03 | Veri | Planlandı |
+| M06 | Tavily, crawl, yetkili erişim ve fallback | P1 | M05 | Kaynak erişimi + UI | Tamamlandı (14 Eyl, ADR-0061); T07 M17, T09 uygulanmadı |
+| M07 | Ortak ingestion ve provenance | P0 | M01, M03 | Veri | Tamamlandı (14 Eyl, ADR-0057); T08 2016 kurulumunda ölçülüyor |
 | M08 | BDDK/EVDS semantik ve kapsam hazırlığı | P1 | M00 kapsam; M07 yayın kanıtı | Veri + alan doğrulaması | Planlandı |
-| M09 | Gold, hizalama ve reel dönüşüm | P1 | M07, M08 | Veri + agent | Planlandı |
+| M09 | Gold, hizalama ve reel dönüşüm | P1 | M07, M08 | Veri + agent | Tamamlandı (14 Eyl, ADR-0058); T07 kısmi |
 | M10 | Dosya/URL/PDF/OCR giriş akışı | P1 | M03, M04 sınırı, M05 | Agent + UI | Çekirdek tamamlandı (14 Eyl, ADR-0054); T04/T06 kısmi |
-| M11 | Oturum, tablo korunması ve açıklama soruları | P1 | M03, M04; M10 ile entegrasyon | Agent + UI | Planlandı |
+| M11 | Oturum, tablo korunması ve açıklama soruları | P1 | M03, M04; M10 ile entegrasyon | Agent + UI | Tamamlandı (14 Eyl, ADR-0059); T07/T08 canlı ölçüm M16 |
 | M12 | Anomali/kırılma/öncülük doğruluğu | P0/P1 | M03; M09/M11 ile entegrasyon | Analitik | Çekirdek tamamlandı (13 Eyl, ADR-0052); T03/T05/T06 kısmi |
 | M13 | İddia doğrulama ve kanıtın doğru sunulması | P0 | Mevcut kod; M03/M07/M11 ile entegrasyon | Agent + veri + UI | Çekirdek tamamlandı (13 Eyl, ADR-0050); T04/T07/T11/T12 açık |
 | M14 | Kullanıcı arayüzü ve tam çıktı indirme | P1 | M10, M11, M13 | UI + API | Çekirdek tamamlandı (14 Eyl, ADR-0055); T11/T12 açık |
-| M15 | Süre/çıktı bütçeleri ve otomatik kontroller | P1/P2 | M01; M02 ölçümleri | Agent + geliştirme altyapısı | Planlandı |
+| M15 | Süre/çıktı bütçeleri ve otomatik kontroller | P1/P2 | M01; M02 ölçümleri | Agent + geliştirme altyapısı | Çekirdek tamamlandı (14 Eyl, ADR-0061); ölçüm T01/T02 M16'dan |
 | M16 | Birleşik kabul ve görülmemiş veri provası | P0 | Tüm zorunlu uygulama milestone'ları | Ekip + değerlendirme | Planlandı |
 | M17 | Teslim, belgeler, merge ve freeze | P0 | M16 | Ekip koordinasyonu | Planlandı |
 
@@ -149,15 +149,15 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Desteklenen veri şekilleri, semantik metadata ve source capability sözleşmesi; finans dışı referans fikstürleri.
 
-- [ ] **M03-T01:** Zaman serisi, tarihsiz tablo, işlem/olay tablosu, birden fazla varlık ve belge içinden tablo için mevcut desteği matrise dök.
-- [ ] **M03-T02:** Önerilen sınırı sözleşmeye yaz: Silver zaman serisi taşır; tarihsiz/işlemsel tablolar oturum workspace'inde analiz edilir, otomatik kalıcı yayına girmez. Her tabloya zorla tarih veya ekonomik ölçüm türü uydurma. İki yeni tablonun anahtarla birleştirilmesi kullanıcı kararıyla zorunludur; mevcut tek `t` tablosu bunun tamamlandığı anlamına gelmez.
-- [ ] **M03-T03:** Kaynak/şema/kolon/anahtar/birim/frekans/kapsam/null/kalite/provenance bilgilerinin taşıdığı sözleşmeleri gözden geçir.
-- [ ] **M03-T04:** Kaynağa özel kod ve alan bilgisi ile genel hesap/politika kodunu ayır; BDDK/EVDS adları core kararlarının önkoşulu olmasın.
-- [ ] **M03-T05:** Yeni source adapter için yetenekler: erişim yöntemi, kimlik doğrulama türü, format, sayfalama/pencereleme, bütçe, hata ve kanıt zarfı.
-- [ ] **M03-T06:** REST API, DB, stream ve farklı auth için genişleme noktalarını belgeleyip bir adapter sözleşme testi yaz; hepsi uygulanmadan uygulanmış gibi sunma.
-- [ ] **M03-T07:** Temiz/boş katalog açılışını, katalog değişince alan profilinin yenilenmesini ve eski alan bağlamının temizlenmesini doğrula.
-- [ ] **M03-T08:** Finans dışı zaman serisi ve iki ayrı tarihsiz tablonun anahtar üzerinden birleştirilmesi için kabul fikstürleri hazırla; beklenen sonuçlar modelden bağımsız olsun. Yinelenen anahtar ve eşleşmeyen satır varyantları bulunsun.
-- [ ] **M03-T09:** Desteklenmeyen şekli doğru gerekçeyle reddetme veya kullanıcıdan eşleme isteme yolunu tanımla; sessiz veri kaybı olmamalı.
+- [x] **M03-T01** (`M03_VERI_SOZLESMESI.md` §1): Zaman serisi, tarihsiz tablo, işlem/olay tablosu, birden fazla varlık ve belge içinden tablo için mevcut desteği matrise dök.
+- [x] **M03-T02** (Silver zaman serisi / oturum tabloları; A09 birleştirme zorunlu, ADR-0059): Önerilen sınırı sözleşmeye yaz: Silver zaman serisi taşır; tarihsiz/işlemsel tablolar oturum workspace'inde analiz edilir, otomatik kalıcı yayına girmez. Her tabloya zorla tarih veya ekonomik ölçüm türü uydurma. İki yeni tablonun anahtarla birleştirilmesi kullanıcı kararıyla zorunludur; mevcut tek `t` tablosu bunun tamamlandığı anlamına gelmez.
+- [x] **M03-T03** (§2): Kaynak/şema/kolon/anahtar/birim/frekans/kapsam/null/kalite/provenance bilgilerinin taşıdığı sözleşmeleri gözden geçir.
+- [x] **M03-T04** (kaynak ipuçları JSON'a taşındı, alan sızıntısı testleri; ADR-0060): Kaynağa özel kod ve alan bilgisi ile genel hesap/politika kodunu ayır; BDDK/EVDS adları core kararlarının önkoşulu olmasın.
+- [x] **M03-T05** (§4 yetenek tablosu): Yeni source adapter için yetenekler: erişim yöntemi, kimlik doğrulama türü, format, sayfalama/pencereleme, bütçe, hata ve kanıt zarfı.
+- [~] **M03-T06** (bellek-içi adaptör sözleşme testi; REST/DB/stream adaptörleri uygulanmadı, eklenme yeri belgeli): REST API, DB, stream ve farklı auth için genişleme noktalarını belgeleyip bir adapter sözleşme testi yaz; hepsi uygulanmadan uygulanmış gibi sunma.
+- [x] **M03-T07** (boş katalog + profil yenileme, ADR-0048/0056): Temiz/boş katalog açılışını, katalog değişince alan profilinin yenilenmesini ve eski alan bağlamının temizlenmesini doğrula.
+- [x] **M03-T08** (`tests/fixtures/generic`, `test_m03_jenerik.py`): Finans dışı zaman serisi ve iki ayrı tarihsiz tablonun anahtar üzerinden birleştirilmesi için kabul fikstürleri hazırla; beklenen sonuçlar modelden bağımsız olsun. Yinelenen anahtar ve eşleşmeyen satır varyantları bulunsun.
+- [x] **M03-T09** (§6): Desteklenmeyen şekli doğru gerekçeyle reddetme veya kullanıcıdan eşleme isteme yolunu tanımla; sessiz veri kaybı olmamalı.
 
 **Kabul:** Aynı agent kodu finans ve finans dışı veriyle çalışır; alan değişikliği katalog/konfigürasyon/adapter üzerinden yapılır. Yeni alanda finans varsayımları cevaba veya SQL'e sızmaz. Destek sınırı açıkça gösterilir.
 
@@ -210,18 +210,18 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Kaynak seçimi/erişim/parse/fallback zinciri, kaynak bazlı erişim matrisi ve sade kullanıcı mesajları.
 
-- [ ] **M06-T01:** Tavily sonuçlarını kaynak adayı olarak işle; snippet'i doğrulanmış tablo verisi sayma. Gerekli içeriği kaynağından aç.
-- [ ] **M06-T02:** MIA, Search ve Retrieval sağlayıcı sözleşmelerini ayrı tut; Tavily değişimi ana motoru değiştirmesin.
-- [ ] **M06-T03:** Soruya göre doğrudan CSV/JSON/XLSX/PDF/API/tablo bağlantısına öncelik ver; sayfa gezme gerekçesi trace'e yazılsın.
-- [ ] **M06-T04:** Aynı alan adı, robots, sayfa/süre/derinlik bütçelerini uygula. Mevcut araç şemasının derinlik sınırını doğrula; 2–3 seviye mentörün makul üst sınır önerisidir, her istekte zorunlu tarama değildir.
-- [ ] **M06-T05:** Kayıp veri, yanlış dönem, 404, 429, login, CAPTCHA/bot, ücretli erişim ve JS kabuğunu ayrı nedenlerle sun.
-- [ ] **M06-T06:** Kaynak sabitlenmişse alternatif kaynağı önerip kullanıcı tercihini al; sabitlenmemişse kullanılan alternatifi açıkça belirt.
-- [ ] **M06-T07:** Demo aday kaynaklarında ekip hesabı/API kullanım hakkı, erişilebilen içerik, bağlantı yöntemi ve son kontrol zamanını kaydet. Hesap açma işi ekip/operator sorumluluğunda kalsın.
-- [ ] **M06-T08:** Desteklenen yetkili bağlantı gerçekten uygulanmadan “ekip hesabıyla devam edebilirim” deme; credential varlığı ile kullanılabilir adapter'ı ayır.
-- [ ] **M06-T09:** JS kaynaklar için ihtiyaç doğrulanırsa ayrı browser capability değerlendir; otomatik olarak bütün web hattını tarayıcıya taşıma.
-- [ ] **M06-T10:** Erişilememe hâlinde dosya yükleme, yetkili bağlantı veya alternatif kaynakla devam seçeneklerini çalışır UI eylemlerine bağla.
-- [ ] **M06-T11:** Kullanılan kaynak için URL/zaman/hash/erişim sonucu; kullanılmayan adaylar için trace tut. Kaynak değişimi cevapta gizlenmesin.
-- [ ] **M06-T12:** Tavily bütçesi, MIA hatası, internet kesintisi ve kısmi crawl durumunda kısmi sonucu/kapsamı dürüstçe bildir.
+- [x] **M06-T01** (prompt kuralı): Tavily sonuçlarını kaynak adayı olarak işle; snippet'i doğrulanmış tablo verisi sayma. Gerekli içeriği kaynağından aç.
+- [x] **M06-T02** (`web/search.py`): MIA, Search ve Retrieval sağlayıcı sözleşmelerini ayrı tut; Tavily değişimi ana motoru değiştirmesin.
+- [x] **M06-T03** (`link_score` veri bağlantısı +10): Soruya göre doğrudan CSV/JSON/XLSX/PDF/API/tablo bağlantısına öncelik ver; sayfa gezme gerekçesi trace'e yazılsın.
+- [x] **M06-T04** (sayfa ≤5, derinlik ≤1, süre ≤60 s, aynı alan adı, robots): Aynı alan adı, robots, sayfa/süre/derinlik bütçelerini uygula. Mevcut araç şemasının derinlik sınırını doğrula; 2–3 seviye mentörün makul üst sınır önerisidir, her istekte zorunlu tarama değildir.
+- [x] **M06-T05** (js_required eklendi; ADR-0061): Kayıp veri, yanlış dönem, 404, 429, login, CAPTCHA/bot, ücretli erişim ve JS kabuğunu ayrı nedenlerle sun.
+- [x] **M06-T06** (ADR-0034 `decide`): Kaynak sabitlenmişse alternatif kaynağı önerip kullanıcı tercihini al; sabitlenmemişse kullanılan alternatifi açıkça belirt.
+- [x] **M06-T07** (M17 operasyon tarifinde): Demo aday kaynaklarında ekip hesabı/API kullanım hakkı, erişilebilen içerik, bağlantı yöntemi ve son kontrol zamanını kaydet. Hesap açma işi ekip/operator sorumluluğunda kalsın.
+- [x] **M06-T08** (seçenek yalnız anahtarı kullanan bağlayıcıda): Desteklenen yetkili bağlantı gerçekten uygulanmadan “ekip hesabıyla devam edebilirim” deme; credential varlığı ile kullanılabilir adapter'ı ayır.
+- [~] **M06-T09** (uygulanmadı, K08 opsiyonel; js_required dosya yüklemeye yönlendirir): JS kaynaklar için ihtiyaç doğrulanırsa ayrı browser capability değerlendir; otomatik olarak bütün web hattını tarayıcıya taşıma.
+- [x] **M06-T10** (arayüz düğmeleri): Erişilememe hâlinde dosya yükleme, yetkili bağlantı veya alternatif kaynakla devam seçeneklerini çalışır UI eylemlerine bağla.
+- [x] **M06-T11** (kanıt paneli web_sources/web_unused): Kullanılan kaynak için URL/zaman/hash/erişim sonucu; kullanılmayan adaylar için trace tut. Kaynak değişimi cevapta gizlenmesin.
+- [x] **M06-T12** (arama bütçesi kartta; tarama bütçe notu; model kesintisi M15): Tavily bütçesi, MIA hatası, internet kesintisi ve kısmi crawl durumunda kısmi sonucu/kapsamı dürüstçe bildir.
 
 **Kabul:** Kullanıcı kaynak neden kullanılamadı ve hangi seçeneklerle devam edebilir anlayabilir. Kaynak değiştirme kararı soru kısıtına uyar. Hesap veya otomasyon desteği olmayan site için başarı vaadi verilmez.
 
@@ -233,17 +233,17 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Tekrar çalıştırılabilir çok artifactli ingest akışı, run/artifact/warning kayıtları ve Silver'a kadar doğrulanmış aktarım.
 
-- [ ] **M07-T01:** CLI ingest, toplu script ve ad-hoc yolunun veri/kayıt sınırlarını çiz; tekrar eden sorumlulukları belirle.
-- [ ] **M07-T02:** Bir artifactin önceden bulunması sonraki yeni artifactleri engellemeyecek ortak üretim işlemi oluştur veya mevcut pipeline'ı bu davranışla genişlet.
-- [ ] **M07-T03:** Her run için başlangıç, sonuç, kısmi başarı/başarısızlık, süre ve satır sayıları kalıcı olsun.
-- [ ] **M07-T04:** Her artifact run'a bağlansın; parser uyarıları artifact kapsamı ve sırası korunarak yazılsın.
-- [ ] **M07-T05:** Hata metinlerinde redaksiyon ve uzunluk sınırlarını koru; kontrolsüz response/credential yazma.
-- [ ] **M07-T06:** Silver rebuild sonrası run_id, source_warning ve diğer kalite işaretlerinin sessizce iyileştirilmediğini doğrula; kayıtsız artifacti uyarısız kaynak sayma.
-- [ ] **M07-T07:** Aynı içeriğin farklı çekim zamanı, farklı dataset metadata'sı ve farklı parser konfigürasyonu için kimlik kurallarını test et.
+- [x] **M07-T01** (ADR-0057 bağlam): CLI ingest, toplu script ve ad-hoc yolunun veri/kayıt sınırlarını çiz; tekrar eden sorumlulukları belirle.
+- [x] **M07-T02** (varlık başına iniş + run): Bir artifactin önceden bulunması sonraki yeni artifactleri engellemeyecek ortak üretim işlemi oluştur veya mevcut pipeline'ı bu davranışla genişlet.
+- [x] **M07-T03**: Her run için başlangıç, sonuç, kısmi başarı/başarısızlık, süre ve satır sayıları kalıcı olsun.
+- [x] **M07-T04**: Her artifact run'a bağlansın; parser uyarıları artifact kapsamı ve sırası korunarak yazılsın.
+- [x] **M07-T05** (`describe_exception`): Hata metinlerinde redaksiyon ve uzunluk sınırlarını koru; kontrolsüz response/credential yazma.
+- [x] **M07-T06** (mevcut test `silver/test_build.py`): Silver rebuild sonrası run_id, source_warning ve diğer kalite işaretlerinin sessizce iyileştirilmediğini doğrula; kayıtsız artifacti uyarısız kaynak sayma.
+- [x] **M07-T07** (mevcut `infrastructure/test_artifacts.py`, `test_parquet.py`): Aynı içeriğin farklı çekim zamanı, farklı dataset metadata'sı ve farklı parser konfigürasyonu için kimlik kurallarını test et.
 - [ ] **M07-T08:** Tarihsel 95 artifact çatışması iddiasını hedef DB üzerinde yeniden envanterle; güncel sayı gibi kopyalama. Çözüm her çatışma türüne gerekçe taşısın.
-- [ ] **M07-T09:** Pencere sınırı tekrarlarını tekilleştir; değer revizyonu çatışmasını ayrı raporla, sessiz son-kayıt seçme.
-- [ ] **M07-T10:** `--only` ile istenen seri bulunamadığında veya hiç işlenmediğinde başarı sayılmasın; kapsam raporu istenen/işlenen/atlananın farkını açıklasın.
-- [ ] **M07-T11:** Kesinti sonrası bayat running kaydı, yarım RAW/Bronze ve yeniden deneme davranışını belgeleyip test et.
+- [x] **M07-T09** (mevcut `_deduplicate_boundaries`, revizyon kurulumu durdurur): Pencere sınırı tekrarlarını tekilleştir; değer revizyonu çatışmasını ayrı raporla, sessiz son-kayıt seçme.
+- [x] **M07-T10** (`--report`, eksik seri çıkış 1): `--only` ile istenen seri bulunamadığında veya hiç işlenmediğinde başarı sayılmasın; kapsam raporu istenen/işlenen/atlananın farkını açıklasın.
+- [x] **M07-T11** (`close_stale_runs`): Kesinti sonrası bayat running kaydı, yarım RAW/Bronze ve yeniden deneme davranışını belgeleyip test et.
 
 **Kabul:** Aynı girdi ikinci koşuda veriyi çoğaltmaz; yeni artifact işlenir; parser uyarısı run→Bronze→Silver izinde bulunur. Sonuç raporu kısmi başarıyı tam başarı olarak sunmaz.
 
@@ -255,17 +255,17 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Gereksinim→seri→semantik kanıt→yüklü gözlem→Gold hazır matrisi ve güncel kapsama raporu.
 
-- [ ] **M08-T01** (M02 bulgusu L3-02: tüketici kredisi alt kalem ailesi — konut/taşıt/ihtiyaç/dövize endeksli — tek kartta, eksik alt kalem söylenir): BDDK aylık/haftalık/FinTürk ve EVDS için zorunlu soru ailelerinin gerektirdiği seri kimliklerini çıkar.
+- [x] **M08-T01** (681 zorunlu seri katalogdan; L3-02 alt kalem kuralı prompt'ta, alandan bağımsız): BDDK aylık/haftalık/FinTürk ve EVDS için zorunlu soru ailelerinin gerektirdiği seri kimliklerini çıkar.
 - [ ] **M08-T02:** Her seri için birim/çarpan, frekans, stok/akım/endeks/oran, toplama kuralı, kaynak kapsamı ve kanıtı kaydet.
 - [ ] **M08-T03:** 1.533 unknown/birimsiz seriyi doğrulanacak öncelikli aileler ve keşif için saklanacaklar olarak ayır; katalogdan topluca silmeyi varsayılan çözüm yapma.
 - [ ] **M08-T04:** 2021-01–2026-06 için yayın takvimine göre beklenen ve mevcut gözlemleri karşılaştır; veri yokluğu/erişim yokluğu/anlamı belirsiz ayrımı yap.
 - [ ] **M08-T05:** FinTürk 12 il demo alt-kümesi ile 81 il katalog kapsamını ayır; il soruları ve harita kabulüne göre gerekli veriyi tamamla.
 - [ ] **M08-T06:** EVDS çeyreklik canlı yanıt biçimini doğrula; güncel katalogda 152 çeyreklik kayıt olduğu bilgisini kullan. Kod desteklemiyorsa açık destek eksikliği kaydet.
-- [ ] **M08-T07:** TP.FG.J0, TP.TUKFIY2025.GENEL ve KFE için baz/kapsam/yayın durumu kanıtlarını karşılaştır; farklı bazlı endeksleri kendiliğinden ekleme/splice etme.
+- [x] **M08-T07** (TP.TUKFIY2025.GENEL 2025=100 küratörlüğü; TP.FG.J0 2003=100; splice yok; KFE bazı doğrulanmamış notu): TP.FG.J0, TP.TUKFIY2025.GENEL ve KFE için baz/kapsam/yayın durumu kanıtlarını karşılaştır; farklı bazlı endeksleri kendiliğinden ekleme/splice etme.
 - [ ] **M08-T08:** TÜFE terfi için eski açıkların hangi adımlarının gerçekten kapandığını kaydet; eski belgeyi güncel canlı doğrulama yerine kullanma.
 - [ ] **M08-T09:** Aylık/haftalık/il kaynakları arasında karşılaştırılabilir alanlarda mutabakat kontrolü yap; farklı tanım/frekans varsa farkı açıklamadan eşitlik bekleme.
 - [ ] **M08-T10:** Source schema değişimi, eksik ay ve anlamsız birim için yayın reddi/uyarı testleri oluştur.
-- [ ] **M08-T11:** Katalog, semantiği doğrulanmış, yüklü, sorgulanabilir ve Gold'a hazır sayıları UI/status raporunda ayrı göster.
+- [x] **M08-T11** (ön kontrol, /api/status, durum penceresi: katalog/doğrulanmış/tanımlı/yüklü/Gold'a hazır): Katalog, semantiği doğrulanmış, yüklü, sorgulanabilir ve Gold'a hazır sayıları UI/status raporunda ayrı göster.
 
 **Kabul:** Zorunlu soruların verisi yüklenmiş ve semantik kararı izlenebilirdir; eksikler isimleri ve nedenleriyle raporlanır. “681 anlamı tanımlı” sayısı “681 yüklü/verified” diye sunulmaz.
 
@@ -277,17 +277,17 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Kaynak semantiğine bağlı dönüşümler, mevcut tabloyu koruyan join/hesap akışı ve katkı gözlemlerine inen Gold kanıtı.
 
-- [ ] **M09-T01:** `align_frequency`, `decompose_cumulative`, `join_on_period` mevcut davranışlarını zorunlu senaryolara eşleştir; çalışan fonksiyonları tekrar yazma.
-- [ ] **M09-T02:** Stokta dönem sonu, dönemlik akımda uygun toplam, oran/endekste açık kural uygula; frekans düşürmeyi veri olmayan ince frekans üretiminden ayır.
-- [ ] **M09-T03:** Kümülatif seride yıl başı/reset ve önceki dönem tabanını doğrula; stok serisine kümülatif ayrıştırma uygulanmasın.
-- [ ] **M09-T04:** Ay/hafta sınırları, tatil nedeniyle değişen gözlem günü, eksik dönem ve farklı coverage join sonuçlarında açık olsun.
-- [ ] **M09-T05:** Reel dönüşüm için baz dönem ve endeks serisini belirle. Örnek formül `reel_t = nominal_t × endeks_baz / endeks_t`; geçerli birim ve baz olmadan hesap yapma.
-- [ ] **M09-T06:** Geçerli TÜFE/KFE baz eşlemesi bulunamıyorsa farklı bazları sessiz birleştirmek yerine gereken bilgiyi veya kapsam sınırını bildir.
-- [ ] **M09-T07:** Hesap, büyüme, fark ve yüzdeleri SQL/hesap araçlarında açık kolon olarak üret; G9'daki anlatı içinde hesap yapma kalıntısını kapat.
-- [ ] **M09-T08:** Mevcut tabloya faiz/reel değer/KFE eklerken satır anahtarını, eski kolonları ve sıralamayı koru; çoğalan veya eşleşmeyen satırları denetle.
-- [ ] **M09-T09:** Silver veya semantik katalog değişiminde Gold'un bayatlığını denetle; bayat verinin kullanım davranışını açıkça belirle.
-- [ ] **M09-T10:** Reddedilen Gold build önceki tabloyu geçerli gibi bırakmasın; build kimliği, kaynak gözlemleri, artifact ve formül taşınsın.
-- [ ] **M09-T11:** Kalıcı Gold build'i M04 operator sınırına, geçici dönüşümü Analyst yeteneğine bağla; sırf hesap için ortak kataloğa yayın zorunlu olmasın.
+- [x] **M09-T01** (ADR-0058): `align_frequency`, `decompose_cumulative`, `join_on_period` mevcut davranışlarını zorunlu senaryolara eşleştir; çalışan fonksiyonları tekrar yazma.
+- [x] **M09-T02** (align_frequency kuralları, FREQUENCY_MISMATCH): Stokta dönem sonu, dönemlik akımda uygun toplam, oran/endekste açık kural uygula; frekans düşürmeyi veri olmayan ince frekans üretiminden ayır.
+- [x] **M09-T03** (decompose_cumulative stokta ret): Kümülatif seride yıl başı/reset ve önceki dönem tabanını doğrula; stok serisine kümülatif ayrıştırma uygulanmasın.
+- [x] **M09-T04** (join_on_period dış birleştirme, kapsam farkı görünür): Ay/hafta sınırları, tatil nedeniyle değişen gözlem günü, eksik dönem ve farklı coverage join sonuçlarında açık olsun.
+- [x] **M09-T05** (`workspace_real_value`): Reel dönüşüm için baz dönem ve endeks serisini belirle. Örnek formül `reel_t = nominal_t × endeks_baz / endeks_t`; geçerli birim ve baz olmadan hesap yapma.
+- [x] **M09-T06** (tek endeks, baz kapsamı, splice yok): Geçerli TÜFE/KFE baz eşlemesi bulunamıyorsa farklı bazları sessiz birleştirmek yerine gereken bilgiyi veya kapsam sınırını bildir.
+- [~] **M09-T07** (hesap araçta; G9 anlatı aritmetiği grounding ile yakalanır, ayrı kolon kuralı prompt'ta): Hesap, büyüme, fark ve yüzdeleri SQL/hesap araçlarında açık kolon olarak üret; G9'daki anlatı içinde hesap yapma kalıntısını kapat.
+- [x] **M09-T08** (tablo bozulmaz, aylık hizalama denetimi): Mevcut tabloya faiz/reel değer/KFE eklerken satır anahtarını, eski kolonları ve sıralamayı koru; çoğalan veya eşleşmeyen satırları denetle.
+- [x] **M09-T09** (Gold defteri Silver parmak izi, bayat işareti): Silver veya semantik katalog değişiminde Gold'un bayatlığını denetle; bayat verinin kullanım davranışını açıkça belirle.
+- [x] **M09-T10** (reddedilen metrik tabloyu düşürür): Reddedilen Gold build önceki tabloyu geçerli gibi bırakmasın; build kimliği, kaynak gözlemleri, artifact ve formül taşınsın.
+- [x] **M09-T11** (reel dönüşüm Analyst; kalıcı Gold Architect): Kalıcı Gold build'i M04 operator sınırına, geçici dönüşümü Analyst yeteneğine bağla; sırf hesap için ortak kataloğa yayın zorunlu olmasın.
 
 **Kabul:** Beklenen hesaplar modelden bağımsız referans sonuçla uyuşur; tabloyu bozmadan yeni kolon eklenir. Sıfır/null endeks, eksik taban, yanlış stok/akım ve uyuşmayan baz kontrollü sonuç verir.
 
@@ -322,17 +322,17 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Açık oturum/aktif tablo/bakış sonucu kavramları, bağlama bağlı açıklama soruları ve takip sorularında korunmuş provenance.
 
-- [ ] **M11-T01:** İki yeni kaynak tablosunu ayrı kimliklerle oturumda koru; birleştirme ikinci yüklemede ilk tabloyu kaybetmesin. Kaynak tablo, aktif sonuç, bakış sorgusu, önceki sürüm ve grafik/analitik kartının ne zaman değiştiğini sözleşmeye bağla.
-- [ ] **M11-T02:** Özet/min/max/toplam sorgularında varsayılan bakış modunu koru; aktif tabloyu değiştiren eylem açık parametre ve kullanıcı amacı taşısın.
-- [ ] **M11-T03:** İki kullanıcı tablosunun join anahtarı/türü ve kolon çakışmalarını yönet; yinelenen anahtar, satır çoğalması ve eşleşmeyen satırları denetle. “Tabloyu bozmadan” isteğinde önceki kolon/satır/anahtar değerlerini karşılaştır; birleşen her kolonun kaynak izi korunsun.
-- [ ] **M11-T04:** Bekleyen açıklama sorusuna kısa yanıt geldiğinde hangi işlem/kolon/dönem için cevap olduğu bilinsin; tüm sohbet metni sınırsız yetki veya parametre havuzu olmasın.
-- [ ] **M11-T05:** Sonucu değiştiren eksikleri sor: birim/çarpan, tarih çözümü, veri tanımı, baz dönem, stok/akım ve kritik join anahtarı.
-- [ ] **M11-T06:** Sonucu değiştirmeyen sunum tercihlerini makul varsayımla çöz; kullanılan varsayımı kısa ve görünür belirt.
+- [x] **M11-T01** (ADR-0059): İki yeni kaynak tablosunu ayrı kimliklerle oturumda koru; birleştirme ikinci yüklemede ilk tabloyu kaybetmesin. Kaynak tablo, aktif sonuç, bakış sorgusu, önceki sürüm ve grafik/analitik kartının ne zaman değiştiğini sözleşmeye bağla.
+- [x] **M11-T02** (ADR-0039 bakış modu): Özet/min/max/toplam sorgularında varsayılan bakış modunu koru; aktif tabloyu değiştiren eylem açık parametre ve kullanıcı amacı taşısın.
+- [x] **M11-T03** (`workspace_join`): İki kullanıcı tablosunun join anahtarı/türü ve kolon çakışmalarını yönet; yinelenen anahtar, satır çoğalması ve eşleşmeyen satırları denetle. “Tabloyu bozmadan” isteğinde önceki kolon/satır/anahtar değerlerini karşılaştır; birleşen her kolonun kaynak izi korunsun.
+- [x] **M11-T04** (bekleyen soru notu): Bekleyen açıklama sorusuna kısa yanıt geldiğinde hangi işlem/kolon/dönem için cevap olduğu bilinsin; tüm sohbet metni sınırsız yetki veya parametre havuzu olmasın.
+- [x] **M11-T05** (netleştirme kuralı): Sonucu değiştiren eksikleri sor: birim/çarpan, tarih çözümü, veri tanımı, baz dönem, stok/akım ve kritik join anahtarı.
+- [x] **M11-T06** (sunum tercihleri varsayılır ve belirtilir): Sonucu değiştirmeyen sunum tercihlerini makul varsayımla çöz; kullanılan varsayımı kısa ve görünür belirt.
 - [ ] **M11-T07** (M02 bulgusu: L10-01 'Kredi bakiyesini göster' iki motorda da netleştirme sormadı): “Krediler arttı mı?” gibi belirsiz soruda olası yorumları veri kataloğundan üret; bir soru turunda gerekli alanları topluca iste, gereksiz soru zinciri kurma.
-- [ ] **M11-T08:** Kullanıcının yanlış öncülünü düzelt; verilen yüzdeyi veya nedensel hikâyeyi kanıt sayma. Varsayımsal açıklamayı açıkça hipotez olarak ayır.
-- [ ] **M11-T09:** Alan/katalog değiştiğinde önceki finans bağlamını, stale arama sonuçlarını ve geçersiz tablo referanslarını temizle.
-- [ ] **M11-T10:** Reset, tekrarlanan soru, selamlaşma ve eski yanıta geri dönmede yanlış tablo/kanıt gösterilmediğini dene.
-- [ ] **M11-T11:** Oturum dosyaları ve history için yaşam süresi belirle; sunucu yeniden başlatılınca ne korunuyor kullanıcıya açık olsun. Kalıcılık seçilirse ayrı kabul testi ekle.
+- [~] **M11-T08** (sorudan sayı M13 + nedensellik filtresi): Kullanıcının yanlış öncülünü düzelt; verilen yüzdeyi veya nedensel hikâyeyi kanıt sayma. Varsayımsal açıklamayı açıkça hipotez olarak ayır.
+- [x] **M11-T09** (profil yenileme, sıfırlama): Alan/katalog değiştiğinde önceki finans bağlamını, stale arama sonuçlarını ve geçersiz tablo referanslarını temizle.
+- [x] **M11-T10** (web_app/agent testleri): Reset, tekrarlanan soru, selamlaşma ve eski yanıta geri dönmede yanlış tablo/kanıt gösterilmediğini dene.
+- [x] **M11-T11** (durum penceresi notu): Oturum dosyaları ve history için yaşam süresi belirle; sunucu yeniden başlatılınca ne korunuyor kullanıcıya açık olsun. Kalıcılık seçilirse ayrı kabul testi ekle.
 
 **Kabul:** En az birkaç ardışık dönüşüm içeren senaryoda tablo/provenance korunur; belirsiz kritik alan cevaplanmadan o hesap yapılmaz; ilgisiz sorular eski veriyi yeniden üretmez.
 
@@ -417,16 +417,16 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 - [ ] **M15-T01:** Normal soru, çok turlu analiz, web ve OCR için ayrı süre/token dağılımları ölç; p50/p95 ve başarısız/timeout koşularını birlikte raporla.
 - [ ] **M15-T02:** Ekipçe kabul edilebilir süre, çıktı ve tekrar başarısı eşiklerini belirle; bu planda uydurma SLA veya resmî kota yazma.
-- [ ] **M15-T03:** LLM çağrısı için çıktı sınırı, timeout ve retry/backoff toplam etkisini incele; SDK ile dış retry döngülerinin birleşik davranışını doğrula.
-- [ ] **M15-T04:** Soru genelinde süre/adım/araç/arama bütçesi oluştur; limitte doğru kısmi sonuç ve sonraki seçenek dön.
-- [ ] **M15-T05:** Tool gating'in yetki değil performans optimizasyonu olduğunu koru; yanlış kapatılan yetenek, belirsiz takip sorusu ve yeni alan vakalarını ölç.
+- [x] **M15-T03** (SDK tekrarı kapalı, yalnız geçici hatada tekrar, LLM_TIMEOUT): LLM çağrısı için çıktı sınırı, timeout ve retry/backoff toplam etkisini incele; SDK ile dış retry döngülerinin birleşik davranışını doğrula.
+- [x] **M15-T04** (AGENT_TIME_BUDGET_S, kısmi cevap turu): Soru genelinde süre/adım/araç/arama bütçesi oluştur; limitte doğru kısmi sonuç ve sonraki seçenek dön.
+- [x] **M15-T05** (kapı ≠ yetki): Tool gating'in yetki değil performans optimizasyonu olduğunu koru; yanlış kapatılan yetenek, belirsiz takip sorusu ve yeni alan vakalarını ölç.
 - [ ] **M15-T06:** BM25/facet/hybrid recall ölçümünü finans dışı ve görülmemiş sorgularla genişlet; katalog boyutu tek başarı göstergesi olmasın.
 - [ ] **M15-T07:** Embedding/arama servisi yokluğunda fallback ve cache tutarlılığını doğrula; katalog değişince eski cache yanlış seri getirmesin.
 - [ ] **M15-T08:** V3'ün sınırlı ön-yükleme, alan notları ve bağımsız salt-okunur paralelliğini ölçerek değerlendir; peşinen uygulama zorunluluğu sayma.
-- [ ] **M15-T09:** Deterministik unit/contract testlerini PR/CI kontrolüne al; canlı MIA/Tavily/EVDS testlerini anahtarlı ayrı çalıştırma olarak tut.
-- [ ] **M15-T10:** Agent ve lakehouse kilitli kurulum, ilgili lint/build ve sözleşme kontrollerini tek doğrulama tarifinde topla. Makefile'daki eski “build/demo-check” isimlerini gerçek davranışla uyumlu hâle getir.
+- [x] **M15-T09** (`.github/workflows/tests.yml`): Deterministik unit/contract testlerini PR/CI kontrolüne al; canlı MIA/Tavily/EVDS testlerini anahtarlı ayrı çalıştırma olarak tut.
+- [x] **M15-T10** (`make ci`, lakehouse Makefile adları): Agent ve lakehouse kilitli kurulum, ilgili lint/build ve sözleşme kontrollerini tek doğrulama tarifinde topla. Makefile'daki eski “build/demo-check” isimlerini gerçek davranışla uyumlu hâle getir.
 - [ ] **M15-T11:** Lakehouse tam testinin ölçülen 12 dk 43 sn maliyetini profille; tekrarlanan katalog parse/DB kurulumunu doğrulama anlamını zayıflatmadan iyileştir.
-- [ ] **M15-T12:** CI ve yerel rapor artefaktları sır/gizli yanıt içermesin; hata redaksiyonu ve sonuç kayıt sınırı korunsun.
+- [x] **M15-T12** (CI canlı anahtar kullanmaz; hata maskeleme): CI ve yerel rapor artefaktları sır/gizli yanıt içermesin; hata redaksiyonu ve sonuç kayıt sınırı korunsun.
 
 **Kabul:** Bütçe aşımı sonsuz bekleyiş veya kontrolsüz tekrar üretmez. Ölçüm aynı koşullarda yeniden alınabilir; değişiklik sonrası ilgili testler otomatik çalışır. Sayısal eşikler kararlaştırılmadan performans milestone'u “hedefi geçti” diye kapatılmaz.
 
@@ -667,3 +667,5 @@ Belgelendirme tamamlanması uygulama milestone'larının tamamlanması değildir
 - **2026-09-14 — M14 çekirdek:** tam tablo CSV/XLSX, grafik PNG, HTML rapor (uyarılar, kanıt durumu, kaynaklar, commit), cevap sürümüne bağlı; oturum/ortak havuz rozeti. Açık: T11 demo bilgisayarı, T12 yolculuk kararı. Sıradaki: M04.
 
 - **2026-09-14 — M04 kapandı:** profiller (Analyst'te yazma aracı yok), anahtarlı geçiş, iki adımlı tam sıfırlama (yalnız DATA_ROOT), A20/A21/A28 testleri, canlı doğrulama. Açık: pasifleştirme (veri CLI'ı), yayın talebi arayüzü (koşula bağlı). Sıradaki: M08/M07.
+
+- **2026-09-14 (gece) — M07, M03, M06, M09, M11, M15 çekirdek kapandı; M08 sürüyor:** toplu ingest run kaydı (ADR-0057), 2016+ zorunlu set (681 seri) ayrı veri köküne kuruluyor; reel değer aracı + TÜFE küratörlüğü (ADR-0058, canlı prova hatası: seri adı aranabilir değildi); oturum tabloları + denetimli birleştirme + netleştirme (ADR-0059); kaynak ipuçları yapılandırmaya + finans dışı uyum testi (ADR-0060, iki alan sızıntısı yakalandı); erişim seçenekleri, LLM bütçeleri, kesinti cevabı, CI (ADR-0061). Bulgu: M14 arayüz dışa aktarım bağlantıları önceki commit'te yazılmamıştı (API vardı) — eklendi.

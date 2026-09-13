@@ -221,8 +221,7 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
         base_url=settings.llm_base_url,
         api_key=settings.llm_api_key,
         model=settings.llm_model,
-        disable_thinking=settings.disable_thinking,
-    )
+        disable_thinking=settings.disable_thinking, timeout=settings.llm_timeout)
     print(
         f"[motor] sağlayıcı={settings.provider_label} model={settings.llm_model} "
         f"alan={profile.domain!r} araçlar={len(registry)} profil={agent_profile_name}",
@@ -241,6 +240,7 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
         system_prompt=system_prompt, evidence=EvidenceBuilder(lakehouse), preloader=preloader,
         tool_gate=settings.tool_gate, narrate_temperature=settings.narrate_temperature,
         profile_factory=profile_factory,
+        max_tokens=settings.llm_max_tokens, time_budget_s=settings.agent_time_budget_s,
     )
     agent.profile_name = agent_profile_name          # analyst | architect (M04)
     agent.upload_root = settings.ingest_allowed_root

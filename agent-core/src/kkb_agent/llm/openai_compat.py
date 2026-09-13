@@ -30,7 +30,10 @@ class OpenAICompatClient:
         native_tools: bool = True,
         disable_thinking: bool = False,
     ) -> None:
-        self._client = OpenAI(base_url=base_url, api_key=api_key, timeout=timeout)
+        # SDK'nın kendi tekrar denemesi KAPALI (M15-T03): varsayılan 2 deneme bizim döngümüzün içinde çarpılıyordu
+        # (3 × 3 × zaman aşımı). Tekrar politikası tek yerde, aşağıda.
+        self._client = OpenAI(base_url=base_url, api_key=api_key, timeout=timeout, max_retries=0)
+        self.timeout = timeout
         self.model = model
         self.base_url = base_url
         self._max_retries = max_retries
@@ -93,6 +96,11 @@ class OpenAICompatClient:
                 )
             except APIError as exc:
                 last_err = exc
+                status = getattr(exc, "status_code", None)
+                if status is not None and 400 <= int(status) < 500 and int(status) not in (408, 409, 429):
+                    raise                     # istek hatası: tekrar denemek sonucu değiştirmez
+                if attempt >= self._max_retries:
+                    break
                 # Mentör: kota yok ama retry/backoff olsun. 429'da sunucunun
                 # Retry-After'ı varsa ona uy; yoksa üstel bekleme (2,4,8… ≤15 s).
                 wait = min(2**attempt, 15)

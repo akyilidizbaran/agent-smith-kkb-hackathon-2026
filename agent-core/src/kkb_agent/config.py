@@ -65,6 +65,10 @@ class Settings:
     # Profil başlatmada seçilir; oturumda geçiş yalnız ARCHITECT_TOKEN ile (boşsa geçiş kapalı).
     agent_profile: str
     architect_token: str
+    # Bütçeler (M15): tek çağrı zaman aşımı, çıktı sınırı, soru başına toplam süre.
+    llm_timeout: float
+    llm_max_tokens: int
+    agent_time_budget_s: float
 
     @property
     def provider_label(self) -> str:
@@ -102,4 +106,7 @@ def load_settings() -> Settings:
         tool_gate=os.getenv("TOOL_GATE", "on").lower() != "off",
         agent_profile=os.getenv("AGENT_PROFILE", "analyst").strip().lower(),
         architect_token=os.getenv("ARCHITECT_TOKEN", "").strip(),
+        llm_timeout=float(os.getenv("LLM_TIMEOUT", "90")),
+        llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "1500")),
+        agent_time_budget_s=float(os.getenv("AGENT_TIME_BUDGET_S", "300")),
     )

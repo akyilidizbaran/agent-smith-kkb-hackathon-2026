@@ -56,6 +56,9 @@ _PAYWALL_MARKERS = (
     "premium içerik",
 )
 _LOGIN_URL_MARKERS = ("login", "signin", "sign-in", "sign_in", "giris", "giriş", "/auth", "oauth", "sso")
+# İçeriği JavaScript'le yüklenen kabuk sayfa (mentöre soru 1: "sayfa JavaScript olmadan açılmıyor").
+_JS_MARKERS = ("enable javascript", "javascript is required", "javascript required", "requires javascript",
+               "please enable js", "javascript'i etkinleştir", "javascript etkinleştir", "you need to enable javascript")
 
 # ------------------------------------------------------------------ credential varlığı
 # Host → env anahtar adı. Değer hiçbir zaman buradan geçmez; yalnız "var mı" sorulur.
@@ -95,8 +98,8 @@ def _options_for(status: str, reason: str | None, *, credential: bool) -> tuple[
                                "Aynı veriyi yayımlayan başka bir kurum/sayfa; kaynak değişikliği cevapta belirtilir.")
     retry = AccessOption("retry_later", "Biraz sonra tekrar deneyeyim",
                          "Kaynak istek sınırı uyguluyor; bekleyip yeniden denenebilir.")
-    use_cred = AccessOption("use_credential", "Ekip hesabıyla devam edeyim",
-                            "Bu kaynak için tanımlı bir anahtar var; onunla yeniden denerim.")
+    use_cred = AccessOption("use_credential", "Ekip hesabıyla (tanımlı bağlayıcı) çekilebilir",
+                            "Bu kaynak için anahtarı kullanan bir bağlayıcı tanımlı; veri Architect ingest'iyle o yoldan çekilir.")
     if status == "needs_credential":
         return ((use_cred,) if credential else ()) + (upload, alternative)
     if status == "blocked":
@@ -123,6 +126,10 @@ def classify_access(
     body = (body_excerpt or "").lower()
     final = (final_url or "").lower()
     credential = credential_available(source, environ)
+    # "Ekip hesabıyla devam" ancak anahtarı gerçekten kullanan bir bağlayıcı varsa sunulur (M06-T08): anahtarın ortamda
+    # olması yetmez, host yapılandırmada tanımlı olmalı. Tanımsız hostta anahtar var diye başarı vaadi verilmez.
+    credential_usable = credential and _host(source) in _known_credential_env()
+    hit_js = tuple(m for m in _JS_MARKERS if m in body)
     hit_bot = tuple(m for m in _BOT_MARKERS if m in body)
     hit_captcha = tuple(m for m in _CAPTCHA_MARKERS if m in body)
     hit_paywall = tuple(m for m in _PAYWALL_MARKERS if m in body)
@@ -136,7 +143,7 @@ def classify_access(
     def out(status, reason, message):
         return AccessOutcome(
             status=status, source=source, message=message, reason=reason,
-            options=_options_for(status, reason, credential=credential), evidence=evidence,
+            options=_options_for(status, reason, credential=credential_usable), evidence=evidence,
         )
 
     if robots_disallow:
@@ -165,6 +172,9 @@ def classify_access(
             return out("blocked", "bot_challenge", "Sayfa bot denetimi gösteriyor; otomatik olarak geçilmez.")
         if hit_paywall:
             return out("needs_credential", "paywall", "İçerik ücretli üyelik arkasında.")
+        if hit_js:
+            return out("blocked", "js_required",
+                       "Sayfa içeriği JavaScript ile yükleniyor; tarayıcı olmadan okunamıyor (tarayıcı yeteneği yok).")
         return AccessOutcome(status="ok", source=source, message="Erişildi.", evidence=evidence)
     if 500 <= http_status:
         return out("blocked", "unreachable", f"Kaynak sunucu hatası döndürdü ({http_status}).")

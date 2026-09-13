@@ -81,7 +81,22 @@ def test_credential_yalniz_varligi_bilinir_degeri_hic_gorunmez() -> None:
     decision = decide(out, detect_source_constraint("bu siteden veriyi getir"))
     rendered = render_for_model(out, decision) + str(out) + str(decision)
     assert "cok-gizli-anahtar-123" not in rendered
+    # M06-T08 (ADR-0061): anahtarın ortamda olması "ekip hesabıyla devam" vaadi için yetmez; anahtarı kullanan bir
+    # bağlayıcı tanımlı olmalı. Tanımsız hostta seçenek sunulmaz (sahte vaat yok), anahtar varlığı yine kanıtta görünür.
+    assert out.evidence.credential_available is True
+    assert not any(o.kind == "use_credential" for o in out.options)
+
+
+def test_ekip_hesabi_secenegi_yalniz_anahtari_kullanan_baglayicida() -> None:
+    src = "https://evds3.tcmb.gov.tr/igmevdsms-dis/series=TP.KTF12"
+    out = classify_access(src, http_status=401, environ={"EVDS_API_KEY": "gizli"})
     assert any(o.kind == "use_credential" for o in out.options)
+    assert not any(o.kind == "use_credential" for o in classify_access(src, http_status=401, environ={}).options)
+
+
+def test_javascript_kabugu_ayri_sebep() -> None:
+    out = classify_access(SRC, http_status=200, body_excerpt="<noscript>You need to enable JavaScript to run this app.</noscript>")
+    assert out.status == "blocked" and out.reason == "js_required" and {o.kind for o in out.options} >= {"upload_file", "alternative_source"}
 
 
 def test_evds_bilinen_anahtar_adina_eslenir() -> None:

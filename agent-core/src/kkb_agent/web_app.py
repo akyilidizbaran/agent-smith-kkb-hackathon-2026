@@ -126,6 +126,18 @@ def _table_touched(answer: Any, before: Any, after: Any) -> bool:
     return any(s.tool_name and s.ok and s.tool_name.startswith(DATA_TOOLS_PREFIX) for s in getattr(answer, "steps", []))
 
 
+ACCESS_CODES = frozenset({"NEEDS_CREDENTIAL", "ACCESS_BLOCKED", "SOURCE_NOT_FOUND"})
+ACCESS_KINDS = ("upload_file", "use_credential", "alternative_source", "retry_later")
+
+
+def access_options(answer: Any) -> list[str]:
+    """Son erişim hatasının seçenekleri (M06-T10): arayüz bunları eyleme bağlar; seçenek sunmak yetki vermez."""
+    for s in reversed(getattr(answer, "steps", []) or []):
+        if getattr(s, "error_code", None) in ACCESS_CODES:
+            return [k for k in dict.fromkeys(getattr(s, "candidates", []) or []) if k in ACCESS_KINDS]
+    return []
+
+
 def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict[str, Any]:
     steps = []
     for s in getattr(answer, "steps", []):
@@ -133,6 +145,7 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict
             "index": s.index, "role": s.role, "thought": s.thought, "tool": s.tool_name,
             "args": _json_safe(s.tool_args), "ok": bool(s.ok), "error_code": s.error_code,
             "summary": (s.result_summary or "")[:400], "duration_ms": round(float(getattr(s, "duration_ms", 0.0) or 0.0)),
+            "candidates": list(getattr(s, "candidates", []) or []),
         })
     charts = []
     for art in getattr(answer, "artifacts", []) or []:
@@ -160,6 +173,7 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict
         "table": frame_to_dict(table) if show_table else None,
         "table_title": (getattr(agent.workspace, "title", "") or "") if show_table else "",
         "table_scope": scope if show_table else None,
+        "access_options": access_options(answer),
         "charts": charts,
         "evidence": evidence_to_dict(getattr(answer, "evidence", None)),
         "usage": dict(getattr(answer, "usage", {}) or {}),
