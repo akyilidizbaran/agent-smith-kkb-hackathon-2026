@@ -1,6 +1,6 @@
 # Agentic Analytics Engine — Mimari
 
-> **Durum:** 10 Eylül 2026 · Golden 7/7 · 22 birim testi · 19 ADR
+> **Durum:** 12 Eylül 2026 · Golden 16 vaka; demo kabul sıfırdan 8/8 (`scripts/demo_acceptance.py`) · 252 birim testi · 38 ADR
 > Bu belge kodun *ne yaptığını* değil, *neden öyle yapıldığını* anlatır; her karar
 > `docs/adr/` altındaki kayda atıfla gelir. Kodla birebir örtüşmesi için modül, sınıf ve
 > metot adları gerçek adlarıyla verilmiştir.
@@ -269,6 +269,22 @@ Araçların kayıt defteri. `register`, `schemas(profile)`, `describe()` (JSON m
 **Planlı:** `Tool.group` alanı ve `subset(groups)` — alt-agent'a daraltılmış kayıt
 defteri, ileride tool retrieval.
 
+### 5.2b `BoundaryValidator` — her araç çağrısı aynı boru hattından
+
+`core/validator.py`. Sıra: **şema → SQL guard → referans → politika → run** (ADR-0029).
+Araç yalnız `validate_refs` ve `check_policy` hook'larını yazar; sırayı ve hataya
+sarmayı doğrulayıcı bilir. `sql` alanı taşıyan her araç guard'dan geçer — araçtan
+bağımsız, adaptörün kendi guard'ına ek (savunma derinliği, ADR-0020).
+
+Mentörün sorduğu dört rol burada **rol** olarak tutuluyor, agent olarak değil:
+
+| rol | nerede |
+|---|---|
+| Planner | LLM'in kendisi; hangi aracı seçtiği izdeki adım sırasında okunur |
+| Retriever | `lakehouse_search / describe / distinct_values` (`Tool.role = "retrieve"`) |
+| Validator | `core/validator.py` + döngüdeki guard'lar; izde `[validate]` |
+| Narrator | son tur; anlatı doğrulama ve nedensellik filtresinden geçer; izde `[narrate]` |
+
 ### 5.3 `AnalysisWorkspace` — konuşma boyunca yaşayan tablo
 
 Örnek senaryo: *"tabloyu göster → tabloyu bozmadan enflasyondan arındır → bu tabloyu hiç
@@ -309,29 +325,43 @@ ekleyebilir. "Tabloyu bozmadan" garantisi prompt'a değil, aracın imkânlarına
           if not produced_data and not nudged:
               nudged = True
               "Henüz veri çekmedin" → geri gönder, continue   ← CEVAP GUARD'I
+          if produced_data:
+              grounding_check(soru, cevap, araç çıktıları)     ← ANLATI GUARD'I
+              MISS ya da nedensellik → bir kez geri gönder
+              ikinci kez de MISS → cevap gider, değerler işaretlenir
           return AgentAnswer(_strip_reasoning(content))
 
       for call in calls:
+          if (call.name, args) daha önce görüldüyse:
+              DUPLICATE_CALL; ikinci tekrarda araçlar geri alınır  ← DÖNGÜ KİLİDİ
           result = registry.execute(call.name, call.arguments)
           if result.ok and call.name in DATA_PRODUCING_TOOLS:
               produced_data = True
           messages.append(tool mesajı: result.content)     ← data DEĞİL, content
           steps.append(AgentStep(...))                       ← izlenebilirlik
 
+      if terminal hata (retryable değil):
+          araçsız son tur: "durumu açıkla, sayı uydurma"     ← ÇIKMAZ GUARD'I
+
  4. max_steps aşıldı:
       "Elindekiyle en iyi cevabı ver, neyi tamamlayamadığını söyle" → son tur
 ```
 
-Dört guard, hepsi ölçülmüş bir hata moduna karşılık:
+Yedi guard, hepsi ölçülmüş bir hata moduna karşılık:
 
 | Guard | Hata modu | ADR |
 |---|---|---|
 | Cevap guard'ı (`produced_data`) | Model katalogu okuyup veri çekmeden cevap yazıyordu | 0010 |
 | `DATA_PRODUCING_TOOLS` araç adına göre | İlk sürüm DataFrame varlığına bakıyordu; `describe` de DataFrame döndürüyor, guard hiç tetiklenmedi | 0010 |
+| Anlatı guard'ı (`grounding_check`) | Tablo doğru, anlatıda tabloda olmayan sayı: "155.515 milyon TL arttı" | 0027 |
+| Nedensellik filtresi | "faiz indirimi buna yol açtı" — veriden çıkarılamaz | 0027 |
+| Döngü kilidi + kırılması | Aynı çağrı tekrar tekrar; kilit aracı korudu ama model yedi kez daha istedi ve adım limitini yaktı | 0025 |
+| Çıkmaz guard'ı (araçsız son tur) | Tekrar denemeyle çözülmeyen hatada model aynı yolu farklı yazımlarla deniyordu | 0017, 0025 |
 | `max_steps` + son tur | Sessiz kesilme yerine "neyi tamamlayamadım" | — |
 | `_strip_reasoning` | Qwen3/DeepSeek `<think>` blokları kullanıcıya sızmasın | — |
 
-`AgentAnswer` cevap metni + `steps` (trace) + `workspace` + `hit_step_limit` taşır.
+`AgentAnswer` cevap metni + `steps` (trace) + `workspace` + `hit_step_limit` +
+`grounding` taşır.
 Trace yalnız hata ayıklama için değil; demoda "bu sonuca nasıl vardın?" sorusunun cevabı.
 
 ---
@@ -374,6 +404,7 @@ sonuç workspace'e gider, modele 10 satır.
 | `workspace_add_column(dataset_id, key_column, value_column, column_name, join_on, filter_column?, filter_value?, purpose)` | Lakehouse'tan bir ölçümü çekip mevcut tabloya hizalar |
 | `workspace_compute_column(expression, column_name, purpose)` | Mevcut sütunlardan DuckDB ifadesiyle yeni sütun hesaplar |
 | `workspace_show(max_rows)` | Tablonun güncel hali + işlem geçmişi |
+| `workspace_query(sql, purpose, as_active_table=false)` — `tools/workspace_query.py` (ADR-0039) | Aktif tablo `t` üzerinde SELECT, sertleştirilmiş bellek-içi DuckDB; veri havuzuna dokunmaz. Varsayılan bakış modu (tablo değişmez, sonuç kanıt için not edilir); `as_active_table=true` kırpma |
 
 **`add_column` neden SQL almıyor:** Serbest SQL alan sürümde model, eklemek istediği yeni
 sütunun adını SELECT listesine var olan kolon gibi yazdı, hatadan çıkamadı ve
@@ -387,22 +418,26 @@ ifade reddedilir.
 
 ---
 
-## 7. Planlı araçlar
+## 7. Araç aileleri (analitik yazıldı; web, grafik, ingest aşağıda ve §15'te)
 
-### Analitik ailesi — `tools/analytics.py` (LLM YOK)
+### Analitik ailesi — `tools/analytics.py` + `analytics/methods.py` (LLM YOK, ADR-0040) — YAZILDI
 
-Literatürün tutarlı bulgusu: tek LLM sayısal girdi üzerinde sınırlı kontrol sağlar.
-İstatistik tespit eder, LLM açıklar.
+Yarışmanın asgari araç listesindeki üç ad (Anomali, Change Detection, Causality). Literatürün
+tutarlı bulgusu ve bizim ölçümümüz (ADR-0027): model sayısal girdi üzerinde kendi aritmetiğini
+yapınca uydurur. İstatistik tespit eder, model kartı anlatır.
 
 | Araç | Yöntem | Döner |
 |---|---|---|
-| `anomaly_detect(column, method?)` | IQR / z-score / IsolationForest, workspace tablosu üzerinde | işaretli satırlar + `is_anomaly` sütunu |
-| `change_points(column)` | ruptures (PELT/Binseg) ensemble | kırılma dönemleri + güven |
-| `correlate(col_a, col_b, lag?)` | Pearson/Spearman + Granger | katsayı, p-değeri, yön uyarısı |
+| `anomaly_detect(column, method=iqr|zscore, basis=auto|level|change)` | Tukey çiti (k=1.5) ya da z-skoru (|z|>3); trendli seride (Spearman rho ≥ 0.8) dönemlik yüzde değişim üzerinde | `<sütun>_anomali` ('ok'/'aykırı'), `<sütun>_skor` (+ `_degisim_yuzde`); kartta aykırı dönemler |
+| `change_points(column, basis, max_breaks, min_size)` | ikili bölütleme, parçalı sabit ortalama, ceza 2·log(n)·σ² (σ birinci farkların MAD'ı) | `<sütun>_rejim` (1..k); kartta kırılma tarihleri ve rejim ortalamaları |
+| `lead_lag(column_a, column_b, max_lag, basis)` | gecikmeli Pearson (−k..+k; +k: A önce) + iki yönlü Granger F-testi (OLS, scipy F) | tablo değişmez; kartta en güçlü gecikme, r, gecikme tablosu, Granger F/p/n |
 
-Hepsi `AnalysisWorkspace.table` üzerinde çalışır; hangi veri olduğu umurlarında değil.
-Sentetik seriyle test edilir. LLM yalnız çıktıyı yorumlar ve `web_search` ile bağlar —
-transkriptteki *"o dönemde dünya piyasalarında ne olmuş"* akışı.
+Hepsi `AnalysisWorkspace.table` üzerinde; hangi veri olduğu umurlarında değil; sentetik seriyle
+test edilir. Sonuç sütunları "türetilmiş:" provenance taşır (kanıt zinciri kopmaz), kart sayıları
+kanıt paneli için not edilir. Grafik `_anomali` sütununu `quality_flag` gibi halka ile işaretler.
+"Causality" dürüst: kart "öncülük, nedensellik değil" der; anlatı guard'ı "neden oldu" cümlesini
+yine geri çevirir. Kullanıcı aykırılık/kırılma/öncülük sorup model aracı çağırmadan cevap yazarsa
+harness bir kez geri gönderir (grafik kuralıyla aynı mekanizma).
 
 ### Web ailesi — `tools/web.py`
 
@@ -416,7 +451,7 @@ adayı.
 render eder) + PNG (yedek). Çizgi, çubuk, **çift eksen** (kredi + faiz), vurgulanmış
 dönemler (anomali çıktısı). Workspace tablosundan beslenir, kaynak notu otomatik eklenir.
 
-### Ingest alt-agent'ı — `tools/ingest.py` (`SubAgentTool`)
+### Ingest — `tools/ingest.py` (`ingest_from_url`, ADR-0030) — YAZILDI, deterministik; LLM'li alt-agent hâli planlı
 
 Jürinin sınayacağı yetenek: *"şu URL'den veriyi al, belgele, analiz et."*
 
@@ -613,3 +648,153 @@ kaldırıldı — vLLM reddediyordu).
 - Gerçek Lakehouse'a bağlı değil; kendi seed'iyle çalışıyor. Veri ekibinin
   `silver.fact_observation` + `meta.series`'i hazır; adaptör yazılacak.
 - Golden set kapsamı dar: tek kaynak, kredi kalemleri.
+
+### Gold — `tools/gold.py` (`gold_align / gold_decompose / gold_join`, ADR-0031) — YAZILDI
+
+Frekans dönüşümü SQL'de değil, katalog kurallı fonksiyonda. "Çeyreklik göster", "aylığa
+indir", "iki seriyi aynı dönemde karşılaştır", "kümülatifi çöz" isteklerinde model
+`AVG(value)` yazamaz; kural (`stok → son`, `akım → toplam`, `oran → katalog`) `meta.series`'ten
+gelir, fonksiyon ya sonucu verir ya da sebebiyle reddeder (`GOLD_REFUSED`, tekrar denenmez).
+
+```
+gold_align(series_id, target_frequency, period_from?, period_to?)   → aktif tablo
+gold_decompose(series_id, ...)                                       → akımlar + decomposition_flag
+gold_join(series_ids[2..6], target_frequency, ...)                   → '<seri>::value' kolonları
+```
+
+- Çağrı veri ekibinin `python -m lakehouse gold-run` komutuyla, ayrı süreçte, salt-okunur
+  (0,3 s); agent paketi import etmez (ADR-0024). Sonuç JSON belgesi → DataFrame; kanıt
+  kolonları (`source_observation_dates`, `artifact_sha256_list`) tabloda kalır.
+- Hazır tablolar: `python -m lakehouse gold` `catalog/gold/*.yml`'deki metrikleri
+  `gold.<metric_id>` olarak kurar; adaptör `meta.gold_build` defterinden okur, her satırda
+  kurulum kimliği + Silver parmak izi; Silver değişmişse **BAYAT** notu. Model hazır tabloyu
+  bulursa SQL ile sorgular — o da Gold'dur (G9 böyle geçti).
+- Sözleşme: `GoldCapable` (`contracts/lakehouse.py`), `LakehouseClient`'tan ayrı; seed
+  adaptörü sunmaz → araçlar kayıt edilmez, Gold kuralı prompt'a girmez.
+
+
+### Grafik — `tools/chart.py` + `charts/` (ADR-0032) — YAZILDI
+
+Model NE çizileceğini söyler (tür, kolonlar, başlık); NASIL çizileceği inşacının kuralı ve
+denetçinin sınavıdır. Belirtim Vega-Lite JSON'dur, yani veridir:
+
+```
+chart(chart_type=line|bar|map, y_columns, x_column?, title, dual_axis?, log_scale?, province_column?)
+  → charts/spec.py   inşa: stok→y=0, birim+dönem başlıkta, uyarılı gözlem halkalı, ay sonu→ay kutusu
+  → charts/lint.py   9 kural, bağımsız; geçmezse TOOL_FAILED ve dosya YOK
+  → charts/render.py .vl.json + PNG/SVG (vl-convert, tarayıcısız, 0,36 s)
+```
+
+Birim ve seri tipi workspace provenance → katalogdan; bilinmiyorsa "birim belirtilmemiş"
+açıkça yazılır. Gold join kolonları önekten seriye bağlanır. Harita `assets/geo/
+tr_provinces.geojson` ister; yoksa politika katmanında durur. Çıktı `AgentAnswer.artifacts`
+ile CLI'a gider, dosya yolu cevaba yazılmaz.
+
+
+### Kanıt paneli — `core/evidence.py` + `contracts/evidence.py` (ADR-0033) — YAZILDI
+
+"Bu rakam nereden geliyor?" tek zincir olarak:
+
+```
+cevaptaki sayı → tablo hücresi → SQL (provenance) → Silver/adhoc satırı
+  → artifact_sha256 → Bronze parquet → RAW → kaynak URL + fetched_at + HTTP
+```
+
+Cevap kesinleştikten sonra kurulur (`AgentAnswer.evidence`), cevabı asla düşürmez. "Tam"
+ölçülebilir: her sayı bir hücrede, her kolonun SQL'i var, her gözlem locator+fetched_at
+taşıyor; eksikse `gaps` neresinin eksik olduğunu söyler. Gold tabloları katkıda bulunan
+Silver gözlemlerine çözülür. Danışılıp kullanılmayan seriler panelde, cevapta değil.
+CLI: her cevabın altında `[kanıt]` özeti, `--evidence` tam panel. Golden: `KANIT ZİNCİRİ
+n/m tam`; artifact izi olan adaptörde eksik zincir vakayı düşürür.
+
+
+### Web — `tools/web.py` + `web/` (ADR-0034) — YAZILDI; `web_search` Tavily anahtarıyla açık (13 Eyl)
+
+```
+web_url(url, purpose, table_index?, max_pages≤5, max_depth≤1)
+  → web/fetch.py   özel adres yok, boyut sınırı, robots.txt, ADR-0028 sınıflandırması, sha256+zaman
+  → web/html.py    tablolar METİN olarak → profilci dilbilgisiyle sayı (belirsizse metin + not)
+  → web/crawl.py   aynı alan adı, veri bağlantıları önce, ilgi puanı, sayfa/derinlik/süre bütçesi
+web_search(query, topic?, time_range?)  Tavily (Bearer başlığı, basic arama); TAVILY_API_KEY yoksa kayıt edilmez,
+                   prompt "arama kapalı" der; süreç başına bütçe WEB_SEARCH_BUDGET (varsayılan 20)
+```
+
+Liste modu tabloları ve yıl denetimini gösterir ("soruda geçen 2025 sayfada GEÇMİYOR");
+yükleme modu tabloyu aktif analiz tablosu yapar (provenance URL + sha256 + zaman). Erişilemezse
+`ACCESS_BLOCKED / NEEDS_CREDENTIAL / SOURCE_NOT_FOUND`, tekrar denenmez; kaynak sabitse sorulur.
+Taranıp kullanılmayan sayfalar kanıt panelinde. Golden G11 üç erişim hâli (var / yok /
+erişilemez) yerel fikstürlerle 3/3.
+
+
+### Ön-yükleme — `core/context.py` (ADR-0013 → ADR-0035) — YAZILDI
+
+Soru geldiğinde deterministik: `search_datasets(question, k=8)` ile seçilen serilerin
+kompakt kartları (kimlik, ad, ölçüm+birim, kapsam, erişim SQL'i, uyarılar) ve küçük
+katalogda kırılım kolonlarının GERÇEK değerleri (alt toplam işaretli) tek system mesajının
+sonuna, 6.000 token bütçesiyle; kalanlar tek satırlık dizin. Keşif turları LLM turu olmaktan
+çıkar: seed 7,0 → 3,3 adım, gerçek DB 3,0 → 1,6; doğruluk aynı. Araçlar kayıtlı kalır.
+`AgentAnswer.usage` token ve çağrı sayısını taşır; golden `TOKEN:` satırı basar.
+`PRELOAD_BUDGET_TOKENS=0` kapatır.
+
+
+### Kademeli retrieval ve araç kapısı — `core/retriever.py`, `core/facets.py`, `core/tool_gate.py` (ADR-0043) — YAZILDI
+
+Modele giden kart sayısı sabit (8–12), aday havuzu ölçekle büyür. `CatalogRetriever` üç kademe:
+`preload_all` (katalog ≤ 60: arama yok, hepsi kart), `bm25` (yüzlü BM25, havuz k×10), `hybrid`
+(≥ 5.000 ve embedder varsa: BM25 ∪ MIA embedding → RRF → yüzler). Yüzler puan değil eleme/öncelik:
+il (81 il, ekleriyle), frekans (aynı → ince → kaba), kaynak. Adaptörler (Silver, seed) ve
+`scripts/retrieval_golden.py` aynı sınıfı kullanır; eşikler golden'daki recall ile konur
+(2.214 seride yüzler recall@8 0,864 → 0,996). Embedding vektörleri `EmbeddingCache` ile diskte.
+Araç kapısı her tur soruya göre araç alt kümesi sunar (lakehouse/workspace/gold her zaman; chart,
+analitik, web, Architect sinyalle); şemayı daraltır, yetkiyi değil. Ölçüldü: 11 senaryoda adım
+36 → 27, prompt token ≈ %40 düştü.
+
+### Arama — `core/lexical.py` BM25 (ADR-0036) — YAZILDI
+
+Retrieval sözleşmesinin (`contracts/retrieval.py`) ilk gerçek uygulaması: saf Python BM25,
+Türkçe katlama, 5+ karakterlik ön ekler yarım ağırlıkla, en az bir tam sözcük eşleşmesi
+şart; takma adlar 3× ağırlıklı. Her isabet hangi sorgu sözcüklerinin eşleşMEdiğini taşır ve
+arama kartı bunu yazar. Yüklenmemiş seriler ayrı dizinde: arama "yok" ile "katalogda var ama
+henüz çekilmemiş"i ayırır; kısmi isabet ya da boş arama ikinci kezde tekrar denenmez hataya
+döner (döngü kırılır). Ön-yükleme seçimi de bu dizinden geçer.
+
+
+### Görüntü ve PDF girişi — `vision/ocr.py` (ADR-0041) — YAZILDI
+
+`web_url` ve `ingest_from_url` PDF/PNG/JPG belgeyi de alır: sayfa → PNG (pypdfium2, 2×, en çok
+5 sayfa) → MIA `Unlimited-OCR` (rehberdeki istem ve `vllm_xargs`, ilk `<|det|>` öncesi atılır,
+ADR-0022) → HTML `<table>` → colspan/rowspan açılmış ızgara → `<td>` başlık satırları kolon adı
+(çok satırlı başlık "TL | Hacim") → profilci sayı dilbilgisi. Kanıt zinciri belgenin
+sha256'sında biter; tablo "görüntüden OCR ile okundu, doğrulanmadı" notunu taşır ve model bunu
+söyler. Ingest'te OCR tablosu izinli köke CSV olarak yazılır ve veri ekibinin CLI'ına o gider;
+belgenin kendisi yanına kopyalanır, sha256'sı ve OCR modeli katalog açıklamasında. `VISION_MODEL`
+yoksa belge "OCR olmadan okunamaz" der, uydurmaz.
+
+### Architect'in ikinci kapısı — `tools/promote.py` (`promote_draft`, ADR-0039) — YAZILDI
+
+Taslak → aktif yalnız kullanıcı onayıyla: metinde onay ifadesi ("onaylıyorum", "kataloğa al",
+"yayınla") **ve** seri anahtarı geçmeli; yalnız `adhoc` + TASLAK notlu seri; yazma ayrı süreçte
+veri ekibinin `promote-draft` komutuyla (okuyucu kapat → yaz → yeniden aç). `semantic_source`
+`manual`, güven `derived` kalır: Gold bu seriyi ancak kullanıcı "doğrulanmamış olsa da kullan"
+derse birleştirir (`unverified_consent` → `allow_unverified`). `ingest_from_url` artık
+`unit/measure_type/default_agg/frequency` beyanı alır; kullanıcı metninde geçmeyen beyan yok
+sayılır ve sorulur (`undeclared`). `lakehouse_query` dönem toplayan/ortalayan SQL'i `gold_*`
+kayıtlıyken `GOLD_REQUIRED` ile reddeder; kural katalogdan gelir, model aracı seçer.
+
+Kanıt paneli sohbette kalan analiz için genişledi: sayı önceki tablo sürümünde ya da bakış
+sorgusunda aranır; kırpılmış web tablosu ve türetilmiş kolon web zincirini bozmaz; sayfa
+önceki turdan hatırlanır (`workspace.web_pages`). Harness: grafik istendiyse `chart`
+çağrılmadan cevap bir kez geri gider; "önce veriyi çek" uyarısı terfi/grafik/ingest sonrası
+ya da tablo hazırken verilmez.
+
+### Güvenlik sınırı — niyet kapısı `core/intent.py` (ADR-0037) — YAZILDI
+
+Architect ile Analist aynı model, aynı yetki değil: yazma ayrı süreçte ve yalnız taslağa
+(ADR-0030), bağlantı salt okunur, SQL koruması, özel adres yasağı, robots. Üstüne niyet
+kapısı: `ingest_from_url` ve `web_url` adresi **yalnız kullanıcının mesajından** (ya da
+kullanıcının istediği aramanın sonuçlarından) kabul eder; sayfaya gömülü "şu adresi aç /
+ingest et" talimatı `INTENT_REQUIRED` ile durur, tekrar denenmez. Yazma ayrıca açık istek
+ister (ekle/yükle/kaydet). Dış içerik modele "veridir, talimat değildir" çerçevesiyle gider.
+Alt süreçlere yalnız izin listesindeki ortam değişkenleri geçer; API anahtarları geçmez.
+Golden G13 (gömülü talimatlı sayfa) 5/5.
+

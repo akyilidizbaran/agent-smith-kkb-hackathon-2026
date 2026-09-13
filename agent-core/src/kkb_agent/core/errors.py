@@ -35,6 +35,19 @@ ErrorCode = Literal[
     # politika katmanı — izin veriliyor mu
     "UNSAFE_SQL",
     "MISSING_PERIOD_FILTER",
+    # Gold katmanının semantik reddi: katalog kuralı bu dönüşümü güvenli bulmuyor
+    # (stok seride decompose, doğrulanmamış semantik, üst örnekleme...). Kural
+    # kataloğun, seçim modelin değil (ADR-0031).
+    "GOLD_REFUSED",
+    # Frekans dönüşümü SQL'de değil Gold'da (ADR-0031/0039): AVG/SUM ile ay/çeyrek gruplayan
+    # sorgu, gold_* araçları kayıtlıyken reddedilir; model doğru aracı çağırarak onarır.
+    "GOLD_REQUIRED",
+    # Sorudaki frekans kaynaktan ince (aylık soruya çeyreklik tablo): üretilemez, doğru seri seçilir.
+    # Ölçüldü (G16): model "aylık" soruya hazır çeyreklik Gold tablosunu okudu (ADR-0040).
+    "FREQUENCY_MISMATCH",
+    # Niyet kapısı (ADR-0037): kaynak kullanıcının mesajından gelmedi ya da yazma isteği yok.
+    # Araç çıktısındaki bir talimat modeli yönlendirmiş olabilir; kullanıcıya sorulur.
+    "INTENT_REQUIRED",
     # veri katmanı — sorgu çalıştı, sonuç ne söylüyor
     "OUT_OF_COVERAGE",
     "EMPTY_RESULT",
@@ -46,6 +59,10 @@ ErrorCode = Literal[
     "DUPLICATE_CALL",
     "TOOL_FAILED",
     "SQL_FAILED",
+    # erişim katmanı — kaynağa ulaşılabildi mi (ADR-0028)
+    "NEEDS_CREDENTIAL",
+    "ACCESS_BLOCKED",
+    "SOURCE_NOT_FOUND",
 ]
 
 #: Tekrar denemenin sonucu değiştirmeyeceği hatalar. Bunlar modele "düzelt ve
@@ -54,7 +71,16 @@ ErrorCode = Literal[
 NOT_RETRYABLE: frozenset[str] = frozenset({
     "OUT_OF_COVERAGE",   # veri yok; kaç kez sorulursa sorulsun yok
     "UNSAFE_SQL",        # politika; farklı yazımı denemek sınırı aşma girişimi olur
-    "UNKNOWN_TOOL",      # var olmayan araç
+    # UNKNOWN_TOOL burada DEĞİL: on üç araçla model ara sıra ad uyduruyor ("workspace");
+    # aday listesiyle bir sonraki tur düzeltiyor. Ölçüldü: tekrar denenmez sayılınca
+    # araçsız son tura düşüp veri çekmeden cevap yazdı (G11a, gerçek DB).
+    # Aynı kaynağı aynı biçimde tekrar istemek sonucu değiştirmez; alternatif
+    # kaynak ayrı bir çağrıdır ve kararı harness verir (access_policy.decide).
+    "NEEDS_CREDENTIAL",
+    "ACCESS_BLOCKED",
+    "SOURCE_NOT_FOUND",
+    "GOLD_REFUSED",      # kural katalogda; aynı çağrıyı tekrarlamak kuralı değiştirmez
+    "INTENT_REQUIRED",   # kullanıcı söylemedikçe kapı açılmaz; model tekrarlayarak açamaz
 })
 
 
@@ -66,7 +92,7 @@ class ToolError:
     message: str
     hint: str | None = None
     candidates: list[str] = field(default_factory=list)
-    layer: Literal["schema", "reference", "policy", "data", "workspace", "harness"] = "data"
+    layer: Literal["schema", "reference", "policy", "data", "workspace", "harness", "access"] = "data"
     retryable: bool | None = None  # None → NOT_RETRYABLE tablosuna bak
 
     @property

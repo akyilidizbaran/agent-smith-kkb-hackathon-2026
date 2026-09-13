@@ -69,10 +69,23 @@ class Tool(ABC):
     name: str
     description: str
     Params: type[BaseModel]
+    #: İzde görünen rol. Katalog araçları `retrieve`, iş yapanlar `execute`.
+    #: Planner LLM'in kendisidir, Validator `core/validator.py`, Narrator son tur —
+    #: dördü de rol olarak tutuluyor, ayrı agent olarak değil.
+    role: str = "execute"
 
     @abstractmethod
     def run(self, params: BaseModel) -> ToolResult:
-        """Aracın işini yapar. Doğrulanmış parametrelerle çağrılır."""
+        """Aracın işini yapar. DOĞRULANMIŞ parametrelerle çağrılır: referans ve politika
+        kontrolleri buraya gelmeden `BoundaryValidator`'da yapılmıştır."""
+
+    def validate_refs(self, params: BaseModel) -> ToolError | None:
+        """Referans katmanı: seri/kolon/tablo gerçekten var mı? Varsayılan: kontrol yok."""
+        return None
+
+    def check_policy(self, params: BaseModel) -> ToolError | None:
+        """Politika katmanı: referansı sağlam çağrı yine de çalışmamalı mı? Varsayılan: yok."""
+        return None
 
     # ---- harness tarafından kullanılır ----
     def openai_schema(self, profile: DomainProfile | None = None) -> dict[str, Any]:
@@ -114,28 +127,12 @@ class Tool(ABC):
         return node
 
     def validate_and_run(self, raw_args: dict[str, Any]) -> ToolResult:
-        """Ham LLM argümanlarını doğrular, sonra çalıştırır.
+        """Ham LLM argümanlarını sınır doğrulayıcıdan geçirip çalıştırır.
 
-        Küçük modeller sık sık eksik/yanlış tipte argüman üretir. Burada
-        yakalanan hata modele okunabilir biçimde geri döner ve model
-        çağrıyı düzeltir — harness'ın 'onarım' yeteneği budur.
+        Küçük modeller sık sık eksik/yanlış tipte argüman üretir; yakalanan hata
+        modele okunabilir biçimde döner ve model çağrıyı düzeltir — harness'ın
+        'onarım' yeteneği budur. Katmanların sırası `core/validator.py`'da.
         """
-        try:
-            params = self.Params(**raw_args)
-        except Exception as exc:
-            props = list(self.Params.model_json_schema().get("properties", {}))
-            return ToolResult.fail(
-                "INVALID_ARGS",
-                f"'{self.name}' aracının parametreleri geçersiz: {exc}",
-                hint=f"Beklenen alanları doldur: {', '.join(props)}",
-                candidates=props,
-                layer="schema",
-            )
-        try:
-            return self.run(params)
-        except Exception as exc:
-            return ToolResult.fail(
-                "TOOL_FAILED",
-                f"'{self.name}' çalışırken hata: {type(exc).__name__}: {exc}",
-                layer="harness",
-            )
+        from .validator import DEFAULT_VALIDATOR  # döngüsel import: validator bu modülü tanır
+
+        return DEFAULT_VALIDATOR.validate_and_run(self, raw_args)

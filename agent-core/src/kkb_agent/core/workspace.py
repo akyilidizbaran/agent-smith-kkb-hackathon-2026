@@ -46,6 +46,8 @@ class AnalysisWorkspace:
         self._snapshots: list[pd.DataFrame] = []
         self._column_sources: dict[str, QueryProvenance] = {}
         self.title: str = ""
+        self._peeks: list[tuple[str, pd.DataFrame]] = []      # bakış sorguları (tabloyu değiştirmeyen)
+        self.web_pages: dict[str, dict[str, object]] = {}     # url → sha256/fetched_at/status; turlar arası kalır
 
     # ---------- durum ----------
     @property
@@ -62,6 +64,27 @@ class AnalysisWorkspace:
 
     def columns(self) -> list[str]:
         return list(self._table.columns) if self._table is not None else []
+
+    def note_peek(self, sql: str, frame: pd.DataFrame) -> None:
+        """Bakış sorgusunun sonucu: tablo değişmez ama cevaptaki sayı buradan gelmiş olabilir."""
+        self._peeks.append((sql, frame.copy()))
+        if len(self._peeks) > 10:
+            self._peeks.pop(0)
+
+    def peeks(self) -> list[tuple[str, pd.DataFrame]]:
+        return list(reversed(self._peeks))
+
+    def remember_web(self, artifact: dict[str, object]) -> None:
+        """web_url'in ziyaret ettiği sayfalar (sha256 + zaman) sonraki turların kanıt paneli için."""
+        for v in artifact.get("visited", []) or []:
+            url = v.get("url") if isinstance(v, dict) else None
+            if url:
+                self.web_pages[str(url)] = dict(v)
+
+    def previous_tables(self) -> list[pd.DataFrame]:
+        """Geçmişteki tablo sürümleri, en yeniden en eskiye (kanıt paneli için: cevaptaki sayı
+        bakış modunda ya da tablo değişmeden önce üretilmiş olabilir)."""
+        return list(reversed(self._snapshots))
 
     # ---------- işlemler ----------
     def set_table(

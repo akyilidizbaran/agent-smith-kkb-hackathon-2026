@@ -156,3 +156,164 @@ def test_basarili_sorgu_analiz_tablosunu_kurar() -> None:
          "as_active_table": True}
     )
     assert ws.has_table and len(ws.table) == 1
+
+
+def _ay_araci(question: str) -> LakehouseQueryTool:
+    """Kapsamı 2021-01 → 2026-06 olan tek serilik bir lakehouse üstünde sorgu aracı."""
+
+    class _Registry:
+        active_question = question
+
+    stub = StubLakehouse(pd.DataFrame({"donem": [date(2026, 1, 31)], "deger": [1.0]}))
+    return LakehouseQueryTool(stub, AnalysisWorkspace(), registry=_Registry())
+
+
+def test_sorudaki_ay_kapsam_disiysa_sorgu_hic_calismaz() -> None:
+    """Yıl kapsamda, ay değil: eski kontrol bu boşluğu görmüyordu.
+
+    Veri 2026-06'da bitiyor. "2026 Ağustos kaç?" sorusunda 2026 kapsam içinde
+    göründüğü için hiçbir şey tetiklenmiyor, model o yılın mevcut aylarını çekip
+    tablo kuruyordu. Cevap metni doğru çıksa bile ekranda sayı dolu bir tablo
+    kalıyor. Ölçüldü (L9-02): iki şemada da 0/3.
+    """
+    tool = _ay_araci("2026 Ağustos konut kredisi bakiyesi kaç?")
+
+    # Kapsam kontrolü artık sınır doğrulayıcıda (check_policy); run doğrulanmış
+    # parametre varsayar. Test, modelin gördüğü yolu izler: validate_and_run.
+    result = tool.validate_and_run(
+        {"sql": "SELECT donem, toplam FROM t WHERE EXTRACT(year FROM donem)=2026",
+         "purpose": "2026 aylık"}
+    )
+
+    assert not result.ok
+    assert result.error is not None and result.error.error_code == "OUT_OF_COVERAGE"
+    assert not result.error.is_retryable, "tekrar denemek bu dönemi var etmez"
+    assert not tool.workspace.has_table, "kapsam dışı soruya tablo kurulmamalı"
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "2026 Mart konut kredisi bakiyesi kaç?",   # kapsam içinde
+        "2025 yılında aylık göster",               # ay yok, yalnız yıl
+        "Konut kredisi bakiyesi nedir?",           # dönem yok
+    ],
+)
+def test_kapsamdaki_ay_ve_donemsiz_sorular_engellenmez(question: str) -> None:
+    """Kontrol yalnız hiçbir serinin veremeyeceği dönemde tetiklenmeli."""
+    tool = _ay_araci(question)
+
+    result = tool.validate_and_run(
+        {"sql": "SELECT donem, toplam FROM t WHERE EXTRACT(year FROM donem)=2026", "purpose": "x"}
+    )
+
+    assert result.ok or (result.error and result.error.error_code != "OUT_OF_COVERAGE")
+
+
+
+def test_arama_bos_donunce_yuklenmemis_seri_soylenir_ve_dongu_kirilir() -> None:
+    """Ölçüldü: gerçek DB'de olmayan seri için model on kez aradı. Yüklenmemiş seri varsa
+    ilk boş aramada, yoksa ikinci boş aramada tekrar denenmez hata döner."""
+    from kkb_agent.tools.lakehouse import LakehouseSearchTool
+
+    class Lake:
+        def __init__(self, pending):
+            self.pending = pending
+        def search_datasets(self, query, limit=5):
+            return []
+        def search_uningested(self, query, limit=5):
+            return self.pending
+
+    tool = LakehouseSearchTool(Lake([("evds:TP.X", "Taşıt Kredisi")]))
+    r = tool.validate_and_run({"query": "taşıt kredisi"})
+    assert not r.ok and r.error.error_code == "DATASET_NOT_FOUND" and not r.error.is_retryable
+    assert "HENÜZ YÜKLENMEMİŞ" in r.content and "evds:TP.X" in r.content and r.error.candidates == ["evds:TP.X"]
+
+    tool2 = LakehouseSearchTool(Lake([]))
+    first = tool2.validate_and_run({"query": "enflasyon"})
+    assert first.ok and "EN FAZLA bir kez daha" in first.content
+    second = tool2.validate_and_run({"query": "tüfe"})
+    assert not second.ok and second.error.error_code == "DATASET_NOT_FOUND" and not second.error.is_retryable
+
+
+def test_kismi_eslesen_aramalar_ikinci_kezde_durur() -> None:
+    """G12 ölçümü: her isabet 'taşıt' sözcüğünü karşılamıyor ve taşıt yüklenmemiş serilerde varsa
+    ikinci arama tekrar denenmez hata olur; model konutu taşıt diye kullanmaz."""
+    from datetime import date as _d
+    from kkb_agent.tools.lakehouse import LakehouseSearchTool
+
+    spec = SPEC.model_copy(update={"dataset_id": "bddk_monthly:konut", "name": "Konut Kredisi"})
+
+    class Lake:
+        last_search_terms = {"bddk_monthly:konut": (["kredisi"], ["tasit"])}
+        def search_datasets(self, query, limit=5):
+            return [spec]
+        def search_uningested(self, query, limit=5):
+            return [("bddk_monthly:tasit", "Tüketici Kredileri - Taşıt")]
+        def series_sql(self, *a, **k):
+            return "SELECT donem, deger FROM test_tablo"
+
+    tool = LakehouseSearchTool(Lake())
+    first = tool.validate_and_run({"query": "taşıt kredisi"})
+    assert first.ok and "EŞLEŞMEYEN: tasit" in first.content and "HENÜZ YÜKLENMEMİŞ" in first.content
+    second = tool.validate_and_run({"query": "taşıt kredisi bakiyesi"})
+    assert not second.ok and second.error.error_code == "DATASET_NOT_FOUND" and not second.error.is_retryable
+    assert second.error.candidates == ["bddk_monthly:tasit"]
+
+
+
+def test_gold_varken_donem_toplamasi_sqlde_reddedilir() -> None:
+    """ADR-0039: ay/çeyrek kutusuna AVG/SUM alan sorgu Gold'a yönlendirilir; Gold yoksa serbest."""
+    from kkb_agent.tools.lakehouse import LakehouseQueryTool
+
+    class Lake:
+        def get_dataset(self, *a, **k):
+            raise LookupError
+
+    sql = "SELECT strftime(observation_date, '%Y-%m') AS ay, AVG(value) FROM silver.fact_observation WHERE observation_date >= '1985-01-01' GROUP BY 1"
+    with_gold = LakehouseQueryTool(Lake(), AnalysisWorkspace(), None, gold_available=True)
+    r = with_gold.validate_and_run({"sql": sql, "purpose": "aylık ortalama"})
+    assert not r.ok and r.error.error_code == "GOLD_REQUIRED" and r.error.is_retryable and "gold_align" in r.content
+
+    plain = "SELECT observation_date, value FROM silver.fact_observation WHERE observation_date >= '1985-01-01'"
+    assert with_gold.check_policy(with_gold.Params(sql=plain, purpose="x")) is None
+    without = LakehouseQueryTool(Lake(), AnalysisWorkspace(), None, gold_available=False)
+    assert without.check_policy(without.Params(sql=sql, purpose="x")) is None
+
+
+def test_aylik_soruya_ceyreklik_tablo_okunmaz_incesi_serbest() -> None:
+    """Ölçüldü (G16): model 'aylık ... büyüme hızı' sorusuna hazır çeyreklik Gold tablosunu okudu."""
+    from datetime import date
+    from types import SimpleNamespace
+    from kkb_agent.contracts.catalog import ColumnRole, ColumnSpec, Coverage, DatasetSpec, Frequency
+
+    def spec(ds_id: str, freq: Frequency) -> DatasetSpec:
+        return DatasetSpec(dataset_id=ds_id, name=ds_id, description="d", source="s", frequency=freq,
+                           time_column="observation_date", grain=["observation_date"],
+                           columns=[ColumnSpec(name="observation_date", role=ColumnRole.TIME, dtype="DATE", description="d"),
+                                    ColumnSpec(name="value", role=ColumnRole.MEASURE, dtype="DOUBLE", description="v")],
+                           coverage=Coverage(start=date(2021, 1, 31), end=date(2026, 6, 30)))
+
+    aylik, ceyreklik, haftalik = spec("bddk_monthly:1534_Toplam", Frequency.MONTHLY), spec("gold.konut_kredisi_ceyreklik", Frequency.QUARTERLY), spec("bddk_weekly:5690_3", Frequency.WEEKLY)
+
+    class Lake(StubLakehouse):
+        def __init__(self): super().__init__(pd.DataFrame())
+        def list_datasets(self): return [aylik, ceyreklik, haftalik]
+        def search_datasets(self, q): return [ceyreklik, aylik, haftalik]
+
+    def tool(question: str) -> LakehouseQueryTool:
+        return LakehouseQueryTool(Lake(), AnalysisWorkspace(), SimpleNamespace(active_question=question, user_text=question, sanctioned_locators=set()))
+
+    t = tool("Aylık konut kredisi bakiyesinin büyüme hızı 2021'den bu yana ne zaman rejim değiştirdi?")
+    err = t.check_policy(t.Params(sql="SELECT period_end, value FROM gold.konut_kredisi_ceyreklik WHERE EXTRACT(year FROM period_end) >= 2021", purpose="x"))
+    assert err is not None and err.error_code == "FREQUENCY_MISMATCH" and err.is_retryable
+    assert "bddk_monthly:1534_Toplam" in err.candidates and "çeyreklik" in err.message
+    # aylık seri okunuyorsa sorun yok
+    assert t.check_policy(t.Params(sql="SELECT observation_date, value FROM silver.fact_observation WHERE series_id = 'bddk_monthly:1534_Toplam' AND observation_date >= '2021-01-01'", purpose="x")) is None
+    # inceden kabaya serbest: aylık soruya haftalık seri (Gold'un işi), çeyreklik soruya aylık seri
+    assert t.check_policy(t.Params(sql="SELECT * FROM silver.fact_observation WHERE series_id = 'bddk_weekly:5690_3' AND observation_date >= '2021-01-01'", purpose="x")) is None
+    t2 = tool("Çeyreklik konut kredisi bakiyesi 2021'den bu yana")
+    assert t2.check_policy(t2.Params(sql="SELECT * FROM silver.fact_observation WHERE series_id = 'bddk_monthly:1534_Toplam' AND observation_date >= '2021-01-01'", purpose="x")) is None
+    # iki frekans sözcüğü: guard susar
+    t3 = tool("Haftalık faizi aylık göster, 2021'den bu yana")
+    assert t3.check_policy(t3.Params(sql="SELECT * FROM gold.konut_kredisi_ceyreklik WHERE period_end >= '2021-01-01'", purpose="x")) is None

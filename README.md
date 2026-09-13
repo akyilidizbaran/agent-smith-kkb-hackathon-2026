@@ -26,7 +26,7 @@ Beklenen, yalnızca analiz yapan bir sistem değil; **uçtan uca akıl yürüten
 
 ```
    Açık veri kaynakları                    Doğal dilde soru
-   BDDK · EVDS · URL · dosya                      │
+   BDDK · EVDS · URL · dosya · PDF/görsel         │
             │                                     ▼
             ▼                          ┌────────────────────────┐
    ┌──────────────────┐                │   Agentic Engine       │
@@ -36,9 +36,9 @@ Beklenen, yalnızca analiz yapan bir sistem değil; **uçtan uca akıl yürüten
    │  Bronze  parquet │                │ Araçlar:               │
    │  Silver  canonic │◀──────────────▶│  lakehouse             │
    │  Gold    analiz  │   Contract     │  web search / URL      │
-   │  Meta    catalog │                │  anomali               │
-   └──────────────────┘                │  nedensellik           │
-                                       │  değişim tespiti       │
+   │  Meta    catalog │                │  anomali · kırılma     │
+   └──────────────────┘                │  öncül-ardıl (Granger) │
+                                       │  grafik · ingest       │
                                        └───────────┬────────────┘
                                                    ▼
                                      Tablo · grafik · rapor + KAYNAK
@@ -96,6 +96,7 @@ uv sync --extra dev              # uv.lock'taki sabit sürümlerle kurar
 python scripts/dev_seed.py    # gerçek BDDK verisiyle geliştirme lakehouse'u
 
 uv run python -m kkb_agent.cli --trace "2025'te konut kredisi nasıl değişti?"
+uv run python -m kkb_agent.serve          # arayüz: http://127.0.0.1:8765 (ADR-0044)
 uv run python scripts/run_golden.py
 ```
 

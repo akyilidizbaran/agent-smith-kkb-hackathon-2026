@@ -18,6 +18,10 @@ karşılaştırılmalıdır — "iyileştirdim" iddiasının tek objektif kanıt
 
 from __future__ import annotations
 
+import os
+
+import re
+
 import json
 import sys
 import time
@@ -29,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tests.golden.cases import CASES, GoldenCase  # noqa: E402
 
+os.environ.setdefault("LLM_NARRATE_TEMPERATURE", "0")  # golden deterministik: anlatı da 0 (ADR-0046)
 from kkb_agent.cli import build_agent  # noqa: E402
 
 
@@ -41,7 +46,11 @@ class StabilityReport:
     passed: int
     durations: list[float] = field(default_factory=list)
     step_counts: list[int] = field(default_factory=list)
+    prompt_tokens: list[int] = field(default_factory=list)
+    error_codes: dict[str, int] = field(default_factory=dict)   # hata sınıfı → toplam (tüm tekrarlar)
+    roles: dict[str, int] = field(default_factory=dict)         # rol → toplam adım
     failure_reasons: dict[str, int] = field(default_factory=dict)
+    failure_samples: list[str] = field(default_factory=list)    # düşen koşuların TAM ilk hatası (teşhis)
     tool_paths: set[str] = field(default_factory=set)
 
     @property
@@ -67,6 +76,12 @@ class CaseOutcome:
     tools_used: list[str] = field(default_factory=list)
     tool_errors: int = 0
     error_codes: dict[str, int] = field(default_factory=dict)
+    grounding: str = ""
+    roles: dict[str, int] = field(default_factory=dict)
+    evidence: str = "—"   # kanıt zinciri: tam | EKSİK: … | — (tablo yok / ölçülmedi)
+    prompt_tokens: int = 0   # tüm LLM çağrılarının prompt token toplamı (ön-yüklemenin ölçüsü)
+    llm_calls: int = 0
+    context: str = ""        # ön-yükleme özeti
     failures: list[str] = field(default_factory=list)
     answer_preview: str = ""
 
@@ -77,9 +92,13 @@ def run_case(case: GoldenCase) -> CaseOutcome:
 
     answer = agent.ask(case.question)
     steps = list(answer.steps)
+    usage = dict(answer.usage)
+    context = answer.context
     if case.follow_up:
         answer = agent.ask(case.follow_up)
         steps += answer.steps
+        for key, value in answer.usage.items():
+            usage[key] = usage.get(key, 0) + value
 
     duration = time.perf_counter() - started
     tools = [s.tool_name for s in steps if s.tool_name]
@@ -95,6 +114,8 @@ def run_case(case: GoldenCase) -> CaseOutcome:
         # Halüsinasyon testi: veri yoksa uydurulmuş bir tablo da olmamalı.
         if table is not None and not table.empty:
             failures.append("kapsam dışı soruya rağmen tablo üretildi")
+    elif case.table_optional and (table is None or table.empty):
+        pass  # tablo yüklenmemesi meşru; cevap denetimleri aşağıda
     else:
         if table is None or table.empty:
             failures.append("analiz tablosu üretilmedi")
@@ -109,6 +130,12 @@ def run_case(case: GoldenCase) -> CaseOutcome:
     for needed in case.must_use_tools:
         if needed not in tools:
             failures.append(f"'{needed}' aracı hiç kullanılmadı (kullanılanlar: {', '.join(tools)})")
+    for label, check in case.tool_path_checks:
+        try:
+            if not check(steps):
+                failures.append(f"araç yolu kontrolü başarısız: {label} (kullanılanlar: {', '.join(tools)})")
+        except Exception as exc:
+            failures.append(f"araç yolu kontrolü hata verdi ({label}): {exc}")
 
     low = answer.text.lower()
     for needle in case.answer_must_contain:
@@ -117,10 +144,30 @@ def run_case(case: GoldenCase) -> CaseOutcome:
     for needle in case.answer_must_not_contain:
         if needle.lower() in low:
             failures.append(f"cevapta olmaması gereken '{needle}' geçiyor")
+    for pattern in getattr(case, "answer_must_not_match", []):
+        if re.search(pattern, answer.text, re.I):
+            failures.append(f"cevapta yasak ifade var (düzenli ifade): {pattern[:40]}")
+    if case.answer_must_contain_any and not any(n.lower() in low for n in case.answer_must_contain_any):
+        failures.append(f"cevapta şunlardan hiçbiri geçmiyor: {', '.join(case.answer_must_contain_any)}")
 
     tool_steps = len([s for s in steps if s.tool_name])
     if tool_steps > case.max_steps_used:
         failures.append(f"çok fazla adım: {tool_steps} > {case.max_steps_used}")
+
+    # Kanıt zinciri (ADR-0033): tablo varsa her sayı bir hücrede, her kolonun SQL'i var ve
+    # adaptör artifact izi sunuyorsa her gözlem locator + fetched_at taşıyor. Seed
+    # adaptöründe artifact yoktur; zincir SQL'de biter ve bu bir eksik sayılmaz.
+    evidence = answer.evidence
+    evidence_state = "—"
+    if evidence is not None and not case.expect_no_table and table is not None and not table.empty:
+        if evidence.complete:
+            evidence_state = "tam"
+        elif not evidence.supports_artifacts and all("seed" in g for g in evidence.gaps):
+            evidence_state = "SQL'de biter (seed)"
+        else:
+            evidence_state = "EKSİK: " + "; ".join(evidence.gaps)[:160]
+        if not evidence.complete and evidence.supports_artifacts:
+            failures.append(f"kanıt zinciri eksik: {'; '.join(evidence.gaps)[:200]}")
 
     return CaseOutcome(
         id=case.id,
@@ -130,8 +177,14 @@ def run_case(case: GoldenCase) -> CaseOutcome:
         tools_used=tools,
         tool_errors=errors,
         error_codes=codes,
+        grounding=answer.grounding,
+        roles={r: sum(1 for s in steps if s.role == r) for r in ("retrieve", "execute", "validate", "narrate")},
+        evidence=evidence_state,
+        prompt_tokens=usage.get("prompt", 0),
+        llm_calls=usage.get("calls", 0),
+        context=context,
         failures=failures,
-        answer_preview=answer.text[:200].replace("\n", " "),
+        answer_preview=answer.text[:600].replace("\n", " "),
     )
 
 
@@ -151,6 +204,11 @@ def run_stability(cases: list[GoldenCase], repeat: int) -> list[StabilityReport]
                 )
             rep.durations.append(o.duration_s)
             rep.step_counts.append(o.steps)
+            rep.prompt_tokens.append(o.prompt_tokens)
+            for code, n in o.error_codes.items():
+                rep.error_codes[code] = rep.error_codes.get(code, 0) + n
+            for role, n in o.roles.items():
+                rep.roles[role] = rep.roles.get(role, 0) + n
             rep.tool_paths.add(" → ".join(o.tools_used) or "(araç yok)")
             if o.passed:
                 rep.passed += 1
@@ -158,6 +216,11 @@ def run_stability(cases: list[GoldenCase], repeat: int) -> list[StabilityReport]
                 # Sayısal ayrıntıyı kırp ki aynı hata tek satırda toplansın
                 key = f.split(":")[0].strip()
                 rep.failure_reasons[key] = rep.failure_reasons.get(key, 0) + 1
+            if o.failures:
+                # Cevabın başı da rapora girer: "yasak ifade var" gibi bulguların hangi cümleden
+                # geldiği görülsün (ölçüldü, G17: sebep anlaşılmadan iki koşu harcandı).
+                rep.failure_samples.append(f"{i}/{repeat}: " + " | ".join(o.failures)[:300]
+                                           + f"\n         cevap: {o.answer_preview[:400]}")
             print(f"   {i}/{repeat} {'✓' if o.passed else '✗'} {o.duration_s:.0f}s {o.steps} adım")
         reports.append(rep)
     return reports
@@ -172,9 +235,14 @@ def print_stability(reports: list[StabilityReport]) -> None:
         print(
             f"\n{r.id:26} {r.passed}/{r.runs} ({r.pass_rate:.0%})  {r.verdict}"
             f"  | ort. {avg:.0f}s | adımlar: {r.step_counts}"
+            + (f" | prompt token: {sum(r.prompt_tokens) // max(1, len(r.prompt_tokens))}" if any(r.prompt_tokens) else "")
+            + (f" | hata: {', '.join(f'{k}×{v}' for k, v in sorted(r.error_codes.items()))}" if r.error_codes else "")
+            + (" | roller: " + ", ".join(f"{k}×{v}" for k, v in r.roles.items() if v) if r.roles else "")
         )
         for reason, n in sorted(r.failure_reasons.items(), key=lambda x: -x[1]):
             print(f"     ✗ {n}x {reason}")
+        for sample in r.failure_samples[:3]:
+            print(f"       - {sample}")
         if len(r.tool_paths) > 1:
             print(f"     ⚠ {len(r.tool_paths)} FARKLI araç yolu izlendi:")
             for path in sorted(r.tool_paths):
@@ -262,6 +330,33 @@ def main() -> None:
     if all_codes:
         print("HATA SINIFLARI: " + ", ".join(
             f"{k}×{v}" for k, v in sorted(all_codes.items(), key=lambda x: -x[1])))
+    roles: dict[str, int] = {}
+    for o in outcomes:
+        for k, v in o.roles.items():
+            roles[k] = roles.get(k, 0) + v
+    if roles:
+        print("ROLLER: " + ", ".join(f"{k}×{v}" for k, v in roles.items() if v))
+    if outcomes:
+        print(f"TOKEN: vaka başına ort. prompt {sum(o.prompt_tokens for o in outcomes) / len(outcomes):.0f}, "
+              f"LLM çağrısı {sum(o.llm_calls for o in outcomes) / len(outcomes):.1f}"
+              + (f" | {outcomes[0].context}" if outcomes[0].context else ""))
+    chained = [o for o in outcomes if o.evidence != "—"]
+    if chained:
+        full = sum(1 for o in chained if o.evidence == "tam")
+        seed = sum(1 for o in chained if o.evidence.startswith("SQL'de biter"))
+        broken = [o for o in chained if o.evidence.startswith("EKSİK")]
+        line = f"KANIT ZİNCİRİ: {full}/{len(chained)} tam"
+        if seed:
+            line += f", {seed} SQL'de biter (seed adaptörü, artifact yok)"
+        if broken:
+            line += " | " + "; ".join(f"{o.id}: {o.evidence}" for o in broken)
+        print(line)
+    measured = [o for o in outcomes if o.grounding]
+    if measured:
+        clean = sum(1 for o in measured if o.grounding == "OK")
+        print(f"ANLATI DOĞRULAMA: {clean}/{len(measured)} temiz" + (
+            "" if clean == len(measured)
+            else " | " + "; ".join(f"{o.id}: {o.grounding}" for o in measured if o.grounding != "OK")))
     if json_out:
         json_out.write_text(
             json.dumps([asdict(o) for o in outcomes], ensure_ascii=False, indent=2), encoding="utf-8"

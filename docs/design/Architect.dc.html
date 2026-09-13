@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; color: #1f1d1a; background: #f6f4ef; }
+    a { color: #0f6b63; } a:hover { color: #0a4f49; }
+  </style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: #f6f4ef; overflow: hidden;">
+  <div style="height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid #e3ded4; background: #fbfaf7;">
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <div style="font-family: 'IBM Plex Serif', Georgia, serif; font-weight: 600; font-size: 18px; letter-spacing: -0.01em;">AgentSmithler</div>
+      <div style="font-size: 12px; color: #6b665d;">Architect akışı · taslak → onay → aktif</div>
+    </div>
+    <div style="font-size: 12px; color: #6b665d;">Yazma ayrı süreçte, yalnız taslak · onay kullanıcıdan</div>
+  </div>
+
+  <div style="flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 392px; min-height: 0;">
+    <div style="padding: 28px 40px; display: flex; flex-direction: column; gap: 18px; overflow: hidden;">
+
+      <div style="align-self: flex-end; max-width: 640px; padding: 12px 16px; background: #1f1d1a; color: #f6f4ef; border-radius: 12px 12px 2px 12px; font-size: 15px; line-height: 1.45;">
+        Şu dosyayı taslak seri olarak ekle: raw.githubusercontent.com/…/daily-min-temperatures.csv — anahtar melbourne_sicaklik
+      </div>
+
+      <div style="max-width: 760px; border: 1px solid #e3c98f; background: #fff8e8; border-radius: 8px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="padding: 3px 10px; border-radius: 999px; background: #f2dfae; color: #6b4d00; font-size: 12px; font-weight: 500;">EKLENMEDİ · önce sorulmalı</span>
+          <span style="font-size: 12px; color: #6b665d;">3.650 satır · tarih "Date" · değer "Temp" · günlük</span>
+        </div>
+        <div style="font-size: 14px; line-height: 1.5;">Birim veriden çıkmıyor, ölçüm tipi de. İkisini sen söylemeden yazmıyorum: <strong>birim nedir</strong> (°C mi, °F mi) ve <strong>ölçüm tipi</strong> (seviye/index mi, akım mı)? Aylık kural olarak ortalama mı, son değer mi?</div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: 12.5px;">
+          <div style="padding: 8px 10px; background: #fff; border: 1px solid #efe2c0; border-radius: 6px;"><span style="color: #6b665d;">observation_date_column</span> = Date <span style="color: #0a4f49;">[kesin]</span> ISO tarih, 3.650/3.650</div>
+          <div style="padding: 8px 10px; background: #fff; border: 1px solid #efe2c0; border-radius: 6px;"><span style="color: #6b665d;">value_column</span> = Temp <span style="color: #0a4f49;">[kesin]</span> tek sayısal kolon</div>
+          <div style="padding: 8px 10px; background: #fff; border: 1px solid #efe2c0; border-radius: 6px;"><span style="color: #6b665d;">frequency</span> = daily <span style="color: #0a4f49;">[kesin]</span> ardışık günler</div>
+          <div style="padding: 8px 10px; background: #fff; border: 1px solid #efe2c0; border-radius: 6px;"><span style="color: #6b665d;">unit</span> = ? <span style="color: #a35a00;">[yok]</span> kullanıcı beyanı gerekir</div>
+        </div>
+      </div>
+
+      <div style="align-self: flex-end; max-width: 640px; padding: 12px 16px; background: #1f1d1a; color: #f6f4ef; border-radius: 12px 12px 2px 12px; font-size: 15px; line-height: 1.45;">
+        Birim °C, ölçüm tipi index, aylık kural ortalama. Ekle. Sonra onaylıyorum, kataloğa al.
+      </div>
+
+      <div style="max-width: 760px; border: 1px solid #c7e0dc; background: #fff; border-radius: 8px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="padding: 3px 10px; border-radius: 999px; background: #e9f3f1; color: #0a4f49; font-size: 12px; font-weight: 500;">ONAYLANDI · adhoc:melbourne_sicaklik</span>
+          <span style="font-size: 12px; color: #6b665d;">taslak → aktif · Silver'a 3.650 gözlem · provenance korundu</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;">
+          <div style="padding: 10px 12px; border: 1px solid #e3ded4; border-radius: 6px;">
+            <div style="font-size: 11px; color: #8a8478; text-transform: uppercase; letter-spacing: 0.06em;">RAW</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; margin-top: 4px;">8b9de63ed678… · 67.921 bayt</div>
+          </div>
+          <div style="padding: 10px 12px; border: 1px solid #e3ded4; border-radius: 6px;">
+            <div style="font-size: 11px; color: #8a8478; text-transform: uppercase; letter-spacing: 0.06em;">Bronze</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; margin-top: 4px;">parquet · run c2a91e05 · success</div>
+          </div>
+          <div style="padding: 10px 12px; border: 1px solid #e3ded4; border-radius: 6px;">
+            <div style="font-size: 11px; color: #8a8478; text-transform: uppercase; letter-spacing: 0.06em;">Silver</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; margin-top: 4px;">3.650 satır · 1981-01-01 → 1990-12-31</div>
+          </div>
+        </div>
+        <div style="font-size: 13px; line-height: 1.5; color: #4a463f;">Semantik <strong>derived</strong> kalır: onay doğrulama değildir. Gold hesapları için "doğrulanmamış olsa da kullan" demen gerekir; kullanıcı beyanı (°C, index, avg) kanıt satırı olarak kaydedildi.</div>
+      </div>
+    </div>
+
+    <div style="border-left: 1px solid #e3ded4; background: #fbfaf7; padding: 18px 20px; display: flex; flex-direction: column; gap: 16px;">
+      <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #8a8478;">Kapılar</div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: #fff; border: 1px solid #e3ded4; border-radius: 6px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0f6b63" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 2px;"><path d="M20 6 9 17l-5-5"></path></svg>
+          <div style="font-size: 12.5px; line-height: 1.45;"><strong>Niyet</strong> · adres kullanıcının mesajında, "ekle" sözcüğü var</div>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: #fff; border: 1px solid #e3ded4; border-radius: 6px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0f6b63" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 2px;"><path d="M20 6 9 17l-5-5"></path></svg>
+          <div style="font-size: 12.5px; line-height: 1.45;"><strong>Beyan</strong> · birim ve ölçüm tipi kullanıcı metninde geçiyor; uydurulan alan yok sayılır</div>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: #fff; border: 1px solid #e3ded4; border-radius: 6px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0f6b63" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 2px;"><path d="M20 6 9 17l-5-5"></path></svg>
+          <div style="font-size: 12.5px; line-height: 1.45;"><strong>Onay</strong> · "onaylıyorum, kataloğa al" ve seri anahtarı mesajda</div>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: #fff; border: 1px solid #e3ded4; border-radius: 6px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a35a00" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 2px;"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5"></path><path d="M12 16h.01"></path></svg>
+          <div style="font-size: 12.5px; line-height: 1.45;"><strong>Gold rızası</strong> · bekliyor: doğrulanmamış seri için "doğrulanmamış olsa da kullan"</div>
+        </div>
+      </div>
+      <div style="margin-top: auto; font-size: 12px; color: #6b665d; line-height: 1.5;">Yazma yolu: okuyucuyu kapat → veri ekibinin <span style="font-family: 'IBM Plex Mono', monospace;">ingest-file / promote-draft</span> komutu → yeniden aç. Agent lakehouse kodunu import etmez.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

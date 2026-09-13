@@ -1,0 +1,65 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "Analist · ana ekran"
+    },
+    {
+      "file": "Architect.dc.html",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "Architect · taslak → onay"
+    },
+    {
+      "file": "PdfView.dc.html",
+      "x": 0,
+      "y": 1040,
+      "w": 1440,
+      "h": 900,
+      "title": "PDF / OCR görünümü"
+    },
+    {
+      "file": "DirectionDense.dc.html",
+      "x": 1560,
+      "y": 1040,
+      "w": 720,
+      "h": 450,
+      "title": "Yön B · terminal yoğunluğu (taslak)"
+    },
+    {
+      "file": "DirectionReport.dc.html",
+      "x": 2400,
+      "y": 1040,
+      "w": 720,
+      "h": 450,
+      "title": "Yön C · rapor önce (taslak)"
+    },
+    {
+      "file": "EvidenceJourney.dc.html",
+      "x": 0,
+      "y": 2060,
+      "w": 720,
+      "h": 450,
+      "title": "Yön D · kanıt yolculuğu (taslak, canlı animasyon)",
+      "is_interactive": true
+    }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -170,
+      "w": 520,
+      "text": "Yön A (ana): editoryal, veri-önce. Üç sütun: sol veri havuzu + oturum, orta sohbet (tablo + grafik yan yana), sağ kanıt zinciri; altta araç izi.\nIBM Plex Sans / Serif / Mono · sıcak kağıt zemin · yeşil = kanıt/onay, kehribar = taslak/OCR uyarısı.\nSayılar gerçek: 13 Eylül demo veritabanı ve canlı OCR koşuları.\nB ve C düşük çözünürlüklü alternatifler; biri seçilirse Main ona göre yeniden kurulur."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

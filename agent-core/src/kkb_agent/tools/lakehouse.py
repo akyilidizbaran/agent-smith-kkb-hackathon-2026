@@ -15,8 +15,10 @@ import re
 
 from pydantic import BaseModel, Field
 
+from ..contracts.catalog import Frequency, ColumnRole
 from ..contracts.lakehouse import LakehouseClient, LakehouseError
 from ..domain import kisa_terim
+from ..core.errors import ToolError
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
 
@@ -29,6 +31,7 @@ class SearchParams(BaseModel):
 
 class LakehouseSearchTool(Tool):
     name = "lakehouse_search"
+    role = "retrieve"
     description = (
         "Veri havuzunda hangi tabloların bulunduğunu keşfeder. Bir soruyu cevaplamadan ÖNCE "
         "hangi verinin mevcut olduğunu öğrenmek için bunu kullan. Tablo adlarını ve ne "
@@ -36,21 +39,135 @@ class LakehouseSearchTool(Tool):
     )
     Params = SearchParams
 
+    #: Üst üste kaç boş arama sonrası "bu yoldan sonuç çıkmaz" denir. Ölçüldü: gerçek
+    #: DB'de olmayan bir seri için model on kez farklı sözcükle aradı ve bütçeyi yaktı.
+    EMPTY_LIMIT = 2
+
+    #: Üst üste kaç "aranan seri yüklenmemiş" sonucundan sonra durulur. Ölçüldü (G12, gerçek
+    #: DB): üç arama üç kez konut serisini "taşıt eşleşmedi" notuyla döndürdü, model sonra
+    #: SQL ile keşfe girişti: 10 LLM çağrısı, 125 bin token, cevap yine "yüklenmemiş".
+    PENDING_LIMIT = 2
+
     def __init__(self, lakehouse: LakehouseClient) -> None:
         self.lakehouse = lakehouse
+        self._empty_streak = 0
+        self._pending_streak = 0
 
     def run(self, params: SearchParams) -> ToolResult:
         specs = self.lakehouse.search_datasets(params.query)
         if not specs:
-            return ToolResult(content="Bu konuyla ilgili tablo bulunamadı.", ok=True)
+            self._empty_streak += 1
+            search_un = getattr(self.lakehouse, "search_uningested", None)
+            pending = list(search_un(params.query, 5)) if callable(search_un) else []
+            lines = ["Bu konuyla ilgili SORGULANABİLİR seri yok."]
+            if pending:
+                lines.append("Katalogda tanımlı ama bu veri havuzuna HENÜZ YÜKLENMEMİŞ seriler:")
+                lines += [f"  - {sid} — {name}" for sid, name in pending]
+                lines.append("YAPACAĞIN: bu seriler için sorgu yazma; kullanıcıya verinin katalogda "
+                             "tanımlı ama henüz çekilmemiş olduğunu söyle. Yeniden arama yapma.")
+            else:
+                lines.append("YAPACAĞIN: soruyu farklı sözcüklerle EN FAZLA bir kez daha ara; yine yoksa "
+                             "kullanıcıya bu verinin havuzda bulunmadığını söyle.")
+            if self._empty_streak >= self.EMPTY_LIMIT or pending:
+                self._empty_streak = 0
+                return ToolResult.fail(
+                    "DATASET_NOT_FOUND", "\n".join(lines), layer="reference", retryable=False,
+                    candidates=[sid for sid, _ in pending],
+                )
+            return ToolResult(content="\n".join(lines), ok=True)
+        self._empty_streak = 0
+        terms = getattr(self.lakehouse, "last_search_terms", {}) or {}
         lines = ["Bulunan tablolar:"]
         for s in specs:
             lines.append(
                 f"- {s.dataset_id}: {s.name}. {s.description[:180]} "
                 f"[frekans: {s.frequency.value}, kapsam: {s.coverage.start}→{s.coverage.end}]"
             )
+            matched, unmatched = terms.get(s.dataset_id, ([], []))
+            if unmatched:
+                # Ölçüldü: "taşıt kredisi" araması konut serisini "kredisi" ile buluyor; hangi
+                # sözcüğün eşleşMEdiği yazılmazsa model konutu taşıt diye kullanabilir.
+                lines.append(f"    eşleşen: {', '.join(matched) or '—'} | EŞLEŞMEYEN: {', '.join(unmatched)} "
+                             "— bu seri sorunun tamamını karşılamıyor olabilir")
+            # Kimlik ile fiziksel erişim kalıbı aynı şey olmak zorunda değil. Seed'de
+            # dataset_id gerçekten tablo adı; Silver'da 'evds:TP.KTF12' bir tablo DEĞİL,
+            # tek bir ilişkideki bir satır kümesinin kimliği. Bu satır olmadığında model
+            # arama çıktısındaki kimliği FROM'a yazıyordu (ölçüldü: Silver şemasında
+            # SQL_FAILED, tek kök neden). Kalıbı adaptör üretiyor (ADR-0024, series_sql):
+            # çalıştırılabilir SQL veriyoruz, tarif değil — tarif kopyalanınca bozuluyor.
+            hint = self._access_sql(s)
+            if hint:
+                lines.append(f"    '{s.dataset_id}' bir tablo adı DEĞİL. SQL'de şöyle eriş: {hint}")
+        # Sorunun eşleşmeyen sözcükleri yüklenmemiş bir seriyi işaret ediyorsa bunu da söyle:
+        # "yok" ile "var ama yüklenmemiş" aynı cevap değildir (ADR-0026).
+        unmatched_all = sorted({t for m, u in terms.values() for t in u})
+        every_hit_partial = bool(terms) and all(u for _, u in terms.values())
+        search_un = getattr(self.lakehouse, "search_uningested", None)
+        pending: list[tuple[str, str]] = []
+        if unmatched_all and callable(search_un):
+            pending = list(search_un(" ".join(unmatched_all), 5))
+        if pending and every_hit_partial:
+            # Aranan şeyin kendisi yüklenmemiş; bulunanlar yalnız ortak sözcükle geldi.
+            self._pending_streak += 1
+            lines.append("Katalogda tanımlı ama HENÜZ YÜKLENMEMİŞ ve soruya uyan seriler: "
+                         + "; ".join(f"{sid} — {name}" for sid, name in pending)
+                         + ". Yukarıdaki tablolar sorunun yalnız bir kısmıyla eşleşiyor; onları "
+                         "aranan serinin yerine KULLANMA. Kullanıcıya verinin henüz çekilmediğini söyle.")
+            if self._pending_streak >= self.PENDING_LIMIT:
+                self._pending_streak = 0
+                return ToolResult.fail(
+                    "DATASET_NOT_FOUND", "\n".join(lines), layer="reference", retryable=False,
+                    candidates=[sid for sid, _ in pending],
+                )
+        elif pending:
+            lines.append("Katalogda tanımlı ama HENÜZ YÜKLENMEMİŞ ve soruya uyan seriler: "
+                         + "; ".join(f"{sid} — {name}" for sid, name in pending)
+                         + ". Bunlar için sorgu yazma; kullanıcıya verinin henüz çekilmediğini söyle.")
+        else:
+            self._pending_streak = 0
         lines.append("\nSorgu yazmadan önce lakehouse_describe ile kolonları incele.")
         return ToolResult(content="\n".join(lines))
+
+    def _access_sql(self, spec) -> str | None:
+        """Kimliğin tablo adı olmadığı adaptörler için çalıştırılabilir erişim kalıbı.
+
+        Seed adaptöründe `dataset_id` gerçekten tablo adıdır ve satır yalnız gürültü
+        olur; orada `source_detail` boştur ve bu metot None döner. Kalıbın nasıl
+        yazılacağını adaptör bilir, araç değil.
+        """
+        measure = next((c for c in spec.columns if c.role is ColumnRole.MEASURE), None)
+        if measure is None:
+            return None
+        try:
+            sql = self.lakehouse.series_sql(
+                spec.dataset_id, key_column=spec.time_column, value_column=measure.name
+            )
+        except Exception:  # noqa: BLE001 — ipucu üretilemiyorsa arama sonucu yine geçerli
+            return None
+        # Kimliğin tablo adı olup olmadığını tahmin etmiyoruz: adaptörün ürettiği SQL'e
+        # bakıyoruz. `FROM <dataset_id>` yazıyorsa kimlik zaten tablo adıdır ve ipucu
+        # yalnız gürültü olur (seed adaptörü böyle). Silver'da ilişki başka bir addır.
+        if re.search(rf"\bFROM\s+{re.escape(spec.dataset_id)}\b", sql, re.IGNORECASE):
+            return None
+        return sql
+
+
+def _dataset_missing(lakehouse: LakehouseClient, dataset_id: str) -> ToolError | None:
+    """Kimlik katalogda yoksa referans hatası; adaylar en yakın 8, tüm katalog değil.
+
+    Eski hâli bütün kataloğu aday olarak listeliyordu — 4 tabloda faydalı, 1620 seride
+    hata mesajının kendisi hataya dönüşüyor (ADR-0026 dersi). Adaylar aramadan gelir.
+    """
+    try:
+        lakehouse.get_dataset(dataset_id)
+    except LakehouseError as exc:
+        near = [s.dataset_id for s in lakehouse.search_datasets(dataset_id, limit=8)]
+        return ToolError(
+            error_code="DATASET_NOT_FOUND", message=str(exc),
+            hint="lakehouse_search ile doğru kimliği bul.",
+            candidates=near, layer="reference",
+        )
+    return None
 
 
 class DescribeParams(BaseModel):
@@ -59,6 +176,7 @@ class DescribeParams(BaseModel):
 
 class LakehouseDescribeTool(Tool):
     name = "lakehouse_describe"
+    role = "retrieve"
     description = (
         "Bir tablonun kolonlarını, birimlerini, kümülatif olup olmadığını ve örnek satırlarını "
         "gösterir. SQL yazmadan ÖNCE mutlaka çağır: kolon adlarını ve birimleri buradan öğren."
@@ -68,17 +186,12 @@ class LakehouseDescribeTool(Tool):
     def __init__(self, lakehouse: LakehouseClient) -> None:
         self.lakehouse = lakehouse
 
+    def validate_refs(self, params: DescribeParams) -> ToolError | None:
+        return _dataset_missing(self.lakehouse, params.dataset_id)
+
     def run(self, params: DescribeParams) -> ToolResult:
-        try:
-            spec = self.lakehouse.get_dataset(params.dataset_id)
-            sample = self.lakehouse.preview(params.dataset_id, n=5)
-        except LakehouseError as exc:
-            return ToolResult.fail(
-                "DATASET_NOT_FOUND", str(exc),
-                hint="lakehouse_search ile doğru kimliği bul.",
-                candidates=[s.dataset_id for s in self.lakehouse.list_datasets()],
-                layer="reference",
-            )
+        spec = self.lakehouse.get_dataset(params.dataset_id)
+        sample = self.lakehouse.preview(params.dataset_id, n=5)
 
         content = spec.to_prompt_card()
         content += "\n\nÖrnek satırlar:\n" + sample.data.to_string(index=False)
@@ -111,45 +224,97 @@ class LakehouseQueryTool(Tool):
     )
     Params = QueryParams
 
+    #: Ay/çeyrek/yıl kutusuna toplama/ortalama: frekans dönüşümüdür, kural kataloğundur.
+    _PERIOD_AGG = re.compile(
+        r"(strftime\s*\([^)]*%Y-%m|date_trunc\s*\(\s*'(month|quarter|year)'|extract\s*\(\s*(month|quarter|year)\b|"
+        r"year\s*\(|month\s*\(|quarter\s*\()", re.I,
+    )
+    _AGG_FN = re.compile(r"\b(avg|sum|mean|min|max)\s*\(", re.I)
+
     def __init__(
         self,
         lakehouse: LakehouseClient,
         workspace: AnalysisWorkspace,
         registry: object | None = None,
+        *,
+        gold_available: bool = False,
     ) -> None:
         self.lakehouse = lakehouse
         self.workspace = workspace
         # Sorulan soruya erişim: atlanan dönem kısıtını yakalamak için.
         self._registry = registry
+        # Gold araçları kayıtlıysa ay/çeyrek toplaması SQL'de yapılmaz (ADR-0039).
+        self.gold_available = gold_available
 
-    def run(self, params: QueryParams) -> ToolResult:
-        # Sorgu çalışmadan önce reddet: uyarı olarak eklendiğinde model onu
-        # okuyup yine de cevaba geçiyordu (ölçüldü: 0/2). Kapsam kontrolünde
-        # işe yarayan kalıp bu — modele seçenek bırakmamak (ADR-0010).
+    def check_policy(self, params: QueryParams) -> ToolError | None:
+        """Sorgu çalışmadan önce reddet: uyarı olarak eklendiğinde model onu okuyup
+        yine de cevaba geçiyordu (ölçüldü: 0/2). Kapsam kontrolünde işe yarayan kalıp
+        bu — modele seçenek bırakmamak (ADR-0010). Mesajlar ADR-0017'deki gibi."""
+        kapsam_disi_soru = self._soru_kapsam_disi()
+        if kapsam_disi_soru:
+            return ToolError(
+                error_code="OUT_OF_COVERAGE", message=kapsam_disi_soru,
+                hint="Bu dönem için sorgu çalıştırma. Kullanıcıya verinin hangi tarihe "
+                     "kadar yayımlandığını söyle; istersen mevcut son dönemi teklif et.",
+                layer="data",
+            )
+        if self.gold_available and self._is_period_aggregation(params.sql):
+            # Ölçüldü: onaylanmış sıcaklık serisinde model "aylık ortalama"yı SQL'de AVG ile aldı;
+            # katalogdaki kural (index → avg) ile örtüştüğü için sayı doğru çıktı ama kanıt zinciri
+            # koptu (gözlem izi yok) ve kural stok olsaydı sessizce yanlış olurdu. Seçenek bırakılmaz.
+            return ToolError(
+                error_code="GOLD_REQUIRED", layer="policy", retryable=True,
+                message="Bu sorgu dönemleri (ay/çeyrek/yıl) toplayıp ortalıyor; frekans dönüşümü SQL'de değil "
+                        "Gold'da yapılır, kural katalogdan gelir.",
+                hint="gold_align (tek seri) ya da gold_join (birden çok seri) çağır: target_frequency='monthly' "
+                     "ya da 'quarterly', period_from/period_to ile dönem. Seri doğrulanmamışsa kullanıcının "
+                     "onayı gerekir. Yıllık için gold_align aylık sonucu üzerinde workspace_query kullan.",
+            )
+        uyusmazlik = self._frekans_uyusmazligi(params.sql)
+        if uyusmazlik:
+            return uyusmazlik
         eksik_donem = self._atlanmis_donem_filtresi(params.sql)
         if eksik_donem:
             yil = eksik_donem.split(",")[0].strip()
-            return ToolResult.fail(
-                "MISSING_PERIOD_FILTER",
-                f"Sorguda dönem filtresi yok. Kullanıcı {eksik_donem} dönemini sordu ama "
-                f"sorgun tablonun tamamını getiriyor.",
-                hint=f"Sorguya dönem kısıtını ekleyip tekrar çalıştır, ör. "
-                     f"WHERE EXTRACT(year FROM <dönem_kolonu>) = {yil}",
+            return ToolError(
+                error_code="MISSING_PERIOD_FILTER",
+                message=f"Sorguda dönem filtresi yok. Kullanıcı {eksik_donem} dönemini sordu ama "
+                        f"sorgun tablonun tamamını getiriyor.",
+                hint=f"Sorguya dönem kısıtını ekleyip tekrar çalıştır, ör. {self._donem_ipucu(yil)}",
                 layer="policy",
             )
+        return None
+
+    _ARALIK_SONRASI = re.compile(r"(19\d{2}|20\d{2})\s*'?\s*(?:den|dan|ten|tan)\s+(?:bu yana|beri|itibaren|sonra|günümüze|bugüne)|"
+                                 r"(19\d{2}|20\d{2})\s+(?:başından|sonrası|ve sonrası)", re.I)
+    _ARALIK_ONCESI = re.compile(r"(19\d{2}|20\d{2})\s*'?\s*(?:a|e|ya|ye)\s+kadar|(19\d{2}|20\d{2})\s+(?:öncesi|sonuna kadar)", re.I)
+
+    def _donem_ipucu(self, yil: str) -> str:
+        """"2021'den bu yana" tek yıl değil, aralıktır. Ölçüldü (G16): ipucu '= 2021' deyince model
+        yalnız 2021'i çekti, 12 satırla kırılma aradı. Sorunun ifadesine göre >= / <= / BETWEEN."""
+        soru = getattr(self._registry, "active_question", "") or ""
+        yillar = sorted(set(re.findall(r"\b(19\d{2}|20\d{2})\b", soru)))
+        if len(yillar) >= 2:
+            return f"WHERE EXTRACT(year FROM <dönem_kolonu>) BETWEEN {yillar[0]} AND {yillar[-1]}"
+        m = self._ARALIK_SONRASI.search(soru)
+        if m and (m.group(1) or m.group(2)) == yil:
+            return f"WHERE EXTRACT(year FROM <dönem_kolonu>) >= {yil}  (soru '{yil}'den bu yana' diyor: aralık, tek yıl değil)"
+        m = self._ARALIK_ONCESI.search(soru)
+        if m and (m.group(1) or m.group(2)) == yil:
+            return f"WHERE EXTRACT(year FROM <dönem_kolonu>) <= {yil}"
+        return f"WHERE EXTRACT(year FROM <dönem_kolonu>) = {yil}"
+
+    def run(self, params: QueryParams) -> ToolResult:
+        # SQL guard sınır doğrulayıcıda çalıştı (UNSAFE_SQL orada); buraya gelen bir
+        # hata artık çalışma hatasıdır ve tekrar denemeyle çözülebilir.
         try:
             result = self.lakehouse.execute_sql(params.sql)
         except LakehouseError as exc:
-            # Hata modele geri döner; harness'ın onarım döngüsü devreye girer.
-            # Politika ihlali (guard) ile çalışma hatası ayrılır: ilki tekrar
-            # denemeyle çözülmez, ikincisi çözülebilir.
-            msg = str(exc)
-            unsafe = any(k in msg for k in ("izin veril", "kullanılamaz", "Tek bir sorgu"))
             return ToolResult.fail(
-                "UNSAFE_SQL" if unsafe else "SQL_FAILED", msg,
-                hint=None if unsafe else "SQL'i düzeltip tekrar dene; kolon adlarını "
-                                         "lakehouse_describe çıktısıyla karşılaştır.",
-                layer="policy" if unsafe else "data",
+                "SQL_FAILED", str(exc),
+                hint="SQL'i düzeltip tekrar dene; kolon adlarını lakehouse_describe "
+                     "çıktısıyla karşılaştır.",
+                layer="data",
             )
 
         if result.is_empty:
@@ -203,6 +368,61 @@ class LakehouseQueryTool(Tool):
         content += f"\nKaynak: {result.provenance.summary()}"
         return ToolResult(content=content, data=df, provenance=result.provenance)
 
+    def _is_period_aggregation(self, sql: str) -> bool:
+        text = sql.lower()
+        return bool(self._PERIOD_AGG.search(text) and self._AGG_FN.search(text) and "group by" in text)
+
+    _FREKANS_SOZ = (
+        ("günlük", Frequency.DAILY), ("gunluk", Frequency.DAILY),
+        ("haftalık", Frequency.WEEKLY), ("haftalik", Frequency.WEEKLY),
+        ("aylık", Frequency.MONTHLY), ("aylik", Frequency.MONTHLY),
+        ("çeyreklik", Frequency.QUARTERLY), ("ceyreklik", Frequency.QUARTERLY),
+        ("yıllık", Frequency.YEARLY), ("yillik", Frequency.YEARLY),
+    )
+    _FREKANS_SIRA = {Frequency.DAILY: 0, Frequency.WEEKLY: 1, Frequency.MONTHLY: 2,
+                     Frequency.QUARTERLY: 3, Frequency.YEARLY: 4}
+
+    def _frekans_uyusmazligi(self, sql: str) -> ToolError | None:
+        """Soru tek bir frekans söylüyor (aylık) ve sorgunun okuduğu her kaynak ondan KABA ise
+        (çeyreklik, yıllık) sorgu çalışmaz: kabadan ince üretilemez. İnceden kaba (haftalıktan aylık)
+        serbesttir, o Gold'un işi. Ölçüldü (G16): model "aylık ... büyüme hızı" sorusuna hazır
+        çeyreklik Gold tablosunu okudu, 22 satırla kırılma aradı; cevap tutarlı ama soruya değil."""
+        soru = (getattr(self._registry, "active_question", "") or "").lower()
+        istenen = {f for w, f in self._FREKANS_SOZ if re.search(rf"\b{w}", soru)}
+        if len(istenen) != 1:
+            return None
+        hedef = next(iter(istenen))
+        try:
+            specs = list(self.lakehouse.list_datasets())
+        except Exception:  # noqa: BLE001 — katalog okunamıyorsa guard susar
+            return None
+        okunan = [sp for sp in specs if re.search(rf"(?<![\w.]){re.escape(sp.dataset_id)}(?![\w])", sql)]
+        if not okunan:
+            return None
+        kaba = [sp for sp in okunan
+                if sp.frequency in self._FREKANS_SIRA and self._FREKANS_SIRA[sp.frequency] > self._FREKANS_SIRA[hedef]]
+        if len(kaba) != len(okunan):
+            return None
+        ad = {Frequency.DAILY: "günlük", Frequency.WEEKLY: "haftalık", Frequency.MONTHLY: "aylık",
+              Frequency.QUARTERLY: "çeyreklik", Frequency.YEARLY: "yıllık"}
+        adaylar: list[str] = []
+        try:
+            for sp in self.lakehouse.search_datasets(soru):
+                if sp.frequency == hedef and sp.dataset_id not in adaylar:
+                    adaylar.append(sp.dataset_id)
+                if len(adaylar) >= 5:
+                    break
+        except Exception:  # noqa: BLE001
+            adaylar = []
+        okunan_metin = ", ".join(f"{sp.dataset_id} ({ad.get(sp.frequency, sp.frequency)})" for sp in kaba)
+        return ToolError(
+            error_code="FREQUENCY_MISMATCH", layer="policy", retryable=True, candidates=adaylar,
+            message=f"Kullanıcı {ad[hedef]} seri sordu; sorgu {okunan_metin} okuyor. "
+                    f"{ad[kaba[0].frequency].capitalize()} kaynaktan {ad[hedef]} seri üretilemez.",
+            hint=(f"{ad[hedef].capitalize()} frekanslı seriyi sorgula: " + ", ".join(adaylar)) if adaylar
+                 else f"lakehouse_search ile {ad[hedef]} frekanslı seriyi bul ve onu sorgula.",
+        )
+
     def _atlanmis_donem_filtresi(self, sql: str) -> str | None:
         """Soruda bir yıl geçiyor ama sorguda geçmiyorsa bunu bildirir.
 
@@ -218,6 +438,55 @@ class LakehouseQueryTool(Tool):
         sorguda = set(re.findall(r"\b(19\d{2}|20\d{2})\b", sql))
         eksik = sorted(sorulan - sorguda)
         return ", ".join(eksik) if eksik else None
+
+    _AYLAR = {
+        "ocak": 1, "şubat": 2, "subat": 2, "mart": 3, "nisan": 4, "mayıs": 5, "mayis": 5,
+        "haziran": 6, "temmuz": 7, "ağustos": 8, "agustos": 8, "eylül": 9, "eylul": 9,
+        "ekim": 10, "kasım": 11, "kasim": 11, "aralık": 12, "aralik": 12,
+    }
+
+    def _soru_kapsam_disi(self) -> str | None:
+        """Sorudaki AY kapsamın dışındaysa sorguyu hiç çalıştırma.
+
+        Kapsam kontrolü yıl çözünürlüğündeydi ve bu bir boşluk bırakıyordu: veri
+        2026-06'da bitiyorken "2026 Ağustos kaç?" sorusunda 2026 kapsam içinde
+        göründüğü için hiçbir şey tetiklenmiyordu. Model o yılın mevcut aylarını
+        çekip tablo kuruyor, sonra "Ağustos yok" diyordu. Cevap doğru ama ekranda
+        sayı dolu bir tablo duruyor; jüri bakışında bunlardan birinin Ağustos
+        olduğu sanılabilir. Ölçüldü (L9-02): iki şemada da 0/3.
+
+        Yalnız hiçbir serinin veremeyeceği dönemlerde tetikleniyor — kataloğun en
+        geniş aralığı dışında kalmayan bir ay varsa karışmıyor.
+        """
+        soru = getattr(self._registry, "active_question", "") or ""
+        if not soru:
+            return None
+        istenen: set[tuple[int, int]] = set()
+        low = soru.lower()
+        for ay_adi, ay in self._AYLAR.items():
+            for m in re.finditer(rf"\b(19\d{{2}}|20\d{{2}})\b[^\d]{{0,12}}{ay_adi}\b", low):
+                istenen.add((int(m.group(1)), ay))
+            for m in re.finditer(rf"{ay_adi}\b[^\d]{{0,12}}\b(19\d{{2}}|20\d{{2}})\b", low):
+                istenen.add((int(m.group(1)), ay))
+        for m in re.finditer(r"\b(19\d{2}|20\d{2})[-/](0[1-9]|1[0-2])\b", low):
+            istenen.add((int(m.group(1)), int(m.group(2))))
+        if not istenen:
+            return None
+
+        specs = self.lakehouse.list_datasets()
+        if not specs:
+            return None
+        ilk = min(s.coverage.start for s in specs)
+        son = max(s.coverage.end for s in specs)
+        sinirlar = ((ilk.year, ilk.month), (son.year, son.month))
+        disarida = sorted(d for d in istenen if d < sinirlar[0] or d > sinirlar[1])
+        if not disarida or len(disarida) != len(istenen):
+            return None
+        yazi = ", ".join(f"{y}-{ay:02d}" for y, ay in disarida)
+        return (
+            f"Sorulan dönem ({yazi}) veri kapsamının dışında. Veri {ilk} ile {son} "
+            "arasını kapsıyor; bu dönem için hiçbir seride gözlem yok."
+        )
 
     def _out_of_coverage(self, sql: str) -> str | None:
         """Sorgudaki yıllar katalog kapsamının dışında mı?
@@ -285,6 +554,7 @@ class LakehouseDistinctValuesTool(Tool):
     """
 
     name = "lakehouse_distinct_values"
+    role = "retrieve"
     description = (
         "Bir kırılım kolonundaki GERÇEK değerleri listeler. Bir kalemi/kategoriyi filtrelemeden "
         "ÖNCE mutlaka bunu çağır — değer adını asla tahmin etme. Alt toplam satırlarını da "
@@ -295,26 +565,24 @@ class LakehouseDistinctValuesTool(Tool):
     def __init__(self, lakehouse: LakehouseClient) -> None:
         self.lakehouse = lakehouse
 
-    def run(self, params: DistinctValuesParams) -> ToolResult:
-        try:
-            spec = self.lakehouse.get_dataset(params.dataset_id)
-        except LakehouseError as exc:
-            return ToolResult.fail(
-                "DATASET_NOT_FOUND", str(exc),
-                hint="lakehouse_search ile doğru kimliği bul.",
-                candidates=[s.dataset_id for s in self.lakehouse.list_datasets()],
-                layer="reference",
-            )
-
+    def validate_refs(self, params: DistinctValuesParams) -> ToolError | None:
+        missing = _dataset_missing(self.lakehouse, params.dataset_id)
+        if missing:
+            return missing
+        spec = self.lakehouse.get_dataset(params.dataset_id)
         if spec.column(params.column) is None:
-            return ToolResult.fail(
-                "COLUMN_NOT_FOUND",
-                f"'{params.column}' kolonu {params.dataset_id} tablosunda yok. "
-                f"Mevcut kolonlar: {', '.join(c.name for c in spec.columns)}",
+            return ToolError(
+                error_code="COLUMN_NOT_FOUND",
+                message=f"'{params.column}' kolonu {params.dataset_id} tablosunda yok. "
+                        f"Mevcut kolonlar: {', '.join(c.name for c in spec.columns)}",
                 hint="Kırılım kolonlarından birini seç.",
                 candidates=[c.name for c in spec.columns],
                 layer="reference",
             )
+        return None
+
+    def run(self, params: DistinctValuesParams) -> ToolResult:
+        spec = self.lakehouse.get_dataset(params.dataset_id)
 
         col = params.column
         # Alt toplam bayrağı varsa birlikte göster: mükerrer sayımı önleyen sinyal.

@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 import duckdb
+import weakref
 import pandas as pd
 
 from ..contracts.catalog import DatasetSpec
@@ -49,6 +50,34 @@ _FORBIDDEN = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+
+
+# Aynı süreçte aynı dosyaya açılmış okuyucular. DuckDB, aynı yapılandırmadaki
+# bağlantıları tek veritabanı örneğinde paylaşır ve DOSYA KİLİDİ son bağlantı kapanana
+# kadar kalır. Ölçüldü: bir önceki agent örneğinin okuyucusu açık kaldığı için Architect'in
+# yazar alt süreci "Conflicting lock is held" ile açılamadı. Kapatan, yalnız kendi
+# bağlantısını değil süreçteki hepsini bırakmalı; bırakılan adaptör dokunulunca yeniden açar.
+_READERS: dict[str, "weakref.WeakSet[Any]"] = {}
+
+
+def register_reader(path: str | Path, adapter: Any) -> None:
+    """Bir adaptörü (close() bilen) bu dosyanın okuyucuları arasına kaydet."""
+    _READERS.setdefault(str(Path(path).resolve()), weakref.WeakSet()).add(adapter)
+
+
+def release_connections(path: str | Path | None) -> int:
+    """Bu dosyaya açık BÜTÜN okuyucuları kapat; kaçını kapattığını döndür.
+
+    Yazar alt süreç çalışmadan hemen önce çağrılır. Kapatılan adaptörler ölmez: bir
+    sonraki sorguda kendi bağlantılarını yeniden açarlar (`_conn()`)."""
+    if path is None:
+        return 0
+    n = 0
+    for adapter in list(_READERS.get(str(Path(path).resolve()), ())):
+        if getattr(adapter, "_con", None) is not None:
+            adapter.close()
+            n += 1
+    return n
 
 
 def hardened_connection(path: str | Path | None = None) -> duckdb.DuckDBPyConnection:
@@ -126,7 +155,26 @@ class DuckDBLakehouse:
                 f"Lakehouse bulunamadı: {self.db_path}. Önce `python scripts/dev_seed.py` çalıştırın."
             )
         self._con = hardened_connection(self.db_path)
+        register_reader(self.db_path, self)
         self._catalog: dict[str, DatasetSpec] = self._load_catalog()
+
+    def _conn(self) -> duckdb.DuckDBPyConnection:
+        """Bağlantı; dışarıdan bırakıldıysa aynı sertleştirmeyle yeniden açılır."""
+        if getattr(self, "_con", None) is None:
+            self._con = hardened_connection(self.db_path)
+            register_reader(self.db_path, self)
+        return self._con
+
+    def close(self) -> None:
+        con = getattr(self, "_con", None)
+        if con is not None:
+            con.close()
+            self._con = None  # type: ignore[assignment]
+
+    def reload(self) -> None:
+        self.close()
+        self._con = hardened_connection(self.db_path)
+        self._catalog = self._load_catalog()
 
     def _load_catalog(self) -> dict[str, DatasetSpec]:
         if not self.catalog_path.exists():
@@ -148,24 +196,32 @@ class DuckDBLakehouse:
         return spec
 
     def search_datasets(self, query: str, limit: int = 5) -> list[DatasetSpec]:
-        """Anahtar kelime tabanlı skorlama.
+        """BM25 sözlük dizini (ADR-0036); örnek değerler de dizinde.
 
-        Bilinçli olarak basit: embedding geldiğinde bu metot semantik/hibrit
-        aramaya geçer, arayüz aynı kalır, agent etkilenmez (ADR-0015).
+        Eşleşme yoksa küçük seed kataloğunda ilk N tablo döner: tek tablolu seed'de
+        "tablo bulunamadı" demek yanıltıcı olurdu. Silver adaptörü boş döner (ADR-0026).
         """
-        terms = [t for t in re.split(r"\W+", query.lower()) if len(t) > 2]
-        scored: list[tuple[int, DatasetSpec]] = []
-        for spec in self._catalog.values():
-            haystack = " ".join(
-                [spec.name, spec.description, " ".join(spec.tags)]
-                + [f"{c.name} {c.description} {' '.join(c.aliases)}" for c in spec.columns]
-                + [v for c in spec.columns for v in c.example_values]
-            ).lower()
-            score = sum(haystack.count(t) for t in terms)
-            if score:
-                scored.append((score, spec))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return [s for _, s in scored[:limit]] or list(self._catalog.values())[:limit]
+        from ..core.facets import province_of
+        from ..core.retriever import CatalogRecord, CatalogRetriever, RetrievalPolicy
+
+        if getattr(self, "_retr_for", None) is not id(self._catalog):
+            records = [
+                CatalogRecord(
+                    id=spec.dataset_id, name=spec.name, description=spec.description, tags=tuple(spec.tags),
+                    aliases=tuple([a for c in spec.columns for a in c.aliases]
+                                  + [f"{c.name} {c.description}" for c in spec.columns]
+                                  + [v for c in spec.columns for v in c.example_values]),
+                    frequency=str(getattr(spec.frequency, "value", spec.frequency)), source=spec.source,
+                    province=province_of(f"{spec.dataset_id} {spec.name}"),
+                )
+                for spec in self._catalog.values()
+            ]
+            self._retr = CatalogRetriever(records, policy=getattr(self, "retrieval_policy", None) or RetrievalPolicy())
+            self._retr_for = id(self._catalog)
+        self._bm25 = self._retr   # eski ad; testler ve araçlar `search_datasets` üzerinden gelir
+        hits = self._retr.search(query, k=limit)
+        found = [self._catalog[h.id] for h in hits if h.id in self._catalog]
+        return found or list(self._catalog.values())[:limit]
 
     # ---------- Sorgulama ----------
     def execute_sql(self, sql: str, *, max_rows: int = 10_000) -> QueryResult:
@@ -174,7 +230,8 @@ class DuckDBLakehouse:
         bounded = f"SELECT * FROM ({text}) AS _q LIMIT {int(max_rows) + 1}"
         started = time.perf_counter()
         try:
-            df = self._con.execute(bounded).fetch_df()
+            # Her sorgu kendi imlecinde; gerekçe silver_lakehouse.execute_sql'de.
+            df = self._conn().cursor().execute(bounded).fetch_df()
         except Exception as exc:
             raise LakehouseError(f"SQL çalıştırılamadı: {exc}") from exc
         duration = (time.perf_counter() - started) * 1000
@@ -228,7 +285,7 @@ class DuckDBLakehouse:
         return f"SELECT {key_column}, {value_column} FROM {dataset_id}{where}"
 
     def health(self) -> dict[str, Any]:
-        tables = self._con.execute("SHOW TABLES").fetch_df()
+        tables = self._conn().execute("SHOW TABLES").fetch_df()
         return {
             "ok": True,
             "db_path": str(self.db_path),

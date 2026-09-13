@@ -18,6 +18,8 @@ venv/
 
 # Veri (lakehouse çıktıları repoya girmez)
 data/
+# Architect'in izinli yerel kökü: jüri dosyaları, golden fikstür kopyaları (satır sonu yorumu gitignore'da desteklenmez)
+incoming/
 !data/.gitkeep
 *.duckdb
 *.duckdb.wal
@@ -30,3 +32,6 @@ data/
 
 # Claude Code kişisel ayarlar (takım ayarları .claude/settings.json'a yazılır)
 .claude/settings.local.json
+
+# Seed edilmiş tasarım kanvası (2,5 MB, çalışma dosyalarından yeniden üretilir)
+docs/design/agentsmithler-arayuz.html

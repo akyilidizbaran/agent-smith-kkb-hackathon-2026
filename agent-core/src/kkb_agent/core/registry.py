@@ -6,20 +6,32 @@ Agent kodunda hiçbir değişiklik gerekmez.
 
 from __future__ import annotations
 
-from typing import Any, Iterator
+from typing import Iterable, Any, Iterator
 
 from ..domain import DomainProfile
 from .tool import Tool, ToolResult
+from .validator import BoundaryValidator
 
 
 class ToolRegistry:
-    def __init__(self, profile: DomainProfile | None = None) -> None:
+    def __init__(
+        self,
+        profile: DomainProfile | None = None,
+        validator: BoundaryValidator | None = None,
+    ) -> None:
         self._tools: dict[str, Tool] = {}
         # Araç açıklamaları modele gönderilmeden önce bu profille doldurulur.
         self.profile = profile or DomainProfile.generic()
+        # Her çağrı aynı boru hattından: şema → SQL guard → referans → politika → run.
+        self.validator = validator or BoundaryValidator()
         # Cevaplanmakta olan soru. Bazı araçlar sonucu soruyla karşılaştırıp
         # eksik kalan bir kısıtı fark edebilir (ör. atlanan dönem filtresi).
         self.active_question: str = ""
+        # Konuşma boyunca kullanıcının yazdığı her şey (niyet kapısı, ADR-0037): yazma ve
+        # dışarı çıkma yeteneği olan araçlar adresi yalnız buradan kabul eder.
+        self.user_text: str = ""
+        # Kullanıcının istediği bir aramanın döndürdüğü adresler; web_url için onaylı sayılır.
+        self.sanctioned_locators: set[str] = set()
 
     def register(self, tool: Tool) -> None:
         if tool.name in self._tools:
@@ -36,13 +48,17 @@ class ToolRegistry:
     def names(self) -> list[str]:
         return list(self._tools)
 
-    def schemas(self) -> list[dict[str, Any]]:
-        return [t.openai_schema(self.profile) for t in self._tools.values()]
+    def schemas(self, only: Iterable[str] | None = None) -> list[dict[str, Any]]:
+        """Modele sunulan şemalar; `only` verilirse araç kapısının alt kümesi (ADR-0043)."""
+        names = set(only) if only is not None else None
+        return [t.openai_schema(self.profile) for t in self._tools.values() if names is None or t.name in names]
 
-    def describe(self) -> str:
+    def describe(self, only: Iterable[str] | None = None) -> str:
         """Native tool-calling desteklemeyen modeller için metin katalog."""
+        names = set(only) if only is not None else None
         return "\n".join(
             f"- {t.name}: {self.profile.render(t.description)}" for t in self._tools.values()
+            if names is None or t.name in names
         )
 
     def execute(self, name: str, args: dict[str, Any]) -> ToolResult:
@@ -55,7 +71,7 @@ class ToolRegistry:
                 candidates=self.names(),
                 layer="schema",
             )
-        return tool.validate_and_run(args)
+        return self.validator.validate_and_run(tool, args)
 
     def __iter__(self) -> Iterator[Tool]:
         return iter(self._tools.values())
