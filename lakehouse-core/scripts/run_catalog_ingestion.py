@@ -250,6 +250,16 @@ def _parse_args(argv: list[str] | None = None):
     return parser.parse_args(argv)
 
 
+def _spec_key(spec) -> str:
+    import json
+
+    return json.dumps(
+        {"source": spec.source_id, "locator": spec.locator, "start": str(spec.start_date), "end": str(spec.end_date),
+         "parameters": spec.parameters},
+        sort_keys=True, default=str, ensure_ascii=False,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     _require_repo_root_cwd()
     args = _parse_args(argv)
@@ -271,8 +281,25 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Katalogda {len(series)} aktif seri bulundu.")
 
     outcomes: dict[str, bool] = {}
+    # Aynı çekilişi paylaşan seriler (FinTürk: bir ilin 8 ölçüm sütunu tek yanıtta gelir) bir kez
+    # çekilir; parser yanıttaki bütün serileri Bronze'a yazdığı için ikinci çekim yalnız ağ
+    # maliyetidir. Anahtar FetchSpec'in kendisidir (kaynak, adres, parametreler, tarih aralığı).
+    shared: dict[str, str] = {}
     try:
         for position, row in enumerate(series):
+            binding = CONNECTOR_REGISTRY.get(row.source_id)
+            if binding is not None:
+                try:
+                    key = _spec_key(binding.build_spec(row, DEFAULT_START, DEFAULT_END))
+                except ValueError:
+                    key = None
+                if key is not None and key in shared:
+                    first = shared[key]
+                    outcomes[row.series_id] = outcomes[first]
+                    print(f"\n=== {row.series_id} ({row.name_tr}) ===\n  aynı çekilişten ({first}); yeniden istenmedi")
+                    continue
+                if key is not None:
+                    shared[key] = row.series_id
             if position > 0:
                 # Generic, source-agnostic pacing between DIFFERENT series' first requests.
                 # Connectors that need per-request pacing within one series' own fetch()

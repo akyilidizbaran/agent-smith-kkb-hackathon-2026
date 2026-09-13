@@ -152,9 +152,10 @@ def test_build_is_reproducible_over_the_same_bronze_tree(
 def test_build_publishes_the_catalogued_measure_and_withholds_the_rest_with_a_reason(
     tmp_path: Path, connection: duckdb.DuckDBPyConnection
 ) -> None:
-    """One FinTürk response is a grid; the catalog registers one column of it.
+    """One FinTürk response is a grid; here the catalog registers one column of it.
 
-    Seven of its eight measure columns are not catalogued at all. Leaving them out is correct.
+    (Reproduced by deleting the other seven YALOVA entries below.) Seven of its eight measure
+    columns are then not catalogued at all. Leaving them out is correct.
     Leaving them out without saying so is how a province quietly ends up with no rows and
     nobody can explain why, so each exclusion is counted against its series in the report.
     """
@@ -162,6 +163,13 @@ def test_build_publishes_the_catalogued_measure_and_withholds_the_rest_with_a_re
     data_root = tmp_path / "data"
     _bddk_monthly(data_root)
     _finturk(data_root)
+    # 2026-09-13'ten beri katalog sekiz sütunun hepsini tanımlar (docs/sources/bddk_finturk.md,
+    # Genişletme). Bu test "kataloglanmayan tutulur ve söylenir" davranışını ölçer; o durumu
+    # yeniden kurmak için YALOVA'nın konut dışı yedi girdisi bu bağlantıdan çıkarılır.
+    connection.execute(
+        "DELETE FROM meta.series WHERE series_id LIKE 'bddk_finturk:YALOVA_%' "
+        "AND series_id <> 'bddk_finturk:YALOVA_KonutKredisi'"
+    )
 
     report = build_silver_snapshot(connection, bronze_root=data_root / "bronze")
 

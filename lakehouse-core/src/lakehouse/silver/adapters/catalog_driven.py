@@ -123,6 +123,9 @@ _SOURCE_UNIT_TO_CATALOG_UNIT: dict[str, str] = {
     "milyon tl": "TRY_mn",
     "bin tl": "TRY_th",
     "tl": "TRY",
+    # BDDK Aylık "Rasyolar" tablosu: kolon başlığı "... (%)-Rasyo"; katalog birimi pct.
+    # 2026-09-13 canlı doğrulama (docs/sources/bddk_monthly.md, Genişletme): 544, 1749, 1746.
+    "%": "pct",
 }
 
 

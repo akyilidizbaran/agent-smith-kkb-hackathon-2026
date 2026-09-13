@@ -253,11 +253,16 @@ def test_the_committed_page_evidence_still_says_what_the_catalog_claims() -> Non
 def test_uncatalogued_series_never_reaches_silver(
     tmp_path: Path, semantics: dict[str, SeriesSemantics]
 ) -> None:
-    """One FinTürk response carries eight measures; the catalog registers one of them."""
+    """One FinTürk response carries eight measures; since 2026-09-13 the catalog registers all
+    eight (docs/sources/bddk_finturk.md, Genişletme). A measure the catalog does NOT know must
+    still never reach Silver, so the fixture's vehicle rows are relabelled as a column that no
+    catalog entry describes."""
 
     frame, identity = _finturk_bronze(tmp_path)
-    other = frame.loc[frame["series_id"] == "bddk_finturk:YALOVA_TasitKredisi"]
+    other = frame.loc[frame["series_id"] == "bddk_finturk:YALOVA_TasitKredisi"].copy()
     assert not other.empty, "fixture precondition"
+    other["series_id"] = "bddk_finturk:YALOVA_KatalogsuzOlcum"
+    assert "bddk_finturk:YALOVA_KatalogsuzOlcum" not in semantics
 
     with pytest.raises(SilverValidationError, match="not in meta.series"):
         catalog_driven_to_staging(other, identity=identity, semantics=semantics)

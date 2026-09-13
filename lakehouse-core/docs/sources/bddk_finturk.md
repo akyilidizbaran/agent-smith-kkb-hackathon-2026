@@ -223,3 +223,26 @@ measures matter is a catalog decision, not a parsing one.
 - Any party other than Sektör (`10001`).
 - Any Bronze/Silver/Gold semantics beyond raw pass-through: no unit conversion, no `date_key`,
   no cross-province aggregation.
+
+## Genişletme (2026-09-13): tabloNo=3 yanıtının diğer 7 ölçüm sütunu kataloğa alındı
+
+`tabloNo=3` yanıtı bir il ve dönem için 8 ölçüm sütunu döndürür ve parser hepsini
+`bddk_finturk:<İL>_<Kolon>` kimliğiyle Bronze'a yazar (yukarıdaki YALOVA örneği: 8 satır).
+Bugüne kadar yalnız `KonutKredisi` katalogluydu; Silver diğer 7'sini `not in meta.series`
+gerekçesiyle tutuyordu. 13 Eylül'de `TasitKredisi`, `DigerTuketiciKredileri`,
+`KrediliMevduatHesabi`, `BireyselKrediKartlari`, `TakiptekiTasitKredisi`,
+`TakiptekiKonutKredisi`, `TakiptekiDigerTuketiciKredileri` sütunları 81 il için kataloğa
+girdi (7 × 81 = 567 seri; `catalog/series/bddk_finturk.yml` "Genişletme" bloğu). Ek istek
+gerekmez: aynı çekilişin aynı yanıtı. Birim ve frekans konut kolonuyla aynı (Bin TL, çeyreklik);
+kolon adları yukarıdaki doğrulanmış `colModels` listesinden.
+
+`scripts/run_catalog_ingestion.py` aynı FetchSpec'i paylaşan serileri bir kez çeker (bir ilin
+8 serisi = 1 istek/dönem); 13 Eylül değişikliği.
+
+`dataset_id` notu: 7 yeni sütunun serileri ilin konut girdisiyle aynı `dataset_id`'yi taşır
+(`bddk_finturk_<il>_housing_loans`). Sebep ölçüldü: bir çekiliş tek asset üretir ve parser bütün
+satırlara o asset'in `dataset_id`'sini yazar; Silver'ın staging denetimi katalogdaki
+`dataset_id` ile Bronze'dakinin birebir örtüşmesini ister (ilk deneme
+`bddk_finturk:ADANA_DigerTuketiciKredileri` için "invalid catalog semantics" ile düştü). Ad
+tarihsel bir yanlış adlandırmadır: dataset "tabloNo=3, Bireysel Bankacılık, il" çekilişidir,
+yalnız konut değil; mevcut Bronze artifact'lerini yetim bırakmamak için değiştirilmedi.

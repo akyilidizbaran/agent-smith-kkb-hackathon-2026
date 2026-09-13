@@ -19357,9 +19357,10 @@ series:
       otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
     tags: [evds, konut, otomatik]
     frequency: monthly
-    unit: null
-    measure_type: unknown
-    semantic_confidence: derived
+    unit: index
+    measure_type: index
+    default_agg: last
+    semantic_confidence: verified
     semantic_source: source_service
     metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_tukfiy2025
     status: active
@@ -24966,4 +24967,206 @@ series:
     semantic_confidence: derived
     semantic_source: source_docs
     metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=TP.FG.J0
+    status: active
+
+  # --- Küratörlü ek (13 Eylül 2026): kur, politika faizi, fonlama maliyeti, mevduat faizi, kart
+  #     harcaması, para arzı. Üretilen bloğun dışında, elle yazıldı; docs/sources/evds.md.
+
+  - series_id: evds:TP.DK.USD.A.YTL
+    native_code: TP.DK.USD.A.YTL
+    dataset_id: evds_fx_usd
+    name_tr: ABD Doları Döviz Alış Kuru (TL)
+    description: >-
+      TCMB EVDS, "bie_dkdovytl" veri grubu. TCMB gösterge döviz alış kuru, ABD doları, günlük (iş günleri). Fiyat düzeyidir: dönemlere indirgenirken ortalama alınır (kural avg), toplanmaz. Frekans ve birim EVDS'nin kendi metadata'sından
+      (FREQUENCY_STR, BIRIMI: Türk lirası); ölçüm tipi ve indirgeme kuralı serinin adından ve veri
+      grubu tanımından; canlı seri listesi 13 Eylül 2026 (docs/sources/evds.md, 'Küratörlü ek').
+    aliases:
+      - dolar kuru
+      - usd kuru
+      - dolar/tl
+      - usd/try
+      - amerikan doları
+      - döviz kuru dolar
+      - dolar alış
+    tags: [kur, doviz, usd, tcmb]
+    frequency: daily
+    unit: TRY
+    measure_type: rate
+    default_agg: avg
+    semantic_confidence: verified
+    semantic_source: source_service
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_dkdovytl
+    status: active
+
+  - series_id: evds:TP.DK.EUR.A.YTL
+    native_code: TP.DK.EUR.A.YTL
+    dataset_id: evds_fx_eur
+    name_tr: Euro Döviz Alış Kuru (TL)
+    description: >-
+      TCMB EVDS, "bie_dkdovytl" veri grubu. TCMB gösterge döviz alış kuru, Euro, günlük (iş günleri). Fiyat düzeyidir: dönemlere indirgenirken ortalama alınır (kural avg). Frekans ve birim EVDS'nin kendi metadata'sından
+      (FREQUENCY_STR, BIRIMI: Türk lirası); ölçüm tipi ve indirgeme kuralı serinin adından ve veri
+      grubu tanımından; canlı seri listesi 13 Eylül 2026 (docs/sources/evds.md, 'Küratörlü ek').
+    aliases:
+      - euro kuru
+      - eur kuru
+      - euro/tl
+      - eur/try
+      - döviz kuru euro
+      - euro alış
+    tags: [kur, doviz, eur, tcmb]
+    frequency: daily
+    unit: TRY
+    measure_type: rate
+    default_agg: avg
+    semantic_confidence: verified
+    semantic_source: source_service
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_dkdovytl
+    status: active
+
+  - series_id: evds:TP.BISPOLFAIZ.TUR
+    native_code: TP.BISPOLFAIZ.TUR
+    dataset_id: evds_policy_rate
+    name_tr: TCMB Politika Faiz Oranı (%)
+    description: >-
+      TCMB EVDS, "bie_bispolfaiz" veri grubu. BIS derlemesinde Türkiye Cumhuriyet Merkez Bankası politika faiz oranı (bir hafta vadeli repo ihale faizi), ay sonu değeri, yüzde. Dönemlere indirgenirken ortalama alınır (kural avg). Frekans ve birim EVDS'nin kendi metadata'sından
+      (FREQUENCY_STR, BIRIMI: Yüzde); ölçüm tipi ve indirgeme kuralı serinin adından ve veri
+      grubu tanımından; canlı seri listesi 13 Eylül 2026 (docs/sources/evds.md, 'Küratörlü ek').
+    aliases:
+      - politika faizi
+      - tcmb faizi
+      - merkez bankası faizi
+      - politika faiz oranı
+      - haftalık repo faizi
+      - faiz kararı
+    tags: [faiz, politika_faizi, tcmb, para_politikasi]
+    frequency: monthly
+    unit: pct
+    measure_type: rate
+    default_agg: avg
+    semantic_confidence: verified
+    semantic_source: source_service
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_bispolfaiz
+    status: active
+
+  - series_id: evds:TP.APIFON4
+    native_code: TP.APIFON4
+    dataset_id: evds_wafc
+    name_tr: TCMB Ağırlıklı Ortalama Fonlama Maliyeti (%)
+    description: >-
+      TCMB EVDS, "bie_apifon" veri grubu. TCMB'nin bankaları fonladığı ağırlıklı ortalama faiz, iş günü bazında, yüzde. Fiilî para politikası duruşunun günlük ölçüsüdür. Dönemlere indirgenirken ortalama alınır (kural avg). Frekans ve birim EVDS'nin kendi metadata'sından
+      (FREQUENCY_STR, BIRIMI: milyon TL ve yüzde (bu seri yüzde)); ölçüm tipi ve indirgeme kuralı serinin adından ve veri
+      grubu tanımından; canlı seri listesi 13 Eylül 2026 (docs/sources/evds.md, 'Küratörlü ek').
+    aliases:
+      - ağırlıklı ortalama fonlama maliyeti
+      - aofm
+      - fonlama maliyeti
+      - tcmb fonlama faizi
+      - efektif politika faizi
+    tags: [faiz, tcmb, para_politikasi, fonlama]
+    frequency: business_daily
+    unit: pct
+    measure_type: rate
+    default_agg: avg
+    semantic_confidence: verified
+    semantic_source: source_service
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_apifon
+    status: active
+
+  - series_id: evds:TP.TRY.MT02
+    native_code: TP.TRY.MT02
+    dataset_id: evds_deposit_rate_3m
+    name_tr: 3 Aya Kadar Vadeli TL Mevduat Faiz Oranı (Akım, %)
+    description: >-
+      TCMB EVDS, "bie_mt100h" veri grubu. Bankalarca açılan 3 aya kadar vadeli TL mevduatlara uygulanan ağırlıklı ortalama faiz, haftalık (Cuma bitişli), akım: o hafta açılan mevduatların oranıdır, stokun değil. Dönemlere indirgenirken ortalama alınır (kural avg). Frekans ve birim EVDS'nin kendi metadata'sından
+      (FREQUENCY_STR, BIRIMI: Ağırlıklı ortalama (yüzde)); ölçüm tipi ve indirgeme kuralı serinin adından ve veri
+      grubu tanımından; canlı seri listesi 13 Eylül 2026 (docs/sources/evds.md, 'Küratörlü ek').
+    aliases:
+      - mevduat faizi
+      - 3 aylık mevduat faizi
+      - tl mevduat faiz oranı
+      - vadeli mevduat faizi
+      - mevduat faiz oranı
+    tags: [faiz, mevduat, tcmb, akim]
+    frequency: weekly
+    week_anchor: friday
+    unit: pct
+    measure_type: rate
+    default_agg: avg
+    semantic_confidence: verified
+    semantic_source: source_service
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_mt100h
+    status: active
+
+  - series_id: evds:TP.KKHARTUT.KT1
+    native_code: TP.KKHARTUT.KT1
+    dataset_id: evds_card_spending
+    name_tr: Banka Kartı ve Kredi Kartı Harcama Tutarı, Toplam (Akım, bin TL)
+    description: >-
+      TCMB EVDS, "bie_kkhartut" veri grubu. Haftalık (Cuma bitişli) toplam banka kartı ve kredi kartı harcama tutarı, bin TL, akım: haftalar toplanabilir (kural sum). Sektör kırılımları aynı veri grubunda. Frekans ve birim EVDS'nin kendi metadata'sından
+      (FREQUENCY_STR, BIRIMI: bin TL); ölçüm tipi ve indirgeme kuralı serinin adından ve veri
+      grubu tanımından; canlı seri listesi 13 Eylül 2026 (docs/sources/evds.md, 'Küratörlü ek').
+    aliases:
+      - kredi kartı harcamaları
+      - kart harcaması
+      - kart harcama tutarı
+      - kredi kartı harcama
+      - tüketici harcaması kart
+    tags: [harcama, kredi_karti, tcmb, akim]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_th
+    measure_type: flow_periodic
+    default_agg: sum
+    semantic_confidence: verified
+    semantic_source: source_service
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_kkhartut
+    status: active
+
+  - series_id: evds:TP.HPBITABLO1.11
+    native_code: TP.HPBITABLO1.11
+    dataset_id: evds_m2
+    name_tr: Para Arzı M2 (bin TL)
+    description: >-
+      TCMB EVDS, "bie_hpbitablo1" veri grubu. Haftalık (Cuma bitişli) M2 para arzı stoku, bin TL: M1 + vadeli mevduat. Dönemlere indirgenirken son değer alınır (kural last). Frekans ve birim EVDS'nin kendi metadata'sından
+      (FREQUENCY_STR, BIRIMI: bin TL); ölçüm tipi ve indirgeme kuralı serinin adından ve veri
+      grubu tanımından; canlı seri listesi 13 Eylül 2026 (docs/sources/evds.md, 'Küratörlü ek').
+    aliases:
+      - para arzı
+      - m2
+      - m2 para arzı
+      - para arzı m2
+      - parasal büyüklük
+    tags: [para_arzi, m2, tcmb, stok]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_th
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_service
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_hpbitablo1
+    status: active
+
+  - series_id: evds:TP.HPBITABLO1.18
+    native_code: TP.HPBITABLO1.18
+    dataset_id: evds_m3
+    name_tr: Para Arzı M3 (bin TL)
+    description: >-
+      TCMB EVDS, "bie_hpbitablo1" veri grubu. Haftalık (Cuma bitişli) M3 para arzı stoku, bin TL: M2 + repo + para piyasası fonları + ihraç edilen menkul kıymetler. Dönemlere indirgenirken son değer alınır (kural last). Frekans ve birim EVDS'nin kendi metadata'sından
+      (FREQUENCY_STR, BIRIMI: bin TL); ölçüm tipi ve indirgeme kuralı serinin adından ve veri
+      grubu tanımından; canlı seri listesi 13 Eylül 2026 (docs/sources/evds.md, 'Küratörlü ek').
+    aliases:
+      - m3
+      - m3 para arzı
+      - geniş para arzı
+      - para arzı m3
+    tags: [para_arzi, m3, tcmb, stok]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_th
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_service
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_hpbitablo1
     status: active

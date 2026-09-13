@@ -203,3 +203,25 @@ locator, artifact metadata, logs, or exception messages. `.env` is git-ignored a
   `/fe` is a shape-discovery tool only and must not become a production fallback.
 - The exact `Tarih` format for quarterly, semi-annual and yearly frequencies is unverified.
 - No rate limit is documented. The guide only advises fetching once per day.
+
+## Küratörlü ek (2026-09-13): kur, faiz, mevduat faizi, kart harcaması, para arzı, TÜFE
+
+`catalog/series/evds.yml` üretilen bloğun altına elle yazılmış 8 giriş eklendi; TÜFE genel
+endeksi (`TP.TUKFIY2025.GENEL`) üretilmiş girdi olarak duruyordu, semantiği küratörlü yapıldı.
+Kanıt: EVDS'nin kendi `/datagroups/mode=0` ve `/serieList/fe/type=json&code=<grup>` yanıtları
+(13 Eylül, `EVDS_API_KEY` ile). Frekans `FREQUENCY_STR`'den, birim veri grubunun `BIRIMI`
+alanından; ölçüm tipi ve indirgeme kuralı serinin adından ve tanımından (oran → avg,
+stok → last, akım → sum).
+
+| Seri | Veri grubu | FREQUENCY_STR | BIRIMI | Katalog |
+|---|---|---|---|---|
+| TP.DK.USD.A.YTL, TP.DK.EUR.A.YTL | bie_dkdovytl Döviz Kurları | GÜNLÜK | Türk lirası | daily, TRY, rate, avg |
+| TP.BISPOLFAIZ.TUR | bie_bispolfaiz Merkez Bankaları Politika Faiz Oranı | AYLIK | Yüzde | monthly, pct, rate, avg |
+| TP.APIFON4 | bie_apifon TCMB Net Fonlaması ve AOFM | İŞ GÜNÜ | milyon TL ve yüzde (bu seri yüzde) | business_daily, pct, rate, avg |
+| TP.TRY.MT02 | bie_mt100h Mevduat Faiz Oranları (Akım) | HAFTALIK(CUMA) | Ağırlıklı ortalama | weekly/friday, pct, rate, avg |
+| TP.KKHARTUT.KT1 | bie_kkhartut Kart Harcama Tutarı (Akım) | HAFTALIK(CUMA) | bin TL | weekly/friday, TRY_th, flow_periodic, sum |
+| TP.HPBITABLO1.11, .18 | bie_hpbitablo1 Para Arzı (M2, M3) | HAFTALIK(CUMA) | bin TL | weekly/friday, TRY_th, stock, last |
+| TP.TUKFIY2025.GENEL | bie_tukfiy2025 TÜFE (2025=100) | AYLIK | (boş) | monthly, index, index, last |
+
+Alınmayan: `bie_kt100h`/`bie_kt210a` kredi faizlerinin diğer serileri (üretilmiş blokta
+`unknown` olarak duruyor; TP.KTF12 küratörlü), TLREF (`bie_bisttlref`), rezervler.

@@ -406,11 +406,13 @@ def test_silver_command_publishes_bronze_into_the_trusted_query_surface(
 def test_gold_command_caches_reviewed_metrics_and_records_the_rest_as_refused(
     tmp_path: Path, capsys: Any
 ) -> None:
-    """The committed metric catalog against a Silver holding only the BDDK monthly series.
+    """The committed metric catalog against a Silver holding only the BDDK monthly housing series.
 
-    One metric can be built (the quarterly housing-loan stock); the other two need series
-    this Silver does not hold, so the functions refuse them with ``NO_OBSERVATIONS``. The
-    refusal is a recorded outcome with a reason, not a silently missing table.
+    One metric can be built (the quarterly housing-loan stock); every other catalogued metric
+    needs series this Silver does not hold, so the functions refuse them with
+    ``NO_OBSERVATIONS``. The refusal is a recorded outcome with a reason, not a silently
+    missing table. The refused count follows the committed catalog (2026-09-13: five, after
+    ``catalog/gold/kredi_kirilimi.yml`` added three), so it is derived, not hardcoded.
     """
 
     database, data_root = _bronze_from_bddk_monthly_fixture(tmp_path)
@@ -424,7 +426,11 @@ def test_gold_command_caches_reviewed_metrics_and_records_the_rest_as_refused(
     assert "status: success" in output
     assert "tables built           : 1" in output
     assert "gold.konut_kredisi_ceyreklik" in output
-    assert "metrics refused        : 2" in output
+    from src.lakehouse.gold.catalog import load_gold_catalog_files
+
+    catalogued = len(load_gold_catalog_files(Path("catalog/gold")))
+    assert catalogued >= 3
+    assert f"metrics refused        : {catalogued - 1}" in output
     assert "NO_OBSERVATIONS" in output
     quarters = _read(database, "SELECT count(*) FROM gold.konut_kredisi_ceyreklik")[0][0]
     assert quarters > 0
@@ -432,11 +438,10 @@ def test_gold_command_caches_reviewed_metrics_and_records_the_rest_as_refused(
         database,
         "SELECT metric_id, status FROM meta.gold_build WHERE is_current ORDER BY metric_id",
     )
-    assert ledger == [
-        ("konut_faizi_aylik", "refused"),
-        ("konut_kredisi_aylik_vs_haftalik", "refused"),
-        ("konut_kredisi_ceyreklik", "built"),
-    ]
+    assert ("konut_kredisi_ceyreklik", "built") in ledger
+    assert ("konut_faizi_aylik", "refused") in ledger
+    assert ("konut_kredisi_aylik_vs_haftalik", "refused") in ledger
+    assert len(ledger) == catalogued and sum(1 for _, st in ledger if st == "built") == 1
 
 
 def test_gold_run_writes_one_call_as_json_and_exits_3_on_refusal(
