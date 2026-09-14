@@ -1,0 +1,171 @@
+{
+  "meta": {
+    "commit": "04655c7",
+    "url": "http://127.0.0.1:8766",
+    "at": "2026-09-14T13:50:37",
+    "gorunum_alanlari": [
+      "1512x982",
+      "1280x800"
+    ]
+  },
+  "passed": 6,
+  "total": 6,
+  "steps": [
+    {
+      "id": "1512x982_duzen",
+      "ok": true,
+      "gozlenen": {
+        "genislik": 1512,
+        "yukseklik": 982,
+        "yatay_kaydirma": false,
+        "soru": {
+          "x": 396,
+          "y": 926,
+          "w": 616,
+          "h": 44,
+          "icinde": true
+        },
+        "gonder": {
+          "x": 1022,
+          "y": 926,
+          "w": 58,
+          "h": 44,
+          "icinde": true
+        },
+        "sohbet": {
+          "x": 248,
+          "y": 56,
+          "w": 872,
+          "h": 822,
+          "icinde": true
+        },
+        "kanit": {
+          "x": 1121,
+          "y": 159,
+          "w": 391,
+          "h": 32,
+          "icinde": true
+        },
+        "oturum": {
+          "x": 16,
+          "y": 289,
+          "w": 215,
+          "h": 15,
+          "icinde": true
+        },
+        "rol": "Profil: Analyst (salt-okunur)"
+      },
+      "ekran": "01_1512x982_duzen.png",
+      "at": "2026-09-14T13:50:01"
+    },
+    {
+      "id": "1512x982_iki_cevap",
+      "ok": true,
+      "gozlenen": {
+        "cevap": 2,
+        "tablolar": [
+          true,
+          false
+        ],
+        "yatay_kaydirma": false
+      },
+      "ekran": "02_1512x982_iki_cevap.png",
+      "at": "2026-09-14T13:50:15"
+    },
+    {
+      "id": "1512x982_eski_cevap",
+      "ok": true,
+      "gozlenen": {
+        "aktif": "0",
+        "görünür": true,
+        "bağlantılar": [
+          "/api/answers/0/report.html",
+          "/api/answers/0/table.csv",
+          "/api/answers/0/table.xlsx"
+        ],
+        "kanıt_paneli_ilk_40": "sayılar ✓sorgu izi ✓dosya zinciri ✓Cevap",
+        "cevap0_kanıt_özeti": "kanıt zinciri tam: 11/11 sayı tabloda · "
+      },
+      "ekran": "03_1512x982_eski_cevap.png",
+      "at": "2026-09-14T13:50:15"
+    },
+    {
+      "id": "1280x800_duzen",
+      "ok": true,
+      "gozlenen": {
+        "genislik": 1280,
+        "yukseklik": 800,
+        "yatay_kaydirma": false,
+        "soru": {
+          "x": 396,
+          "y": 744,
+          "w": 384,
+          "h": 44,
+          "icinde": true
+        },
+        "gonder": {
+          "x": 790,
+          "y": 744,
+          "w": 58,
+          "h": 44,
+          "icinde": true
+        },
+        "sohbet": {
+          "x": 248,
+          "y": 56,
+          "w": 640,
+          "h": 640,
+          "icinde": true
+        },
+        "kanit": {
+          "x": 889,
+          "y": 159,
+          "w": 391,
+          "h": 32,
+          "icinde": true
+        },
+        "oturum": {
+          "x": 16,
+          "y": 289,
+          "w": 215,
+          "h": 15,
+          "icinde": true
+        },
+        "rol": "Profil: Analyst (salt-okunur)"
+      },
+      "ekran": "04_1280x800_duzen.png",
+      "at": "2026-09-14T13:50:16"
+    },
+    {
+      "id": "1280x800_iki_cevap",
+      "ok": true,
+      "gozlenen": {
+        "cevap": 2,
+        "tablolar": [
+          true,
+          true
+        ],
+        "yatay_kaydirma": false
+      },
+      "ekran": "05_1280x800_iki_cevap.png",
+      "at": "2026-09-14T13:50:36"
+    },
+    {
+      "id": "1280x800_eski_cevap",
+      "ok": true,
+      "gozlenen": {
+        "aktif": "0",
+        "görünür": true,
+        "bağlantılar": [
+          "/api/answers/0/report.html",
+          "/api/answers/0/table.csv",
+          "/api/answers/0/table.xlsx"
+        ],
+        "kanıt_paneli_ilk_40": "sayılar ✗sorgu izi ✓dosya zinciri ✓Cevap",
+        "cevap0_kanıt_özeti": "kanıt zinciri EKSİK: 11/12 sayı tabloda "
+      },
+      "ekran": "06_1280x800_eski_cevap.png",
+      "at": "2026-09-14T13:50:37"
+    }
+  ]
+}

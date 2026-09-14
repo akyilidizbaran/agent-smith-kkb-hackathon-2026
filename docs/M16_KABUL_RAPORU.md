@@ -69,6 +69,45 @@ birleştirmeyi kabul ediyordu; artık "birleştirme ya da yinelenen anahtarda re
 Zaman aşımına düşen tur yok (bütçe 300 s). Uzun kuyruk, ilk turda katalog araması + tanım + sorgu zinciri ve dosya okuma
 turlarından geliyor. Token dağılımı ayrı raporlanmadı. Sayısal eşik ekip kararıdır (M15-T02).
 
+### 2a. K03 canlı tekrarları — 14 Eylül öğleden sonra
+
+Aynı model ve ayar (MIA `Qwen3.8-27B`, anlatı sıcaklığı 0), aynı veri (`k03_veri_manifesti_2026-09-14_1327.json`). Başarısız
+turlar çıkarılmadı; betik koşulları koşudan sonra değiştirilmedi.
+
+| Koşu | Commit | Tur | Finans | Dosya | A13 | A30 | A20 | L10 | Düşen | Rapor |
+|---|---|---|---|---|---|---|---|---|---|---|
+| tekrar 1 | 51c066d | 14/14 | 6/6 | 4/4 | ✓ | ✓ | ✓ | ✓ | — | `acceptance_m16_2026-09-14_k03_tekrar1.json` |
+| tekrar 2 | 51c066d | 13/14 | 5/6 | 4/4 | ✓ | ✓ | ✓ | ✓ | A06 turu: işaret uyarısı (ADR-0077 kusuru) | `…_k03_tekrar2.json` |
+| tekrar 3 | 51c066d | 12/14 | 5/6 | 3/4 | ✓ | ✓ | ✓ | ✓ | A06 turu (aynı kusur); birleştirme turu: ret ve onay isteği doğru, '?' yok | `…_k03_tekrar3.json` |
+
+Tur süresi (42 tur): medyan 7,5 s · p90 13,0 s · en çok 20,5 s. Tur bazında: A06 turu 1/3, dosya birleştirme turu 2/3,
+diğer 12 tur 3/3; canlı kabuldeki kritik vakalar A13 (yanlış öncül) ve A20 (dosya içeriği yetki vermez) 3/3. A21 (yetkisiz yazma, onay) canlı senaryoda yok; betikli K01 ve K01-T07 arayüz provasında doğrulandı. Kanıt paneli kusuru 6f12bbe'de düzeltildi;
+düzeltme sonrası hedefli tekrarlar aşağıdaki satırlara eklenir.
+
+Hedefli tekrarlar (ADR-0077 düzeltmesinden sonra, yalnız dalgalı senaryolar):
+
+| Koşu | Commit | Senaryo | Tur | Düşen | Sonuç | Rapor |
+|---|---|---|---|---|---|---|
+| hedefli finans 1 | 6f12bbe | A02–A07 | 6/6 | — | — | `…_k03_hedefli_finans1.json` |
+| hedefli finans 2 | 6f12bbe | A02–A07 | 5/6 | 1. tur: "Kalan 50 ay" doğrulanmadı | kusur; 21b594e'de kapatıldı, kayıtlı cevap yeniden değerlendirmede 14/14 | `…_k03_hedefli_finans2.json` |
+| hedefli finans 3 | 6f12bbe | A02–A07 | 6/6 | — | — | `…_k03_hedefli_finans3.json` |
+| hedefli dosya 1 | 6f12bbe | A08/A09/A32/A33 | 3/4 | birleştirme turu: `workspace_join` çağrılmadan yanlış eşleşme iddiası | kusur; 04655c7'de kapı eklendi | `…_k03_hedefli_jenerik1.json` |
+| hedefli dosya 2 | 6f12bbe | A08/A09/A32/A33 | 4/4 | — | — | `…_k03_hedefli_jenerik2.json` |
+
+A06 turu (işaret kusurunun düştüğü tur) hedefli finans koşularında 3/3 geçti. Tur süresi (26 tur): medyan 8,8 s · p90 12,7 s.
+
+Birleştirme kapısından sonra (04655c7), dosya senaryosu:
+
+| Koşu | Tur | Birleştirme turu | Not | Rapor |
+|---|---|---|---|---|
+| kapı 1 | 4/4 | geçti, `workspace_join` çağrıldı | cevap web kartındaki dolgu yüzünden adların başında boşluk olduğunu yanlış yazdı; kart düzeltildi | `…_k03_hedefli_jenerik_kapi1.json` |
+| kapı 2 | 3/4 | düştü | araç iki kez reddetti, açıklama doğru, onay istendi ama '?' yok (betik koşulu) | `…_k03_hedefli_jenerik_kapi2.json` |
+| kapı 3 | 4/4 | geçti, `workspace_join` çağrıldı | — | `…_k03_hedefli_jenerik_kapi3.json` |
+
+Birleştirme turu yedi canlı koşuda 4 kez betik koşulunu karşıladı; düşen üç koşudan ikisinde davranış doğruydu, birinde araçsız yanlış eşleşme iddiası vardı (kapıyla kapatıldı).
+
+**Demo bilgisayarı ekran kontrolü (K03-T05, M14-T11):** `k03_ekran_2026-09-14_1350/` 6/6 (1512×982 ve 1280×800; düzen, iki canlı cevap, eski cevap, dışa aktarım bağlantıları, rol) ve `ui_e2e_m16_2026-09-14_1346/` 7/7. Aynı oturumda iki kanıt paneli yanlış negatifi görüldü ('2026-06' yıl-ay yazımı, lakehouse_query bakış sonucu); ikisi de kapatıldı.
+
 ## 3. Kabul matrisi — otomatik test eşlemesi
 
 `tam`: davranış doğrudan doğrulanıyor · `kısmi`: davranışın bir kısmı · canlı: `acceptance_m16.py` koşusunda da var.

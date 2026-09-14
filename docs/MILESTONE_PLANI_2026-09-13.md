@@ -401,7 +401,7 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 - [x] **M14-T08** (NaN ve ±Infinity → null; katı JSON testi): NaN ve ±Infinity JSON davranışını düzelt; eksik veya hesaplanamayan değeri sessiz sıfıra çevirme. Sayfa tüm cevap nedeniyle 500 vermesin.
 - [~] **M14-T09** ('ajan çalışıyor' durumu var; aşama/SSE yok, kapsam kararı K07): Uzun işlemde işin sürdüğünü ve hangi aşamada olduğunu göster. SSE/iptal ayrı kapsam kararıdır; bütün akışı bloklayan kör bekleyiş azaltılsın.
 - [x] **M14-T10** (13 Eyl tarayıcı kontrolü): Reset, tekrar yükleme, eski cevaba dönüş, modal aç/kapat, grafik büyütme ve klavye erişimini gerçek tarayıcıyla kontrol et.
-- [ ] **M14-T11** (demo bilgisayarında M16'da): Üç sütunlu ekranı demo bilgisayarında test et; kritik tablo/uyarı/soru kutusu erişilebilir olsun.
+- [x] **M14-T11** (14 Eyl, K03-T05: bu Mac'te gerçek sunucu ve canlı modelle 1512×982 ve 1280×800 görünüm alanında düzen, iki canlı cevap, eski cevap, dışa aktarım ve rol 6/6 — `docs/experiments/k03_ekran_2026-09-14_1350/`; canlı arayüz provası 7/7 `ui_e2e_m16_2026-09-14_1346/`; ekran okuyucu/klavye erişilebilirliği ayrıca denetlenmedi): Üç sütunlu ekranı demo bilgisayarında test et; kritik tablo/uyarı/soru kutusu erişilebilir olsun.
 - [ ] **M14-T12** (K10: kullanıcı kararı bekliyor; 2,5B/3B ikisi de duruyor): 2,5B/3B kanıt yolculuğu denemeleri için kapsam kararı ver; seçilmeyen görünüm ancak karar sonrası kaldırılır. Gösterimin kanıt düzeltmelerinin önüne geçmesine izin verme.
 - [x] **M14-T13** (test: CSV/XLSX yeniden okunup karşılaştırıldı; canlı indirme doğrulandı): İndirilen tabloyu yeniden okuyup satır/kolon/değerlerini karşılaştır; raporu aç/render et; PNG/SVG'yi görsel olarak doğrula.
 

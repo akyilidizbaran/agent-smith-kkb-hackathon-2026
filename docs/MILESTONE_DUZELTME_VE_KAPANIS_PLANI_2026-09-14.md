@@ -198,14 +198,46 @@ Dayanak: [M16 kabul raporu](M16_KABUL_RAPORU.md). Aşağıdakiler her biri yeni 
 
 ## 12. K03 — Son sürüm provası ve teslim hazırlığı
 
-- [ ] **K03-T01:** Normal analiz, çok turlu analiz, web ve OCR için ölçülecek süre/token/başarı ölçütlerini kararlaştır; uydurma SLA yazma.
-- [ ] **K03-T02:** Son aday commit ve veri manifestini sabitle; ilgili offline testleri, gerekiyorsa paketlerin tam testlerini ve kurulum kontrollerini çalıştır.
-- [ ] **K03-T03:** Canlı provada üç dengeli ilk tekrar yaklaşımını bütçeyle değerlendir; kritik/dalgalı vakaya hedefli ek tekrar yap. Başarısızlık ve timeout'ları sonuçtan çıkarma.
-- [ ] **K03-T04:** Doğruluk kontrolü başarısını canlı başarı yüzdesiyle karıştırma. Tek temiz koşuyu bütün stokastik davranışın garantisi sayma.
-- [ ] **K03-T05:** Demo bilgisayarında gerçek ekran düzeni, yükleme, eski cevap, export ve rol gösterimini kontrol et; M14-T11'i kanıtla kapat.
+- [ ] **K03-T01:** Normal analiz, çok turlu analiz, web ve OCR için ölçülecek süre/token/başarı ölçütlerini kararlaştır; uydurma SLA yazma. — **14 Eyl:** ölçülen taban ve öneri aşağıda; eşik kararı kullanıcıda (K06), bu yüzden kutu işaretlenmedi.
+- [x] **K03-T02:** Son aday commit ve veri manifestini sabitle; ilgili offline testleri, gerekiyorsa paketlerin tam testlerini ve kurulum kontrollerini çalıştır. — **14 Eyl:** aday kod commit'i 6f12bbe idi; canlı tekrar ve ekran provası bulguları kapatılınca aday e212e96 oldu (sonraki commit'ler yalnız belge/kanıt). Veri manifesti `docs/experiments/k03_veri_manifesti_2026-09-14_1327.json` (DB sha256 c2cf0aec…, 2.214 katalog / 681 yüklü seri, 43.830 gözlem, 2016-01-01 → 2026-07-03, 6 Gold tablo, 117 run, 3.468 artifact; DB'de `meta.lakehouse_setting` yok — D04 öncesi kuruldu, okuma varsayılan kip). Ajan testleri 477 geçti (6f12bbe) → 485 (e212e96). Lakehouse tam suite 1.112 geçti, 12 dk 15 s (9eaf60e'de; lakehouse-core o tarihten sonra değişmedi). Kurulum kontrolü K02-T01 temiz klon provası (9eaf60e; sonraki ajan değişiklikleri kanıt paneli, birleştirme kapısı, web kartı biçimi ve lakehouse_query bakış kaydı — kurulum yolunu değiştirmez).
+- [x] **K03-T03:** Canlı provada üç dengeli ilk tekrar yaklaşımını bütçeyle değerlendir; kritik/dalgalı vakaya hedefli ek tekrar yap. Başarısızlık ve timeout'ları sonuçtan çıkarma. — **14 Eyl:** 51c066d'de üç tam tekrar (14/14, 13/14, 12/14); dalgalı turlarda hedefli ek tekrar: 6f12bbe finans ×3 (6/6, 5/6, 6/6) ve dosya ×2 (3/4, 4/4), 04655c7 dosya ×3 (4/4, 3/4, 4/4). Timeout yok; düşen turlar kayıtta. Tekrarların bulduğu ürün kusurları kapatıldı: işaretsiz büyüklük ve yön sözcüğü (ADR-0077), tabloyla tutarlı kalan satır sayısı, birleştirmede araçsız eşleşme iddiası (ADR-0077 eki). Kalan dalgalanma: dosya senaryosunun birleştirme turu 3 koşuda betik koşulunu karşılamadı; ikisinde davranış doğruydu (araç reddi, doğru açıklama, onay isteği) ama cevapta '?' yoktu; betik koşulu sonuç lehine değiştirilmedi. Raporlar `docs/experiments/acceptance_m16_2026-09-14_k03_*.json`, M16 raporu §2a.
+- [x] **K03-T04:** Doğruluk kontrolü başarısını canlı başarı yüzdesiyle karıştırma. Tek temiz koşuyu bütün stokastik davranışın garantisi sayma. — **14 Eyl:** M16 raporunda iki ayrı katman: doğruluk kanıtı (§3a matris, betikli K01/K01-T07/K02, ajan testleri 484) ve canlı tur başarısı (§2a: tur bazında oranlar, ör. A06 turu düzeltme öncesi 1/3, sonrası 3/3; birleştirme turu 7 koşuda 4). Yüzdeler birbirine eklenmedi; 14/14 koşusu garanti diye yazılmadı.
+- [x] **K03-T05:** Demo bilgisayarında gerçek ekran düzeni, yükleme, eski cevap, export ve rol gösterimini kontrol et; M14-T11'i kanıtla kapat. — **14 Eyl:** bu Mac (2560×1664 Retina) üzerinde gerçek sunucu ve canlı modelle `scripts/k03_ekran_kontrol.py` 6/6 (`docs/experiments/k03_ekran_2026-09-14_1350/`): 1512×982 ve 1280×800 görünüm alanında yatay kaydırma yok, soru kutusu/gönder/kanıt paneli/oturum listesi ekranda, iki canlı cevap, sol listeden eski cevap açılınca odak ve CSV/XLSX/HTML bağlantıları, rol rozeti 'Analyst'. Ayrıca `ui_e2e_m16.py` canlı 7/7 (`ui_e2e_m16_2026-09-14_1346`): yükleme, dışa aktarım, anahtarsız Architect 403, sıfırlama. Provanın bulduğu üç kusur kapatıldı: web kartında metin dolgusu modelin yanlış 'baştaki boşluk' iddiasına yol açtı; '2026-06' yıl-ay yazımı sayı sanıldı; lakehouse_query bakış sonucu kanıt havuzuna girmiyordu (ADR-0077 eki).
 - [ ] **K03-T06:** Başka ekip üyesi yalnız belgelenmiş adımlarla kurulumu ve kabul akışını tekrarlasın; gizli yerel yol/terminal/env override bağımlılığı bulunmasın.
-- [ ] **K03-T07:** Pasifleştirme, ek animasyon, yardımcı motor katkıları ve ek çıktı biçimleri için açık kararları sınıflandır; zorunlu işlerle karışmasın. Erteleme gerekçesi ve kabul etkisi yazılsın.
-- [ ] **K03-T08:** Teslim commit/etiket/veri manifesti/test raporunu kaydet; gerekli ek teslim beklentilerini teyit et. Merge/push/branch temizliği ayrı kullanıcı/ekip kararını izlesin.
+- [x] **K03-T07:** Pasifleştirme, ek animasyon, yardımcı motor katkıları ve ek çıktı biçimleri için açık kararları sınıflandır; zorunlu işlerle karışmasın. Erteleme gerekçesi ve kabul etkisi yazılsın. — **14 Eyl:** aşağıdaki sınıflandırma tablosu.
+- [x] **K03-T08:** Teslim commit/etiket/veri manifesti/test raporunu kaydet; gerekli ek teslim beklentilerini teyit et. Merge/push/branch temizliği ayrı kullanıcı/ekip kararını izlesin. — **14 Eyl teslim adayı kaydı:** dal `feature/agent-engine`, aday kod commit'i e212e96 (origin'e itildi; main'e birleştirilmedi, etiket konmadı). Veri: `k03_veri_manifesti_2026-09-14_1327.json`. Testler: ajan 485 (e212e96), lakehouse 1.112 (lakehouse-core değişmedi). Kabul raporları: K01 CLI 22/22, K01-T07 arayüz 15/15, K02 finans 22/22, A30 canlı 5/5, temiz kurulum provası, canlı M16 tekrarları ve hedefli tekrarlar (M16 raporu §2a), ekran kontrolü 6/6, canlı arayüz 7/7. Teslim kuralları denetimi (izlenen dosyalar): `.env` izlenmiyor ve gitignore'da, izlenen dosyada `.env` anahtar değeri 0, token kalıbı 0; kodda OpenAI/Anthropic/OpenRouter adresi 0, bulut lakehouse istemcisi 0; model uç noktası Kloudeks (ön kontrol). **Kullanıcı/ekip kararı bekleyenler:** main'e birleştirme ve itme, freeze etiketi (geliştirme bitişi 20 Eylül), reponun private kalması ve KKB kullanıcılarının collaborator eklenmesi, başka ekip üyesi provası (K03-T06), eşikler (K03-T01).
+
+### Ölçülen taban (K03-T01; SLA değil)
+
+| Ölçüt | Ölçülen | Kaynak | Sınır |
+|---|---|---|---|
+| Canlı çok turlu kabulde tur süresi | medyan 13,9 s · p90 58,4 s · en çok 200,9 s (84 tur, 6 koşu) | `docs/experiments/acceptance_m16_2026-09-14_0118…0219.json` | aynı model ve ayar; koşular arasında kod değişti |
+| Son iki gece koşusunun toplamı | 123 s ve 127 s (14 tur) | `…_0214.json`, `…_0219.json` | tek koşu garanti değil |
+| K03 canlı tekrarlarında tur süresi | medyan 7,5 s · p90 13,0 s · en çok 20,5 s (42 tur, 3 koşu, 51c066d); koşu toplamı 111–122 s | `acceptance_m16_2026-09-14_k03_tekrar1…3.json` | aynı commit; tur başarısı 14, 13, 12 / 14 |
+| Canlı tur başarısı | 10 → 11 → 11 → 12 → 12 → 14 / 14 | aynı dosyalar | her koşu yeni commit'te |
+| Temiz kurulumdan ilk canlı cevap | `make setup` 1 s (uv önbelleğiyle), iki seri canlı veri 11 s, ön kontrol 1 s, ilk canlı soru 7,7 s | `k02_t01_kurulum_2026-09-14_1321/kurulum.log` | aynı makine; önbelleksiz kurulum ölçülmedi |
+| Tam zorunlu veri kurulumu | ~30 dk (681 seri, FinTürk 3.402 istek ~26 dk) | `M08_KAPSAM_RAPORU.md`, `OPERASYON_TARIFI.md` | ağ hızına bağlı |
+| Web araması ve OCR süresi | ayrı ölçüm yok | — | canlı kabul senaryoları OCR turu içermiyor |
+| Token | koşu raporları token saymıyor | — | ölçmek için kabul betiğine kullanım alanı eklenmesi gerekir |
+
+**Öneri (kullanıcı onayı bekler):** canlı kabuldeki kritik vakalar (A13 yanlış öncül, A20 dosya içeriği yetki vermez) canlı
+tekrarların hepsinde geçmeli; A21 (yetkisiz yazma, onay) canlı senaryoda yok, her aday commit'te betikli K01 ve K01-T07 ile tam geçmeli; diğer turlar için başarı oranı ve p90 süre raporlanır, eşik ayrıca yazılır. Betikli kabul
+(K01/K02) doğruluk kanıtıdır ve canlı başarı yüzdesiyle toplanmaz (K03-T04).
+
+### Açık kararların sınıflandırması (K03-T07)
+
+Bu işler zorunlu düzeltmelerden ayrıdır; hiçbiri A01–A33 kabul matrisinde (M16 raporu §3a) bir vakanın tam sayılmasını engellemez.
+
+| Konu | Tür | Bugünkü durum | Erteleme gerekçesi | Kabul etkisi | Karar sahibi |
+|---|---|---|---|---|---|
+| Seri/kaynak pasifleştirme (M04) | koşula bağlı özellik | uygulanmadı; taslak → onay → aktif ve doğrulanan tam sıfırlama var | A21 ve demo akışı mevcut yayın/sıfırlama ile kapanıyor; pasifleştirme ek yönetim işlemi | yok | ekip |
+| Kanıt yolculuğu 2,5B/3B görünümü (K10, M14-T12) | görünüm | iki deneme duruyor, seçim yapılmadı | kanıt düzeltmeleri önceydi; kanıt paneli metin ve üç rozetle tam | yok | kullanıcı |
+| Yardımcı motor katkıları (EK-08: Büşra'nın ilgi kapısı, çapraz kontrol, birim tahmini; G12a–d) | katkı aktarımı | bu dala alınmadı. 14 Eyl birleştirme denemesinde metin çatışması yok; birleşik ağaçta 8 test düştü: 6'sı yeni testlerin sahte okuyucusu bizim `read_table_for_profiling(sheet=…)` imzasını tanımıyor, 2'si (`test_vision`, v3 doğrulayıcı) ayrıca düştü, nedeni incelenmedi | yanlış/alakasız dosya ve birimsiz ekleme riskini azaltır; ama bizim ingest imzasına uyarlanması ve golden vakaların yeniden koşulması ayrı iş | zorunlu vaka yok; A10/A11 davranışını güçlendirir | ekip (Büşra + Baran) |
+| Ek çıktı biçimleri (K05 dışı: PDF rapor, PPTX) | kapsam dışı | K05 kararı CSV, XLSX, PNG, HTML; hepsi kabulde | karar verilmiş | yok | kullanıcı |
+| Performans ve başarı eşikleri (K06, M16-T10) | ölçüm kararı | K03-T01'de ölçülen taban öneri olarak yazıldı, SLA değil | eşiği kullanıcı belirleyecek | M16-T10 açık | kullanıcı |
+| Canlı ağ/MIA kesintisi provası (M16-T07) | prova | birim testleri var (Tavily 503/429/kopma, model kesintisi, süre bütçesi) | demo makinesinde ağ kesmek riskli; test düzeyi kanıt var | A27 test düzeyinde tam | ekip |
+| Başka ekip üyesinin kurulum provası (M16-T11, K03-T06) | prova | aynı makinede temiz klon provası yapıldı (K02-T01) | başka kişi ve başka makine gerekir | teslim kabulü | kullanıcı/ekip |
+| Nihai merge, main'e push, freeze etiketi (K12, M17) | teslim | yapılmadı; çalışma yalnız `feature/agent-engine` | kullanıcı talimatı: main'e push yok | freeze kaydı | kullanıcı |
 
 **Kabul:** son kodla gerekli senaryoları başka ekip üyesi tekrar çalıştırabiliyor; tüm kritik düzeltmeler kapalı, performans ölçütleri açık, kalan koşullu işler gerekçeli. 20 Eylül freeze kaydı ayrıca tamamlanır.
 
@@ -263,4 +295,5 @@ D01–D07 ve zorunlu K01/K02 kabulü tamamlanmadan bu incelemenin açıkları ka
 - **2026-09-14 (uygulama):** D04 (lakehouse kip + sıfırlama bağlantısı), D05 ve D06 uygulandı ve testlendi (ADR-0069, ADR-0070); ajan 448, lakehouse tam suite 1.111 geçti. D04-T05…T07 gerçek CLI akışı K01'de.
 - **2026-09-14 (K01):** `scripts/k01_kabul.py` gerçek bileşenlerle 22/22; bulgu: bootstrap sonrası Silver ilişkisi yoktu → düzeltildi (ADR-0069 eki). K01-T07 arayüz provası ayrı.
 - **2026-09-14 (K02):** T06–T14 testlerle ve A30 canlı provasıyla kapandı (ADR-0071…0074). T02–T05 `scripts/k02_finans_kabul.py` 22/22, commit 15f8593; dört ürün kusuru bulunup kapatıldı (ADR-0075).
+- **2026-09-14 (K03):** manifest, tam testler, üç canlı tekrar ve hedefli tekrarlar, ekran kontrolü; tekrarlar ve prova altı ürün kusuru daha buldu, hepsi kapatıldı (ADR-0077 ve eki); teslim adayı e212e96. K03-T01 eşik kararı ve K03-T06 başka üye provası kullanıcıda.
 - **2026-09-14 (K01-T07):** `scripts/k01_ui_kabul.py` arayüzden 15/15, commit 9eaf60e; onaylanan adhoc seri sayaç bulgusu kapatıldı. K02-T01 kurulum provasında ön kontrol boş model anahtarında 'hazır' dedi → düzeltildi (ADR-0076).
