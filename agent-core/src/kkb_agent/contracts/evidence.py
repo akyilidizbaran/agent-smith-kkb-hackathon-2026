@@ -21,6 +21,7 @@ from typing import Any, Protocol, runtime_checkable
 # Boşluk metinleri core/evidence.py'de üretilir; rozet ayrımı bu iki imle yapılır (metin değişirse test düşer).
 _CLAIM_GAP_PREFIX = "tabloda bulunmayan sayılar"
 _PROVENANCE_GAP_MARK = "kolonunun provenance kaydı yok"
+_OCR_GAP_PREFIX = "sayılar OCR ile görüntüden okundu"
 
 
 @dataclass(frozen=True)
@@ -153,6 +154,7 @@ class EvidencePanel:
     web_sources: list[dict[str, Any]] = field(default_factory=list)   # kullanılan sayfa: url, sha256, fetched_at
     web_unused: list[dict[str, Any]] = field(default_factory=list)    # taranıp kullanılmayan / erişilemeyen
     inspected_rows: int = 0         # kaç satır incelendi (ilk N); tablo daha büyükse kapsam notu
+    ocr_unverified: bool = False    # K02-T06 (A12): sayılar OCR ile görüntüden okunmuş bir tablodan; kesin sonuç sayılmaz
 
     @property
     def matched_numbers(self) -> int:
@@ -162,6 +164,8 @@ class EvidencePanel:
     @property
     def claims_ok(self) -> bool:
         """Cevaptaki her sayı bir araç çıktısında, doğru işaretle; sorudan kopya doğrulanmamış sayı yok."""
+        if self.ocr_unverified and self.numbers:
+            return False             # tabloda eşleşse de tablo OCR tahmini: sayı doğrulanmış sayılmaz
         return all(n.matched and not n.sign_warning for n in self.numbers)
 
     @property
@@ -173,7 +177,7 @@ class EvidencePanel:
     def chain_gaps(self) -> list[str]:
         """Yalnız zincir halkalarının boşlukları. Sayı ve sorgu izi boşlukları kendi rozetlerinde sayılır;
         M16 ölçümü (14 Eyl): tek eşleşmeyen sayı, dosyaları diskte duran zinciri de ✗ gösteriyordu."""
-        return [g for g in self.gaps if not g.startswith(_CLAIM_GAP_PREFIX) and _PROVENANCE_GAP_MARK not in g]
+        return [g for g in self.gaps if not g.startswith((_CLAIM_GAP_PREFIX, _OCR_GAP_PREFIX)) and _PROVENANCE_GAP_MARK not in g]
 
     @property
     def chain_ok(self) -> bool:
@@ -317,6 +321,7 @@ class EvidencePanel:
                           for k, v in self.artifacts.items()},
             "consulted_unused": self.consulted_unused,
             "gaps": self.gaps,
+            "ocr_unverified": self.ocr_unverified,
             "supports_artifacts": self.supports_artifacts,
             "chart_paths": self.chart_paths,
             "web_sources": self.web_sources,

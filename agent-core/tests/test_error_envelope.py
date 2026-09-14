@@ -68,6 +68,8 @@ def test_not_retryable_kumesi_beklendigi_gibi() -> None:
         "FILE_IRRELEVANT",
         # K02-T09 (A24): bayat Gold tablosunu tekrar sorgulamak eski sonucu verir; yeniden hesaplama ayrı çağrıdır.
         "GOLD_STALE",
+        # K02-T06 (A12): aynı düşük kaliteli görüntü yine aynı kalitede okunur.
+        "LOW_QUALITY_SOURCE",
     }
     # UNKNOWN_TOOL tekrar denenebilir: ad uyduran model aday listesiyle düzeltir (ADR-0036).
 

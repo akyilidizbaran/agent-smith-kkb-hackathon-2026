@@ -95,3 +95,5 @@ sıfırdan başlatmamak için kayıt tutulur.
 | [0069](0069-bos-katalog-ve-dogrulanan-sifirlama.md) | D04/D05: meta.lakehouse_setting ile kalıcı boş katalog kipi (bootstrap --catalog), sıfırlama hedefleri yapılandırmadan, kök dışı ayarda ret, onay kapsama bağlı, hedef hedef doğrulanan sonuç, boş katalog doğrulaması | Kabul edildi |
 | [0070](0070-fiziksel-kanit-halkalari.md) | D06: yol metni ile dosya durumu ayrı, canlı RAW/Bronze varlığı, özet denetim zamanı, altı halka durumu; yalnız Bronze kalması tam zincir değil | Kabul edildi |
 | [0071](0071-bayat-gold-reddi.md) | K02-T09: parmak izi canlı Silver'dan farklı gold.* tablosuna sorgu GOLD_STALE ile reddedilir; canlı Silver'dan yeniden hesap ya da operatörün gold build'i | Kabul edildi |
+| [0072](0072-ocr-kalite-kapisi.md) | K02-T06: düşük/belirsiz kaliteli OCR tablosu yüklenmez (LOW_QUALITY_SOURCE), açık kabulle uyarılı; OCR kaynaklı sayılar doğrulanmış sayılmaz | Kabul edildi |
+| [0073](0073-architect-kaynaktan-cekme.md) | K02-T12: Architect'e ingest_source — katalogdaki serinin dönemi kayıtlı kaynağından run kayıtlı toplu betikle çekilir, Silver yenilenir; erişilemezse sebep | Kabul edildi |

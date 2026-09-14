@@ -404,6 +404,9 @@ class EvidenceBuilder:
         panel.chart_paths = [str(a.get("png_path") or a.get("spec_path")) for a in (artifacts or [])
                              if a and a.get("kind") != "web"]
         self._web(panel, artifacts or [], workspace)
+        if any(w.get("ocr") for w in panel.web_sources):
+            panel.ocr_unverified = True
+            panel.gaps.append("sayılar OCR ile görüntüden okundu; hücreler doğrulanmadı, kesin sonuç sayılmaz")
         unmatched = [n.text for n in panel.numbers if not n.matched]
         if unmatched:
             panel.gaps.append("tabloda bulunmayan sayılar: " + ", ".join(unmatched[:8]))

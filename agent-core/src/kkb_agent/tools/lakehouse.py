@@ -254,10 +254,12 @@ class LakehouseQueryTool(Tool):
         bu — modele seçenek bırakmamak (ADR-0010). Mesajlar ADR-0017'deki gibi."""
         kapsam_disi_soru = self._soru_kapsam_disi()
         if kapsam_disi_soru:
+            can_fetch = callable(getattr(self._registry, "get", None)) and self._registry.get("ingest_source") is not None
             return ToolError(
                 error_code="OUT_OF_COVERAGE", message=kapsam_disi_soru,
                 hint="Bu dönem için sorgu çalıştırma. Kullanıcıya verinin hangi tarihe "
-                     "kadar yayımlandığını söyle; istersen mevcut son dönemi teklif et.",
+                     "kadar yayımlandığını söyle; istersen mevcut son dönemi teklif et."
+                     + (" Kullanıcı bu dönemi kaynağından çekmek isterse ingest_source ile çek, sonra sorgula." if can_fetch else ""),
                 layer="data",
             )
         if self.gold_available and self._is_period_aggregation(params.sql):

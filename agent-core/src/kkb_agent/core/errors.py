@@ -53,6 +53,8 @@ ErrorCode = Literal[
     "FILE_IRRELEVANT",
     # Bayat Gold (K02-T09, A24): Silver tablo kurulduktan sonra değişti; eski tablodan sayı verilmez, canlı Silver'dan yeniden hesaplanır.
     "GOLD_STALE",
+    # Düşük kaliteli OCR (K02-T06, A12): tablo yapısı çözülemedi ya da satır toplamları tutmuyor; doğrulanmamış sayı verilmez.
+    "LOW_QUALITY_SOURCE",
     # veri katmanı — sorgu çalıştı, sonuç ne söylüyor
     "OUT_OF_COVERAGE",
     "EMPTY_RESULT",
@@ -78,6 +80,7 @@ NOT_RETRYABLE: frozenset[str] = frozenset({
     "UNSAFE_SQL",        # politika; farklı yazımı denemek sınırı aşma girişimi olur
     "FILE_IRRELEVANT",   # aynı dosya aynı soruyla yine ilgisiz; kullanıcı onayı ayrı çağrıdır
     "GOLD_STALE",        # aynı bayat tabloyu yeniden sorgulamak eski sonucu verir; yeniden hesaplama ayrı çağrıdır
+    "LOW_QUALITY_SOURCE",  # aynı görüntü yine aynı kalitede okunur; daha iyi dosya ya da açık kabul ayrı çağrıdır
     # UNKNOWN_TOOL burada DEĞİL: on üç araçla model ara sıra ad uyduruyor ("workspace");
     # aday listesiyle bir sonraki tur düzeltiyor. Ölçüldü: tekrar denenmez sayılınca
     # araçsız son tura düşüp veri çekmeden cevap yazdı (G11a, gerçek DB).

@@ -404,7 +404,7 @@ class AnalyticsAgent:
     tekrardan sonra kendiliğinden çıkmıyordu."""
 
     #: Veri getirmez ama cevabın konusu olan işi yapar: bunlardan sonra "önce veriyi çek" uyarısı anlamsız.
-    ACTING_TOOLS = frozenset({"promote_draft", "chart", "web_search"})  # ingest ve web_url zaten veri sayılır
+    ACTING_TOOLS = frozenset({"promote_draft", "chart", "web_search", "ingest_source"})  # ingest ve web_url zaten veri sayılır
 
     DATA_PRODUCING_TOOLS = frozenset(
         {
@@ -902,6 +902,10 @@ class AnalyticsAgent:
         )
         text = self._strip_reasoning(final.content)
         text, rejected = self._checked_final(question, text, tool_texts, steps, self.max_steps + 1)
+        if budget_hit:
+            # K02-T10 (A27): sınır kullanıcıya deterministik söylenir; modelin bunu yazmasına bırakılmaz.
+            text = text.rstrip() + (f"\n\n(Not: soru başına süre bütçesi ({self.time_budget_s:.0f} s) doldu; cevap o ana kadar "
+                                    "toplanan verilerle sınırlı, tamamlanmayan adımlar yapılmadı.)")
         self._history.append(ChatMessage(role="user", content=question))
         self._history.append(ChatMessage(role="assistant", content=text))
         return AgentAnswer(text=text, steps=steps, workspace=self.workspace,

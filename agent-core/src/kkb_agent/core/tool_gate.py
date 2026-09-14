@@ -26,7 +26,7 @@ ALWAYS = frozenset({
 CHART = frozenset({"chart"})
 ANALYTICS = frozenset({"anomaly_detect", "change_points", "lead_lag"})
 WEB = frozenset({"web_url", "web_search"})
-ARCHITECT = frozenset({"ingest_from_url", "promote_draft"})
+ARCHITECT = frozenset({"ingest_from_url", "ingest_source", "promote_draft"})
 
 _CHART = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
 _ANALYTICS = re.compile(r"anomali|aykır|olağan ?dışı|sıra ?dışı|kırılma|rejim değişi|öncül|önden mi|korelasyon|granger|ilişki", re.I)

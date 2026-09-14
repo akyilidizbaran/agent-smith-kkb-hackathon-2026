@@ -170,6 +170,21 @@ class WebUrlTool(Tool):
                     candidates=[f"#{i}" for i in range(len(flat))],
                 )
             page, table = flat[params.table_index]
+            ocr_meta = (page.page.ocr or {}) if page.page else {}  # type: ignore[union-attr]
+            if ocr_meta and ocr_meta.get("quality") in ("düşük", "belirsiz"):
+                from .gold import unverified_consent
+                user_text = (getattr(self._registry, "user_text", None) or getattr(self._registry, "active_question", "") or "")
+                if not unverified_consent(user_text):
+                    # K02-T06 (A12): düşük kaliteli OCR tablosu aktif tablo olmaz; doğrulanmamış değer kesin sonuç gibi kullanılmaz.
+                    dikkat = [n for n in (page.page.notes or []) if n.startswith("DİKKAT")]  # type: ignore[union-attr]
+                    return ToolResult.fail(
+                        "LOW_QUALITY_SOURCE",
+                        f"Belgedeki tablo #{params.table_index} OCR kalite denetiminden geçmedi (kalite: {ocr_meta.get('quality')}); "
+                        "bu tablodan sayı verilmez. " + " ".join(dikkat),
+                        hint=("Kullanıcıya daha net bir görüntü ya da metin katmanlı PDF iste. Doğrulanmamış olduğunu bilerek "
+                              "kullanmayı açıkça kabul ederse ('doğrulanmamış olsa da kullan') aynı çağrıyı yinele."),
+                        layer="data", retryable=False,
+                    )
             local_index = next((i for (pp, i, tt) in tables if pp is page and tt is table), 0)
             labels = getattr(page.page, "table_labels", []) or []
             table_label = labels[local_index] if local_index < len(labels) else ""
@@ -182,7 +197,7 @@ class WebUrlTool(Tool):
                 warnings=[f"Kaynak web sayfası; içerik sha256 {page.fetch.sha256[:12]}…, çekim "
                           f"{page.fetch.fetched_at:%Y-%m-%d %H:%M} UTC, HTTP {page.fetch.http_status}. "
                           "Birimler sayfanın kendi beyanı; katalog doğrulaması yok."]
-                         + ([page.page.notes[0]] if page.page.ocr and page.page.notes else []),  # type: ignore[union-attr]
+                         + (list(page.page.notes) if page.page.ocr and page.page.notes else []),  # type: ignore[union-attr]
             )
             self.workspace.set_table(table, description=params.purpose, provenance=prov)
             self.workspace.title = params.purpose

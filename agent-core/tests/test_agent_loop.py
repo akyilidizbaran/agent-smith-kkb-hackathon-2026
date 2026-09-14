@@ -652,3 +652,14 @@ def test_d02_arac_cagirmadan_onceki_tablodan_yanlis_tek_sayi_gecmez() -> None:
     ok = _agent(_ScriptedLLM([LLMResponse(content="Aralıkta bakiye 110 idi.")]))[0]
     ok.workspace.set_table(pd.DataFrame({"bakiye": [100.0, 110.0]}), description="önceki tur")
     assert ok.ask("Aralıkta ne oldu?").text == "Aralıkta bakiye 110 idi.", "tablodaki sayıyla yorum geçer"
+
+
+def test_k02_t10_sure_butcesi_dolunca_sinir_deterministik_yazilir() -> None:
+    llm = _ScriptedLLM([LLMResponse(content="Şu ana kadar bulduklarım kısmi.")])
+    registry = ToolRegistry()
+    tool = _CountingTool()
+    registry.register(tool)
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=10, time_budget_s=1e-9)
+    ans = agent.ask("2025 konut kredisi ne kadar?")
+    assert ans.hit_step_limit and "süre bütçesi" in ans.text and "tamamlanmayan adımlar yapılmadı" in ans.text
+    assert tool.calls == 0

@@ -188,6 +188,9 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
             IngestFromUrlTool(lakehouse, cli, allowed_root=settings.ingest_allowed_root, registry=registry, ocr=ocr)
         )
         registry.register(PromoteDraftTool(lakehouse, cli, registry=registry))
+        # K02-T12 (A30): yüklü aralık dışını kayıtlı kaynağından çekme — yalnız Architect, aynı CLI kapısından.
+        from .tools.ingest_source import IngestSourceTool
+        registry.register(IngestSourceTool(lakehouse, cli, registry=registry))
         system_prompt_extra = ARCHITECT_PROMPT_RULES
 
     # Grafik her adaptörde var: veri aktif tablodan gelir, kural araçta (ADR-0032).

@@ -256,7 +256,9 @@ def test_sorudaki_yil_ve_metin_kalmis_hucre_sayi_sayilir() -> None:
     assert m["2026"].matched and m["2026"].column == "(soruda geçiyor)"
     assert m["13.837"].matched and m["13.837"].column == "TL | Miktar" and "metin hücre" in m["13.837"].row_key
     assert m["1.017"].matched and m["93.824.682.381"].matched
-    assert panel.complete, panel.gaps
+    # K02-T06 (A12): hücreler eşleşse de kaynak OCR tahmini; sayılar doğrulanmış sayılmaz, zincir (URL+sha+zaman) tam kalır.
+    assert panel.ocr_unverified and not panel.claims_ok and panel.chain_ok and not panel.complete
+    assert any(g.startswith("sayılar OCR ile görüntüden okundu") for g in panel.gaps)
     assert panel.web_sources[0]["ocr"]["model"] == "ocr"
 
 

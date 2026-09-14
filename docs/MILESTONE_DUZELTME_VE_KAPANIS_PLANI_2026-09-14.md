@@ -182,13 +182,13 @@ Dayanak: [M16 kabul raporu](M16_KABUL_RAPORU.md). Aşağıdakiler her biri yeni 
 | K02-T03 | A05 | KFE eklenmesinde birim, baz ve dönem denetimi; kaynak sütunlar korunur |
 | K02-T04 | A06 | Faiz düşerken kredi artmayan dönemleri araçla hesapla; dış bağlamı ayrıca kaynaklandır, nedensellik diye sunma |
 | K02-T05 | A07/A26 | Grafik ve eski cevap raporundaki dönem/birim/kaynak/uyarı ve sürüm tutarlılığı; önceki ek testler tam kapsamı karşılıyorsa statüyü kanıtla düzelt |
-| K02-T06 | A12 | Düşük kaliteli OCR örneğinde uyarı/kontrollü ret ve doğrulanmamış değerin kesin sonuç sayılmaması |
+| K02-T06 | A12 | **Kapandı 14 Eyl (ADR-0072):** düşük/belirsiz kaliteli OCR tablosu `LOW_QUALITY_SOURCE` ile yüklenmez, açık kabulle bütün DİKKAT notlarıyla yüklenir; OCR kaynaklı sayılar panelde doğrulanmış sayılmaz; `tests/test_k02_ocr.py` |
 | K02-T07 | A18 | Alternatif kaynak kullanıldığında gerçek cevabın kullanılan kaynağı adlandırması |
 | K02-T08 | A22 | **Kapandı 14 Eyl:** `lakehouse-core/tests/scripts/test_run_catalog_ingestion.py::test_a22_warned_artifact_ingested_twice_is_idempotent_and_keeps_each_runs_warning` — tek artifact, iki koşu bağı, koşu başına uyarı satırı, Bronze dosyası ve özeti değişmez |
 | K02-T09 | A24 | **Kapandı 14 Eyl (ADR-0071):** bayat gold.* tablosuna sorgu `GOLD_STALE` ile reddedilir, eski değer dönmez; canlı Silver'dan gold_align/gold_join ile yeniden hesap; `tests/test_k02_bayat_gold.py` |
-| K02-T10 | A27 | Tavily HTTP hatası, model/OCR yokluğu ve bütçe dolumu için kontrollü sonuç; sınırlamayı kullanıcı görür |
+| K02-T10 | A27 | **Kapandı 14 Eyl:** Tavily 503/429/bağlantı kopması `ACCESS_BLOCKED` ve sebep (`tests/test_web.py`); süre bütçesi dolunca deterministik sınır notu (`tests/test_agent_loop.py`); model kesintisi ve OCR yokluğu önceki testlerde |
 | K02-T11 | A28 | Yeni alan/profil/oturumda eski izin, tablo ve alan bağlamı sızmaz; K01 ile birlikte kapatılabilir |
-| K02-T12 | A30 | Architect yüklü aralık dışındaki gerekli veriyi desteklenen kaynaktan çeker; kaynak erişilemezse nedeni dürüstçe gösterir |
+| K02-T12 | A30 | **Uygulandı 14 Eyl (ADR-0073):** Architect `ingest_source` (run kayıtlı toplu betik + Silver), erişilemezse sebep; `tests/test_k02_kaynaktan_cek.py`; canlı prova ayrı kayıtta |
 | K02-T13 | A32/A33 | **Kapandı 14 Eyl:** anomali kartı yöntem ve eşiği (Tukey k=1.5 / \|z\|>3), taban ve SINIRLAMA; kırılma kartı ceza formülü ve sayısal değeri, min segment, en çok kırılma ve SINIRLAMA; `tests/test_analytics_tools.py` metin denetimleri |
 | K02-T14 | M13-T04/T07 | Aynı sayının yanlış dönem/kolon/varlıkta bulunması doğrulama sayılmaz; eski tablo eşleşmesi doğru sürüm/kaynakla sunulur |
 
