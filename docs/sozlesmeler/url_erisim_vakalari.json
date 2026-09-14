@@ -1,0 +1,29 @@
+{
+  "aciklama": "M05-T03 ortak davranış vakaları: ajanın web getirme/dosya okuyucusu (agent-core kkb_agent.web.addresses) ile lakehouse generic bağlayıcısı (lakehouse.generic._access.assert_url_is_allowed) aynı adres ve ad için aynı kararı verir. İki paketin testleri bu dosyayı okur; vaka eklemek iki tarafı birden sınar. 'sebep' belgedir, karşılaştırılmaz (Python yamaları loopback/private etiketinde ayrışabilir).",
+  "adresler": [
+    {"adres": "127.0.0.1", "beklenen": "ret", "sebep": "loopback"},
+    {"adres": "::1", "beklenen": "ret", "sebep": "loopback"},
+    {"adres": "::ffff:127.0.0.1", "beklenen": "ret", "sebep": "IPv4-eşlemeli loopback"},
+    {"adres": "10.0.0.5", "beklenen": "ret", "sebep": "private"},
+    {"adres": "172.16.0.1", "beklenen": "ret", "sebep": "private"},
+    {"adres": "192.168.1.1", "beklenen": "ret", "sebep": "private"},
+    {"adres": "::ffff:10.0.0.5", "beklenen": "ret", "sebep": "IPv4-eşlemeli private"},
+    {"adres": "169.254.169.254", "beklenen": "ret", "sebep": "link-local (bulut metadata)"},
+    {"adres": "fe80::1", "beklenen": "ret", "sebep": "link-local"},
+    {"adres": "224.0.0.1", "beklenen": "ret", "sebep": "multicast"},
+    {"adres": "ff02::1", "beklenen": "ret", "sebep": "multicast"},
+    {"adres": "0.0.0.0", "beklenen": "ret", "sebep": "unspecified"},
+    {"adres": "fec0::1", "beklenen": "ret", "sebep": "site-local"},
+    {"adres": "93.184.216.34", "beklenen": "izin", "sebep": "genel"},
+    {"adres": "8.8.8.8", "beklenen": "izin", "sebep": "genel"},
+    {"adres": "2606:4700:4700::1111", "beklenen": "izin", "sebep": "genel IPv6"},
+    {"adres": "::ffff:93.184.216.34", "beklenen": "izin", "sebep": "IPv4-eşlemeli genel"}
+  ],
+  "adlar": [
+    {"ad": "localhost", "beklenen": "ret", "sebep": "yerel ad"},
+    {"ad": "something.localhost", "beklenen": "ret", "sebep": ".localhost"},
+    {"ad": "box.internal", "beklenen": "ret", "sebep": ".internal"},
+    {"ad": "metadata.google.internal", "beklenen": "ret", "sebep": "bulut metadata adı"},
+    {"ad": "veri.example.com", "beklenen": "izin", "sebep": "genel ad, genel adrese çözülür"}
+  ]
+}

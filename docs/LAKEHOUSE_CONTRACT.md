@@ -125,8 +125,12 @@ Aylık bülten tablo haritası (doğrulandı): `1` Bilanço, `2` Kar/Zarar, `3` 
 `4` Tüketici Kredileri, `5` Sektörel Kredi Dağılımı **(bin TL!)**, `6` KOBİ Kredileri,
 `9`/`10` Mevduat, `12` Sermaye Yeterliliği, `15` Rasyolar.
 
-⚠️ BDDK'nın SSL sertifika zinciri eksik; `httpx.Client(verify=False)` ya da uygun CA
-bundle gerekiyor.
+⚠️ BDDK'nın sunucusu ara sertifikayı göndermiyor; `certifi` ile doğrulama başarısız olur.
+**`verify=False` kullanılmaz** — doğrulama her zaman açık kalır. İki doğru yol:
+(a) `truststore.inject_into_ssl()` ile işletim sisteminin sertifika deposunu kullanmak
+(macOS/Windows'ta ara sertifika mevcut; bu repoda doğrulandı, HTTP 200), ya da
+(b) BDDK'nın ara sertifikasını içeren bir CA bundle'ı `SSL_CERT_FILE` / `REQUESTS_CA_BUNDLE`
+ile vermek.
 
 ⚠️ Alt toplam satırlarına dikkat: `Tüketici Kredileri (2+3+4)` bir toplamdır, alt
 kalemlerle birlikte toplanırsa mükerrer sayım olur. `notes` alanına yazın.

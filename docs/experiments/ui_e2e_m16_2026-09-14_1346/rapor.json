@@ -1,0 +1,76 @@
+{
+  "meta": {
+    "commit": "21b594e",
+    "url": "http://127.0.0.1:8766",
+    "model": "kkbhackathon2026/Qwen3.8-27B",
+    "data": null,
+    "at": "2026-09-14T13:47:18"
+  },
+  "passed": 7,
+  "total": 7,
+  "steps": [
+    {
+      "step": "acilis",
+      "ok": true,
+      "detail": "model=kkbhackathon2026/Qwen3.8-27B profil=analyst hazır={'catalog_total': 2214, 'semantics_verified': 679, 'semantics_defined': 681, 'loaded_series': 681, 'gold_ready_series': 679}",
+      "url": "http://127.0.0.1:8766/",
+      "at": "2026-09-14T13:46:59",
+      "seconds": 0.8,
+      "screenshot": "01_acilis.png"
+    },
+    {
+      "step": "soru_cevap",
+      "ok": true,
+      "detail": "tablo=True bağlantılar=['/api/answers/0/report.html', '/api/answers/0/table.csv', '/api/answers/0/table.xlsx'] kanıt=True",
+      "url": "http://127.0.0.1:8766/",
+      "at": "2026-09-14T13:47:11",
+      "seconds": 11.5,
+      "screenshot": "02_soru_cevap.png"
+    },
+    {
+      "step": "disa_aktarim",
+      "ok": true,
+      "detail": "csv satır=12 (başlık hariç) xlsx sayfalar=['tablo', 'notlar'] satır=12 api önizleme satır=12 rapor_html=3710 bayt",
+      "url": "http://127.0.0.1:8766",
+      "at": "2026-09-14T13:47:11",
+      "seconds": 0.2,
+      "screenshot": null
+    },
+    {
+      "step": "dosya_yukleme",
+      "ok": true,
+      "detail": "📎 nufus_il.csv · tablo · 0 KB×",
+      "url": "http://127.0.0.1:8766/",
+      "at": "2026-09-14T13:47:11",
+      "seconds": 0.1,
+      "screenshot": "04_dosya_yukleme.png"
+    },
+    {
+      "step": "yuklenen_dosyayi_sor",
+      "ok": true,
+      "detail": "beklenen=ankara · Dosyadaki en kalabalık il **Ankara** (5.864 bin kişi).  Dosyadaki dört ilin nüfus sıralaması:  | İl | Nüfus (bin) | |---|---| | Ankara | 5.864 | | İzmir | 4.462 | | Adana | 2.274 | | Trabzon | 818 |  ",
+      "url": "http://127.0.0.1:8766/",
+      "at": "2026-09-14T13:47:17",
+      "seconds": 6.3,
+      "screenshot": "05_yuklenen_dosyayi_sor.png"
+    },
+    {
+      "step": "anahtarsiz_architect_red",
+      "ok": true,
+      "detail": "HTTP 403",
+      "url": "http://127.0.0.1:8766",
+      "at": "2026-09-14T13:47:17",
+      "seconds": 0.0,
+      "screenshot": null
+    },
+    {
+      "step": "oturum_sifirlama",
+      "ok": true,
+      "detail": "kalan cevap=0",
+      "url": "http://127.0.0.1:8766/",
+      "at": "2026-09-14T13:47:17",
+      "seconds": 0.2,
+      "screenshot": "07_oturum_sifirlama.png"
+    }
+  ]
+}

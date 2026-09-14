@@ -1,0 +1,148 @@
+{
+  "meta": {
+    "commit": "51ccc17",
+    "kaynak_agac_temiz": true,
+    "work": "/private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80b/scratchpad/k02_son",
+    "at": "2026-09-14T15:39:29",
+    "model": "betikli (LLM çağrısı yok)",
+    "demo_db": "/private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80b/scratchpad/entegrasyon2/data/lakehouse.duckdb",
+    "demo_db_sha256_once": "c2cf0aece473423158bf42113632c88ee7691058e51ed19f09f7f252c405f59d",
+    "demo_db_sha256_sonra": "c2cf0aece473423158bf42113632c88ee7691058e51ed19f09f7f252c405f59d"
+  },
+  "passed": 22,
+  "total": 22,
+  "steps": [
+    {
+      "id": "A02-satir-donem",
+      "beklenen": "tablo 60 satır, 2021-01-31 → 2025-12-31, ay başına tek satır, ardışık",
+      "gozlenen": "{'satır': 60, 'ilk': '2021-01-31', 'son': '2025-12-31', 'ardışık': True}",
+      "ok": true
+    },
+    {
+      "id": "A02-deger",
+      "beklenen": "her ayın bakiyesi Silver'dan bağımsız okunanla birebir",
+      "gozlenen": "{'beklenen_son': np.float64(678970.0), 'gözlenen_son': 678970.0}",
+      "ok": true
+    },
+    {
+      "id": "A02-kanit",
+      "beklenen": "betikteki cevap değişmeden gider; iki bakiye sayısı tabloda eşleşir (sayılar ✓, sorgu izi ✓)",
+      "gozlenen": "{'durum': {'sayılar': True, 'sorgu izi': True, 'dosya zinciri': True}, 'eşleşen': ['2021', '2025', '60', '276.785', '678.970'], 'özet': 'kanıt zinciri tam: 5/5 sayı tabloda · 2 kolon → SQL · 60 gözlem → 1 artifact · çekim 2026-09-14', 'cevap': 'Tabloda 2021 Ocak ile 2025 Aralık arasındaki 60 ayın konut kredisi bakiyesi var; Ocak 2021 bakiyesi 276.785 milyon TL, Aralık 2025 bakiyesi 678.970 milyon TL.'}",
+      "ok": true
+    },
+    {
+      "id": "A03-tablo-bozulmadi",
+      "beklenen": "60 satır korunur; önceki kolonlar birebir aynı; yalnız konut_faizi eklenir",
+      "gozlenen": "{'kolonlar': ['observation_date', 'konut_kredisi', 'konut_faizi'], 'önceki_aynı': True}",
+      "ok": true
+    },
+    {
+      "id": "A03-hizalama-deger",
+      "beklenen": "her ay faiz = o takvim ayındaki haftalık Silver gözlemlerinin ortalaması (bağımsız hesap, 60/60)",
+      "gozlenen": "{'beklenen_ilk_son': [np.float64(18.387999999999998), np.float64(37.29)], 'gözlenen_ilk_son': [np.float64(18.387999999999998), np.float64(37.29)]}",
+      "ok": true
+    },
+    {
+      "id": "A03-hizalama-gorunur",
+      "beklenen": "kart dönem eşleşmesini (60/60) yazar; kanıt kolonu hizalı Gold tablosuna bağlı (haftalık → aylık, avg)",
+      "gozlenen": "{'kart': \"'konut_faizi' sütunu eklendi. Tablo bozulmadı: 60 satır, 3 sütun.\\nSütunlar: observation_date, konut_kredisi, konut_faizi\\nBirim: yüzde · ölçüm tipi: rate · kaynak frekansı: monthly · kaynak kapsamı 2016-01-01 → 2026-07-31\\nDönem eşleşmesi: 60/60 satır\\nİlk 5 satır:\\nobservation_date  konut_kredisi  konu\", 'kanıt_sql': 'SELECT \"period_end\", \"value\" FROM gold.konut_faizi_aylik ORDER BY \"period_end\"', 'gold': (60, 'avg', 'avg', 'weekly', 'weekly')}",
+      "ok": true
+    },
+    {
+      "id": "A06-arac-hesabi",
+      "beklenen": "dönemler araçla (workspace_query) hesaplanır; bağımsız pandas hesabıyla aynı liste",
+      "gozlenen": "{'beklenen': ['2021-02-28', '2021-05-31', '2023-12-31', '2024-01-31'], 'araç': ['2021-02-28', '2021-05-31', '2023-12-31', '2024-01-31'], 'kart': 'Sorgu başarılı: 4 satır, 5 sütun — AKTİF TABLO DEĞİŞMEDİ (bakış modu; tabloyu buna çevirmek için as_active_table=true).\\nSütunlar: observation_date, konut_faizi,'}",
+      "ok": true
+    },
+    {
+      "id": "A06-tablo-degismedi",
+      "beklenen": "bakış modu: aktif tablo değişmez (60 satır, 3 kolon)",
+      "gozlenen": "{'kolonlar': ['observation_date', 'konut_kredisi', 'konut_faizi']}",
+      "ok": true
+    },
+    {
+      "id": "A06-nedensellik",
+      "beklenen": "nedensellik dili geri gönderilir; giden cevap eşzamanlılık der, neden-sonuç kurmaz",
+      "gozlenen": "{'geri_gönderme': ['grounding: OK | CAUSAL:neden oldu'], 'cevap': 'Faizin bir önceki aya göre düştüğü ve kredi bakiyesinin artmadığı 4 dönem var: 2021-02-28, 2021-05-31, 2023-12-31, 2024-01-31. İlk dönemde aylık ortalama faiz %17,98. Bu yalnız eşzamanlılıktır; veride'}",
+      "ok": true
+    },
+    {
+      "id": "A06-kanit",
+      "beklenen": "giden cevaptaki faiz sayısı (üç ondalıklı Gold değerinin Türkçe yuvarlaması) tabloda eşleşir (sayılar ✓)",
+      "gozlenen": "{'durum': {'sayılar': True, 'sorgu izi': True, 'dosya zinciri': True}, 'eşleşen': ['17,98'], 'özet': 'kanıt zinciri tam: 1/1 sayı tabloda · 3 kolon → SQL · 321 gözlem → 2 artifact · çekim 2026-09-14'}",
+      "ok": true
+    },
+    {
+      "id": "A06-dis-baglam",
+      "beklenen": "dış bağlam kanıtta ve raporda veri kaynaklarından ayrı 'bağlam, veri değil' diye kaynaklanır; tablo ve dönem hesabı değişmez",
+      "gozlenen": "{'bağlam': [('https://ornek-tcmb.example/ppk-2023', 'web araması — bağlam, veri değil'), ('https://ornek-haber.example/konut-talebi', 'web araması — bağlam, veri değil')], 'rapor': 200, 'cevap_aynı': True}",
+      "ok": true
+    },
+    {
+      "id": "A04-reel",
+      "beklenen": "reel = nominal × TÜFE(2025-12) / TÜFE(ay), bağımsız hesapla aynı; önceki kolonlar birebir, 60 satır",
+      "gozlenen": "{'kolonlar': ['observation_date', 'konut_kredisi', 'konut_faizi', 'reel_konut_kredisi_endeks', 'reel_konut_kredisi'], 'beklenen_ilk': 1894772.0791, 'gözlenen_ilk': 1894772.0791}",
+      "ok": true
+    },
+    {
+      "id": "A05-baz-dogrulanmamis",
+      "beklenen": "KFE (semantic_confidence=derived) rızasız reel dönüşümde reddedilir; doğrulanmış endeks aday; tablo aynı",
+      "gozlenen": "{'kod': 'UNVERIFIED_SEMANTICS', 'adaylar': ['evds:TP.TUKFIY2025.GENEL'], 'cevap': \"KFE'nin baz yılı doğrulanmamış; doğrulanmış TÜFE ile yapabilirim ya da doğrulanmamış olsa da kullanmamı söyleyebilirsin.\"}",
+      "ok": true
+    },
+    {
+      "id": "A05-baz-kapsam",
+      "beklenen": "rızayla bile KFE kapsamı dışındaki baz (2015-06) reddedilir, kapsam söylenir; tablo aynı",
+      "gozlenen": "{'kod': 'OUT_OF_COVERAGE', 'kart': 'HATA[OUT_OF_COVERAGE]: Baz dönem 2015-06 endeks kapsamında değil (kapsam 2016-01 → 2026-06).\\nYAPACAĞIN: Kapsamdaki bir ayı baz seç; farklı bazlı başka bir endeksle birleştirme yapılmaz.\\nBU HATA TEKRAR'}",
+      "ok": true
+    },
+    {
+      "id": "A05-kaynak-kolonlar",
+      "beklenen": "60 satır; önceki dört kolon birebir; KFE değerleri Silver'la 60/60 aynı",
+      "gozlenen": "{'kolonlar': ['observation_date', 'konut_kredisi', 'konut_faizi', 'reel_konut_kredisi_endeks', 'reel_konut_kredisi', 'konut_fiyat_endeksi']}",
+      "ok": true
+    },
+    {
+      "id": "A05-kart",
+      "beklenen": "kart birim/ölçüm tipi, kaynak frekansı, dönem eşleşmesi 60/60 ve baz yılının DOĞRULANMAMIŞ olduğunu yazar",
+      "gozlenen": "'konut_fiyat_endeksi' sütunu eklendi. Tablo bozulmadı: 60 satır, 6 sütun.\nSütunlar: observation_date, konut_kredisi, konut_faizi, reel_konut_kredisi_endeks, reel_konut_kredisi, konut_fiyat_endeksi\nBirim: endeks · ölçüm tipi: index · kaynak frekansı: monthly · kaynak kapsamı 2016-01-31 → 2026-06-30\nDönem eşleşmesi: 60/60 satır\nEndeks: baz yılı DOĞRULANMAMIŞ; farklı bazlı endekslerle birleştirilmez,",
+      "ok": true
+    },
+    {
+      "id": "A05-uyari-disa-aktarim",
+      "beklenen": "anlam uyarısı kanıt kolonunda ve XLSX dışa aktarımında (semantic_confidence=derived)",
+      "gozlenen": "{'kanıt_uyarı': ['Bu serinin semantiği DOĞRULANMAMIŞ (semantic_confidence=derived). Frekans dönüşümü, kümülatif çözme ve birim çevirisi otomatik yapılmaz; kullanıcıya sorulmalıdır.', 'Frekans indirgemede kullanılacak kural: avg.', 'evds:TP.KFE.TR: anlamı katalogda doğrulanmamış (semantic_confidence=derived); endeks baz yılı doğrulanmadı, reel dönüşümde ve farklı bazlı endeksle birlikte kullanılmaz'], 'xlsx': 200}",
+      "ok": true
+    },
+    {
+      "id": "A07-grafik",
+      "beklenen": "PNG üretilir ve indirilir; başlık dönemi ve 'ilk dönem = 100' ölçeğini yazar; denetçi geçti; kart birim notu",
+      "gozlenen": "{'başlık': 'Konut kredisi ve konut kredisi faizi (ilk dönem = 100) · endeks (ilk dönem = 100) · 2021-01-31 → 2025-12-31', 'png': 200, 'bayt': 394059, 'lint_ok': True, 'birim_notu': True, 'adım_ok': True}",
+      "ok": true
+    },
+    {
+      "id": "A26-eski-cevap",
+      "beklenen": "altı tur sonra 1. cevabın raporu ve CSV'si hâlâ o cevabın tablosu: 60 satır, 2 kolon, faiz/KFE yok; sürüm ve kaynak yazılı",
+      "gozlenen": "{'rapor': 200, 'csv_kolon': ['observation_date', 'konut_kredisi'], 'csv_satır': 60, 'sürüm_yazılı': True}",
+      "ok": true
+    },
+    {
+      "id": "A26-kfe-raporu",
+      "beklenen": "KFE cevabının raporu kendi tablosunu (60 satır, 5 kolon) ve anlam uyarısını taşır",
+      "gozlenen": "{'rapor': 200, 'uyarı': True}",
+      "ok": true
+    },
+    {
+      "id": "A26-grafik-raporu",
+      "beklenen": "grafik cevabının raporu gömülü grafiği, başlıktaki dönem/ölçeği, kaynağı ve sürümü taşır",
+      "gozlenen": "{'rapor': 200, 'figür': True, 'kaynaklar': True}",
+      "ok": true
+    },
+    {
+      "id": "salt-okunur",
+      "beklenen": "asıl demo DB değişmedi (sha256 önce = sonra)",
+      "gozlenen": "{'önce': 'c2cf0aece4734231', 'sonra': 'c2cf0aece4734231'}",
+      "ok": true
+    }
+  ]
+}

@@ -73,6 +73,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "bootstrap", help="create or update the local DuckDB schemas and catalog"
     )
     _add_storage_options(bootstrap)
+    bootstrap.add_argument(
+        "--catalog",
+        choices=("default", "none"),
+        default=None,
+        help=("series catalog mode stored in the database: 'default' loads catalog/series/*.yml, "
+              "'none' keeps an empty catalog for a new domain (default: keep the stored mode)"),
+    )
     bootstrap.set_defaults(handler=_handle_bootstrap)
 
     ingest = commands.add_parser(
@@ -192,9 +199,10 @@ def _parser_parameters(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _handle_bootstrap(args: argparse.Namespace, **_: Any) -> int:
-    summary = run_bootstrap(args.database)
+    summary = run_bootstrap(args.database, catalog_mode=args.catalog)
     print("status: success")
     print(f"database: {summary.database}")
+    print(f"catalog_mode: {summary.catalog_mode}")
     print(f"catalog_series_count: {summary.catalog_series_count}")
     return 0
 

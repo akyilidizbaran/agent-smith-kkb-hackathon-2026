@@ -1,0 +1,19 @@
+cd agent-core && uv run python -m kkb_agent.cli --preflight
+ÖN KONTROL (salt-okunur)
+  ✓ mod                LAKEHOUSE_MODE=demo
+  ✓ veri kökü          /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/data
+  ✓ veritabanı         /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/data/lakehouse.duckdb (6.3 MB)
+  ✓ şema               meta.series + silver.fact_observation var
+  ✓ veri               katalog 2.214 seri · yüklü 2 seri · 675 gözlem · 2016-01-01 → 2026-07-03
+  ✓ hazır oluş         anlamı doğrulanmış 679 · birim+ölçüm tipi tanımlı 681 · yüklü 2 · Gold'a hazır 2 (ayrı sayılar. birbirinin yerine geçmez)
+  ✓ gold               2 tablo: konut_faizi_aylik, konut_kredisi_ceyreklik
+  ✓ provenance         12 artifact · 2 run kaydı
+  ✓ RAW/Bronze         /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/data/raw var · /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/data/bronze var (kanıt zinciri dosyaya iner)
+  ✓ lakehouse-core     /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/lakehouse-core · CLI çalışıyor (uv run python)
+  ✓ izinli dosya kökü  /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/data/incoming var
+  ✓ grafik dizini      /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/data/charts ilk grafikte oluşturulur
+  ✗ model              https://mia.csp.kloudeks.com/v1 · kkbhackathon2026/Qwen3.8-27B · anahtar yok → uzak model için LLM_API_KEY boş: arayüz başlamaz; .env'yi doldur
+  ✓ yardımcı modeller  embedding kkbhackathon2026/Qwen3-Embedding-8B · vision kkbhackathon2026/Unlimited-OCR
+  ✓ anahtarlar         MIA var · EVDS var · Tavily var (yalnız var/yok)
+SONUÇ: HAZIR DEĞİL — model
+make: *** [preflight] Error 1

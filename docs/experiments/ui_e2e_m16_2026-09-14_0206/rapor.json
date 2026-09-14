@@ -1,0 +1,76 @@
+{
+  "meta": {
+    "commit": "b33c03f",
+    "url": "http://localhost:8765",
+    "model": "kkbhackathon2026/Qwen3.8-27B",
+    "data": null,
+    "at": "2026-09-14T02:08:08"
+  },
+  "passed": 7,
+  "total": 7,
+  "steps": [
+    {
+      "step": "acilis",
+      "ok": true,
+      "detail": "model=kkbhackathon2026/Qwen3.8-27B profil=analyst hazır={'catalog_total': 2214, 'semantics_verified': 679, 'semantics_defined': 681, 'loaded_series': 681, 'gold_ready_series': 679}",
+      "url": "http://localhost:8765/",
+      "at": "2026-09-14T02:06:27",
+      "seconds": 1.1,
+      "screenshot": "01_acilis.png"
+    },
+    {
+      "step": "soru_cevap",
+      "ok": true,
+      "detail": "tablo=True bağlantılar=['/api/answers/0/report.html', '/api/answers/0/table.csv', '/api/answers/0/table.xlsx'] kanıt=True",
+      "url": "http://localhost:8765/",
+      "at": "2026-09-14T02:07:48",
+      "seconds": 80.9,
+      "screenshot": "02_soru_cevap.png"
+    },
+    {
+      "step": "disa_aktarim",
+      "ok": true,
+      "detail": "csv satır=12 (başlık hariç) xlsx sayfalar=['tablo', 'notlar'] satır=12 api önizleme satır=12 rapor_html=3632 bayt",
+      "url": "http://localhost:8765",
+      "at": "2026-09-14T02:07:48",
+      "seconds": 0.2,
+      "screenshot": null
+    },
+    {
+      "step": "dosya_yukleme",
+      "ok": true,
+      "detail": "📎 nufus_il.csv · tablo · 0 KB×",
+      "url": "http://localhost:8765/",
+      "at": "2026-09-14T02:07:48",
+      "seconds": 0.1,
+      "screenshot": "04_dosya_yukleme.png"
+    },
+    {
+      "step": "yuklenen_dosyayi_sor",
+      "ok": true,
+      "detail": "beklenen=ankara · Dosyadaki en kalabalık il **Ankara**'dır: 5.864 bin nüfus.  Dosyadaki diğer iller: İzmir 4.462 bin, Adana 2.274 bin, Trabzon 818 bin.  Kaynak: bbbd1d18_nufus_il.csv (il_adi, nufus_bin).",
+      "url": "http://localhost:8765/",
+      "at": "2026-09-14T02:08:07",
+      "seconds": 19.6,
+      "screenshot": "05_yuklenen_dosyayi_sor.png"
+    },
+    {
+      "step": "anahtarsiz_architect_red",
+      "ok": true,
+      "detail": "HTTP 403",
+      "url": "http://localhost:8765",
+      "at": "2026-09-14T02:08:07",
+      "seconds": 0.0,
+      "screenshot": null
+    },
+    {
+      "step": "oturum_sifirlama",
+      "ok": true,
+      "detail": "kalan cevap=0",
+      "url": "http://localhost:8765/",
+      "at": "2026-09-14T02:08:08",
+      "seconds": 0.2,
+      "screenshot": "07_oturum_sifirlama.png"
+    }
+  ]
+}

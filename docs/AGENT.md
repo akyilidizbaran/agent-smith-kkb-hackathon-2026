@@ -12,41 +12,67 @@ analizi çok adımlı yürüten ve sonucu **kanıtıyla** sunan motor.
 ## Mimari
 
 ```
-Soru
- └─> AnalyticsAgent (harness: planla → araç çağır → gözlemle → onar)
-      ├─ ToolRegistry ......... araçlar burada kayıtlı; yeni yetenek = yeni sınıf
-      ├─ AnalysisWorkspace .... konuşma boyunca yaşayan analiz tablosu
-      └─ LLMClient ............ OpenAI-uyumlu; Ollama (geliştirme) / Kloudeks (demo)
-           └─> LakehouseClient (Protocol) ── DuckDBLakehouse | <veri ekibinin adaptörü>
+Soru (arayüz: kkb_agent.serve  ·  CLI: kkb_agent.cli)
+ └─> AnalyticsAgent (harness: planla → araç çağır → gözlemle → onar → guard'lar → kanıt paneli)
+      ├─ ToolRegistry ......... profile göre kayıt: Analyst 19 araç, Architect +ingest +terfi = 21
+      ├─ AnalysisWorkspace .... aktif tablo + kimlikli oturum tabloları k1…k8, kolon başına provenance
+      ├─ EvidencePanel ........ sayılar tabloda mı · sorgu izi · RAW dosya zinciri
+      └─ LLMClient ............ OpenAI-uyumlu; MIA/Kloudeks (demo) · Ollama (isteğe bağlı geliştirme)
+           └─> LakehouseClient (Protocol) ── SilverLakehouse (lakehouse-core DuckDB) | bellek-içi test adaptörleri
 ```
+
+Araç aileleri: lakehouse (search, describe, distinct_values, query) · workspace (add_column, compute_column, show, query,
+real_value, join) · analitik (anomaly_detect, change_points, lead_lag) · gold (align, decompose, join) · chart ·
+web (web_url, web_search) · Architect: ingest_from_url, promote_draft.
 
 **Tasarım ilkesi:** harness güçlü, modelin işi az. Model hesap yapmaz (SQL yapar),
 ham veri görmez (şema + örnek satır görür), hatasını sessizce yutmaz (hata metni
 geri verilir, düzeltir). Böylece 8B'lik bir modelle çalışan sistem, demo gününde
 daha güçlü modelle daha da iyi çalışır.
 
+Tasarım kararlarının gerekçeleri: [`docs/adr/`](adr/)
+
 ## Kurulum
 
+Tüm komutlar `agent-core/` dizininden çalıştırılır.
+
+Önerilen yol repo kökündeki `make setup → make preflight → make demo-data → make serve` zinciridir
+([OPERASYON_TARIFI.md](OPERASYON_TARIFI.md)). Yalnız ajan paketi için:
+
 ```bash
-uv venv && uv pip install duckdb httpx pandas pydantic openai python-dotenv
-cp .env.example .env          # değerleri doldurun; .env asla commit edilmez
-ollama pull qwen3:8b          # geliştirme modeli
-python scripts/dev_seed.py    # gerçek BDDK verisiyle geliştirme lakehouse'u
+cp ../.env.example ../.env    # değerleri doldurun; .env asla commit edilmez
+uv sync --frozen --extra dev  # uv.lock'taki sabit sürümlerle kurar
 ```
 
 ## Kullanım
 
 ```bash
-PYTHONPATH=src python -m kkb_agent.cli --health
-PYTHONPATH=src python -m kkb_agent.cli --trace "2025'te konut kredisi nasıl değişti?"
-PYTHONPATH=src python -m kkb_agent.cli          # etkileşimli
+uv run python -m kkb_agent.cli --preflight                            # salt-okunur ön kontrol
+uv run python -m kkb_agent.cli --trace "2025'te konut kredisi nasıl değişti?"
+uv run python -m kkb_agent.cli                                        # etkileşimli
+uv run python -m kkb_agent.serve                                      # arayüz http://127.0.0.1:8765
 ```
+
+## Testler
+
+İki katmanlı doğrulama:
+
+```bash
+uv run pytest -q                                    # birim/sözleşme testleri, saniyeler (CI'da da koşar)
+uv run python scripts/run_golden.py                 # uçtan uca davranış, dakikalar
+uv run python scripts/acceptance_m16.py             # çok turlu kabul: finans, finans dışı, sınır vakaları
+uv run --with playwright python scripts/ui_e2e_m16.py   # arayüz uçtan uca (sunucu açıkken)
+```
+
+Birim testleri deterministiktir ve bir aracın bozulduğunu golden set'i beklemeden söyler.
+Golden set ise gerçek modelle uçtan uca davranışı ölçer; stokastiktir, tek koşuya
+bakılarak "düzeldi" denmemelidir.
 
 ## Golden set — ilerlemenin objektif ölçüsü
 
 ```bash
-PYTHONPATH=src python scripts/run_golden.py
-PYTHONPATH=src python scripts/run_golden.py G2 G4      # seçili vakalar
+uv run python scripts/run_golden.py
+uv run python scripts/run_golden.py G2 G4      # seçili vakalar
 ```
 
 Vakalar serbest metni değil, agent'ın ürettiği **analiz tablosunu** denetler
@@ -67,13 +93,14 @@ LLM_MODEL=<model adı>
 
 | Yol | İçerik |
 |---|---|
-| `src/kkb_agent/contracts/` | Veri katmanıyla sözleşme (Protocol + semantic catalog) |
-| `src/kkb_agent/core/` | Harness, workspace, araç soyutlaması, kayıt defteri |
-| `src/kkb_agent/tools/` | Araçlar — her yetenek bağımsız bir modül |
-| `src/kkb_agent/adapters/` | Lakehouse uygulamaları (şimdilik DuckDB) |
-| `src/kkb_agent/llm/` | Sağlayıcıdan bağımsız LLM katmanı |
-| `tests/golden/` | Golden set vakaları |
-| `docs/` | Sözleşme dokümanı, açılış toplantısı slaytları |
+| `agent-core/src/kkb_agent/contracts/` | Veri katmanıyla sözleşme (Protocol + semantic catalog) |
+| `agent-core/src/kkb_agent/core/` | Harness, workspace, araç soyutlaması, kayıt defteri |
+| `agent-core/src/kkb_agent/tools/` | Araçlar — her yetenek bağımsız bir modül |
+| `agent-core/tests/` | Araç birim testleri |
+| `agent-core/src/kkb_agent/adapters/` | Lakehouse uygulamaları (şimdilik DuckDB) |
+| `agent-core/src/kkb_agent/llm/` | Sağlayıcıdan bağımsız LLM katmanı |
+| `agent-core/tests/golden/` | Golden set vakaları |
+| `docs/` | Sözleşme dokümanı, açılış toplantısı slaytları (repo kökünde) |
 
 ## Kurallar (KKB şartnamesi)
 

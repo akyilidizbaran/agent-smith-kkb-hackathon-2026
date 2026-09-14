@@ -18,6 +18,8 @@ venv/
 
 # Veri (lakehouse çıktıları repoya girmez)
 data/
+# Architect'in izinli yerel kökü: jüri dosyaları, golden fikstür kopyaları (satır sonu yorumu gitignore'da desteklenmez)
+incoming/
 !data/.gitkeep
 *.duckdb
 *.duckdb.wal
@@ -27,3 +29,9 @@ data/
 .DS_Store
 .idea/
 .vscode/
+
+# Seed edilmiş tasarım kanvası (2,5 MB, çalışma dosyalarından yeniden üretilir)
+docs/design/agentsmithler-arayuz.html
+
+# Veri kökü değişiminde saklanan eski demo kopyası (yerel, geri alınabilir yeniden adlandırma)
+data_prev_*/

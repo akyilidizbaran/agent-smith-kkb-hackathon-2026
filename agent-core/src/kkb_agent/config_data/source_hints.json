@@ -1,0 +1,63 @@
+{
+  "_note": "Kaynağa özel ipuçları (M03-T04, ADR-0060). Çekirdek kod bu dosyayı okur; kaynak adı kodda yazılı değildir. Başka bir alan için bu dosya değiştirilir ya da SOURCE_HINTS_FILE ile başka dosya verilir; boş dosyada motor yine çalışır, yalnız kaynak yüzü ve kurum sabitleme ipucu olmaz. source_names/derived_sources alan tanımında (Gold ve kullanıcı yüklemesi kaynak sayılmaz), official_hosts ve url_patterns web aracında kullanılır (ADR-0078).",
+  "source_words": {
+    "bddk_finturk": [
+      "finturk",
+      "illere gore",
+      "il bazinda",
+      "il bazli"
+    ],
+    "bddk_monthly": [
+      "aylik bulten",
+      "bddk aylik"
+    ],
+    "bddk_weekly": [
+      "haftalik bulten",
+      "bddk haftalik"
+    ],
+    "evds": [
+      "evds",
+      "tcmb",
+      "merkez bankasi"
+    ]
+  },
+  "credential_env_by_host": {
+    "evds2.tcmb.gov.tr": "EVDS_API_KEY",
+    "evds3.tcmb.gov.tr": "EVDS_API_KEY"
+  },
+  "institutions": [
+    "TCMB",
+    "BDDK",
+    "TÜİK",
+    "TUİK",
+    "TUIK",
+    "EVDS",
+    "Borsa İstanbul",
+    "BİST",
+    "Hazine",
+    "SPK",
+    "TBB"
+  ],
+  "source_names": {
+    "bddk_monthly": "BDDK Aylık Bülten",
+    "bddk_weekly": "BDDK Haftalık Bülten",
+    "bddk_finturk": "BDDK FinTürk (il bazında)",
+    "evds": "TCMB EVDS"
+  },
+  "derived_sources": [
+    "gold",
+    "adhoc"
+  ],
+  "official_hosts": [
+    "tcmb.gov.tr",
+    "bddk.org.tr",
+    "tuik.gov.tr",
+    "hmb.gov.tr",
+    "spk.gov.tr",
+    "tbb.org.tr",
+    "borsaistanbul.com"
+  ],
+  "url_patterns": [
+    "TCMB günlük gösterge döviz kurları (XML): https://www.tcmb.gov.tr/kurlar/YYYYAA/GGAAYYYY.xml — ör. 2 Ocak 2015 için https://www.tcmb.gov.tr/kurlar/201501/02012015.xml; son yayımlanan: https://www.tcmb.gov.tr/kurlar/today.xml. Hafta sonu ve resmi tatilde yayın yoktur: sayfa bulunamazsa önceki iş gününü dene ve cevapta hangi günün kurunu verdiğini söyle."
+  ]
+}

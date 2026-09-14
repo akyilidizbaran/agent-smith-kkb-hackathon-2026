@@ -1,0 +1,184 @@
+{
+  "meta": {
+    "commit": "6f12bbe",
+    "model": "kkbhackathon2026/Qwen3.8-27B",
+    "data": "/Users/baran/Desktop/KKB/data/lakehouse.duckdb",
+    "profile": "analyst",
+    "narrate_temperature": "0",
+    "at": "2026-09-14T13:38:47"
+  },
+  "passed_turns": 6,
+  "total_turns": 6,
+  "scenarios": [
+    {
+      "id": "A02-A07",
+      "title": "çok turlu finans senaryosu (transkript 16:22)",
+      "passed": true,
+      "turns": [
+        {
+          "question": "2021-2025 yılları arasındaki 60 aylık veriden konut kredilerinin aylık dağılımını göster.",
+          "passed": true,
+          "seconds": 11.5,
+          "tools": [
+            "lakehouse_search",
+            "lakehouse_describe",
+            "lakehouse_query",
+            "workspace_show"
+          ],
+          "failures": [],
+          "rows": 60,
+          "columns": [
+            "observation_date",
+            "value"
+          ],
+          "evidence": "kanıt zinciri tam: 6/6 sayı tabloda · 2 kolon → SQL · 60 gözlem → 1 artifact · çekim 2026-09-14",
+          "grounding": "OK",
+          "answer_preview": "2021–2025 arası 60 aylık konut kredisi bakiyeleri hazır.  **Kaynak:** BDDK Aylık Bülten, \"Tüketici Kredileri – Konut\" kalemi (sektör toplamı), dönem sonu bakiyesi, milyon TL.  **Özet (tablodan):** - Ocak 2021: 276.785 milyon TL - Aralık 202",
+          "evidence_states": {
+            "sayılar": true,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": [],
+          "answer_full": "2021–2025 arası 60 aylık konut kredisi bakiyeleri hazır.\n\n**Kaynak:** BDDK Aylık Bülten, \"Tüketici Kredileri – Konut\" kalemi (sektör toplamı), dönem sonu bakiyesi, milyon TL.\n\n**Özet (tablodan):**\n- Ocak 2021: 276.785 milyon TL\n- Aralık 2025: 678.970 milyon TL\n- Dönem boyunca bakiye genel olarak artmış; en düşük değer 2021-05 (275.130 milyon TL), en yüksek değer 2025-12 (678.970 milyon TL).\n\n60 satırlık tam dizi aktif analiz tablosunda; isterseniz grafiğini çizebilirim."
+        },
+        {
+          "question": "Bu tabloya konut kredisi faiz oranlarını da ekle.",
+          "passed": true,
+          "seconds": 6.2,
+          "tools": [
+            "workspace_add_column"
+          ],
+          "failures": [],
+          "rows": 60,
+          "columns": [
+            "observation_date",
+            "value",
+            "konut_kredisi_faizi"
+          ],
+          "evidence": "kanıt zinciri tam: 7/7 sayı tabloda · 3 kolon → SQL · 321 gözlem → 2 artifact · çekim 2026-09-14",
+          "grounding": "OK",
+          "answer_preview": "Tabloya \"konut_kredisi_faizi\" sütunu eklendi (60/60 satır eşleşti).  **Kaynak:** TCMB EVDS haftalık konut kredisi faiz oranının aylık ortalaması, yüzde.  **İlk aylar:** - Ocak 2021: %18,39 - Şubat 2021: %17,99 - Mart 2021: %17,74 - Nisan 20",
+          "evidence_states": {
+            "sayılar": true,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": [],
+          "answer_full": "Tabloya \"konut_kredisi_faizi\" sütunu eklendi (60/60 satır eşleşti).\n\n**Kaynak:** TCMB EVDS haftalık konut kredisi faiz oranının aylık ortalaması, yüzde.\n\n**İlk aylar:**\n- Ocak 2021: %18,39\n- Şubat 2021: %17,99\n- Mart 2021: %17,74\n- Nisan 2021: %18,13\n- Mayıs 2021: %17,84\n\nTablo artık 3 sütun: dönem, konut kredisi bakiyesi (milyon TL) ve konut kredisi faiz oranı (yüzde)."
+        },
+        {
+          "question": "Faiz oranlarının düştüğü halde kredi miktarının yükselmediği dönemler olmuş mu?",
+          "passed": true,
+          "seconds": 9.6,
+          "tools": [
+            "workspace_query",
+            "workspace_query"
+          ],
+          "failures": [],
+          "rows": 60,
+          "columns": [
+            "observation_date",
+            "value",
+            "konut_kredisi_faizi"
+          ],
+          "evidence": "kanıt zinciri tam: 23/23 sayı tabloda · 3 kolon → SQL · 321 gözlem → 2 artifact · çekim 2026-09-14",
+          "grounding": "OK",
+          "answer_preview": "Evet, 2021–2025 arası 60 ayda faiz oranı düşerken bakiyenin de düşmediği (aynı kaldığı ya da azaldığı) 4 ay var:  | Ay | Faiz (yüzde) | Faiz değişimi | Bakiye (milyon TL) | Bakiye değişimi | |---|---|---|---|---| | Şubat 2021 | 17,99 | −0,4",
+          "evidence_states": {
+            "sayılar": true,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": [],
+          "answer_full": "Evet, 2021–2025 arası 60 ayda faiz oranı düşerken bakiyenin de düşmediği (aynı kaldığı ya da azaldığı) 4 ay var:\n\n| Ay | Faiz (yüzde) | Faiz değişimi | Bakiye (milyon TL) | Bakiye değişimi |\n|---|---|---|---|---|\n| Şubat 2021 | 17,99 | −0,40 | 276.263 | −522 |\n| Mayıs 2021 | 17,84 | −0,30 | 275.130 | −1.196 |\n| Aralık 2023 | 42,09 | −0,06 | 438.222 | −2.190 |\n| Ocak 2024 | 41,58 | −0,51 | 436.688 | −1.534 |\n\n**Kaynak:** Bakiye — BDDK Aylık Bülten, konut kredisi dönem sonu bakiyesi (milyon TL); faiz — TCMB EVDS haftalık konut kredisi faiz oranının aylık ortalaması (yüzde).\n\nNot: Bu aylarda faiz düşüşü küçük (0,06–0,51 puan) ve bakiye değişimi de sınırlı; yani \"faiz düştü ama kredi artmadı\" desek de, aslında bakiye bu aylarda hafifçe gerilemiş. Faiz düşüşüne rağmen bakiyenin düz seyrettiği (artmadığı) ay yok; 4 ayın tamamında bakiye azalmış."
+        },
+        {
+          "question": "Tabloyu bozmadan sadece konut kredisi tutarlarını enflasyondan arındırıp göster.",
+          "passed": true,
+          "seconds": 12.6,
+          "tools": [
+            "workspace_real_value"
+          ],
+          "failures": [],
+          "rows": 60,
+          "columns": [
+            "observation_date",
+            "value",
+            "konut_kredisi_faizi",
+            "reel_konut_kredisi_endeks",
+            "reel_konut_kredisi"
+          ],
+          "evidence": "kanıt zinciri tam: 9/9 sayı tabloda · 5 kolon → SQL · 381 gözlem → 3 artifact · çekim 2026-09-14",
+          "grounding": "OK",
+          "answer_preview": "Tablo bozulmadan \"reel_konut_kredisi\" sütunu eklendi (60 satır).  **Yöntem:** Nominal bakiye × TÜFE(2025-12) / TÜFE(dönem). Baz: Aralık 2025 fiyatları (TÜFE genel endeksi, Aralık 2025 endeks değeri 110.387).  **İlk aylar (Aralık 2025 fiyatl",
+          "evidence_states": {
+            "sayılar": true,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": [],
+          "answer_full": "Tablo bozulmadan \"reel_konut_kredisi\" sütunu eklendi (60 satır).\n\n**Yöntem:** Nominal bakiye × TÜFE(2025-12) / TÜFE(dönem). Baz: Aralık 2025 fiyatları (TÜFE genel endeksi, Aralık 2025 endeks değeri 110.387).\n\n**İlk aylar (Aralık 2025 fiyatlarıyla, milyon TL):**\n- Ocak 2021: 1.894.772\n- Şubat 2021: 1.874.184\n- Mart 2021: 1.857.090\n- Nisan 2021: 1.824.041\n- Mayıs 2021: 1.800.151\n\n**Kaynak:** Bakiye — BDDK Aylık Bülten, konut kredisi dönem sonu bakiyesi (milyon TL); enflasyon — TCMB EVDS TÜFE genel endeksi.\n\nNot: Baz Aralık 2025 olduğu için erken dönemler yüksek görünür; reel değerler aynı ayın fiyatlarıyla karşılaştırılabilir."
+        },
+        {
+          "question": "Tabloyu hiç bozmadan yeni bir sütun olarak konut fiyat endeksini getir.",
+          "passed": true,
+          "seconds": 7.3,
+          "tools": [
+            "workspace_add_column"
+          ],
+          "failures": [],
+          "rows": 60,
+          "columns": [
+            "observation_date",
+            "value",
+            "konut_kredisi_faizi",
+            "reel_konut_kredisi_endeks",
+            "reel_konut_kredisi",
+            "konut_fiyat_endeksi"
+          ],
+          "evidence": "kanıt zinciri EKSİK: 8/8 sayı tabloda (4 dönem uyuşmazlığı) · 6 kolon → SQL · durum: sayılar ✗ · sorgu izi ✓ · dosya zinciri ✓ · 441 gözlem → 4 artifact · çekim 2026-09-14",
+          "grounding": "OK",
+          "answer_preview": "Tablo bozulmadan \"konut_fiyat_endeksi\" sütunu eklendi (60/60 satır eşleşti).  **Kaynak:** TCMB Konut Fiyat Endeksi, Türkiye geneli, aylık (birim: endeks).  **İlk aylar:** - Ocak 2021: 16,49 - Şubat 2021: 16,98 - Mart 2021: 17,32 - Nisan 202",
+          "evidence_states": {
+            "sayılar": false,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": [],
+          "answer_full": "Tablo bozulmadan \"konut_fiyat_endeksi\" sütunu eklendi (60/60 satır eşleşti).\n\n**Kaynak:** TCMB Konut Fiyat Endeksi, Türkiye geneli, aylık (birim: endeks).\n\n**İlk aylar:**\n- Ocak 2021: 16,49\n- Şubat 2021: 16,98\n- Mart 2021: 17,32\n- Nisan 2021: 17,86\n- Mayıs 2021: 18,27\n\nTablo artık 6 sütun: dönem, konut kredisi bakiyesi (milyon TL), faiz oranı (yüzde), TÜFE endeks değeri, reel konut kredisi (Aralık 2025 fiyatlarıyla, milyon TL) ve konut fiyat endeksi.\n\nNot: Bu endeksin baz yılı kaynakta doğrulanmamış; farklı bazlı endekslerle birleştirilmez, değerler olduğu gibi gösteriliyor."
+        },
+        {
+          "question": "Bunu bana karşılaştırmalı grafik olarak göster.",
+          "passed": true,
+          "seconds": 8.1,
+          "tools": [
+            "chart"
+          ],
+          "failures": [],
+          "rows": 60,
+          "columns": [
+            "observation_date",
+            "value",
+            "konut_kredisi_faizi",
+            "reel_konut_kredisi_endeks",
+            "reel_konut_kredisi",
+            "konut_fiyat_endeksi"
+          ],
+          "evidence": "kanıt zinciri EKSİK: 7/9 sayı tabloda (2 dönem uyuşmazlığı) · 6 kolon → SQL · durum: sayılar ✗ · sorgu izi ✓ · dosya zinciri ✓ · 441 gözlem → 4 artifact · çekim 2026-09-14",
+          "grounding": "",
+          "answer_preview": "Grafik hazır: konut kredisi bakiyesi, faiz oranı ve konut fiyat endeksi Ocak 2021–Aralık 2025 arası karşılaştırmalı çizgi grafikte.  Üç seri farklı birimde olduğu için her biri Ocak 2021'de 100 olacak şekilde endekslendi; böylece değişim hı",
+          "evidence_states": {
+            "sayılar": false,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": [
+            "tabloda bulunmayan sayılar: 161, 94"
+          ],
+          "answer_full": "Grafik hazır: konut kredisi bakiyesi, faiz oranı ve konut fiyat endeksi Ocak 2021–Aralık 2025 arası karşılaştırmalı çizgi grafikte.\n\nÜç seri farklı birimde olduğu için her biri Ocak 2021'de 100 olacak şekilde endekslendi; böylece değişim hızları aynı eksen üzerinde karşılaştırılabiliyor.\n\n**Görülen seyir (ilk dönem = 100):**\n- Konut fiyat endeksi en hızlı yükselen: 2021 sonuna 161'e ulaşmış, 2025 sonunda 100'ün çok üzerinde.\n- Konut kredisi bakiyesi 2021 boyunca 100 civarında dalgalanıp 2021 sonunda 108'e çıkmış.\n- Faiz oranı 2021'de 100'den 94'e gerilemiş; 2022–2023'te sert yükseliş, 2024–2025'te yeniden düşüş.\n\n**Kaynak:** Bakiye — BDDK Aylık Bülten (milyon TL); faiz — TCMB EVDS haftalık konut kredisi faiz oranı (yüzde); konut fiyat endeksi — TCMB (endeks)."
+        }
+      ]
+    }
+  ]
+}
