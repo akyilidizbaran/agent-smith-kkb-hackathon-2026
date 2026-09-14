@@ -180,6 +180,19 @@ make build
 make demo-check
 ```
 
+The operational entry point is available from this directory:
+
+```bash
+uv run python -m lakehouse --help
+uv run python -m lakehouse bootstrap
+uv run python -m lakehouse ingest --source evds --dataset evds_cpi \
+  --start-date 2026-01-01 --end-date 2026-03-31
+```
+
+Generic local or public tabular inputs use `ingest-file` with an explicit mapping and
+ad-hoc catalog statement. See [`docs/branches/lakehouse-operational-cli.md`](docs/branches/lakehouse-operational-cli.md)
+for the complete command shape and safety boundary.
+
 ## Testing
 
 The automated end-to-end tests use fixture/fake transport and the production path:
@@ -190,6 +203,10 @@ fixture/fake transport -> connector -> RAW -> parser -> Bronze
 ```
 
 The test suite does not require live BDDK or EVDS network access.
+
+Long EVDS date ranges are automatically split into deterministic windows while each
+response retains its own RAW, artifact, and Bronze provenance. See
+docs/branches/evds-windowing.md.
 
 ## Repository Map
 
@@ -211,9 +228,7 @@ The test suite does not require live BDDK or EVDS network access.
 
 The following are intentionally planned for later work:
 
-- Generic connector/parser and programmatic draft-series registration.
-- An isolated ad-hoc observation surface and executable ingestion CLI.
-- EVDS request windowing for responses that exceed source observation limits.
+- EVDS live/CPI evidence closure.
 - FinTürk Silver mapping and entity/geography modeling.
 - Broader catalog coverage for retrieval and genericity evaluation.
 - Safe decomposition-to-alignment composition and persisted Gold publication.

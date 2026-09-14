@@ -265,7 +265,7 @@ class EvdsConnector(BaseConnector):
         """Record request facts only; the response body is never inspected here."""
 
         parameters = dict(spec.parameters)
-        return {
+        metadata: dict[str, Any] = {
             "requested_series": series.split("-"),
             "requested_start_date": _format_date(spec.start_date) if spec.start_date else None,
             "requested_end_date": _format_date(spec.end_date) if spec.end_date else None,
@@ -276,6 +276,17 @@ class EvdsConnector(BaseConnector):
             "observation_limit": EVDS_OBSERVATION_LIMIT,
             "api_base_url": self._base_url,
         }
+        # Window context is caller-supplied provenance, not a transport parameter. Keep only
+        # the non-secret scalar fields used by the window coordinator.
+        for key in (
+            "window_index",
+            "window_count",
+            "logical_start_date",
+            "logical_end_date",
+        ):
+            if key in parameters:
+                metadata[key] = parameters[key]
+        return metadata
 
     @staticmethod
     def _media_type(response: requests.Response) -> str:

@@ -92,6 +92,20 @@ def test_evds_housing_interest_record_matches_the_verified_source_evidence() -> 
     assert "mortgage faizi" in record.aliases
 
 
+def test_cpi_public_documentary_evidence_does_not_promote_live_confidence() -> None:
+    record = {r.series_id: r for r in load_catalog_files(REPO_CATALOG)}["evds:TP.FG.J0"]
+
+    assert record.native_code == "TP.FG.J0"
+    assert record.dataset_id == "evds_cpi"
+    assert record.frequency == "monthly"
+    assert record.unit == "index"
+    assert record.measure_type == "index"
+    assert record.default_agg == "last"
+    assert record.semantic_confidence == "derived"
+    assert record.semantic_source == "source_docs"
+    assert "2003=100" in record.description
+
+
 def test_bddk_housing_loans_record_matches_the_verified_source_evidence() -> None:
     record = {r.series_id: r for r in load_catalog_files(REPO_CATALOG)}[
         "bddk_monthly:1534_Toplam"
