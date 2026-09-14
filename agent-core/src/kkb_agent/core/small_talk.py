@@ -100,11 +100,17 @@ __all__ = ["is_small_talk", "small_talk_reply", "trim_unsolicited_offers"]
 # ---------------------------------------------------------------- yetenek soruları ve dolgu (kullanıcı geri bildirimi, ADR-0078)
 # "İnternetten araştırma yapabiliyor musun" sorusuna model "Anladım, not aldım. Ama elimde veri sorusu yok" dedi; "hangi veri setlerine
 # sahipsin" sorusunda Gold'u anlattı. İkisi de sistemin kendi durumuyla deterministik cevaplanır: kayıtlı araçlar ve katalog.
-_CAP_WEB = re.compile(r"(internet|web|çevrimiçi|cevrimici|online|google)\w*.{0,40}?(araştır|arastir|arama|arayabil|bakabil|bulabil|eriş|eris)", re.I)
+# Sözcük sınırı zorunlu (K01 bulgusu, 14 Eyl): "web_ziyaret serisinde davranış ne zaman değişti?" analiz sorusu "web" + "serisinde"
+# içindeki "eris" ile yetenek sorusu sanılıp modele gitmeden cevaplandı.
+_CAP_WEB = re.compile(r"(?<![\w])(internet\w*|web(?:'?(?:de|den|te|ten))?|çevrimiçi|cevrimici|online|google)(?![\w])"
+                      r".{0,40}?(?<![\w])(araştır|arastir|arama|ara(?:r|yabil)|bakabil|bulabil|eriş|eris)\w*", re.I)
 _CAP_ASK = re.compile(r"m[ıiuü]s[ıiuü]n|yapabil|edebil|olur mu|mümkün mü|mumkun mu|\?", re.I)
 _CAP_DATA = re.compile(
-    r"(hangi|ne|neler)\s+(tür\s+|tur\s+)?(veri\w*(\s*set\w*|\s*kaynak\w*)?|kaynak\w*|seri\w*)\b.{0,30}?"
+    r"(?<![\w])(hangi|ne|neler)\s+(tür\s+|tur\s+)?(veri\w*(\s*set\w*|\s*kaynak\w*)?|kaynak\w*|seri\w*)\b.{0,30}?"
     r"(var|sahip|elinde|mevcut|kullan|bulun|yükl|yukl)|veri\s*set\w*\s+(ne|neler|hangi)", re.I)
+# Analiz sözcüğü taşıyan mesaj yetenek sorusu değildir ("Hangi seride kırılma var?", "web_ziyaret serisinde davranış ne zaman değişti?").
+_ANALYTIC = re.compile(r"kırılma|kirilma|aykırı|aykiri|anomali|artış|artis|arttı|artti|düşüş|dusus|düştü|dustu|azal|yüksel|yuksel|değiş|degis|"
+                       r"trend|eğilim|egilim|fark|oran|toplam|ortalama|karşılaştır|karsilastir|grafik|tablo|davranış|davranis|rejim|öncü|oncu", re.I)
 _FILLER = re.compile(r"^\s*(?:(?:anladım|anladim|anlaşıldı|not aldım|not aldim|haklısın(?:ız)?|özür dilerim|ozur dilerim|"
                      r"kusura bakma(?:yın)?|affedersin(?:iz)?)\s*[,.!]?\s*)+", re.I)
 
@@ -112,7 +118,7 @@ _FILLER = re.compile(r"^\s*(?:(?:anladım|anladim|anlaşıldı|not aldım|not al
 def capability_reply(question: str, *, tools: set[str], datasets) -> str | None:
     """Yetenek ya da veri seti sorusu ise tek paragraf cevap; değilse None. Rakam geçen ya da uzun mesaj veri sorusudur."""
     text = (question or "").strip()
-    if not text or re.search(r"\d", text) or len(text.split()) > 14:
+    if not text or re.search(r"\d", text) or len(text.split()) > 14 or _ANALYTIC.search(text):
         return None
     from ..source_hints import load_source_hints
 

@@ -64,6 +64,15 @@ def lakehouse(*args: str) -> subprocess.CompletedProcess:
                           capture_output=True, text=True, timeout=600, check=False)
 
 
+def catalog_series_count() -> int:
+    """Beklenen başlangıç kataloğu sayısı sabit yazılmaz; lakehouse-core katalog dosyalarından okunur (main entegrasyonunda
+    2.214 → 2.216 oldu: iki kümülatif BDDK kalemi eklendi)."""
+    code = ("from pathlib import Path; from src.lakehouse.catalog.series import load_catalog_files; "
+            "print(len({s.series_id for s in load_catalog_files(Path('catalog/series'))}))")
+    out = subprocess.run(["uv", "run", "python", "-c", code], cwd=REPO / "lakehouse-core", capture_output=True, text=True, timeout=300, check=True)
+    return int(out.stdout.strip().splitlines()[-1])
+
+
 def db_query(db: Path, sql: str, params: list | None = None) -> list[tuple]:
     """Ayrı süreçte salt okunur sorgu: ajanın sertleştirilmiş bağlantısı aynı süreçte açıkken DuckDB farklı ayarlı ikinci
     bağlantıya izin vermez ("same database file with a different configuration")."""
@@ -148,7 +157,9 @@ def main() -> int:
 
     # ---------------------------------------------------------------- K01-T01: kök ve başlangıç kataloğu
     boot = lakehouse("bootstrap", "--database", str(db), "--data-root", str(data), "--catalog", "default")
-    rep.check("T01-kurulum", "geçici kökte DB başlangıç kataloğuyla kurulur", boot.returncode == 0 and "catalog_series_count: 2214" in boot.stdout,
+    expected_catalog = catalog_series_count()
+    rep.check("T01-kurulum", f"geçici kökte DB başlangıç kataloğuyla kurulur ({expected_catalog} seri, katalog dosyalarından)",
+              boot.returncode == 0 and f"catalog_series_count: {expected_catalog}" in boot.stdout,
               boot.stdout.strip().replace("\n", " · ") or boot.stderr[-300:])
     catalog_before = db_query(db, "SELECT count(*), md5(string_agg(series_id || coalesce(status,''), ',' ORDER BY series_id)) FROM meta.series")[0]
 
@@ -297,7 +308,10 @@ def main() -> int:
         regimes = wt["value_rejim"].tolist()
         breaks = [dates[i] for i in range(1, len(regimes)) if regimes[i] != regimes[i - 1]]
     rep.check("T05-analiz", "yeni alanda analiz: rejim 2025-01-31'de değişir (düzey sıçraması), araç başarılı",
-              bool(cp) and cp[-1]["ok"] and "2025-01-31" in breaks, {"kırılmalar": breaks, "adım_ok": cp[-1]["ok"] if cp else None})
+              bool(cp) and cp[-1]["ok"] and "2025-01-31" in breaks,
+              {"kırılmalar": breaks, "adım_ok": cp[-1]["ok"] if cp else None,
+               "adımlar": [(s.get("role"), s.get("tool"), s.get("ok"), s.get("error_code"), (s.get("thought") or "")[:80]) for s in a9.get("steps", [])],
+               "cevap": (a9.get("text") or "")[:200]})
 
     # ---------------------------------------------------------------- K01-T06: yeniden başlatma, profil, katalog/cache sızıntısı, Analyst yazamaz
     from kkb_agent.web_app import _close_agent_readers

@@ -137,3 +137,14 @@ def test_yil_sira_kimligi_sayi_sayilmaz() -> None:
     assert numbers_in("bülten 2015/1") == []
     assert numbers_in("oran 46,59 TL") == [46.59], "ölçüm sayısı etkilenmez"
 
+
+def test_analiz_sorusu_yetenek_sorusu_sanilmaz_k01_bulgusu() -> None:
+    """K01 T05: "web_ziyaret serisinde davranış ne zaman değişti?" modele gitmeden "Kısmen…" diye cevaplanıyordu."""
+    tools = {"web_search", "web_url"}
+    for q in ("web_ziyaret serisinde davranış ne zaman değişti?", "webinar_katilim serisini göster?", "Tüm serilerde erişim sayısı nasıl?",
+              "online_satis serisi ne zaman arttı?", "Hangi seride kırılma var?"):
+        assert capability_reply(q, tools=tools, datasets=lambda: []) is None, q
+    for q in ("İnternetten araştırma yapabiliyo musun", "internette arama yapabilir misin?", "Web'den bilgi bulabilir misin?",
+              "internete erişebiliyor musun?"):
+        assert capability_reply(q, tools=tools, datasets=lambda: []) is not None, q
+

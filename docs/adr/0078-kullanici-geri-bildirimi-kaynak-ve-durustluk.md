@@ -50,3 +50,12 @@ Kullanıcı arayüzde ürünü denedi ve dokuz sorun bildirdi:
 kapısı, arayüz, yıl/sıra kimliği); ajan testleri 485 → 495. Canlı deneme (gerçek model ve demo veri, kullanıcının mesajlarıyla): kişi sorusu "elimde bilgi
 yok"; yetenek ve veri seti soruları deterministik; TCMB XML'inden 2 Ocak 2015 kuru; "1 Temmuz 2026 kuru, araştır" sorusunda model
 TCMB adresini kendisi açtı; 2 sayfalık PDF'in iki bölümü de özetlendi. Canlı denemede "bülten no 2026/120" kimliği sayı sanılıp kanıt rozeti düşüyordu; yıl/sıra kimliği tarih gibi maskelendi. Arayüz provası: `docs/experiments/geri_bildirim_arayuz_2026-09-14/`.
+
+## Ek (14 Eylül, main entegrasyonu hazırlığında K01 bulgusu)
+
+Deterministik yetenek cevabı bir analiz sorusunu yakaladı: K01 T05'teki "web_ziyaret serisinde davranış ne zaman değişti?" sorusunda
+"web" (seri adının parçası) ve "serisinde" içindeki "eris" internet yeteneği kalıbına uydu; soru modele gitmeden "Kısmen. Bu ortamda
+web araması kapalı…" diye cevaplandı ve kırılma analizi hiç çalışmadı (K01 21/22, `docs/experiments/k01_kabul_2026-09-14_1531.json`,
+bd32404). Düzeltme: kalıplarda sözcük sınırı; analiz sözcüğü (kırılma, aykırı, artış, değişim, trend, ortalama, grafik, tablo, davranış …)
+taşıyan mesaj hiçbir zaman yetenek sorusu sayılmaz. "Hangi seride kırılma var?" gibi sorular da modele gider. Regresyon testi K01
+sorusunu ve benzerlerini içerir; K01 yeniden 22/22.
