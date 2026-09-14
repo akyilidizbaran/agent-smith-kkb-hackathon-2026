@@ -54,11 +54,35 @@ _YEAR = re.compile(r"\b(19|20)\d{2}\b")
 def _plain(frame) -> str:
     """Kart tablosu: bilimsel gösterim yok (ölçüldü: 93.824.682.381 kartta 9.38e+10 çıkıyordu, model
     sayıyı yazamıyordu); ondalık gerekiyorsa en çok 2 basamak."""
+    import pandas as pd
+
     def fmt(v: float) -> str:
         if v != v:
             return "NaN"
         return f"{v:.2f}".rstrip("0").rstrip(".") if abs(v) < 1e15 else f"{v:.6g}"
-    return frame.to_string(index=False, float_format=fmt)
+
+    # K03 canlı tekrar bulgusu (14 Eyl): pandas sağa hizalıyordu; kısa metin değerlerin önünde dolgu boşluğu çıktı ("  ADANA",
+    # "   Van") ve model verideki adların başında boşluk olduğunu yazdı. Metin sola, sayı sağa hizalanır; satır başında dolgu yok.
+    cols = list(frame.columns)
+    numeric = [pd.api.types.is_numeric_dtype(frame[c]) and not pd.api.types.is_bool_dtype(frame[c]) for c in cols]
+    dates = [pd.api.types.is_datetime64_any_dtype(frame[c]) for c in cols]
+
+    def cell(v, is_num: bool, is_date: bool) -> str:
+        if v is None or (isinstance(v, float) and v != v) or v is pd.NaT:
+            return "NaN" if is_num else ""
+        if is_date:
+            return pd.Timestamp(v).strftime("%Y-%m-%d")
+        if is_num and isinstance(v, float):
+            return fmt(v)
+        return str(v)
+
+    rows = [[cell(v, n, d) for v, n, d in zip(row, numeric, dates)] for row in frame.itertuples(index=False, name=None)]
+    widths = [max([len(str(c))] + [len(r[i]) for r in rows]) for i, c in enumerate(cols)]
+
+    def line(values: list[str]) -> str:
+        return "  ".join(v.rjust(w) if n else v.ljust(w) for v, w, n in zip(values, widths, numeric)).rstrip()
+
+    return "\n".join([line([str(c) for c in cols]), *(line(r) for r in rows)])
 
 
 class WebUrlParams(BaseModel):

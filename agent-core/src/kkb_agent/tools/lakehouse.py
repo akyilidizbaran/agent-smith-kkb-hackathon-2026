@@ -374,6 +374,10 @@ class LakehouseQueryTool(Tool):
                 result.data, description=params.purpose, provenance=result.provenance
             )
             self.workspace.title = params.purpose
+        else:
+            # K03 ekran provası bulgusu: bakış modunda (aktif tablo değişmez) dönen sonuç kanıt havuzuna girmiyordu; model faizleri
+            # bu sonuçtan doğru yazdı ("40,54" ← 40.536) ama panel "tabloda yok" dedi. workspace_query'deki gibi bakış kaydı.
+            self.workspace.note_peek(params.sql, result.data)
 
         # Modele TAM tablo değil, özet gider: context window'u koruyoruz.
         df = result.data

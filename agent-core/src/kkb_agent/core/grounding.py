@@ -31,7 +31,9 @@ _NUM_RE = re.compile(
 )
 
 
-_DATE_TOKEN = re.compile(r"\b\d{1,2}\.\d{1,2}\.\d{2,4}\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}/\d{1,2}/\d{2,4}\b")
+# K03 ekran provası bulgusu: "kapsam 2026-06'ya kadar" yıl-ay yazımı da tarihtir (2026 sayı sanılıp "tabloda yok" deniyordu);
+# ay 01–12 ile sınırlı, "2021-25 arası" gibi yıl aralığı maskelenmez.
+_DATE_TOKEN = re.compile(r"\b\d{1,2}\.\d{1,2}\.\d{2,4}\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}/\d{1,2}/\d{2,4}\b|\b(?:19|20)\d{2}-(?:0[1-9]|1[0-2])\b(?!-\d)")
 
 
 def _ascii_minus(text: str) -> str:
