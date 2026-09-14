@@ -75,6 +75,12 @@ class Settings:
         """Loglarda hangi sağlayıcıda olduğumuzu görmek için."""
         return "ollama (yerel)" if "localhost" in self.llm_base_url else "kloudeks"
 
+    @property
+    def llm_key_missing(self) -> bool:
+        """K02-T01 (A01): uzak model uç noktası için anahtar boşsa arayüz başlayamaz; ön kontrol bunu HAZIR saymamalı."""
+        local = any(h in self.llm_base_url for h in ("localhost", "127.0.0.1"))
+        return not local and not (self.llm_api_key or "").strip()
+
 
 def load_settings() -> Settings:
     data_root = _path("DATA_ROOT", REPO_ROOT / "data")

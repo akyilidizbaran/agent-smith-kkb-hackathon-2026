@@ -600,7 +600,10 @@ class Session:
         except Exception:  # noqa: BLE001
             specs = []
         gold = sum(1 for s in specs if getattr(s, "source", "") == "gold")
-        adhoc = sum(1 for s in specs if getattr(s, "source", "") == "adhoc")
+        # K01-T07 bulgusu: onaylanıp aktif olan adhoc seri kataloğun parçasıdır; yalnız TASLAKLAR sayaç dışında kalır
+        # (boş katalogdan yeni alan kurulunca sayaç 0 gösteriyordu).
+        adhoc = sum(1 for s in specs if getattr(s, "source", "") == "adhoc"
+                    and any("TASLAK" in str(n) for n in (getattr(s, "notes", None) or [])))
         uningested = len(getattr(lake, "_uningested", {}) or {})
         silver_rows = None
         try:

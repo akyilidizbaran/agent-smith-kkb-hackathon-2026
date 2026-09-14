@@ -107,7 +107,9 @@ def run_preflight(settings: Settings, *, live: bool = False) -> list[Check]:
     root = settings.ingest_allowed_root
     checks.append(Check("izinli dosya kökü", root.is_dir(), f"{root} {'var' if root.is_dir() else 'yok → jüri dosyası buraya konur; make demo-data oluşturur'}"))
     checks.append(Check("grafik dizini", True, f"{settings.chart_dir} {'var' if settings.chart_dir.is_dir() else 'ilk grafikte oluşturulur'}", required=False))
-    checks.append(Check("model", bool(settings.llm_model), f"{settings.llm_base_url} · {settings.llm_model} · anahtar {_key_status('LLM_API_KEY')}"))
+    checks.append(Check("model", bool(settings.llm_model) and not settings.llm_key_missing,
+                        f"{settings.llm_base_url} · {settings.llm_model} · anahtar {_key_status('LLM_API_KEY')}"
+                        + (" → uzak model için LLM_API_KEY boş: arayüz başlamaz; .env'yi doldur" if settings.llm_key_missing else "")))
     checks.append(Check("yardımcı modeller", True, f"embedding {settings.embedding_model or '—'} · vision {settings.vision_model or '—'}", required=False))
     checks.append(Check("anahtarlar", True, f"MIA {_key_status('MIA_API_KEY')} · EVDS {_key_status('EVDS_API_KEY')} · Tavily {_key_status('TAVILY_API_KEY')} (yalnız var/yok)", required=False))
     if live:

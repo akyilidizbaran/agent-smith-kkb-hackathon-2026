@@ -220,6 +220,8 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
         system_prompt = system_prompt + GOLD_PROMPT_RULES
     system_prompt = system_prompt + system_prompt_extra
 
+    if settings.llm_key_missing:
+        raise SystemExit(f"Model anahtarı yok: LLM_API_KEY boş ({settings.llm_base_url}). .env dosyasını doldurun, sonra make preflight.")
     llm = OpenAICompatClient(
         base_url=settings.llm_base_url,
         api_key=settings.llm_api_key,
