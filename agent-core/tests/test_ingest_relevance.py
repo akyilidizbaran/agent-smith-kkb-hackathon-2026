@@ -149,7 +149,8 @@ def test_alakasiz_dosya_yazilmaz_ve_sorulur(tool_env) -> None:
 
     assert not r.ok and r.error.error_code == "FILE_IRRELEVANT" and not r.error.is_retryable
     assert runner.calls == [] and lake.events == []          # CLI hiç çağrılmadı, okuyucu kapanmadı
-    assert "KAPSAMIYOR" in r.content and "Sefer Sayısı" in r.content
+    # 15 Eyl: ret kararını uygunluk kapısı verir (core/fitness); kart dosyada NE olduğunu söyler.
+    assert "dönem: soru 2024 istiyor" in r.content and "Sefer Sayısı" in r.content
     assert "user_confirmed=true" in r.content
 
 
@@ -175,7 +176,7 @@ def test_dogru_ve_yanlis_dosya_birlikte_kart_daha_uygun_olani_soyler(tool_env) -
     assert r1.ok and "ilgi puanı: 2/2" in r1.content
 
     r2 = tool.validate_and_run({"locator": "otobus.csv", "name": "otobüs"})
-    # otobüs: yıl tutuyor (1/2) → alakasız sayılmaz, yazılır ama kart uyarır
-    assert r2.ok and "ilgi puanı: 1/2" in r2.content
-    assert "konut.csv (2/2)" in r2.content and "daha uygun" in r2.content
-    assert r2.artifacts["relevance"].score == 1
+    # 15 Eyl (uygunluk kapısı): yıl tutsa da soru konut/kredi/bakiye istiyor, dosyada hiçbiri yok → yazılmaz;
+    # hata ipucu aynı oturumda bakılan daha uygun dosyayı adıyla söyler. (13 Eyl ilgi kapısı yıl tuttuğu için yazıyordu.)
+    assert not r2.ok and r2.error.error_code == "FILE_IRRELEVANT"
+    assert "hiçbiri yok" in r2.content and "konut.csv" in r2.content and "daha uygun" in r2.content.lower()

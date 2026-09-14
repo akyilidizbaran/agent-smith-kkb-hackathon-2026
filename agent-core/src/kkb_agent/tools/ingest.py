@@ -25,7 +25,9 @@ from ..builder.ingest import LakehouseCLI
 from ..builder.profile import profile_table, propose
 from ..builder.read import ReadRefused, read_bytes_for_profiling, read_table_for_profiling
 from ..builder.crosscheck import cross_check, file_points
+from ..builder.quality import table_quality
 from ..builder.relevance import assess as assess_relevance, catalog_entries, user_confirmed
+from ..core.fitness import Lexicon, assess as assess_fitness, signature_of
 from ..builder.unit_guess import guess_unit
 from ..builder.verify import verify_mapping
 from ..adapters.duckdb_lakehouse import release_connections
@@ -280,15 +282,26 @@ class IngestFromUrlTool(Tool):
             question, self._user_text(), params.locator, frame, mapping,
             catalog=catalog_entries(s for s in specs_all if getattr(s, "source", "") != "adhoc"),
         )
+        # 2b'. uygunluk kapısı (core/fitness.py, 15 Eyl): sözcük örtüşmesi değil GEREKSİNİM — soru hangi ölçümü/varlığı/
+        # dönemi/granülariteyi istiyor, dosya hangisini sunuyor. Anlamca yakın yanlış dosyayı (fiyat endeksi ≠ bakiye;
+        # 459.904'lük "faiz oranı") ilgi kapısı geçiriyordu (ölçüldü: ret %6 → %98, docs/experiments/ueb_wrongfile_ablation).
+        # Ret kararını uygunluk verir; ilgi kapısı gereksinim çıkarılamayan soruda ("bu dosyayı ekle") yedek olarak kalır.
+        sig = signature_of(frame, params.locator, mapping=mapping, semantics=semantics)
+        lexicon = Lexicon.load().with_catalog(s for s in specs_all if getattr(s, "source", "") != "adhoc")
+        # Soru yoksa kullanıcı metni; dosya adları/adresler çıkarılır ("konut.csv belirsiz.csv ekle" → 'konut' gereksinim olmasın).
+        gate_q = question or " ".join(t for t in self._user_text().split() if not re.search(r"[./\\]", t))
+        fit = assess_fitness(gate_q, sig, lexicon)
+        quality = table_quality(frame, sig, gate_q)
         seen = self.__dict__.setdefault("_relevance_seen", {})
-        seen[params.locator] = relevance.score
-        better = [f"{loc} ({sc}/{relevance.applicable})" for loc, sc in seen.items()
-                  if loc != params.locator and sc > relevance.score]
+        seen[params.locator] = fit.score
+        better = [f"{loc} ({sc:.2f})" for loc, sc in seen.items() if loc != params.locator and sc > fit.score]
         confirmed = params.user_confirmed and user_confirmed(self._user_text())
-        if relevance.irrelevant and not confirmed:
+        irrelevant = fit.decision == "reject" or (not fit.required and relevance.irrelevant)
+        if irrelevant and not confirmed:
             return ToolResult.fail(
                 "FILE_IRRELEVANT",
-                (f"'{Path(params.locator.split('?')[0]).name}' dosyası sorulan şeyle ilgili görünmüyor: "
+                (fit.stop_message() if fit.decision == "reject" else
+                 f"'{Path(params.locator.split('?')[0]).name}' dosyası sorulan şeyle ilgili görünmüyor: "
                  + "; ".join(relevance.lines()[1:]) + "."),
                 hint=("Kullanıcıya sor: doğru dosya bu mu? Dosyada şu kolonlar var: "
                       + ", ".join(map(str, frame.columns)) + ". "
@@ -405,9 +418,11 @@ class IngestFromUrlTool(Tool):
         ]
         if out.warnings:
             card.append(f"parser uyarısı: {out.warnings} (quality_flag='source_warning')")
-        card.append(relevance.lines()[0] + (" — kullanıcı onayıyla eklendi" if confirmed and relevance.irrelevant else ""))
+        card.append(fit.lines()[0] + (" — kullanıcı onayıyla eklendi" if confirmed and irrelevant else ""))
+        card.append(relevance.lines()[0])
         if relevance.period_ok is False:
             card.append("⚠ dosyanın tarih aralığı sorudaki yılı KAPSAMIYOR; o yıl için bu seriden sayı çıkmaz")
+        card += [f"UYARI: {q}" for q in quality]
         if better:
             card.append(f"NOT: bu oturumda bakılan {', '.join(better)} bu soruya daha uygun görünüyor")
         if crosscheck is not None:
@@ -420,6 +435,11 @@ class IngestFromUrlTool(Tool):
             summary=f"{series_id} ({params.name}) taslağı kataloğa aktif seri olarak alınacak"))
         return ToolResult(content="\n".join(card),
                           artifacts={"ingest": out, "proposal": mapping, "relevance": relevance,
+                                     "fitness": {"decision": fit.decision, "score": fit.score, "reasons": list(fit.reasons),
+                                                 "dims": dict(fit.dims), "required": list(fit.required), "present": list(fit.present),
+                                                 "signature": sig.describe(), "coverage": sig.coverage(), "source": params.locator,
+                                                 "quality": list(quality),
+                                                 "confirmed": bool(confirmed)},
                                      **({"crosscheck": crosscheck} if crosscheck is not None else {})})
 
 
