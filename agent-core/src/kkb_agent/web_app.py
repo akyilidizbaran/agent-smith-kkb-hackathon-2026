@@ -10,6 +10,8 @@ araç kapısı kararı. Arayüz kanıtı ve izi gizlemez; jürinin göreceği ş
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import base64
 import json
 import re
@@ -20,7 +22,7 @@ import uuid
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -103,7 +105,10 @@ def evidence_to_dict(panel: Any) -> dict[str, Any] | None:
         "inspected_rows": int(getattr(panel, "inspected_rows", 0) or 0),
         "numbers": [_json_safe(n) for n in getattr(panel, "numbers", [])],
         "columns": [_json_safe(c) for c in getattr(panel, "columns", [])],
-        "observations": [_json_safe(o) for o in list(getattr(panel, "observations", []))[:12]],
+        "observations": [{**_json_safe(o), "chain_state": getattr(o, "chain_state", None), "raw_present": getattr(o, "raw_present", None),
+                          "bronze_present": getattr(o, "bronze_present", None)} if isinstance(_json_safe(o), dict) else _json_safe(o)
+                         for o in list(getattr(panel, "observations", []))[:12]],
+        "chain_breakdown": panel.chain_breakdown() if hasattr(panel, "chain_breakdown") else {},
         "observation_count": len(getattr(panel, "observations", [])),
         "artifacts": _json_safe(getattr(panel, "artifacts", {})),
         "web_sources": _json_safe(getattr(panel, "web_sources", [])),
@@ -315,25 +320,81 @@ class ProfileRequest(BaseModel):
 
 class ResetRequest(BaseModel):
     confirm: str = Field(default="", max_length=64)
+    # D04 (ADR-0069): sıfırlama sonrası katalog; varsayılan BOŞ. Başlangıç kataloğunu geri yüklemek ayrı açık seçimdir.
+    catalog: Literal["bos", "varsayilan"] = "bos"
 
 
-# ---------------------------------------------------------------- Architect tam sıfırlama (M04-T06, ADR-0056)
-RESET_ITEMS = ("lakehouse.duckdb", "lakehouse.duckdb.wal", "raw", "bronze", "silver", "quarantine", "incoming/uploads", "cache")
+# ---------------------------------------------------------------- Architect tam sıfırlama (M04-T06, ADR-0056; D04/D05, ADR-0069)
+@dataclass
+class ResetPaths:
+    """Sıfırlamanın bildiği bütün veri yolları — sabit liste değil, yapılandırmadan (D05-T01). Kod, kurulum ve .env yok."""
+
+    data_root: Path
+    db_path: Path
+    upload_root: Path | None = None       # oturum yüklemeleri (INGEST_ALLOWED_ROOT/uploads)
+    chart_dir: Path | None = None         # CHART_DIR
+    cache_dir: Path | None = None         # EMBEDDING_CACHE_DIR'in bulunduğu önbellek kökü
+
+    @classmethod
+    def from_settings(cls, s: Any) -> "ResetPaths":
+        cache = Path(s.embedding_cache_dir)
+        return cls(data_root=Path(s.data_root), db_path=Path(s.lakehouse_path), upload_root=Path(s.ingest_allowed_root) / "uploads",
+                   chart_dir=Path(s.chart_dir), cache_dir=cache.parent if cache.name == "embeddings" else cache)
+
+    def candidates(self) -> list[tuple[str, Path]]:
+        root = self.data_root
+        items = [
+            ("veritabanı", self.db_path), ("veritabanı WAL", Path(str(self.db_path) + ".wal")),
+            ("RAW", root / "raw"), ("Bronze", root / "bronze"), ("Silver dosyaları", root / "silver"), ("karantina", root / "quarantine"),
+            ("oturum yüklemeleri", self.upload_root or root / "incoming" / "uploads"),
+            ("grafikler", self.chart_dir or root / "charts"), ("önbellek", self.cache_dir or root / "cache"),
+        ]
+        seen: set[str] = set()
+        out = []
+        for label, path in items:
+            key = str(path.resolve()) if path.exists() else str(path.absolute())
+            if key not in seen:
+                seen.add(key)
+                out.append((label, path))
+        return out
+
+
+@dataclass
+class ResetPlan:
+    targets: list[tuple[str, Path]]       # veri kökü altında ve mevcut → silinecek
+    absent: list[tuple[str, Path]]        # veri kökü altında, şu an yok
+    outside: list[tuple[str, Path]]       # yapılandırma veri kökü DIŞINI gösteriyor → sıfırlama reddedilir (D05-T02)
+    catalog: str = "bos"
+
+    def token(self) -> str:
+        import hashlib
+        body = "\n".join([*(str(p) for _, p in self.targets), "--dış--", *(str(p) for _, p in self.outside), "--katalog--", self.catalog])
+        return hashlib.sha256(body.encode()).hexdigest()[:12]
+
+    def to_json(self) -> dict[str, Any]:
+        def rows(items):
+            return [{"label": label, "path": str(p)} for label, p in items]
+        return {"targets": [str(p) for _, p in self.targets], "target_details": rows(self.targets), "absent": rows(self.absent),
+                "outside": rows(self.outside), "catalog": self.catalog}
+
+
+def plan_reset(paths: ResetPaths, *, catalog: str = "bos") -> ResetPlan:
+    root = paths.data_root.resolve()
+    targets, absent, outside = [], [], []
+    for label, p in paths.candidates():
+        try:
+            p.resolve().relative_to(root)
+        except ValueError:
+            if p.exists():
+                outside.append((label, p))       # veri kökü dışındaki hiçbir şey silinmez; sessizce atlanmaz da
+            continue
+        (targets if (p.exists() or p.is_symlink()) else absent).append((label, p))
+    return ResetPlan(targets=targets, absent=absent, outside=outside, catalog=catalog)
 
 
 def plan_full_reset(data_root: Path, db_path: Path) -> list[Path]:
-    """Silinecek hedefler: yalnız DATA_ROOT altındakiler. Kod, kurulum dosyaları ve .env asla listede değil."""
-    root = data_root.resolve()
-    targets = [db_path, Path(str(db_path) + ".wal")] + [data_root / item for item in RESET_ITEMS if item not in ("lakehouse.duckdb", "lakehouse.duckdb.wal")]
-    out: list[Path] = []
-    for t in targets:
-        try:
-            t.resolve().relative_to(root)
-        except ValueError:
-            continue                      # veri kökü dışındaki hiçbir şey silinmez
-        if t.exists() and t not in out:
-            out.append(t)
-    return out
+    """Geriye uyum: veri kökü altındaki mevcut hedefler (ADR-0056 imzası)."""
+    return [p for _, p in plan_reset(ResetPaths(data_root=data_root, db_path=db_path)).targets]
 
 
 def reset_token(targets: list[Path]) -> str:
@@ -341,20 +402,101 @@ def reset_token(targets: list[Path]) -> str:
     return hashlib.sha256("\n".join(str(t) for t in targets).encode()).hexdigest()[:12]
 
 
-def execute_full_reset(targets: list[Path], data_root: Path, *, bootstrap: Callable[[], tuple[int, str]] | None = None) -> dict[str, Any]:
-    removed = []
-    for t in targets:
-        if t.is_dir():
-            shutil.rmtree(t, ignore_errors=True)
-        elif t.exists():
-            t.unlink()
-        removed.append(str(t))
+def _verify_rebuilt(db_path: Path, catalog: str) -> dict[str, Any]:
+    """D05-T06: yeniden kurulan DB boş/yeni mi? Seri sayısı ve kalıcı katalog kipi okunur; okunamazsa doğrulandı denmez."""
+    if not db_path.exists():
+        return {"ok": False, "detail": "veritabanı yeniden kurulmadı"}
+    try:
+        import duckdb
+        con = duckdb.connect(str(db_path), read_only=True)
+        try:
+            series = int(con.execute("SELECT count(*) FROM meta.series").fetchone()[0])
+            try:
+                row = con.execute("SELECT value FROM meta.lakehouse_setting WHERE key = 'series_catalog'").fetchone()
+                mode = None if row is None else str(row[0])
+            except Exception:  # noqa: BLE001 — eski şema: kip tablosu yok
+                mode = None
+        finally:
+            con.close()
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "detail": f"yeni veritabanı okunamadı: {exc}"}
+    expected_empty = catalog == "bos"
+    ok = (series == 0 and mode == "none") if expected_empty else series > 0
+    return {"ok": ok, "series": series, "catalog_mode": mode,
+            "detail": ("boş katalog doğrulandı" if ok and expected_empty else "başlangıç kataloğu yüklendi" if ok
+                       else f"beklenen {'boş' if expected_empty else 'dolu'} katalog değil (seri {series}, kip {mode})")}
+
+
+def execute_full_reset(plan: ResetPlan | list[Path], data_root: Path, *, bootstrap: Callable[..., tuple[int, str]] | None = None,
+                       db_path: Path | None = None, close_readers: Callable[[], None] | None = None) -> dict[str, Any]:
+    """Onaylanmış planı uygular ve HER hedefin gerçek sonucunu döner (D05-T05): silindi / zaten yok / silinemedi / korunuyor."""
+    if isinstance(plan, list):                           # geriye uyum
+        plan = ResetPlan(targets=[("hedef", p) for p in plan], absent=[], outside=[])
+    results: list[dict[str, Any]] = [{"label": label, "path": str(p), "status": "korunuyor", "detail": "veri kökü dışında"}
+                                     for label, p in plan.outside]
+    if plan.outside:
+        return {"status": "reddedildi", "results": results, "removed": [], "failed": [],
+                "bootstrap": {"ok": False, "detail": "çalıştırılmadı"}, "verify": {"ok": False, "detail": "çalıştırılmadı"},
+                "catalog": plan.catalog}
+    if close_readers is not None:
+        close_readers()                                  # D05-T04: açık DuckDB okuyucuları silmeden önce kapanır
+    for label, p in plan.targets:
+        row = {"label": label, "path": str(p)}
+        if not p.exists() and not p.is_symlink():
+            results.append({**row, "status": "zaten yok"})
+            continue
+        try:
+            if p.is_dir() and not p.is_symlink():
+                shutil.rmtree(p)
+            else:
+                p.unlink()
+        except OSError as exc:
+            results.append({**row, "status": "silinemedi", "detail": f"{type(exc).__name__}: {exc}"})
+            continue
+        if p.exists():
+            results.append({**row, "status": "silinemedi", "detail": "silme sonrası hâlâ var"})
+        else:
+            results.append({**row, "status": "silindi"})
+    for label, p in plan.absent:
+        results.append({"label": label, "path": str(p), "status": "zaten yok"})
     data_root.mkdir(parents=True, exist_ok=True)
-    boot = {"ok": True, "detail": "bootstrap çalıştırılmadı"}
+    boot: dict[str, Any] = {"ok": True, "detail": "bootstrap çalıştırılmadı"}
+    verify: dict[str, Any] = {"ok": True, "detail": "doğrulama yapılmadı (bootstrap yok)"}
     if bootstrap is not None:
-        code, out = bootstrap()
-        boot = {"ok": code == 0, "detail": out.strip()[-400:]}
-    return {"removed": removed, "bootstrap": boot}
+        mode = "none" if plan.catalog == "bos" else "default"
+        try:
+            code, out = bootstrap(mode)
+        except TypeError:                                # eski imza: katalog seçimi almayan geri çağrı
+            code, out = bootstrap()
+        boot = {"ok": code == 0, "detail": out.strip()[-400:], "catalog_mode": mode}
+        if boot["ok"] and db_path is not None:
+            verify = _verify_rebuilt(db_path, plan.catalog)
+        elif not boot["ok"]:
+            verify = {"ok": False, "detail": "bootstrap başarısız; veritabanı yeni durumda değil"}
+    failed = [r for r in results if r["status"] == "silinemedi"]
+    status = "tamamlandı" if not failed and boot["ok"] and verify["ok"] else "kısmi"
+    return {"status": status, "results": results, "removed": [r["path"] for r in results if r["status"] == "silindi"],
+            "failed": failed, "bootstrap": boot, "verify": verify, "catalog": plan.catalog}
+
+
+def _close_agent_readers(agent: Any, db_path: Path | None) -> None:
+    registry = getattr(agent, "registry", None)
+    seen: set[int] = set()
+    for tool in (list(registry) if registry is not None else []):
+        lake = getattr(tool, "lakehouse", None)
+        if lake is not None and id(lake) not in seen and hasattr(lake, "close"):
+            seen.add(id(lake))
+            try:
+                lake.close()
+            except Exception:  # noqa: BLE001
+                pass
+    try:
+        from .adapters.duckdb_lakehouse import release_connections
+        release_connections(db_path)
+    except Exception:  # noqa: BLE001
+        pass
+    import gc
+    gc.collect()
 
 
 class Session:
@@ -492,7 +634,7 @@ class Session:
 
 
 def create_app(agent_factory: Callable[..., Any], *, profile: str = "analyst", architect_token: str = "",
-               reset_paths: tuple[Path, Path] | None = None, bootstrap: Callable[[], tuple[int, str]] | None = None) -> FastAPI:
+               reset_paths: "ResetPaths | tuple[Path, Path] | None" = None, bootstrap: Callable[..., tuple[int, str]] | None = None) -> FastAPI:
     app = FastAPI(title="Agent Smith", docs_url=None, redoc_url=None)
     session = Session(agent_factory, profile=profile, architect_token=architect_token)
     app.state.session = session
@@ -505,25 +647,39 @@ def create_app(agent_factory: Callable[..., Any], *, profile: str = "analyst", a
 
     @app.post("/api/architect/reset")
     def architect_reset(req: ResetRequest) -> JSONResponse:
-        """İki adım: önce hedef listesi + onay kodu; sonra aynı kodla silme + bootstrap. Yalnız Architect."""
+        """İki adım: önce kapsam önizlemesi + onay kodu (hedefler ve katalog seçimine bağlı); sonra aynı kodla silme,
+        doğrulama ve boş katalogla yeniden kurulum. Yalnız Architect. (ADR-0056, ADR-0069)"""
         if session.profile != "architect":
             raise HTTPException(status_code=403, detail="tam sıfırlama yalnız Architect profilinde")
         if reset_paths is None:
             raise HTTPException(status_code=400, detail="sıfırlama yolları tanımlı değil")
-        data_root, db_path = reset_paths
-        targets = plan_full_reset(data_root, db_path)
-        token = reset_token(targets)
+        paths = reset_paths if isinstance(reset_paths, ResetPaths) else ResetPaths(data_root=reset_paths[0], db_path=reset_paths[1])
+        plan = plan_reset(paths, catalog=req.catalog)
+        token = plan.token()
         if not req.confirm:
             pending_reset["token"] = token
-            return JSONResponse({"targets": [str(t) for t in targets], "confirm": token, "excluded": "kod, kurulum dosyaları, .env ve sırlar kapsam dışı",
-                                 "note": "Silme geri alınamaz; eski cevapların kanıt zinciri kopar."})
+            return JSONResponse({**plan.to_json(), "confirm": token, "refused": bool(plan.outside),
+                                 "excluded": "kod, kurulum dosyaları, .env ve sırlar kapsam dışı",
+                                 "note": ("Silme geri alınamaz; eski cevapların kanıt zinciri kopar. "
+                                          + ("Katalog BOŞ kurulacak; başlangıç kataloğu yüklenmez." if plan.catalog == "bos"
+                                             else "Başlangıç kataloğu yeniden yüklenecek.")
+                                          + (" Veri kökü dışını gösteren ayar var: sıfırlama yapılmaz." if plan.outside else ""))})
         if req.confirm != token or pending_reset.get("token") != token:
-            raise HTTPException(status_code=409, detail="onay kodu eşleşmiyor ya da hedef listesi değişti; listeyi yeniden al")
+            raise HTTPException(status_code=409, detail="onay kodu eşleşmiyor ya da hedef listesi/katalog seçimi değişti; önizlemeyi yeniden al")
+        if plan.outside:
+            raise HTTPException(status_code=409, detail="veri kökü dışını gösteren ayar var: " + ", ".join(f"{l} {p}" for l, p in plan.outside))
         pending_reset.clear()
-        with session._lock:
-            report = execute_full_reset(targets, data_root, bootstrap=bootstrap)
-            session.agent = session._build(session.profile)
+        with session._lock:                              # D05-T04: soru/yükleme ile eşzamanlı silme yok
+            report = execute_full_reset(plan, paths.data_root, bootstrap=bootstrap, db_path=paths.db_path,
+                                        close_readers=lambda: _close_agent_readers(session.agent, paths.db_path))
             session.history, session.answers, session.tables, session.uploads = [], [], {}, []
+            session.id = uuid.uuid4().hex[:8]             # D05-T07: eski grafik/cevap bağlantıları geçersiz
+            try:
+                session.agent = session._build(session.profile)
+                report["agent"] = {"ok": True, "detail": "ajan yeni veriyle kuruldu"}
+            except Exception as exc:  # noqa: BLE001 — yeniden kurulum hatası başarı diye sunulmaz
+                report["agent"] = {"ok": False, "detail": f"{type(exc).__name__}: {exc}"}
+                report["status"] = "kısmi"
         return JSONResponse(_json_safe(report))
     # Yerel dosyalar (three.js vb.); CDN yok, demo çevrimdışı da çalışır (ADR-0047).
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -626,14 +782,15 @@ def build_default_app() -> FastAPI:
 
     s = load_settings()
 
-    def bootstrap() -> tuple[int, str]:
+    def bootstrap(catalog_mode: str = "none") -> tuple[int, str]:
         import subprocess
-        cmd = [*s.lakehouse_cli.split(), "-m", "lakehouse", "bootstrap", "--database", str(s.lakehouse_path), "--data-root", str(s.data_root)]
+        cmd = [*s.lakehouse_cli.split(), "-m", "lakehouse", "bootstrap", "--database", str(s.lakehouse_path), "--data-root", str(s.data_root),
+               "--catalog", catalog_mode]
         proc = subprocess.run(cmd, cwd=str(s.lakehouse_core_dir), capture_output=True, text=True, timeout=600, check=False)
         return proc.returncode, proc.stdout + proc.stderr
 
     return create_app(lambda profile="analyst": build_agent(max_steps=12, profile=profile), profile=s.agent_profile,
-                      architect_token=s.architect_token, reset_paths=(s.data_root, s.lakehouse_path), bootstrap=bootstrap)
+                      architect_token=s.architect_token, reset_paths=ResetPaths.from_settings(s), bootstrap=bootstrap)
 
 
 __all__ = ["AskRequest", "Session", "answer_to_dict", "build_default_app", "create_app", "evidence_to_dict", "frame_to_dict",

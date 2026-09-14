@@ -28,7 +28,7 @@ from .connectors.base import BaseConnector
 from .connectors.evds import EvdsConnector
 from .contracts.identifiers import new_run_id
 from .contracts.models import FetchSpec
-from .db.bootstrap import bootstrap_database
+from .db.bootstrap import bootstrap_database, read_catalog_mode
 from .generic import GenericTabularConnector, GenericTabularParser
 from .ingestion.pipeline import IngestionPipeline, IngestionResult
 from .ingestion.windowing import (
@@ -95,6 +95,7 @@ class BootstrapSummary:
 
     database: Path
     catalog_series_count: int
+    catalog_mode: str = "default"
 
 
 @dataclass(frozen=True)
@@ -249,13 +250,17 @@ def _windowed_summary(
     )
 
 
-def run_bootstrap(database: str | Path) -> BootstrapSummary:
-    """Bootstrap the configured database through the existing idempotent service."""
+def run_bootstrap(database: str | Path, *, catalog_mode: str | None = None) -> BootstrapSummary:
+    """Bootstrap the configured database through the existing idempotent service.
 
-    connection = bootstrap_database(database)
+    ``catalog_mode`` ('default' | 'none') is stored in the database (D04, ADR-0067); None keeps the stored mode.
+    """
+
+    connection = bootstrap_database(database, catalog_mode=catalog_mode)
     try:
         count = connection.execute("SELECT count(*) FROM meta.series").fetchone()[0]
-        return BootstrapSummary(database=Path(database), catalog_series_count=int(count))
+        mode = read_catalog_mode(connection) or "default"
+        return BootstrapSummary(database=Path(database), catalog_series_count=int(count), catalog_mode=mode)
     finally:
         connection.close()
 

@@ -230,22 +230,37 @@ $("pill-profile").addEventListener("click", () => {
     $("gmodal").hidden = true; $("thread").innerHTML = ""; answers = []; activeIndex = -1; renderSession(); lastEvidence = null; $("btn-journey").disabled = true; $("ev-body").innerHTML = ""; loadStatus();
   });
 });
-// ---- Architect tam sıfırlama: iki adım — hedef listesi + onay kodu, sonra silme + bootstrap
-$("btn-wipe").addEventListener("click", async () => {
-  const r = await fetch("/api/architect/reset", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+// ---- Architect tam sıfırlama (ADR-0056, ADR-0069): önizleme → kapsama bağlı onay kodu → silme, doğrulama, yeniden kurulum
+async function wipePreview(catalog) {
+  const r = await fetch("/api/architect/reset", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({catalog})});
   const d = await r.json().catch(() => ({}));
   if (!r.ok) { showModal("Tam veri sıfırlama", `<div class="kv"><div class="k">Ret</div><div class="v">${esc(d.detail || r.status)}</div></div>`); return; }
-  showModal("Tam veri sıfırlama — onay", `<div class="kv"><div class="k">Silinecek</div><div class="v">${(d.targets || []).map(esc).join("<br>") || "(hedef yok)"}</div><div class="k">Kapsam dışı</div><div class="v">${esc(d.excluded)}</div><div class="k">Uyarı</div><div class="v" style="color:var(--red)">${esc(d.note)}</div><div class="k">Onay kodu</div><div class="v"><code>${esc(d.confirm)}</code> → <input id="wp-code" placeholder="kodu yaz" style="width:140px"> <button id="wp-go" class="jbtn" style="border-color:#e5b4b4;background:var(--red-bg);color:var(--red)">Sil ve boş kataloğu kur</button> <span id="wp-msg" class="status"></span></div></div>`);
+  const rows = (items) => (items || []).map((t) => `${esc(t.label)} — <code>${esc(t.path)}</code>`).join("<br>");
+  const outside = (d.outside || []).length ? `<div class="k">Kapsam dışı ayar</div><div class="v" style="color:var(--red)">${rows(d.outside)}<br>Bu yollar veri kökü dışında: sıfırlama yapılmaz.</div>` : "";
+  showModal("Tam veri sıfırlama — onay", `<div class="kv"><div class="k">Silinecek</div><div class="v">${rows(d.target_details) || "(hedef yok)"}</div>`
+    + `<div class="k">Zaten yok</div><div class="v">${rows(d.absent) || "—"}</div>${outside}`
+    + `<div class="k">Korunan</div><div class="v">${esc(d.excluded)}</div>`
+    + `<div class="k">Katalog</div><div class="v"><label><input type="checkbox" id="wp-cat" ${d.catalog === "varsayilan" ? "checked" : ""}> Başlangıç kataloğunu yeniden yükle (işaretsiz: boş katalog, yeni alan)</label></div>`
+    + `<div class="k">Uyarı</div><div class="v" style="color:var(--red)">${esc(d.note)}</div>`
+    + `<div class="k">Onay kodu</div><div class="v"><code>${esc(d.confirm)}</code> → <input id="wp-code" placeholder="kodu yaz" style="width:140px" ${d.refused ? "disabled" : ""}> `
+    + `<button id="wp-go" class="jbtn" style="border-color:#e5b4b4;background:var(--red-bg);color:var(--red)" ${d.refused ? "disabled" : ""}>Sil ve kur</button> <span id="wp-msg" class="status"></span></div></div>`);
+  $("wp-cat").addEventListener("change", () => wipePreview($("wp-cat").checked ? "varsayilan" : "bos"));   // kapsam değişti: yeni kod
   $("wp-go").addEventListener("click", async () => {
     if ($("wp-code").value.trim() !== d.confirm) { $("wp-msg").textContent = "kod eşleşmiyor"; return; }
-    $("wp-go").disabled = true; $("wp-msg").textContent = "siliniyor ve bootstrap…";
-    const r2 = await fetch("/api/architect/reset", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({confirm: d.confirm})});
+    $("wp-go").disabled = true; $("wp-msg").textContent = "okuyucular kapatılıyor, siliniyor, kuruluyor…";
+    const r2 = await fetch("/api/architect/reset", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({confirm: d.confirm, catalog: d.catalog})});
     const d2 = await r2.json().catch(() => ({}));
     if (!r2.ok) { $("wp-msg").textContent = d2.detail || r2.status; $("wp-go").disabled = false; return; }
-    $("gm-body").innerHTML = `<div class="kv"><div class="k">Silindi</div><div class="v">${(d2.removed || []).map(esc).join("<br>") || "—"}</div><div class="k">Bootstrap</div><div class="v">${d2.bootstrap && d2.bootstrap.ok ? "✓" : "✗"} ${esc((d2.bootstrap || {}).detail || "")}</div><div class="k">Sonra</div><div class="v">Yeni veriyi dosya/URL ile yükle; alan profili yeni kataloğa göre türetilir.</div></div>`;
+    const res = (d2.results || []).map((x) => `<span style="color:${x.status === "silinemedi" ? "var(--red)" : "inherit"}">${esc(x.status)}</span> — ${esc(x.label)} <code>${esc(x.path)}</code>${x.detail ? " · " + esc(x.detail) : ""}`).join("<br>");
+    const ok = (o) => (o && o.ok ? "✓" : "✗") + " " + esc((o || {}).detail || "");
+    $("gm-body").innerHTML = `<div class="kv"><div class="k">Durum</div><div class="v" style="color:${d2.status === "tamamlandı" ? "var(--teal)" : "var(--red)"}">${esc(d2.status)}</div>`
+      + `<div class="k">Hedefler</div><div class="v">${res || "—"}</div><div class="k">Bootstrap</div><div class="v">${ok(d2.bootstrap)}</div>`
+      + `<div class="k">Doğrulama</div><div class="v">${ok(d2.verify)}</div><div class="k">Ajan</div><div class="v">${ok(d2.agent)}</div>`
+      + `<div class="k">Sonra</div><div class="v">Eski sohbet, tablo ve grafik bağlantıları temizlendi. Yeni veriyi dosya/URL ile yükle; alan profili yeni kataloğa göre kurulur.</div></div>`;
     $("thread").innerHTML = ""; answers = []; activeIndex = -1; renderSession(); loadStatus();
   });
-});
+}
+$("btn-wipe").addEventListener("click", () => wipePreview("bos"));
 
 let answers = [];          // bu oturumun tam cevap yükleri (sunucudaki /api/answers ile aynı)
 let activeIndex = -1;

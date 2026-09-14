@@ -891,7 +891,7 @@ class SilverLakehouse:
                 artifact_sha256=str(sha), vintage_id=vintage, run_id=run_id,
                 fetched_at=_parse_ts(fetched), locator=locator, http_status=status,
                 raw_path=(resolved := self._resolve_raw(raw_path)), bronze_path=self._bronze_path(str(sha)), relation=relation,
-                raw_digest_ok=self._raw_digest_ok(str(sha), resolved),
+                raw_digest_ok=self._raw_digest_ok(str(sha), resolved), checked_at=datetime.now(),
             ))
         return out
 

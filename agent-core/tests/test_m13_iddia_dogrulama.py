@@ -74,8 +74,9 @@ def _obs(**kw) -> ObservationEvidence:
 def test_a23_kayit_var_dosya_yoksa_zincir_tam_degil(tmp_path) -> None:
     missing = _obs(raw_path=str(tmp_path / "yok.json"))
     assert missing.complete and not missing.file_present
-    present = _obs(raw_path=str(tmp_path / "var.json")); (tmp_path / "var.json").write_text("x")
-    assert present.file_present
+    (tmp_path / "var.json").write_text("x"); (tmp_path / "b.parquet").write_bytes(b"PAR1")
+    present = _obs(raw_path=str(tmp_path / "var.json"), bronze_path=str(tmp_path / "b.parquet"), raw_digest_ok=True)
+    assert present.file_present and _obs(raw_path=str(tmp_path / "var.json")).chain_state == "RAW var ama özeti denetlenmedi"
     def panel(o):
         return EvidencePanel(question="q", numbers=[NumberEvidence(number=1.0, text="1", matched=True)],
                              columns=[], observations=[o], supports_artifacts=True)

@@ -25,7 +25,12 @@ _PROVENANCE_GAP_MARK = "kolonunun provenance kaydı yok"
 
 @dataclass(frozen=True)
 class ObservationEvidence:
-    """Bir Silver/adhoc gözleminin kaynak baytlarına kadar izi."""
+    """Bir Silver/adhoc gözleminin kaynak baytlarına kadar izi.
+
+    D06 (ADR-0070): yol METNİ ile dosyanın DURUMU ayrıdır. Yollar kayıttan gelir; varlık ve okunabilirlik her okumada
+    diskten canlı bakılır (sonradan silinen dosya yeşil kalmaz); RAW özeti kurulum anında denetlenir ve `checked_at`
+    ile taşınır. Tam fiziksel zincir: RAW var + okunur + sha256 kayıtla aynı + Bronze var.
+    """
 
     series_id: str
     entity_id: str | None
@@ -38,26 +43,57 @@ class ObservationEvidence:
     fetched_at: datetime | None
     locator: str | None        # kaynak URL ya da dosya
     http_status: int | None
-    raw_path: str | None       # RAW: içerik adresli ham dosya
-    bronze_path: str | None    # Bronze parquet; diskte bulunamadıysa None
+    raw_path: str | None       # RAW: içerik adresli ham dosya (kayıttaki/çözülen yol metni)
+    bronze_path: str | None    # Bronze parquet yolu (adaptörün bulduğu)
     relation: str = "silver.fact_observation"
     # A23 (M16): RAW içerik adreslidir; dosya baytlarının sha256'sı kayıttaki özetle aynı mı? None = denetlenmedi/dosya yok.
     raw_digest_ok: bool | None = None
+    checked_at: datetime | None = None   # RAW özeti ne zaman denetlendi (D06-T02)
 
     @property
     def complete(self) -> bool:
-        """Kayıt zinciri: sha + kaynak adresi + çekim zamanı. Fiziksel dosya ayrı (`file_present`)."""
+        """Kayıt zinciri: sha + kaynak adresi + çekim zamanı. Fiziksel dosya ayrı (`chain_state`)."""
         return bool(self.artifact_sha256 and self.locator and self.fetched_at)
 
     @property
-    def file_present(self) -> bool:
-        """RAW ya da Bronze dosyası diskte var mı (M13-T09): metadata kaydı ile fiziksel kanıt ayrı."""
+    def raw_present(self) -> bool:
+        """RAW dosyası ŞU AN diskte ve okunabilir mi (canlı)."""
+        import os
         from pathlib import Path
-        if self.raw_digest_ok is False:
-            return False  # dosya var ama değişmiş: fiziksel kanıt sayılmaz (sahte yeşil yok)
-        if self.bronze_path:
-            return True  # adaptör yalnız diskte bulduysa doldurur
-        return bool(self.raw_path) and Path(self.raw_path).exists()
+        return bool(self.raw_path) and Path(self.raw_path).is_file() and os.access(self.raw_path, os.R_OK)
+
+    @property
+    def bronze_present(self) -> bool:
+        from pathlib import Path
+        return bool(self.bronze_path) and Path(self.bronze_path).is_file()
+
+    @property
+    def chain_state(self) -> str:
+        """Fiziksel halka durumu (D06-T03): tam | ham kaynak eksik | işlenmiş dosya eksik | özet uyuşmuyor |
+        özet denetlenmedi | dosya yok. Kayıt (metadata) eksikliği `complete` ile ayrıca söylenir."""
+        raw, bronze = self.raw_present, self.bronze_present
+        if raw and self.raw_digest_ok is False:
+            return CHAIN_DIGEST_MISMATCH
+        if not raw and not bronze:
+            return CHAIN_NO_FILES
+        if not raw:
+            return CHAIN_RAW_MISSING
+        if self.raw_digest_ok is not True:
+            return CHAIN_UNCHECKED
+        return CHAIN_FULL if bronze else CHAIN_BRONZE_MISSING
+
+    @property
+    def file_present(self) -> bool:
+        """Tam fiziksel kanıt (M13-T09, D06): RAW doğrulanmış ve Bronze mevcut. Yalnız Bronze kalmışsa tam değildir."""
+        return self.chain_state == CHAIN_FULL
+
+
+CHAIN_FULL = "tam"
+CHAIN_RAW_MISSING = "ham kaynak (RAW) eksik, işlenmiş veri (Bronze) var"
+CHAIN_BRONZE_MISSING = "ham kaynak var, işlenmiş dosya (Bronze) eksik"
+CHAIN_DIGEST_MISMATCH = "RAW baytları kayıtlı özetle uyuşmuyor"
+CHAIN_UNCHECKED = "RAW var ama özeti denetlenmedi"
+CHAIN_NO_FILES = "RAW ve Bronze dosyası yok"
 
 
 @runtime_checkable
@@ -149,9 +185,16 @@ class EvidencePanel:
         if self.web_sources and not self.observations:
             return not gaps               # zincir web sayfasının baytlarında biter: URL + sha256 + zaman
         if self.supports_artifacts:
-            if not self.observations or not all(o.complete and o.file_present for o in self.observations):
+            if not self.observations or not all(o.complete and o.chain_state == CHAIN_FULL for o in self.observations):
                 return False
         return not gaps
+
+    def chain_breakdown(self) -> dict[str, int]:
+        """Gözlemlerin fiziksel halka durumlarının sayımı (canlı)."""
+        out: dict[str, int] = {}
+        for o in self.observations:
+            out[o.chain_state] = out.get(o.chain_state, 0) + 1
+        return out
 
     @property
     def complete(self) -> bool:
@@ -180,6 +223,9 @@ class EvidencePanel:
             parts.append(f"{len(self.web_sources)} web sayfası (sha256+zaman)")
         else:
             parts.append(f"{len(self.observations)} gözlem → {arts} artifact")
+            breakdown = self.chain_breakdown()
+            if self.observations and set(breakdown) != {CHAIN_FULL}:
+                parts.append("dosya halkaları: " + ", ".join(f"{n} {k}" for k, n in breakdown.items()))
         if fetched:
             parts.append(f"çekim {', '.join(fetched)}")
         return f"kanıt zinciri {state}: " + " · ".join(parts)
@@ -221,9 +267,11 @@ class EvidencePanel:
             if o.locator:
                 lines.append(f"      kaynak: {o.locator}")
             if o.raw_path:
-                lines.append(f"      RAW: {o.raw_path}")
+                lines.append(f"      RAW: {o.raw_path}" + ("" if o.raw_present else "  (YOK)"))
             if o.bronze_path:
-                lines.append(f"      Bronze: {o.bronze_path}")
+                lines.append(f"      Bronze: {o.bronze_path}" + ("" if o.bronze_present else "  (YOK)"))
+            lines.append(f"      dosya halkası: {o.chain_state}"
+                         + (f" · özet denetimi {o.checked_at:%Y-%m-%d %H:%M}" if o.checked_at else ""))
         if len(self.observations) > max_observations:
             lines.append(f"  … {len(self.observations) - max_observations} gözlem daha")
         if not self.observations:
@@ -259,9 +307,12 @@ class EvidencePanel:
             "columns": [{**c.__dict__, "executed_at": c.executed_at.isoformat() if c.executed_at else None} for c in self.columns],
             "observations": [
                 {**o.__dict__, "observation_date": o.observation_date.isoformat(),
-                 "fetched_at": o.fetched_at.isoformat() if o.fetched_at else None}
+                 "fetched_at": o.fetched_at.isoformat() if o.fetched_at else None,
+                 "checked_at": o.checked_at.isoformat() if o.checked_at else None,
+                 "raw_present": o.raw_present, "bronze_present": o.bronze_present, "chain_state": o.chain_state}
                 for o in self.observations
             ],
+            "chain_breakdown": self.chain_breakdown(),
             "artifacts": {k: {kk: (vv.isoformat() if isinstance(vv, datetime) else vv) for kk, vv in v.items()}
                           for k, v in self.artifacts.items()},
             "consulted_unused": self.consulted_unused,
@@ -273,4 +324,5 @@ class EvidencePanel:
         }
 
 
-__all__ = ["ColumnEvidence", "EvidenceCapable", "EvidencePanel", "NumberEvidence", "ObservationEvidence"]
+__all__ = ["CHAIN_BRONZE_MISSING", "CHAIN_DIGEST_MISMATCH", "CHAIN_FULL", "CHAIN_NO_FILES", "CHAIN_RAW_MISSING", "CHAIN_UNCHECKED",
+           "ColumnEvidence", "EvidenceCapable", "EvidencePanel", "NumberEvidence", "ObservationEvidence"]

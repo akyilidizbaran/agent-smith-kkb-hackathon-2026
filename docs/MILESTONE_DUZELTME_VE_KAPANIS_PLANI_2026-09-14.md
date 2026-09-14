@@ -99,11 +99,11 @@ Numaralar katı seri geliştirme sırası değildir. Aynı dosyada D01/D07 ve D0
 
 **İlgili kod:** [web_app.py](../agent-core/src/kkb_agent/web_app.py), [bootstrap.py](../lakehouse-core/src/lakehouse/db/bootstrap.py), [application.py](../lakehouse-core/src/lakehouse/application.py), [CLI](../lakehouse-core/src/lakehouse/cli.py).
 
-- [ ] **D04-T01:** Şema kurma ve başlangıç veri kataloğunu yükleme işlemlerini CLI/uygulama sözleşmesinde ayır. Mevcut `catalog_root=None` yeteneğini uygun giriş yoluna taşı.
-- [ ] **D04-T02:** Tam veri sıfırlaması sonrasında şema mevcut, kullanıcı/veri kataloğu boş durumda başlat. Finans kataloğu yüklemek ayrı açık seçim olsun.
-- [ ] **D04-T03:** Ingest, promotion, Silver/Gold build, yeniden açılış ve diğer bootstrap çağrılarını incele; sonraki işlem finans kataloğunu kendiliğinden geri getirmesin.
-- [ ] **D04-T04:** Seçilen katalog çalışma biçimini yeniden başlatmada koru. Tek seferlik reset bayrağı sonraki süreçte kaybolmasın.
-- [ ] **D04-T05:** Boş adaptörle agent kurulabilsin; “veri yok” durumu kontrollü olsun. Profil, retrieval, alias, eski SQL bağlamı ve cache önceki finans alanını taşımamalı.
+- [x] **D04-T01** (meta.lakehouse_setting + bootstrap_database(catalog_mode) + run_bootstrap/CLI `bootstrap --catalog none|default` (ADR-0069); lakehouse tests/catalog/test_catalog_mode.py): Şema kurma ve başlangıç veri kataloğunu yükleme işlemlerini CLI/uygulama sözleşmesinde ayır. Mevcut `catalog_root=None` yeteneğini uygun giriş yoluna taşı.
+- [x] **D04-T02** (arayüz sıfırlaması varsayılan `--catalog none`; başlangıç kataloğu ayrı açık seçim (ResetRequest.catalog); doğrulama seri 0 + kip none): Tam veri sıfırlaması sonrasında şema mevcut, kullanıcı/veri kataloğu boş durumda başlat. Finans kataloğu yüklemek ayrı açık seçim olsun.
+- [x] **D04-T03** (silver, gold, promote, ingest bileşimi ve yeniden bootstrap kayıtlı kipe uyar; toplu finans ingest betiği boş kipte durur; test): Ingest, promotion, Silver/Gold build, yeniden açılış ve diğer bootstrap çağrılarını incele; sonraki işlem finans kataloğunu kendiliğinden geri getirmesin.
+- [x] **D04-T04** (kip DB'de kalıcı; bayraksız sonraki bootstrap kipi korur; test 'restart' vakası): Seçilen katalog çalışma biçimini yeniden başlatmada koru. Tek seferlik reset bayrağı sonraki süreçte kaybolmasın.
+- [~] **D04-T05** (sıfırlama sonrası ajan yeniden kurulur ve rapora yazılır (test_d05); gerçek boş DB ile profil/retrieval/cache sızıntısı K01'de): Boş adaptörle agent kurulabilsin; “veri yok” durumu kontrollü olsun. Profil, retrieval, alias, eski SQL bağlamı ve cache önceki finans alanını taşımamalı.
 - [ ] **D04-T06:** Finans dışı yeni seri için taslak → beyan → açık onay → Silver → uygun Gold hesabı akışını gerçek CLI ile göster.
 - [ ] **D04-T07:** Aynı ortamda iki genel tabloyu oturumda analiz et; bunlar istemeden ortak zaman serisi kataloğuna yayımlanmasın.
 
@@ -115,14 +115,14 @@ Numaralar katı seri geliştirme sırası değildir. Aynı dosyada D01/D07 ve D0
 
 **İlgili kod:** [web_app.py](../agent-core/src/kkb_agent/web_app.py), [config.py](../agent-core/src/kkb_agent/config.py).
 
-- [ ] **D05-T01:** DB/WAL, RAW/Bronze/Silver/Gold materyalleri, yüklemeler, grafikler, üretilmiş raporlar ve cache için mevcut konfigürasyon yollarını çıkar; var olmayan depolama katmanı icat etme.
-- [ ] **D05-T02:** Yönetilen veri kökü dışına ayarlanmış hedefleri sessizce atlayıp “tam sıfırlandı” deme. Korunan/kapsam dışı yolu açık göster veya reseti kontrollü reddet.
-- [ ] **D05-T03:** Önizlemede silinecek veri kapsamını ve korunan kod/kurulum/sırları göster; onayı bu hedefe bağla. Önizlemeden sonra kapsam değişirse yeniden inceleme gereksinimini belirle.
-- [ ] **D05-T04:** Silmeden önce ilgili agent/DB okuyucularını kapat, eşzamanlı yazma/yükleme ile çakışmayı engelle; D03 onay kontrolünü işlem sınırında uygula.
-- [ ] **D05-T05:** Her hedef için gerçek sonucu kaydet: silindi, zaten yok, silinemedi, korunuyor. Silinemeyen dosyayı `removed` listesine ekleme.
-- [ ] **D05-T06:** Silme sonrası yokluk kontrollerini yap; DB yeniden kurulmuşsa boş/yeni durumu ayrı kontrol et. Bootstrap hatasını başarılı reset gibi sunma.
-- [ ] **D05-T07:** Eski sohbet, tablo, grafik bağlantısı ve cache referanslarını temizle veya açıkça geçersiz işaretle. Yanlış veriyle otomatik devam etme.
-- [ ] **D05-T08:** Geçici kökte izin/IO hatası, bootstrap hatası, eksik dosya, dış hedef ve tekrar çağrı testleri ekle; asıl veri dizinine dokunulmadığını doğrula.
+- [x] **D05-T01** (ResetPaths.from_settings: DB+WAL, raw/bronze/silver/quarantine, INGEST_ALLOWED_ROOT/uploads, CHART_DIR, önbellek kökü): DB/WAL, RAW/Bronze/Silver/Gold materyalleri, yüklemeler, grafikler, üretilmiş raporlar ve cache için mevcut konfigürasyon yollarını çıkar; var olmayan depolama katmanı icat etme.
+- [x] **D05-T02** (veri kökü dışı ayar önizlemede listelenir, sıfırlama reddedilir; test): Yönetilen veri kökü dışına ayarlanmış hedefleri sessizce atlayıp “tam sıfırlandı” deme. Korunan/kapsam dışı yolu açık göster veya reseti kontrollü reddet.
+- [x] **D05-T03** (önizleme hedefleri/korunanları gösterir; onay kodu hedef+kök dışı+katalog seçimine bağlı, kapsam değişirse 409; test ve arayüz penceresi): Önizlemede silinecek veri kapsamını ve korunan kod/kurulum/sırları göster; onayı bu hedefe bağla. Önizlemeden sonra kapsam değişirse yeniden inceleme gereksinimini belirle.
+- [x] **D05-T04** (oturum kilidi içinde, önce ajanın DuckDB okuyucuları kapanır; test): Silmeden önce ilgili agent/DB okuyucularını kapat, eşzamanlı yazma/yükleme ile çakışmayı engelle; D03 onay kontrolünü işlem sınırında uygula.
+- [x] **D05-T05** (hedef başına silindi/zaten yok/silinemedi/korunuyor; silinemeyen removed'a girmez; test): Her hedef için gerçek sonucu kaydet: silindi, zaten yok, silinemedi, korunuyor. Silinemeyen dosyayı `removed` listesine ekleme.
+- [x] **D05-T06** (silme sonrası yokluk; bootstrap hatası ve yeni DB'nin beklenen durumu (seri 0, kip none) doğrulanır, aksi 'kısmi'; test): Silme sonrası yokluk kontrollerini yap; DB yeniden kurulmuşsa boş/yeni durumu ayrı kontrol et. Bootstrap hatasını başarılı reset gibi sunma.
+- [x] **D05-T07** (geçmiş, cevaplar, tablolar, yüklemeler temizlenir; oturum kimliği değişir; ajan yeniden kurulur, kurulamazsa raporda): Eski sohbet, tablo, grafik bağlantısı ve cache referanslarını temizle veya açıkça geçersiz işaretle. Yanlış veriyle otomatik devam etme.
+- [x] **D05-T08** (tests/test_d05_sifirlama.py geçici kökte: izin hatası, bootstrap hatası, dolu katalog, kök dışı hedef, uçtan uca; asıl data/ korunur): Geçici kökte izin/IO hatası, bootstrap hatası, eksik dosya, dış hedef ve tekrar çağrı testleri ekle; asıl veri dizinine dokunulmadığını doğrula.
 
 **Kabul:** `charts/old.png` dahil onaylanan eski çıktılar kalmaz; kısmi başarısızlık doğru raporlanır. Kod ve gizli yapılandırma korunur. Yeniden kurulum D04'ün boş katalog davranışını sağlar. Pasifleştirme işinin durumu ayrı tutulur; tam resetin varlığı tek seri pasifleştirmeyi tamamlanmış yapmaz.
 
@@ -132,13 +132,13 @@ Numaralar katı seri geliştirme sırası değildir. Aynı dosyada D01/D07 ve D0
 
 **İlgili kod:** [evidence sözleşmesi](../agent-core/src/kkb_agent/contracts/evidence.py), [Silver adaptörü](../agent-core/src/kkb_agent/adapters/silver_lakehouse.py), [evidence oluşturucu](../agent-core/src/kkb_agent/core/evidence.py).
 
-- [ ] **D06-T01:** Kaynak türüne göre gerekli halkaları yaz: Silver gözlemi için metadata/RAW/Bronze; web/belge için kendi kaynak baytı sözleşmesi. Her kaynağa yanlışlıkla aynı zorunluluk dayatma.
-- [ ] **D06-T02:** Yol metni, dosyanın varlığı, okunabilirliği, hash doğruluğu ve denetim zamanını ayrı bilgiler olarak taşı.
-- [ ] **D06-T03:** RAW/Bronze için gerekli kontrolleri yap; “Bronze mevcut, RAW eksik” durumunu kısmi göster. Hash denetlenmediyse denetlenmiş gibi sunma.
-- [ ] **D06-T04:** Dosya kontrolü önbelleği kullanılırsa geçersizleştirme kuralı belirle. Reset/silme sonrası eski yeşil durum korunmasın; geçmiş doğrulama ile mevcut erişilebilirlik ayrı ifade edilsin.
-- [ ] **D06-T05:** Sayısal doğruluk, semantik güven, sorgu izi ve fiziksel zincir durumlarını birbirinin yerine kullanma. Kaynağı eksik doğru tablo gereksizce yanlış sayılmasın.
-- [ ] **D06-T06:** UI ve rapor dışa aktarımında eksik halkayı anlaşılır göster; kaynak taşınmışsa güvenli yol çözümleme davranışını koru.
-- [ ] **D06-T07:** RAW yok/Bronze var, RAW var/Bronze yok, ikisi yok, bozuk RAW hash'i, sonradan silinmiş dosya ve eksiksiz zincir vakalarını ekle.
+- [x] **D06-T01** (Silver/adhoc gözlemi RAW+Bronze+özet; web/belge URL+sha256+zaman (ADR-0070)): Kaynak türüne göre gerekli halkaları yaz: Silver gözlemi için metadata/RAW/Bronze; web/belge için kendi kaynak baytı sözleşmesi. Her kaynağa yanlışlıkla aynı zorunluluk dayatma.
+- [x] **D06-T02** (yol metni, canlı varlık/okunabilirlik, raw_digest_ok ve checked_at ayrı alanlar): Yol metni, dosyanın varlığı, okunabilirliği, hash doğruluğu ve denetim zamanını ayrı bilgiler olarak taşı.
+- [x] **D06-T03** (altı halka durumu; yalnız Bronze kalması 'ham kaynak eksik' kısmi; denetlenmemiş özet tam sayılmaz): RAW/Bronze için gerekli kontrolleri yap; “Bronze mevcut, RAW eksik” durumunu kısmi göster. Hash denetlenmediyse denetlenmiş gibi sunma.
+- [x] **D06-T04** (varlık canlı okunur; özet önbelleği (yol, boyut, mtime) — silinen dosya yeşil kalmaz; test): Dosya kontrolü önbelleği kullanılırsa geçersizleştirme kuralı belirle. Reset/silme sonrası eski yeşil durum korunmasın; geçmiş doğrulama ile mevcut erişilebilirlik ayrı ifade edilsin.
+- [x] **D06-T05** (dosya zinciri rozeti ayrı; sayılar ve sorgu izi etkilenmez; test): Sayısal doğruluk, semantik güven, sorgu izi ve fiziksel zincir durumlarını birbirinin yerine kullanma. Kaynağı eksik doğru tablo gereksizce yanlış sayılmasın.
+- [x] **D06-T06** (panel özeti/boşluk ve render '(YOK)', arayüz yükünde chain_state ve dağılım; HTML rapor boşluklardan aynı cümle): UI ve rapor dışa aktarımında eksik halkayı anlaşılır göster; kaynak taşınmışsa güvenli yol çözümleme davranışını koru.
+- [x] **D06-T07** (tests/test_d06_zincir.py altı vaka + sonradan silme + gerçek adaptörde RAW silinmiş; fikstür gerçek sha256): RAW yok/Bronze var, RAW var/Bronze yok, ikisi yok, bozuk RAW hash'i, sonradan silinmiş dosya ve eksiksiz zincir vakalarını ekle.
 
 **Kabul:** eksik halka varken “tam kaynak zinciri” yok; tamamı mevcut ve doğrulanmış örnek doğru biçimde tamdır. Yeniden denetimden sonra silinmiş kaynak tam görünmez. Sınırlama, indirilen raporda da bulunur.
 
@@ -238,3 +238,4 @@ D01–D07 ve zorunlu K01/K02 kabulü tamamlanmadan bu incelemenin açıkları ka
 - **2026-09-14:** Kullanıcı isteğiyle bağımsız kontrolün yedi bulgusu, düzeltme görevleri ve demo kapanış kapsamına dönüştürüldü. Bu tur uygulama kodu ve veri değiştirilmedi.
 - **2026-09-14 (uygulama):** D01, D07 ve D02 uygulandı ve testlendi (ADR-0065, ADR-0066); ajan testleri 432 geçti.
 - **2026-09-14 (uygulama):** D03 uygulandı ve testlendi (ADR-0068); ajan testleri 440 geçti.
+- **2026-09-14 (uygulama):** D04 (lakehouse kip + sıfırlama bağlantısı), D05 ve D06 uygulandı ve testlendi (ADR-0069, ADR-0070); ajan 448, lakehouse tam suite 1.111 geçti. D04-T05…T07 gerçek CLI akışı K01'de.

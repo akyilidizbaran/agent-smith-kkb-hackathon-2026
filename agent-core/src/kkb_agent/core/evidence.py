@@ -414,6 +414,10 @@ class EvidenceBuilder:
             incomplete = [o for o in panel.observations if not o.complete]
             if incomplete:
                 panel.gaps.append(f"{len(incomplete)} gözlemin artifact/locator/fetched_at izi eksik")
+            from ..contracts.evidence import CHAIN_DIGEST_MISMATCH, CHAIN_FULL
+            for state, n in panel.chain_breakdown().items():
+                if state not in (CHAIN_FULL, CHAIN_DIGEST_MISMATCH):
+                    panel.gaps.append(f"{n} gözlemde dosya halkası eksik: {state}")
             altered = sorted({o.artifact_sha256[:12] for o in panel.observations if o.raw_digest_ok is False})
             if altered:
                 panel.gaps.append(f"{len(altered)} RAW dosyasının baytları kayıtlı özetle uyuşmuyor (dosya sonradan değişmiş): "

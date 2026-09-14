@@ -28,7 +28,8 @@ from kkb_agent.core.evidence import EvidenceBuilder  # noqa: E402
 from kkb_agent.core.workspace import AnalysisWorkspace  # noqa: E402
 from tests.test_silver_lakehouse import DDL, _series  # noqa: E402
 
-SHA_A = "a" * 64
+RAW_A = b'{"konut": [100, 110]}'
+SHA_A = hashlib.sha256(RAW_A).hexdigest()   # D06: RAW içerik adresli; fikstür gerçek özet taşır
 SHA_B = "b" * 64
 ARTIFACT_DDL = """
 CREATE TABLE meta.artifact (
@@ -53,12 +54,15 @@ def lake(tmp_path: Path) -> SilverLakehouse:
         )
     con.execute(
         "INSERT INTO meta.artifact VALUES (?, 'bddk_monthly', 'ds', 'https://www.bddk.org.tr/x', 'application/json',"
-        " 100, 200, '2026-09-12 12:35:53+03', '/data/raw/bddk_monthly/a.json', now(), now())", [SHA_A])
+        " 100, 200, '2026-09-12 12:35:53+03', ?, now(), now())", [SHA_A, str(tmp_path / "data" / "raw" / "bddk_monthly" / "a.json")])
     # SHA_B: artifact kaydı yok → locator/fetched_at eksik, zincir kopuk
     con.close()
     bronze = tmp_path / "data" / "bronze" / "source_id=bddk_monthly" / "dataset_id=ds"
     bronze.mkdir(parents=True)
     (bronze / f"artifact_sha256={SHA_A}.parquet").write_bytes(b"PAR1")
+    raw = tmp_path / "data" / "raw" / "bddk_monthly" / "a.json"
+    raw.parent.mkdir(parents=True)
+    raw.write_bytes(RAW_A)
     return SilverLakehouse(db)
 
 
@@ -77,7 +81,7 @@ def test_adaptor_gozlemden_artifact_ve_raw_a_iner(lake: SilverLakehouse) -> None
     jan, mar = obs
     assert jan.artifact_sha256 == SHA_A and jan.locator == "https://www.bddk.org.tr/x"
     assert jan.fetched_at is not None and jan.fetched_at.year == 2026 and jan.http_status == 200
-    assert jan.raw_path == "/data/raw/bddk_monthly/a.json"
+    assert jan.raw_path.endswith("/data/raw/bddk_monthly/a.json") and jan.raw_digest_ok is True and jan.chain_state == "tam"
     assert jan.bronze_path is not None and jan.bronze_path.endswith(f"artifact_sha256={SHA_A}.parquet")
     assert jan.complete
     assert mar.artifact_sha256 == SHA_B and mar.locator is None and not mar.complete
@@ -276,8 +280,7 @@ def test_a23_raw_baytlari_kayitli_ozetle_uyusmazsa_zincir_tam_degil(lake, tmp_pa
     r = lake.execute_sql("SELECT observation_date, value AS bakiye FROM silver.fact_observation "
                          "WHERE series_id = 'bddk_monthly:konut' AND observation_date < '2025-03-01' ORDER BY 1")
     ws.set_table(r.data, description="iki ay", provenance=r.provenance)
-    raw = tmp_path / "data" / "raw" / "bddk_monthly" / "a.json"   # kayıttaki /data/raw/... yolu buraya çözülür
-    raw.parent.mkdir(parents=True)
+    raw = tmp_path / "data" / "raw" / "bddk_monthly" / "a.json"   # fikstürün gerçek RAW dosyası
 
     raw.write_bytes(b'{"degismis": true}')
     obs = lake.evidence_for_observations("bddk_monthly:konut", [date(2025, 1, 28)])

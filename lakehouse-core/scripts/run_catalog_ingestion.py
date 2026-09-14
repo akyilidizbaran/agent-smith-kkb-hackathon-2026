@@ -422,6 +422,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     trusted = bootstrap_database(args.database or (data_root / "lakehouse.duckdb"))
+    from src.lakehouse.db.bootstrap import read_catalog_mode
+    if (read_catalog_mode(trusted) or "default") == "none":
+        # D04 (ADR-0067): boş katalog kipindeki veritabanına başlangıç kataloğunun serileri çekilmez.
+        print("ERROR: this database is in empty-catalog mode (series_catalog=none); "
+              "run `python -m lakehouse bootstrap --catalog default` first if the default catalog is wanted")
+        trusted.close()
+        return 2
     raw_storage = RawStorage(data_root / "raw")
     parquet_storage = ParquetStorage(data_root / "bronze")
     artifact_repository = ArtifactRepository(trusted)
