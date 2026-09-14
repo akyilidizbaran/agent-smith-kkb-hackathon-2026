@@ -132,6 +132,15 @@ ACTION_CLAIM_NOTE = ("Bu turda HİÇBİR ARAÇ ÇALIŞMADI; yapılmamış bir i�
                      "yazamazsın ve sayı veremezsin. Soruda dosya ya da adres varsa önce web_url ile oku; birleştirme "
                      "isteniyorsa workspace_join çağır; sonra cevabını yaz.")
 
+# K03 hedefli canlı tekrar bulgusu (14 Eyl): birleştirme istenen turda model iki tabloyu okudu, workspace_join'i hiç çağırmadan
+# "birebir eşleşme yalnız Adana'da tutar, İzmir vs Izmir" yazıp kural sordu; iki iddia da yanlıştı (tam eşleşen yalnız İzmir).
+# Anahtar eşleşmesi bilgisi aracın kartından gelir; model tahmin etmez (D01, ADR-0065).
+_JOIN_ASK = re.compile(r"birleştir|birlestir|eşleştir|eslestir|\bjoin\b", re.I)
+_MATCH_TALK = re.compile(r"eşleş|esles|uyuş|uyus|birleştir|birlestir|anahtar|yazılmış|yazilmis|biçim|bicim", re.I)
+JOIN_NOTE = ("Birleştirme istendi ama bu turda workspace_join çağrılmadı; iki tablonun anahtarlarının eşleşip eşleşmediğini ya da "
+             "hangi satırların tuttuğunu tahminle yazamazsın. Önce workspace_join çağır; araç kural seçeneklerini ve eşleşme sayılarını "
+             "döndürür, kullanıcıya onları aktar.")
+
 _STOP = frozenset({"göster", "goster", "getir", "ver", "nedir", "ne", "kadar", "nasıl", "nasil", "listele", "bana", "lütfen",
                    "lutfen", "bir", "bu", "şu", "su", "ile", "ve", "mi", "mı", "mu", "mü", "olan", "tablo", "tabloyu"})
 _PERIOD = re.compile(r"\d|yıl|yil|ay\b|aylık|aylik|çeyrek|ceyrek|hafta|dönem|donem|gün|gun|son\b", re.I)
@@ -629,6 +638,7 @@ class AnalyticsAgent:
         grounding = ""                       # son ölçüm; AgentAnswer'a taşınır
         rejected: list[str] = []             # D02: cevaptan çıkarılan, doğrulanamayan iddialar (dışa aktarılmaz)
         action_claim_nudged = False          # araçsız işlem iddiası / okunmamış dosya bir kez geri gönderilir
+        join_nudged = False                  # K03: birleştirme turunda araçsız eşleşme anlatısı bir kez geri gönderilir
 
         for i in range(1, self.max_steps + 1):
             if self.time_budget_s and time.perf_counter() - ask_started > self.time_budget_s:
@@ -712,6 +722,17 @@ class AnalyticsAgent:
                         NO_TOOL_NUMBERS_NOTE.format(nums=", ".join(loose_numbers[:10])) if len(loose_numbers) >= 1
                         and not (_ACTION_CLAIM.search(response.content or "") or _FILE_REF.search(question))
                         else ACTION_CLAIM_NOTE)))
+                    continue
+
+                if (not join_nudged and _JOIN_ASK.search(question) and len(self.workspace.sources()) >= 2
+                        and not any(s.tool_name == "workspace_join" for s in steps)
+                        and _MATCH_TALK.search(self._strip_reasoning(response.content or ""))):
+                    join_nudged = True
+                    steps.append(AgentStep(index=i, role="validate", ok=False,
+                                           thought="birleştirme istendi, workspace_join çağrılmadan eşleşme anlatıldı — geri gönderildi",
+                                           duration_ms=(time.perf_counter() - started) * 1000))
+                    messages.append(ChatMessage(role="assistant", content=response.content))
+                    messages.append(ChatMessage(role="user", content=JOIN_NOTE))
                     continue
 
                 answer_text = self._strip_reasoning(response.content)
