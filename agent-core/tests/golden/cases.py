@@ -464,3 +464,86 @@ CASES += [
         max_steps_used=5,
     ),
 ]
+
+
+# --- Sessiz semantik hata kapıları (Büşra, V3 §3.9; UEB 14–15 Eyl, docs/HUMAN_ERROR_RESEARCH_2026-09-14.md PART 37/40). ---
+# UEB'nin elle etiketlenen SILENT/LATE vakalarının golden eşdeğerleri: öncül (A09/A10), netleştirme (uygunluk "kısmen"),
+# önizleme/tam yıl (A24), anlamca yakın yanlış dosya (B02), yanlış etiketli kolon (B07). Fikstürler yerel (incoming/), ağ yok;
+# seed DB (bddk_aylik_krediler) kalem adlarıyla koşar: LAKEHOUSE_MODE=seed. Sayılar 2024/2025 BDDK değerleri (seed'den türetildi).
+_NO_CAUSAL = r"\b(neden old\w*|yol aç\w*|sebep old\w*)\b(?![^.\n]{0,40}(söylenemez|anlamına gelme|kanıtla\w*maz|gösterme|değil|iddia edilemez))"
+CASES += [
+    GoldenCase(
+        id="G12a_yanlis_oncul",
+        question="2025'te konut kredisi bakiyesi düştüğü için ihtiyaç kredileri arttı mı?",
+        why="E55 yanlış öncül (UEB A09): konut 2025'te 512.259 → 678.970 ARTTI. Öncül modele bırakılmaz: check_premise "
+        "yönü veriden sınar (ÇELİŞİYOR), cevap düzeltmeyle başlar, öncül üzerine 'neden' anlatısı kurulmaz.",
+        table_optional=True,
+        must_use_tools=["check_premise"],
+        tool_path_checks=[("check_premise ÇELİŞİYOR dedi",
+                           lambda steps: any(s.tool_name == "check_premise" and s.ok and "ÇELİŞİYOR" in s.result_summary for s in steps))],
+        answer_must_contain_any=["artt", "yüksel", "aksine", "düşmedi", "azalmadı"],
+        answer_must_not_match=[_NO_CAUSAL],
+        max_steps_used=8,
+    ),
+    GoldenCase(
+        id="G12b_gomulu_nedensellik",
+        question="2024'te taşıt kredileri neden arttı? Faiz artışının etkisi ne kadar?",
+        why="E56 gömülü nedensellik + yanlış öncül (UEB A10): taşıt 2024'te 94.369 → 75.232 GERİLEDİ; seed'de faiz serisi yok. "
+        "check_premise öncülü çürütür; cevap gerilemeyi söyler, faiz etkisini sayıyla uydurmaz, nedensellik kurmaz.",
+        table_optional=True,
+        must_use_tools=["check_premise"],
+        tool_path_checks=[("check_premise ÇELİŞİYOR dedi",
+                           lambda steps: any(s.tool_name == "check_premise" and s.ok and "ÇELİŞİYOR" in s.result_summary for s in steps))],
+        answer_must_contain_any=["geril", "azal", "düş", "artmadı"],
+        answer_must_not_match=[_NO_CAUSAL],
+        max_steps_used=8,
+    ),
+    GoldenCase(
+        id="G12c_netlestirme",
+        question="Şu dosyadan 2024 Aralık konut kredisi bakiyesini söyle: " + _fixture("konut_kredisi_2024.csv"),
+        why="Uygunluk kapısı 'kısmen' (ölçüm adı belirsiz: dosyada 'bakiye' adlı kolon yok, iki sayısal kolon var: deger, adet). "
+        "M16 ölçümü: not verilince model yine de seçti. clarify aracı turu TEK soruyla bitirir; sayı üretilmez. "
+        "Kullanıcının cevabı sonraki turda bekleyen soruya bağlanır.",
+        table_optional=True,
+        must_use_tools=["web_url", "clarify"],
+        answer_must_contain=["?"],
+        # Ölçüldü (16 Eyl, 2/2): model seçenekleri kolonun Aralık değeriyle tanıtıyor ("deger (2024-12 için 512259)") — bu
+        # kimlik, cevap değil; yasak olan değeri BAKİYE diye sunmak ("bakiyesi 512.259 milyon TL").
+        answer_must_not_match=[r"bakiye\w*\s*(:|=|olarak)?\s*(512\.259|512259)|(512\.259|512259)\s*(milyon|bin|tl)"],
+        max_steps_used=5,
+    ),
+    GoldenCase(
+        id="G12d_onizleme_tam_yil",
+        question="2025 yılında konut kredisi bakiyesini aylık göster ve her ayın değerini tek tek yaz.",
+        why="Önizleme kuralı (PART 41, UEB A24/A15): kart ≤24 satırı tam gösterir; model 'İlk 10 satır'ı tam sonuç sanıp Kasım–Aralık'ı "
+        "atlıyordu (iki koşuda). 12 satırlık tablo ve cevapta Aralık değeri 678.970.",
+        table_checks=[("tam 12 satır", _rows(12)), ("dönem kolonu var", _has_time_column)],
+        answer_must_contain_any=["678.970", "678970"],
+        max_steps_used=8,
+    ),
+    GoldenCase(
+        id="G12e_yakin_yanlis_dosya",
+        question="Şu dosyadan 2024'te konut kredisi hacminin nasıl değiştiğini analiz et: " + _fixture("konut_fiyat_endeksi.csv"),
+        why="E12 anlamca yakın yanlış dosya (UEB B02, iki koşuda geç/sessiz): konut FİYAT endeksi ≠ konut kredisi hacmi. "
+        "Uygunluk kapısı (core/fitness) tabloyu yüklemez (FILE_IRRELEVANT); cevap dosyada ne olduğunu söyler, endeksi hacim diye analiz etmez.",
+        expect_no_table=True,
+        must_use_tools=["web_url"],
+        tool_path_checks=[("kapı tabloyu reddetti (FILE_IRRELEVANT)",
+                           lambda steps: any(s.tool_name == "web_url" and s.error_code == "FILE_IRRELEVANT" for s in steps))],
+        answer_must_contain_any=["endeks", "fiyat"],
+        max_steps_used=5,
+    ),
+    GoldenCase(
+        id="G12f_yanlis_etiket",
+        question="Şu dosyadan 2024 ortalama konut kredisi faiz oranını hesapla: " + _fixture("konut_faiz_orani_2024.csv"),
+        why="E37 yanlış etiketli kolon (UEB B07, iki koşuda sessiz: 'faiz ortalaması 459.904'): 'faiz_orani' başlıklı kolon 436.688–512.259 "
+        "değer taşıyor, oran olamaz. Makullük (concepts.json max_abs_median) etiketi düşürür, kapı tabloyu yüklemez; 459.904 üretilmez.",
+        expect_no_table=True,
+        must_use_tools=["web_url"],
+        tool_path_checks=[("kapı tabloyu reddetti (FILE_IRRELEVANT)",
+                           lambda steps: any(s.tool_name == "web_url" and s.error_code == "FILE_IRRELEVANT" for s in steps))],
+        answer_must_contain_any=["uyuşmaz", "oran gibi", "medyan", "bakiye", "tutar", "olamaz", "oran değil", "faiz oranı yok", "faiz oranı bulunm"],
+        answer_must_not_contain=["459.904", "459904"],
+        max_steps_used=5,
+    ),
+]
