@@ -123,7 +123,8 @@ def test_on_yukleme_kucuk_katalogda_hepsini_kart_yapar() -> None:
 def test_arac_kapisi_sinyalle_acar_yetkiyi_daraltmaz() -> None:
     registered = tool_gate.ALWAYS | tool_gate.CHART | tool_gate.ANALYTICS | tool_gate.WEB | tool_gate.ARCHITECT
     d = tool_gate.decide("2025 konut kredisi bakiyesini aylık göster", registered)
-    assert d.allowed == tool_gate.ALWAYS and set(d.closed) == {"grafik", "analitik", "web", "architect"}
+    # "öncül" ailesi (Büşra, tools/premise.py): yön varsayan soru yoksa kapalı.
+    assert d.allowed == tool_gate.ALWAYS and set(d.closed) == {"grafik", "analitik", "web", "architect", "öncül"}
     d = tool_gate.decide("bunun grafiğini çiz", registered)
     assert "chart" in d.allowed and "anomaly_detect" not in d.allowed
     d = tool_gate.decide("aykırı aylar hangileri?", registered)
