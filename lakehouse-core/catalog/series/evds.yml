@@ -1,0 +1,96 @@
+# Semantic series catalog — EVDS (TCMB Electronic Data Delivery System)
+#
+# Human-authored, reviewed, and versioned in Git. Nothing here is inferred from data.
+# Every field must be traceable to docs/sources/evds.md or to a committed fixture.
+# See docs/catalog-contract.md for the field contract and validation rules.
+
+catalog_schema_version: "1.0"
+source_id: evds
+
+series:
+  - series_id: evds:TP.KTF12
+    native_code: TP.KTF12
+    dataset_id: evds_housing_interest
+    name_tr: Konut Kredisi Faiz Oranı (Akım, %)
+    description: >-
+      TCMB EVDS bankalarca açılan konut kredilerine uygulanan ağırlıklı ortalama
+      faiz oranı. Akım veri: ilgili hafta içinde yeni açılan kredilere uygulanan
+      oranı gösterir, mevcut kredi stokunun ortalama faizini değil. Cuma bitişli
+      haftalık yayımlanır.
+    aliases:
+      - konut kredisi faizi
+      - konut kredisi faiz oranı
+      - ev kredisi faizi
+      - mortgage faizi
+      - konut finansmanı faiz oranı
+      - konut kredisi maliyeti
+    tags: [faiz, konut, kredi, bankacilik, tcmb]
+    frequency: weekly
+    week_anchor: friday
+    unit: pct
+    measure_type: rate
+    default_agg: avg
+    semantic_confidence: verified
+    semantic_source: source_service
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=TP.KTF12
+    status: active
+
+  - series_id: evds:TP.KFE.TR
+    native_code: TP.KFE.TR
+    dataset_id: evds_housing_price_index
+    name_tr: Konut Fiyat Endeksi (Türkiye)
+    description: >-
+      TCMB Konut Fiyat Endeksi, Türkiye geneli. Aylık yayımlanır. Birim endekstir;
+      DİKKAT: endeksin BAZ YILI bu repoda doğrulanmamıştır, bu yüzden
+      semantic_confidence 'derived' işaretlenmiştir. Baz yılı doğrulanmadan farklı
+      bazlı endeks serileri birleştirilmemeli (splice) ve reel dönüşümde
+      kullanılmamalıdır.
+    aliases:
+      - konut fiyat endeksi
+      - KFE
+      - ev fiyat endeksi
+      - konut fiyatları
+      - konut fiyat artışı
+    tags: [endeks, konut, fiyat, tcmb]
+    frequency: monthly
+    unit: index
+    measure_type: index
+    default_agg: avg
+    semantic_confidence: derived
+    semantic_source: source_service
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=TP.KFE.TR
+    status: active
+
+  - series_id: evds:TP.FG.J0
+    native_code: TP.FG.J0
+    dataset_id: evds_cpi
+    name_tr: Tüketici Fiyat Endeksi (TÜFE, genel)
+    description: >-
+      TCMB EVDS üzerinden yayımlanan TÜİK Tüketici Fiyat Endeksi genel seviyesi,
+      aylık. Bu bir ENDEKS SEVİYESİDİR; aylık veya yıllık değişim oranı DEĞİLDİR.
+      Reel dönüşümde bölen olarak kullanılır (reel = nominal / (TÜFE / TÜFE_baz)),
+      fakat bu hesap Gold katmanına aittir; Silver hiçbir arındırma veya yeniden
+      bazlama yapmaz.
+      DİKKAT: endeksin BAZ YILI bu repoda DOĞRULANMAMIŞTIR. Talep belgesinde
+      "2003=100" iddiası geçmektedir, ancak ne resmî bir yanıt, ne fixture, ne de
+      bir ADR bu değeri kanıtlamaktadır; bu nedenle semantic_confidence 'derived'
+      ve semantic_source 'manual' işaretlenmiştir. Baz yılı doğrulanmadan farklı
+      bazlı endeks serileri birleştirilmemeli (splice) ve reel dönüşümde
+      kullanılmamalıdır. Doğrulama durumu docs/sources/evds.md içinde izlenir.
+    aliases:
+      - tüfe
+      - tufe
+      - enflasyon
+      - tüketici fiyat endeksi
+      - fiyat endeksi
+      - TÜFE endeksi
+      - genel fiyat endeksi
+    tags: [enflasyon, fiyat, endeks, tcmb, tuik]
+    frequency: monthly
+    unit: index
+    measure_type: index
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: manual
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=TP.FG.J0
+    status: active

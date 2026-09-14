@@ -1,0 +1,43 @@
+# Semantic series catalog — BDDK Weekly Bulletin (Haftalık Bülten)
+#
+# Human-authored, reviewed, and versioned in Git. Nothing here is inferred from data.
+# Every field must be traceable to docs/sources/bddk_weekly.md or to a committed fixture.
+# See docs/catalog-contract.md for the field contract and validation rules.
+
+catalog_schema_version: "1.0"
+source_id: bddk_weekly
+
+series:
+  - series_id: bddk_weekly:5690_3
+    native_code: "5690"
+    dataset_id: bddk_weekly_housing_loans
+    name_tr: Konut Kredileri, Toplam (Sektör) - Haftalık
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "a) Konut" kalemi, Toplam sütunu,
+      Sektör tarafı. Haftalık konut kredisi bakiyesidir (stok): dönemler toplanmaz,
+      daha düşük frekansa indirilirken dönemin son değeri alınır.
+      TARİH NÜANSI: kaynak haftalıktır ve normal çapası Cuma'dır, ancak tatil
+      haftalarında kaynağın gözlem tarihi Perşembe gibi başka bir güne kayabilir;
+      canlı seride 13.03.2026 -> 19.03.2026 -> 27.03.2026 adımları görülmüştür
+      (6 gün, sonra 8 gün). Silver katmanı kaynağın verdiği tarihi SESSİZCE
+      değiştirmemelidir; Cuma'ya hizalama ayrı ve açıkça uygulanan bir kuraldır.
+      KİMLİK NÜANSI: 5690 kaynağın sabit kalem kimliğidir ve seri kimliğinin
+      dayanağıdır; 3 ise Toplam sütunudur. 1.0.4 yalnızca pozisyonel wire/chart
+      adresidir, bülten düzeni değişince başka bir satırı gösterebilir ve kimlik
+      olarak kullanılmaz. Ayrıca Takipteki Alacaklar altında aynı "a) Konut"
+      etiketiyle farklı bir kalem (5867) bulunur; bu seri o değildir.
+    aliases:
+      - haftalık konut kredisi
+      - haftalık konut kredisi bakiyesi
+      - haftalık mortgage bakiyesi
+      - BDDK haftalık konut kredisi
+    tags: [kredi, konut, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active

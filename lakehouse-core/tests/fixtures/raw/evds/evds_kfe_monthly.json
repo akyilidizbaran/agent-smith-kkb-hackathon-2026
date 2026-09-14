@@ -1,0 +1,59 @@
+{
+  "totalCount": 3,
+  "items": [
+    {
+      "Tarih": "01-2026",
+      "TP_KFE_TR": "211.73",
+      "UNIXTIME": {
+        "$numberLong": "1767214800"
+      }
+    },
+    {
+      "Tarih": "02-2026",
+      "TP_KFE_TR": "215.40",
+      "UNIXTIME": {
+        "$numberLong": "1769893200"
+      }
+    },
+    {
+      "Tarih": "03-2026",
+      "TP_KFE_TR": "219.52",
+      "UNIXTIME": {
+        "$numberLong": "1772312400"
+      }
+    }
+  ],
+  "transposedItems": [
+    {
+      "serieCode": "TP_KFE_TR",
+      "serieName": "Residential Property Price Index (RPPI)",
+      "01-2026": "211.73",
+      "02-2026": "215.40",
+      "03-2026": "219.52"
+    }
+  ],
+  "transposedColumns": [
+    {
+      "key": "serieName",
+      "title": ""
+    },
+    {
+      "key": "03-2026",
+      "title": "03-2026"
+    },
+    {
+      "key": "02-2026",
+      "title": "02-2026"
+    },
+    {
+      "key": "01-2026",
+      "title": "01-2026"
+    }
+  ],
+  "seriesNames": {
+    "TP_KFE_TR": "Residential Property Price Index (RPPI)"
+  },
+  "frequencyConversion": {
+    "TP.KFE.TR": true
+  }
+}
