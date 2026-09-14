@@ -50,6 +50,8 @@ def _schema_only_bootstrap(db: Path, series: int = 0, mode: str = "none"):
 
 
 def test_kapsam_grafik_ve_onbellegi_icerir_sonuc_hedef_hedef_dogrulanir(tmp_path: Path) -> None:
+    # Asıl data/ git'te yok (temiz CI kopyasında hiç yok): koşul "var olmalı" değil, "sıfırlama ona dokunmadı" (PR #3 CI bulgusu).
+    repo_data_before = REPO_DATA.exists()
     data, db, paths = _world(tmp_path)
     plan = plan_reset(paths)
     labels = {label for label, _ in plan.targets}
@@ -60,7 +62,7 @@ def test_kapsam_grafik_ve_onbellegi_icerir_sonuc_hedef_hedef_dogrulanir(tmp_path
     assert (data / "incoming" / "jury.csv").exists(), "izinli kökteki kullanıcı dosyası oturum yüklemesi değil"
     assert report["verify"]["ok"] and report["verify"]["series"] == 0 and report["verify"]["catalog_mode"] == "none"
     assert {r["status"] for r in report["results"]} <= {"silindi", "zaten yok"}
-    assert REPO_DATA.exists(), "asıl veri kökü yerinde"
+    assert REPO_DATA.exists() == repo_data_before, "asıl veri köküne dokunulmadı"
 
 
 def test_silinemeyen_hedef_basari_listesine_girmez_kismi_raporlanir(tmp_path: Path, monkeypatch) -> None:
