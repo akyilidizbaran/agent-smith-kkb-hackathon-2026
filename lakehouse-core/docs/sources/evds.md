@@ -201,7 +201,10 @@ locator, artifact metadata, logs, or exception messages. `.env` is git-ignored a
 - **Successful authenticated data from the documented keyed endpoint remains unverified.**
   Prior requests returned HTTP 401; see "Verification status" and the pending smoke test.
   `/fe` is a shape-discovery tool only and must not become a production fallback.
-- The exact `Tarih` format for quarterly, semi-annual and yearly frequencies is unverified.
+- Quarterly `Tarih` was read from real keyed-endpoint Bronze rows on 2026-09-14
+  (`TP.BIRIMFIYAT.TR`, `TP.BK.TR`): `YYYY-Qn`, with `UNIXTIME` at the quarter's first day;
+  Silver accepts exactly that spelling (`_evds_time.evds_quarter_bounds`). Semi-annual and
+  yearly `Tarih` formats remain unverified and are still refused.
 - No rate limit is documented. The guide only advises fetching once per day.
 
 ## Küratörlü ek (2026-09-13): kur, faiz, mevduat faizi, kart harcaması, para arzı, TÜFE
@@ -223,8 +226,28 @@ stok → last, akım → sum).
 | TP.HPBITABLO1.11, .18 | bie_hpbitablo1 Para Arzı (M2, M3) | HAFTALIK(CUMA) | bin TL | weekly/friday, TRY_th, stock, last |
 | TP.TUKFIY2025.GENEL | bie_tukfiy2025 TÜFE (2025=100) | AYLIK | (boş) | monthly, index, index, last |
 
-Alınmayan: `bie_kt100h`/`bie_kt210a` kredi faizlerinin diğer serileri (üretilmiş blokta
-`unknown` olarak duruyor; TP.KTF12 küratörlü), TLREF (`bie_bisttlref`), rezervler.
+Alınmayan: TLREF (`bie_bisttlref`), rezervler. `bie_kt100h`/`bie_kt210a` kredi faizlerinin
+diğer serileri 2026-09-14'te grup semantiğiyle `rate/pct/avg` olarak etiketlendi (aşağı).
+
+## Grup semantiği (2026-09-14): üretilmiş 1.533 seriye anlam
+
+Üretilmiş blok `measure_type: unknown` ile geliyordu ve Silver bunları (doğru olarak)
+yayınlamıyordu. EVDS veri grubu başına bir kez incelenip karar `scripts/apply_evds_group_semantics.py`
+içindeki tabloya yazıldı; yalnız `unknown` girişler değişti, küratörlü satırlara dokunulmadı.
+Kanıt grup adı ve seri adı kalıbı (EVDS `tumSeriler` ağacı); değerlerden çıkarım yok. Güven
+`derived` kalır.
+
+| Veri grubu | Seri | measure_type | unit | default_agg | Gerekçe |
+|---|---|---|---|---|---|
+| bie_tukfiy2025 | 348 | index | index | last | TÜFE alt kalem endeksleri (2025=100) |
+| bie_akonutsat1–4 | 664 | flow_periodic | adet | sum | konut ve iş yeri satış adetleri (toplam/ipotekli/ilk el/ikinci el; il, Türkiye, arındırılmış) |
+| bie_birimfiyat, bie_bk | 152 | stock | TRY_per_m2 | last | konut birim fiyat / kira seviyesi (çeyreklik) |
+| bie_ykke, bie_kfe, bie_ykfe, bie_yokfend | 41 | index | index | last | kira ve bölgesel/yeni/eski konut fiyat endeksleri |
+| bie_kt210a, bie_kt100h | 19 | rate | pct | avg | kredi faiz oranları (stok / akım) |
+| bie_tukkre, bie_vdkre, bie_kybtkttk | 309 | — | — | — | **`status: deprecated`**: "(Arşiv)" grupları, kaynak artık üretmiyor (boş ya da bayt-özdeş yanıt, Bronze'a giremiyor) |
+
+Sonuç (kopya DB): Silver 672 → 1.901 seri; `unknown` 0. İpotekli satış payı
+(`TP.AKONUTSAT2.KTRTOPLAM` / `TP.AKONUTSAT1.KTRTOPLAM`) 2021-01 %15,3 → 2026-06 %20,0.
 
 ## TÜFE 2025=100 küratörlüğü (14 Eylül 2026)
 

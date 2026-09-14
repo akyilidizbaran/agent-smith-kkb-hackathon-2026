@@ -60,3 +60,19 @@ metrics:
     function: join_on_period
     series_ids: [evds:TP.DK.USD.A.YTL, evds:TP.APIFON4, evds:TP.KTF12]
     target_frequency: monthly
+
+  - metric_id: net_kar_aylik
+    name_tr: Bankacılık sektörü aylık net kârı (kümülatiften ayrıştırılmış)
+    description: >-
+      BDDK'nın yıl içi kümülatif yayınladığı Dönem Net Kârı (bddk_monthly:194_Toplam) serisinden
+      her ayın kendi kârı: Ocak = Ocak değeri, diğer aylar = o ay − önceki ay, yılbaşında sıfırlama
+      (cumulative_reset yearly). Milyon TL. Kümülatif seri olduğu gibi toplanmaz; aylık/çeyreklik
+      kâr, büyüme ve mevsimsellik soruları bu tablodan okunur.
+    aliases:
+      - aylık net kâr
+      - sektör aylık kârı
+      - bankaların aylık kârı
+      - kümülatif kârdan aylık kâr
+    tags: [kar, gelir_tablosu, bankacilik, bddk, gold, aylik, kumulatif]
+    function: decompose_cumulative
+    series_ids: [bddk_monthly:194_Toplam]

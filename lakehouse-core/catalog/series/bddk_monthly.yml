@@ -478,3 +478,64 @@ series:
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
+
+  # ---------------------------------------------------------------- Kümülatif (2026-09-14)
+  # Gelir tablosu kalemleri yıl içi kümülatiftir: her ay, yılbaşından o aya kadar biriken
+  # tutarı verir ve Ocak'ta sıfırlanır. 2025-01..2026-02 canlı ölçüldü (docs/sources/
+  # bddk_monthly.md, "Kümülatif kalemler"). Bu yüzden measure_type flow_ytd + cumulative_reset
+  # yearly: aylık akım Gold'un decompose_cumulative fonksiyonuyla türetilir, seri olduğu gibi
+  # toplanmaz.
+  - series_id: bddk_monthly:194_Toplam
+    native_code: 194?Toplam
+    dataset_id: bddk_monthly_donem_net_kari
+    name_tr: Dönem Net Kârı (Zararı), yılbaşından itibaren kümülatif (Sektör, Kar Zarar)
+    description: >-
+      BDDK Aylık Bülten, Kar Zarar tablosu, "DÖNEM NET KARI (ZARARI)" kalemi. Sektör tarafı, Toplam sütunu.
+      YIL İÇİ KÜMÜLATİFTİR: Ocak değeri Ocak ayının kârı, Şubat değeri Ocak+Şubat, Aralık değeri tüm yılın
+      kârıdır; bir sonraki Ocak'ta sıfırdan başlar. Canlı ölçüm 2025: 47347 (Oca), 118214 (Şub), ... 940183
+      (Ara); 2026-01: 87249. Aylık kâr için önce ayrıştırılmalı (Gold decompose_cumulative, kural yearly);
+      bu seri hiçbir zaman doğrudan toplanmamalı veya ortalanmamalıdır.
+      BİRİM: Milyon TL; kaynağın kendi kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 194, taraf
+      10001, para birimi TL. Bilanço tablosundaki 1715 aynı değerleri taşır (aynı ölçüm, ikinci adres).
+    aliases:
+      - dönem net kârı
+      - net kâr
+      - bankacılık sektörü kârı
+      - sektör kârı
+      - net dönem kârı
+    tags: [kar, gelir_tablosu, bankacilik, bddk, kumulatif, flow_ytd]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: flow_ytd
+    cumulative_reset: yearly
+    default_agg: sum
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:158_Toplam
+    native_code: 158?Toplam
+    dataset_id: bddk_monthly_faiz_gelirleri
+    name_tr: Toplam Faiz Gelirleri, yılbaşından itibaren kümülatif (Sektör, Kar Zarar)
+    description: >-
+      BDDK Aylık Bülten, Kar Zarar tablosu, "Toplam Faiz (Kar Payı) Gelirleri" kalemi. Sektör tarafı, Toplam
+      sütunu. YIL İÇİ KÜMÜLATİFTİR: her ay yılbaşından o aya kadar biriken faiz gelirini verir, Ocak'ta
+      sıfırlanır. Canlı ölçüm 2025: 621187 (Oca), 1187191 (Şub), ... 8355475 (Ara); 2026-01: 789354. Aylık
+      akım için Gold decompose_cumulative (kural yearly) kullanılır; doğrudan toplanmaz.
+      BİRİM: Milyon TL; kolon başlığı "(milyon TL)". Kaynak kalem kimliği 158, taraf 10001, para birimi TL.
+    aliases:
+      - faiz gelirleri
+      - toplam faiz gelirleri
+      - bankaların faiz geliri
+      - kar payı gelirleri
+    tags: [faiz, gelir, gelir_tablosu, bankacilik, bddk, kumulatif, flow_ytd]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: flow_ytd
+    cumulative_reset: yearly
+    default_agg: sum
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active

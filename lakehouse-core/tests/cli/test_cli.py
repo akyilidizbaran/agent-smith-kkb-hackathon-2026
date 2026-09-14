@@ -487,3 +487,119 @@ def test_gold_run_writes_one_call_as_json_and_exits_3_on_refusal(
 def _kv(text: str) -> dict[str, str]:
     pairs = (line.partition(":") for line in text.splitlines() if ":" in line)
     return {key.strip(): value.strip() for key, _, value in pairs}
+
+
+# ------------------------------------------------ catalog-resolved known-source datasets
+
+
+class _WeeklySession(SyntheticSession):
+    """Same controlled transport, answering for the catalogued weekly series TP.KTF12."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.response = SyntheticResponse(
+            {
+                "totalCount": 2,
+                "items": [
+                    {"Tarih": "02-01-2026", "TP_KTF12": "40.10",
+                     "UNIXTIME": {"$numberLong": "1767301200"}},
+                    {"Tarih": "09-01-2026", "TP_KTF12": "40.30",
+                     "UNIXTIME": {"$numberLong": "1767906000"}},
+                ],
+                "seriesNames": {"TP_KTF12": "SYNTHETIC"},
+            }
+        )
+
+
+def test_catalog_dataset_ingests_without_a_known_sources_entry(
+    tmp_path: Path, monkeypatch: Any, capsys: Any
+) -> None:
+    """A dataset that exists only in catalog/series/*.yml resolves through the same
+    windowed pipeline as the hand-registered CPI entry; no code registration needed."""
+
+    from src.lakehouse.application import KNOWN_SOURCES
+
+    assert ("evds", "evds_housing_interest") not in KNOWN_SOURCES
+    monkeypatch.setenv("EVDS_API_KEY", "cli-test-key")
+    database = tmp_path / "data" / "lakehouse.duckdb"
+    session = _WeeklySession()
+
+    result = main(
+        [
+            "ingest", "--source", "evds", "--dataset", "evds_housing_interest",
+            "--start-date", "2026-01-01", "--end-date", "2026-02-28",
+            "--database", str(database), "--data-root", str(tmp_path / "data"),
+        ],
+        session=session,
+        clock=lambda: FIXED_TIME,
+    )
+    out = capsys.readouterr().out
+
+    assert result == 0
+    assert "status: success" in out
+    assert any("series=TP.KTF12" in url for url in session.urls)
+    assert _read(database, "SELECT dataset_id FROM meta.run")[0][0] == "evds_housing_interest"
+    assert _read(database, "SELECT count(*) FROM meta.run_artifact")[0][0] == 1
+
+
+def test_catalog_resolution_joins_a_dataset_s_series_and_rejects_mixed_frequencies(
+    tmp_path: Path,
+) -> None:
+    from src.lakehouse.application import _resolve_known_source
+
+    root = tmp_path / "catalog"
+    root.mkdir()
+    (root / "evds.yml").write_text(
+        "\n".join(
+            [
+                'catalog_schema_version: "1.0"',
+                "source_id: evds",
+                "series:",
+                *_entry("TP.A", "evds_pair", "monthly"),
+                *_entry("TP.B", "evds_pair", "monthly"),
+                *_entry("TP.OLD", "evds_pair", "monthly", status="deprecated"),
+                *_entry("TP.C", "evds_mixed", "monthly"),
+                *_entry("TP.D", "evds_mixed", "daily"),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    pair = _resolve_known_source("evds", "evds_pair", catalog_root=root)
+    assert pair.series == "TP.A-TP.B"  # deprecated TP.OLD is not requested
+    assert pair.frequency == "monthly"
+
+    try:
+        _resolve_known_source("evds", "evds_mixed", catalog_root=root)
+    except ValueError as exc:
+        assert "mixes frequencies" in str(exc)
+    else:
+        raise AssertionError("mixed-frequency dataset must be rejected")
+
+    try:
+        _resolve_known_source("evds", "evds_missing", catalog_root=root)
+    except ValueError as exc:
+        assert "unknown dataset" in str(exc) and "evds_pair" in str(exc)
+    else:
+        raise AssertionError("unknown dataset must be rejected")
+
+    # The hand-verified table still wins and needs no catalog at all.
+    assert _resolve_known_source("evds", "evds_cpi", catalog_root=root).series == "TP.FG.J0"
+
+
+def _entry(code: str, dataset_id: str, frequency: str, *, status: str = "active") -> list[str]:
+    lines = [
+        f"  - series_id: evds:{code}",
+        f"    native_code: {code}",
+        f"    dataset_id: {dataset_id}",
+        f"    name_tr: Test {code}",
+        f"    description: Test serisi {code}.",
+        f"    frequency: {frequency}",
+        "    measure_type: unknown",
+        "    semantic_confidence: derived",
+        "    semantic_source: source_service",
+        f"    status: {status}",
+    ]
+    if frequency == "weekly":
+        lines.insert(6, "    week_anchor: friday")
+    return lines

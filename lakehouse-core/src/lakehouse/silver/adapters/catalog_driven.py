@@ -41,7 +41,7 @@ from ...parsers.evds import EVDS_SCHEMA_VERSION
 from ..foundation import SilverValidationError
 from ...storage.parquet import ParquetIdentity
 from ._context import bddk_entity_code, bddk_entity_id, lineage_fields, staging_frame
-from ._evds_time import evds_month_bounds, evds_point_date
+from ._evds_time import evds_month_bounds, evds_point_date, evds_quarter_bounds
 
 
 @dataclass(frozen=True)
@@ -279,6 +279,9 @@ def _evds_row(row: pd.Series, row_number: int, semantics: SeriesSemantics):
         return _Temporal(evds_point_date(row, row_number), None, None), None
     if semantics.frequency == "monthly":
         period_start, period_end = evds_month_bounds(row, row_number)
+        return _Temporal(period_end, period_start, period_end), None
+    if semantics.frequency == "quarterly":
+        period_start, period_end = evds_quarter_bounds(row, row_number)
         return _Temporal(period_end, period_start, period_end), None
     raise SilverValidationError(
         f"{semantics.series_id}: no reviewed EVDS date policy for frequency "
