@@ -272,6 +272,18 @@ class LakehouseQueryTool(Tool):
                      "ya da 'quarterly', period_from/period_to ile dönem. Seri doğrulanmamışsa kullanıcının "
                      "onayı gerekir. Yıllık için gold_align aylık sonucu üzerinde workspace_query kullan.",
             )
+        bayat = self._bayat_gold(params.sql)
+        if bayat:
+            # K02-T09 (A24): bayat Gold yalnız etiketlenmiyor. Etiketli uyarıyla dönen eski değer cevaba giriyordu;
+            # sorgu çalışmadan reddedilir, tablo kurulmaz.
+            return ToolError(
+                error_code="GOLD_STALE", layer="data", retryable=False,
+                message=(f"{', '.join(bayat)} bayat: Silver bu tablo kurulduktan sonra değişti; bu tablodan sayı verilmez."),
+                hint=("Aynı hesabı canlı Silver'dan gold_align / gold_join ile yeniden yap." if self.gold_available else
+                      "Kullanıcıya tablonun bayat olduğunu ve operatörün `python -m lakehouse gold` ile yeniden kurması "
+                      "gerektiğini söyle; eski değeri verme."),
+                candidates=bayat,
+            )
         uyusmazlik = self._frekans_uyusmazligi(params.sql)
         if uyusmazlik:
             return uyusmazlik
@@ -286,6 +298,13 @@ class LakehouseQueryTool(Tool):
                 layer="policy",
             )
         return None
+
+    def _bayat_gold(self, sql: str) -> list[str]:
+        stale = getattr(self.lakehouse, "stale_gold_tables", None)
+        if not callable(stale):
+            return []
+        used = {m.lower() for m in re.findall(r"\bgold\.[a-z0-9_]+", sql or "", re.I)}
+        return [t for t in stale() if t.lower() in used]
 
     _ARALIK_SONRASI = re.compile(r"(19\d{2}|20\d{2})\s*'?\s*(?:den|dan|ten|tan)\s+(?:bu yana|beri|itibaren|sonra|günümüze|bugüne)|"
                                  r"(19\d{2}|20\d{2})\s+(?:başından|sonrası|ve sonrası)", re.I)

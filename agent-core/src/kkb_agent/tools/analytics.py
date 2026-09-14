@@ -241,7 +241,7 @@ class AnomalyDetectTool(_AnalyticsTool):
             "trend_rho": [round(float(res.trend_rho), 2)]}))
         unit = "%" if res.basis == "change" else ""
         card = [
-            f"AYKIRILIK: {col} — yöntem {res.method} (k={res.threshold:g}) | taban: {_BASIS_TEXT[res.basis]} "
+            f"AYKIRILIK: {col} — yöntem {res.method} ({'Tukey çiti k=' if res.method == 'iqr' else '|z|>'}{res.threshold:g}) | taban: {_BASIS_TEXT[res.basis]} "
             f"| zaman ekseni: {axis.frequency}" + (" (" + "; ".join(axis.notes + fin) + ")" if (axis.notes or fin) else " (düzenli)") + " "
             f"(trend rho={res.trend_rho:.2f}) | normal aralık: [{_fmt(res.lower)}{unit}, {_fmt(res.upper)}{unit}] | "
             f"n={int(np.sum(~np.isnan(res.analysed)))} | aykırı: {res.count}",
@@ -252,6 +252,8 @@ class AnomalyDetectTool(_AnalyticsTool):
             card.append("Aykırı dönemler (skora göre):\n" + rows.head(12).to_string(index=False))
         else:
             card.append("Aykırı gözlem yok: hiçbir değer normal aralığın dışına çıkmıyor.")
+        card.append("SINIRLAMA: betimsel ve tek değişkenli; aykırılık seçilen yöntem ve eşiğe bağlıdır, mevsimsellik ayrıştırılmaz, "
+                    "sebep göstermez.")
         card.append("YAPACAĞIN: aykırı dönemleri ve sayıları bu karttan aktar; sebep uydurma, veride sebep yok. "
                     "ARAÇ ÇAĞIRMAYI BIRAK, cevabını yaz.")
         return ToolResult(content="\n".join(card), data=updated)
@@ -316,7 +318,7 @@ class ChangePointsTool(_AnalyticsTool):
         card = [
             f"KIRILMA: {col} — ikili bölütleme | taban: {_BASIS_TEXT[res.basis]} (trend rho={res.trend_rho:.2f}) | "
             f"n={int(np.sum(~np.isnan(res.analysed)))} | kırılma: {len(res.breaks)} | min segment {params.min_size}, "
-            f"en çok {params.max_breaks} kırılma, ceza 2·log(n)·σ² | zaman ekseni: {axis.frequency}"
+            f"en çok {params.max_breaks} kırılma, ceza 2·log(n)·σ² = {res.penalty:.4g} | zaman ekseni: {axis.frequency}"
             + (" (" + "; ".join(axis.notes + fin) + ")" if (axis.notes or fin) else ""),
             f"Tabloya eklendi: {col}_rejim; tablo bozulmadı ({len(updated)} satır).",
         ]
@@ -330,6 +332,7 @@ class ChangePointsTool(_AnalyticsTool):
             card.append("Rejimler:\n" + segs.to_string(index=False))
         else:
             card.append("Kırılma yok: tek rejim, ortalama " + _fmt(res.segments[0].mean if res.segments else float("nan")) + unit)
+        card.append("SINIRLAMA: betimsel ve tek değişkenli; kırılma yerleri ceza ve en az bölüt ayarına bağlıdır, sebep göstermez; kısa seride (n<2·min segment) kırılma aranmaz.")
         card.append("YAPACAĞIN: kırılma tarihlerini ve rejim ortalamalarını bu karttan aktar; sebep uydurma. "
                     "ARAÇ ÇAĞIRMAYI BIRAK, cevabını yaz.")
         return ToolResult(content="\n".join(card), data=updated)

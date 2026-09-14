@@ -333,6 +333,10 @@ class SilverLakehouse:
             out[spec.dataset_id] = spec
         return out
 
+    def stale_gold_tables(self) -> list[str]:
+        """Silver kurulduktan sonra değişmiş Gold tabloları (parmak izi farklı). K02-T09: sorgu aracı bunlardan sayı vermez."""
+        return sorted(k for k, v in getattr(self, "_gold_meta", {}).items() if v.get("stale"))
+
     def _gold_spec(self, row: tuple, *, stale: bool, series_catalog: dict[str, DatasetSpec]) -> DatasetSpec:
         (metric_id, function, series_ids, target, name_tr, description, aliases, tags,
          allow_unverified, row_count, fingerprint, built_at, build_id) = row

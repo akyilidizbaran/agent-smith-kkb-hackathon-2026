@@ -36,6 +36,10 @@ def test_anomali_sutun_ekler_ve_sicrama_ayini_kartta_yazar() -> None:
     assert len(ws.table) == 48 and (ws.table["bakiye_anomali"] == "aykırı").sum() >= 1
     assert ws.table.loc[24, "bakiye_anomali"] == "aykırı" and "2024-01-31" in r.content
     assert "NEDEN" not in r.content and "sebep uydurma" in r.content
+    # K02-T13 (A32): kart yöntemi, eşiği, tabanı ve sınırlamayı yazar.
+    assert "yöntem iqr (Tukey çiti k=1.5)" in r.content and "taban:" in r.content and "SINIRLAMA:" in r.content
+    z = AnomalyDetectTool(_ws()).validate_and_run({"column": "bakiye", "method": "zscore", "purpose": "aykırı ay"})
+    assert z.ok and "yöntem zscore (|z|>3)" in z.content
     assert ws.peeks() and ws.peeks()[0][0].startswith("anomaly_detect")
     assert ws.column_provenance("bakiye_anomali").sql.startswith("türetilmiş: anomali(")
 
@@ -61,6 +65,9 @@ def test_kirilma_rejim_sutunu_ve_kart() -> None:
     assert r.ok, r.content
     assert "bakiye_rejim" in ws.table.columns and ws.table["bakiye_rejim"].nunique() >= 2
     assert "kırılma 1:" in r.content and "2023-0" in r.content and "önceki rejim" in r.content
+    # K02-T13 (A33): ceza formülü ve sayısal değeri, en az bölüt, en çok kırılma ve sınırlama kartta.
+    assert "min segment 4" in r.content and "en çok 3 kırılma" in r.content and "ceza 2·log(n)·σ² = " in r.content
+    assert "SINIRLAMA:" in r.content and "sebep göstermez" in r.content
 
 
 def test_oncul_ardil_karti_nedensellik_degil_der() -> None:

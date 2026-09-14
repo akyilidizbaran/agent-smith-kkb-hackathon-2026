@@ -201,3 +201,27 @@ def test_evds_is_windowed_and_a_full_limit_response_is_truncation(env, monkeypat
     requested.clear()
     out2 = rci._run_one(row, env["raw"], None, env["arts"], env["bronze"], start=date(2019, 1, 1), end=date(2019, 6, 30))
     assert out2.status == "failed" and "per-request limit" in out2.error and out2.new == 0
+
+
+def test_a22_warned_artifact_ingested_twice_is_idempotent_and_keeps_each_runs_warning(env, monkeypatch) -> None:
+    """K02-T08 (A22): the same bytes with a parser warning, fetched by two runs. Data lands once (one artifact, one Bronze
+    file with unchanged bytes); each run keeps its own link and its own warning row, so a later Silver rebuild can still
+    say which run saw the warning."""
+    a1 = _asset(env["tmp"], b'{"w":1}')
+    message = "default 0 is not a measured zero"
+    monkeypatch.setitem(rci.CONNECTOR_REGISTRY, SOURCE, _binding([a1], warn={a1.artifact_sha256: [message]}))
+    first = rci._run_one(ROW, env["raw"], None, env["arts"], env["bronze"], start=date(2016, 1, 1), end=date(2016, 6, 30))
+    bronze_files = sorted((env["tmp"] / "data" / "bronze").rglob("*.parquet"))
+    import hashlib
+    digests = [hashlib.sha256(p.read_bytes()).hexdigest() for p in bronze_files]
+    second = rci._run_one(ROW, env["raw"], None, env["arts"], env["bronze"], start=date(2016, 1, 1), end=date(2016, 6, 30))
+    con = env["con"]
+    assert first.status == second.status == "warning" and first.run_id != second.run_id
+    assert con.execute("SELECT count(*) FROM meta.artifact WHERE artifact_sha256 = ?", [a1.artifact_sha256]).fetchone()[0] == 1
+    links = con.execute("SELECT run_id FROM meta.run_artifact WHERE artifact_sha256 = ? ORDER BY run_id", [a1.artifact_sha256]).fetchall()
+    assert sorted(r[0] for r in links) == sorted([first.run_id, second.run_id])
+    warnings = con.execute("SELECT run_id, artifact_sha256, message FROM meta.ingest_warning ORDER BY run_id").fetchall()
+    assert sorted(warnings) == sorted([(first.run_id, a1.artifact_sha256, message), (second.run_id, a1.artifact_sha256, message)])
+    after = sorted((env["tmp"] / "data" / "bronze").rglob("*.parquet"))
+    assert after == bronze_files and [hashlib.sha256(p.read_bytes()).hexdigest() for p in after] == digests, "Bronze idempotent"
+    assert [r[0] for r in _runs(con)] == ["warning", "warning"]

@@ -51,6 +51,8 @@ ErrorCode = Literal[
     # Dosya sorulan şeyle ilgisiz (Büşra, builder/relevance.py, V3 §3.9): dönem/terim/katalog ölçütlerinin hiçbiri
     # tutmuyor; yazılmaz, kullanıcıya sorulur. Aynı dosyayı tekrar istemek sonucu değiştirmez, onay ayrı çağrıdır.
     "FILE_IRRELEVANT",
+    # Bayat Gold (K02-T09, A24): Silver tablo kurulduktan sonra değişti; eski tablodan sayı verilmez, canlı Silver'dan yeniden hesaplanır.
+    "GOLD_STALE",
     # veri katmanı — sorgu çalıştı, sonuç ne söylüyor
     "OUT_OF_COVERAGE",
     "EMPTY_RESULT",
@@ -75,6 +77,7 @@ NOT_RETRYABLE: frozenset[str] = frozenset({
     "OUT_OF_COVERAGE",   # veri yok; kaç kez sorulursa sorulsun yok
     "UNSAFE_SQL",        # politika; farklı yazımı denemek sınırı aşma girişimi olur
     "FILE_IRRELEVANT",   # aynı dosya aynı soruyla yine ilgisiz; kullanıcı onayı ayrı çağrıdır
+    "GOLD_STALE",        # aynı bayat tabloyu yeniden sorgulamak eski sonucu verir; yeniden hesaplama ayrı çağrıdır
     # UNKNOWN_TOOL burada DEĞİL: on üç araçla model ara sıra ad uyduruyor ("workspace");
     # aday listesiyle bir sonraki tur düzeltiyor. Ölçüldü: tekrar denenmez sayılınca
     # araçsız son tura düşüp veri çekmeden cevap yazdı (G11a, gerçek DB).

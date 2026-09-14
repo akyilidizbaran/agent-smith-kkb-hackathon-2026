@@ -184,12 +184,12 @@ Dayanak: [M16 kabul raporu](M16_KABUL_RAPORU.md). Aşağıdakiler her biri yeni 
 | K02-T05 | A07/A26 | Grafik ve eski cevap raporundaki dönem/birim/kaynak/uyarı ve sürüm tutarlılığı; önceki ek testler tam kapsamı karşılıyorsa statüyü kanıtla düzelt |
 | K02-T06 | A12 | Düşük kaliteli OCR örneğinde uyarı/kontrollü ret ve doğrulanmamış değerin kesin sonuç sayılmaması |
 | K02-T07 | A18 | Alternatif kaynak kullanıldığında gerçek cevabın kullanılan kaynağı adlandırması |
-| K02-T08 | A22 | Aynı artifactin iki ingest koşusunda veri idempotent; her koşunun run/warning izi korunur |
-| K02-T09 | A24 | Silver değişiminden sonra bayat Gold'u yalnız etiketlemekle kalma; ret/yenileme davranışını ve yanlış eski sonuç verilmediğini göster |
+| K02-T08 | A22 | **Kapandı 14 Eyl:** `lakehouse-core/tests/scripts/test_run_catalog_ingestion.py::test_a22_warned_artifact_ingested_twice_is_idempotent_and_keeps_each_runs_warning` — tek artifact, iki koşu bağı, koşu başına uyarı satırı, Bronze dosyası ve özeti değişmez |
+| K02-T09 | A24 | **Kapandı 14 Eyl (ADR-0071):** bayat gold.* tablosuna sorgu `GOLD_STALE` ile reddedilir, eski değer dönmez; canlı Silver'dan gold_align/gold_join ile yeniden hesap; `tests/test_k02_bayat_gold.py` |
 | K02-T10 | A27 | Tavily HTTP hatası, model/OCR yokluğu ve bütçe dolumu için kontrollü sonuç; sınırlamayı kullanıcı görür |
 | K02-T11 | A28 | Yeni alan/profil/oturumda eski izin, tablo ve alan bağlamı sızmaz; K01 ile birlikte kapatılabilir |
 | K02-T12 | A30 | Architect yüklü aralık dışındaki gerekli veriyi desteklenen kaynaktan çeker; kaynak erişilemezse nedeni dürüstçe gösterir |
-| K02-T13 | A32/A33 | Analitik kartlarında yalnız sonuç tarihi değil yöntem/eşik/ceza/min segment ve sınırlama metinleri de denetlenir |
+| K02-T13 | A32/A33 | **Kapandı 14 Eyl:** anomali kartı yöntem ve eşiği (Tukey k=1.5 / \|z\|>3), taban ve SINIRLAMA; kırılma kartı ceza formülü ve sayısal değeri, min segment, en çok kırılma ve SINIRLAMA; `tests/test_analytics_tools.py` metin denetimleri |
 | K02-T14 | M13-T04/T07 | Aynı sayının yanlış dönem/kolon/varlıkta bulunması doğrulama sayılmaz; eski tablo eşleşmesi doğru sürüm/kaynakla sunulur |
 
 **Diğer eşlemeler:** A09 → D01/D07/K01; A21 → D03/D04/D05/K01; A23 → D06. Önceden tam kabul edilmiş diğer vakalar ilgili kod değişikliğinden etkileniyorsa regresyonda korunur. Her eksik için yeni canlı çağrı gerekmez; ağ/LLM davranışı gerektirmeyen kontroller deterministik yapılır.
