@@ -44,6 +44,8 @@ from .tools.chart import CHART_PROMPT_RULES, ChartTool
 from .tools.workspace_query import WorkspaceQueryTool
 from .tools.real_value import REAL_VALUE_PROMPT_RULES, WorkspaceRealValueTool
 from .tools.workspace_join import WorkspaceJoinTool
+from .tools.premise import PREMISE_PROMPT_RULES, CheckPremiseTool
+from .tools.clarify import CLARIFY_PROMPT_RULES, ClarifyTool
 from .vision.ocr import OcrClient
 from .adapters.mia_embedder import EmbeddingCache, MiaEmbedder
 from .core.retriever import RetrievalPolicy
@@ -172,6 +174,9 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
             AnomalyDetectTool(workspace),
             ChangePointsTool(workspace),
             LeadLagTool(workspace),
+            # Büşra (V3 §3.9, UEB): öncül doğrulama (A09/A10) ve netleştirme (uygunluk "kısmen" iken) — LLM yok, her adaptörde.
+            CheckPremiseTool(lakehouse),
+            ClarifyTool(registry),
         ]
     )
     # Architect'e açılan tek kapı. Yalnız veri ekibinin şeması ve CLI'ı varsa: seed
@@ -197,7 +202,8 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
     registry.register(
         ChartTool(lakehouse, workspace, chart_dir=settings.chart_dir, geo_dir=settings.geo_dir)
     )
-    system_prompt = SYSTEM_PROMPT + CHART_PROMPT_RULES + WORKSPACE_QUERY_RULES + ANALYTICS_PROMPT_RULES + REAL_VALUE_PROMPT_RULES
+    system_prompt = (SYSTEM_PROMPT + CHART_PROMPT_RULES + WORKSPACE_QUERY_RULES + ANALYTICS_PROMPT_RULES + REAL_VALUE_PROMPT_RULES
+                     + PREMISE_PROMPT_RULES + CLARIFY_PROMPT_RULES)
     # Dış kaynak (ADR-0034): web_url her zaman; web_search yalnız arama anahtarı varsa.
     settings.ingest_allowed_root.mkdir(parents=True, exist_ok=True)
     registry.register(WebUrlTool(workspace, allowed_local_root=settings.ingest_allowed_root, registry=registry, ocr=ocr))
