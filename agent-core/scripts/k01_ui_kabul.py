@@ -28,7 +28,7 @@ REPO = ROOT.parent
 FIX = ROOT / "tests" / "fixtures" / "generic"
 sys.path.insert(0, str(ROOT))
 
-from scripts.k01_kabul import db_query, lakehouse, sha256  # noqa: E402
+from scripts.k01_kabul import catalog_series_count, db_query, lakehouse, sha256  # noqa: E402
 
 
 def free_port() -> int:
@@ -170,8 +170,10 @@ def main() -> int:
         page.goto(url)
         page.wait_for_function("document.querySelector('#pill-model') && document.querySelector('#pill-model').textContent.length > 3", timeout=30000)
         status = api.get(f"{url}/api/status").json()
-        record("acilis", "arayüz geçici DB ile açılır; Analyst; başlangıç kataloğu", status.get("profile") == "analyst"
-               and "Analyst" in (page.text_content("#pill-profile") or "") and status.get("catalog_series") == 2214,
+        expected_catalog = catalog_series_count(active_only=True)
+        record("acilis", f"arayüz geçici DB ile açılır; Analyst; başlangıç kataloğu ({expected_catalog} etkin seri, katalog dosyalarından)",
+               status.get("profile") == "analyst"
+               and "Analyst" in (page.text_content("#pill-profile") or "") and status.get("catalog_series") == expected_catalog,
                {"profil": status.get("profile"), "katalog": status.get("catalog_series"), "rozet": page.text_content("#pill-profile")}, page)
         catalog_before = catalog_fp()
 

@@ -64,11 +64,14 @@ def lakehouse(*args: str) -> subprocess.CompletedProcess:
                           capture_output=True, text=True, timeout=600, check=False)
 
 
-def catalog_series_count() -> int:
+def catalog_series_count(*, active_only: bool = False) -> int:
     """Beklenen başlangıç kataloğu sayısı sabit yazılmaz; lakehouse-core katalog dosyalarından okunur (main entegrasyonunda
-    2.214 → 2.216 oldu: iki kümülatif BDDK kalemi eklendi)."""
+    2.214 → 2.216 oldu: iki kümülatif BDDK kalemi eklendi). `active_only`: kullanım dışı (deprecated) seriler hariç — arayüz
+    sayacı bunları saymaz (main'in EVDS grup semantiği anlamı çözülemeyen 309 seriyi deprecated işaretledi)."""
+    status = "str(getattr(getattr(s, 'status', ''), 'value', getattr(s, 'status', '')))"
+    keep = f" if {status} != 'deprecated'" if active_only else ""
     code = ("from pathlib import Path; from src.lakehouse.catalog.series import load_catalog_files; "
-            "print(len({s.series_id for s in load_catalog_files(Path('catalog/series'))}))")
+            f"print(len({{s.series_id for s in load_catalog_files(Path('catalog/series')){keep}}}))")
     out = subprocess.run(["uv", "run", "python", "-c", code], cwd=REPO / "lakehouse-core", capture_output=True, text=True, timeout=300, check=True)
     return int(out.stdout.strip().splitlines()[-1])
 
