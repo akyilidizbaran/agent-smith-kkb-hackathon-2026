@@ -1,0 +1,27 @@
+== 13:20:02 klon (yerel depodan feature/agent-engine)
+commit=9eaf60e
+== 13:20:02 make setup
+setup_çıkış=0 setup_s=1
+== 13:20:03 .env: belgelenen adım (cp + doldur) — doldurulmuş dosya kopyalandı, değer yazdırılmaz
+== 13:20:03 ön kontrol (veri yok)
+preflight_verisiz_çıkış=2 SONUÇ: HAZIR DEĞİL — veri kökü, veritabanı, izinli dosya kökü
+== 13:20:48 veri: canlı BDDK+EVDS iki seri, geçici kök
+veri_çıkış=0 veri_s=11
+✓ bootstrap (2 s)
+✓ ingest (canlı: BDDK + EVDS) (5 s)
+    2/2 series ingested successfully (ok 1, warning 1, shared 0, failed 0, skipped 0; missing from catalog 0).
+✓ silver (3 s)
+    rows published         : 675
+✓ gold (1 s)
+✓ izinli dosya kökü: /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/data/incoming
+== 13:20:59 ön kontrol: model anahtarı boş (negatif)
+preflight_bos_anahtar_çıkış=2   ✗ model              https://mia.csp.kloudeks.com/v1 · kkbhackathon2026/Qwen3.8-27B · anahtar yok → uzak model için LLM_API_KEY boş: arayüz başlamaz; .env'yi doldur SONUÇ: HAZIR DEĞİL — model 
+== 13:21:00 ön kontrol: .env ile
+preflight_çıkış=0  ✓ veri katalog 2.214 seri · yüklü 2 seri · 675 gözlem · 2016-01-01 → 2026-07-03  ✓ gold 2 tablo: konut_faizi_aylik, konut_kredisi_ceyreklik  ✓ model https://mia.csp.kloudeks.com/v1 · kkbhackathon2026/Qwen3.8-27B · anahtar var SONUÇ: hazır 
+== 13:21:01 serve (WEB_PORT=8793)
+status_http=200
+ana_sayfa_http=200
+== 13:21:06 canlı soru
+ask_http=200
+ask_s=7
+== 13:21:13 bitti (sunucu ekran görüntüsü için açık; .env klonda, sonra silinecek)

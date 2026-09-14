@@ -1,0 +1,95 @@
+version: "1.0"
+name: fact_observation
+description: Silver V1 canonical, typed, validated and source-independent observation contract.
+fields:
+  - name: series_id
+    type: string
+    nullable: false
+    description: Stable source-namespaced series identifier.
+  - name: entity_id
+    type: string
+    nullable: true
+    description: Canonical entity identifier when the source identifies a population; BDDK sector total is bddk:10001.
+  - name: observation_date
+    type: date
+    nullable: false
+    description: Canonical date of the source observation; monthly periods use their period end.
+  - name: period_start
+    type: date
+    nullable: true
+    description: First date covered by a period-labeled observation, when applicable.
+  - name: period_end
+    type: date
+    nullable: true
+    description: Last date covered by a period-labeled observation, when applicable.
+  - name: value
+    type: float
+    nullable: true
+    description: DOUBLE-compatible canonical numeric value; source nulls remain null.
+  - name: frequency
+    type: string
+    nullable: false
+    description: Canonical frequency snapshot from meta.series.
+  - name: unit
+    type: string
+    nullable: false
+    description: Canonical unit snapshot from meta.series.
+  - name: measure_type
+    type: string
+    nullable: false
+    description: Canonical measure type snapshot from meta.series.
+  - name: quality_flag
+    type: string
+    nullable: false
+    description: One of ok, missing_value or source_warning.
+  - name: source_id
+    type: string
+    nullable: false
+    description: Stable lowercase snake_case source identifier.
+  - name: dataset_id
+    type: string
+    nullable: false
+    description: Stable lowercase snake_case logical dataset identifier.
+  - name: artifact_sha256
+    type: string
+    nullable: false
+    description: SHA-256 identifier of the originating immutable RAW artifact.
+  - name: fetched_at
+    type: timestamp_utc
+    nullable: false
+    description: UTC timestamp at which the source bytes were fetched.
+  - name: schema_version
+    type: string
+    nullable: false
+    description: Actual Bronze/parser schema version used for the source representation.
+  - name: vintage_id
+    type: string
+    nullable: false
+    description: Deterministic content vintage; defaults to artifact:<artifact_sha256> when the source has no native vintage.
+  - name: run_id
+    type: uuid
+    nullable: true
+    description: Optional ingestion run UUID; V1 does not invent one.
+
+measure_type_vocabulary:
+  - stock
+  - flow_periodic
+  - flow_ytd
+  - flow_cumulative
+  - rate
+  - ratio
+  - index
+  - count
+  - unknown
+
+quality_flag_vocabulary:
+  - ok
+  - missing_value
+  - source_warning
+
+notes:
+  - Bronze retains source-faithful value_raw; Silver V1 exposes only the canonical value.
+  - week_anchor, default_agg and semantic_confidence remain catalog metadata and are not copied into fact rows.
+  - Silver V1 does not perform aggregation, frequency alignment, revision selection or business metric derivation.
+  - Parser warnings are carried into staging and quality_flag; their complete text remains reachable from meta.ingest_warning through run_id.
+  - Silver Parquet uses schema_version fact_observation.v1 and representation silver rather than reusing Bronze file identity.

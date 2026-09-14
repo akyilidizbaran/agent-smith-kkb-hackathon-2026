@@ -1,6 +1,8 @@
 # Agentic Analytics Engine — Mimari
 
-> **Durum:** 12 Eylül 2026 · Golden 16 vaka; demo kabul sıfırdan 8/8 (`scripts/demo_acceptance.py`) · 252 birim testi · 38 ADR
+> **Durum:** 14 Eylül 2026 · 386 ajan birim testi + 1.086 lakehouse testi (CI'da) · 63 ADR · 681 seri 2016+ canlı yüklü ·
+> birleşik kabul: [M16_KABUL_RAPORU.md](M16_KABUL_RAPORU.md). §1 çizimindeki "planlı" etiketleri 10 Eylül tarihlidir;
+> güncel araç ve katmanlar §15 sonrasındaki "YAZILDI" bölümlerinde ve §14–15'tedir.
 > Bu belge kodun *ne yaptığını* değil, *neden öyle yapıldığını* anlatır; her karar
 > `docs/adr/` altındaki kayda atıfla gelir. Kodla birebir örtüşmesi için modül, sınıf ve
 > metot adları gerçek adlarıyla verilmiştir.
@@ -616,10 +618,13 @@ gerektirmez.
 
 | Katman | Ne | Süre | Ne söyler |
 |---|---|---|---|
-| Birim (22) | Araçların kendisi, LLM'siz | 0,4 s | "Bu araç bozuldu" |
-| Golden (7) | Uçtan uca, gerçek LLM; metni değil **tabloyu** denetler | ~12 dk | "Sistem bu soruyu çözüyor" |
-| Kararlılık | `--repeat N`, geçme oranı, araç yolu dağılımı | N × golden | "Şans değil" |
-| ADR (19) | Her karar, ölçümü ve reddedilenler | — | "Neden böyle" |
+| Ajan birim/sözleşme (386) | Araçlar, guard'lar, erişim politikası, dışa aktarım, profiller; LLM'siz, ağsız | ~4 s | "Bu araç/kural bozuldu" |
+| Lakehouse (1.086) | Ingestion, RAW→Bronze→Silver→Gold, run kaydı, EVDS penceresi | ~13–25 dk | "Veri katmanı sözleşmesi tutuyor" |
+| CI | İki paket kilitli kurulum + yukarıdaki iki katman, her push'ta | — | "Temiz makinede de geçiyor" |
+| Golden (21) | Uçtan uca, gerçek LLM; metni değil **tabloyu** denetler | dakikalar | "Sistem bu soruyu çözüyor" |
+| M02 kıyası | 18 vaka + 5 görülmemiş soru, aynı DB/model, 3 tekrar | ~1 saat | "Hangi motor, neden" |
+| M16 kabul | Çok turlu finans senaryosu, finans dışı dosyalar, sınır vakaları, arayüz uçtan uca (Playwright) | ~20 dk | "Kullanıcı akışı çalışıyor" |
+| ADR (63) | Her karar, ölçümü ve reddedilenler | — | "Neden böyle" |
 
 Golden'ın ilkesi: LLM'in serbest metni güvenilmez, üretilen tablo deterministik.
 Halüsinasyon vakası (G4: 2015 sorulunca "veri 2021'de başlıyor") demoda en pahalı hatanın
@@ -635,19 +640,18 @@ ve düzeltildi (ADR-0007).
 3/3 kararlı, 4–12 s**. Sağlayıcı geçişi `.env` + tek satır kod (ikinci system mesajı
 kaldırıldı — vLLM reddediyordu).
 
-**Hâlâ açık:**
-- Kota: mentör netleştirdi — özel limit yok, gerekirse artırılır; retry/backoff ve 429
-  `Retry-After` desteği var. Mimariyi kota kaygısıyla kısıtlamaya gerek yok.
-- Türkçe performansı ölçülmedi; İngilizce system prompt A/B'si yapılmadı.
-- Retrieval katmanı ve dönem filtresi enjeksiyonu yazılmadı; G6 adım limitinin tam
-  sınırında (10/10).
-- Görselleştirme yok.
-- Ad-hoc ingest ve otomatik katalog yok — jürinin sınayacağı yetenek. OCR MIA'da denenmedi.
-- Analitik araçlar (anomali, changepoint, causality) yok. Web araçları yok — sözleşme
-  (`SearchClient`) tanımlı, sağlayıcı seçimi ve uygulama bekliyor.
-- Gerçek Lakehouse'a bağlı değil; kendi seed'iyle çalışıyor. Veri ekibinin
-  `silver.fact_observation` + `meta.series`'i hazır; adaptör yazılacak.
-- Golden set kapsamı dar: tek kaynak, kredi kalemleri.
+**10 Eylül listesinden kapananlar:** retrieval ve dönem filtresi (ADR-0035/0036/0043), görselleştirme (ADR-0032),
+ad-hoc ingest ve otomatik katalog (ADR-0030/0039), MIA OCR (ADR-0041), analitik araçlar (ADR-0040/0052), web araçları
+(ADR-0034/0051, Tavily), gerçek Lakehouse adaptörü (`adapters/silver_lakehouse.py`), çok kaynaklı golden set.
+
+**Güncel sınırlar (14 Eylül):**
+- Silver modeli seri/tarih/değer biçimindedir; genel ilişkisel işlem verisi oturum tablolarında (`k1…k8`,
+  `workspace_join`) analiz edilir, ortak kataloğa ilişki deposu olarak yazılmaz (ADR-0059).
+- OCR çıktısı doğrulanmış veri sayılmaz; kalite bayrağıyla taşınır.
+- BDDK "grid defaultValue 0" uyarısı gözlemlerin çoğunda `source_warning` üretir: doğru ama gürültülü (ADR-0062).
+- Çift eksen yalnız açık istekte; farklı birimli karşılaştırma ilk dönem = 100 ile çizilir (ADR-0063).
+- Kataloğa yayın pasifleştirme (silmeden gizleme) veri CLI'ında yok; Architect tam sıfırlama iki adımlıdır (ADR-0056).
+- Canlı LLM davranışı stokastiktir; kabul oranları tek koşuya bakılarak genellenmez (M16 raporu tekrar sayısını verir).
 
 ### Gold — `tools/gold.py` (`gold_align / gold_decompose / gold_join`, ADR-0031) — YAZILDI
 

@@ -18,9 +18,11 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field
 
-from ..analytics.methods import detect_anomalies, detect_change_points, lead_lag
+from ..analytics.methods import detect_anomalies, detect_change_points, lead_lag, has_non_positive
 from ..contracts.lakehouse import QueryProvenance
 from ..core.errors import ToolError
+from dataclasses import dataclass
+
 from ..core.evidence import _time_column as time_column
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
@@ -40,6 +42,85 @@ MIN_POINTS = 8
 _BASIS_TEXT = {"level": "düzey", "change": "dönemlik yüzde değişim"}
 
 
+@dataclass
+class TimeAxis:
+    """Analitik öncesi zaman ekseni denetimi (M12-T02, ADR-0052): satır sırası zaman sayılmaz."""
+
+    column: str | None
+    frame: pd.DataFrame            # zamana göre sıralanmış; indeks etiketleri korunur (kolon ekleme hizalanır)
+    frequency: str                 # günlük/haftalık/aylık/çeyreklik/yıllık/düzensiz/bilinmiyor
+    duplicates: int                # aynı tarihte birden çok satır
+    gaps: int                      # beklenen adımdan uzun boşluk sayısı
+    reordered: bool                # giriş sırası zaman sırasından farklıydı
+    notes: list[str]
+
+    @property
+    def period_word(self) -> str:
+        return {"günlük": "gün", "haftalık": "hafta", "aylık": "ay", "çeyreklik": "çeyrek", "yıllık": "yıl"}.get(self.frequency, "dönem")
+
+
+_FREQ_DAYS = (("günlük", 1, 1.5), ("haftalık", 7, 2.0), ("aylık", 30, 5.0), ("çeyreklik", 91, 8.0), ("yıllık", 365, 20.0))
+
+
+def validate_time_axis(table: pd.DataFrame) -> TimeAxis:
+    """Tarih kolonunu bulur, sıralar, tekrar/boşluk/frekans raporlar. Tarih yoksa bunu söyler."""
+    tcol = time_column(table)
+    if tcol is None:
+        return TimeAxis(None, table, "bilinmiyor", 0, 0, False,
+                        ["tarih kolonu yok: satır sırası dönem sırası varsayıldı (doğrulanmadı)"])
+    dates = pd.to_datetime(table[tcol], errors="coerce")
+    order = dates.sort_values(kind="stable").index
+    frame = table.loc[order]
+    reordered = not frame.index.equals(table.index)
+    valid = dates.dropna().sort_values()
+    dup = int(valid.duplicated().sum())
+    notes: list[str] = []
+    if reordered:
+        notes.append("satırlar zamana göre yeniden sıralandı")
+    if dup:
+        notes.append(f"{dup} tekrar tarih: aynı dönemde birden çok satır (varlık kırılımı olabilir)")
+    if int(dates.isna().sum()):
+        notes.append(f"{int(dates.isna().sum())} satırın tarihi okunamadı")
+    freq, gaps = "bilinmiyor", 0
+    steps = valid.drop_duplicates().diff().dropna().dt.days
+    if len(steps) >= 2:
+        med = float(steps.median())
+        for name, days, tol in _FREQ_DAYS:
+            if abs(med - days) <= tol:
+                freq = name
+                gaps = int((steps > days * 1.6).sum())
+                break
+        else:
+            freq = "düzensiz"
+        if gaps:
+            notes.append(f"{gaps} boşluk: beklenen {freq} adımdan uzun aralık (komşu dönemler atlanmış, bitişik değil)")
+        if freq == "düzensiz":
+            notes.append(f"örneklem düzensiz (medyan adım {med:.0f} gün): gecikmenin 'dönem' anlamı zayıf")
+    return TimeAxis(tcol, frame, freq, dup, gaps, reordered, notes)
+
+
+def lag_cap(n: int, requested: int, *, min_pairs: int = 5) -> tuple[int, str | None]:
+    """Gecikme sınırı (M12-T01): her gecikmede en az `min_pairs` çift kalmalı; n//3'ü aşmaz."""
+    cap = max(1, min(n // 3, n - min_pairs))
+    if requested <= cap:
+        return requested, None
+    return cap, f"max_lag {requested} → {cap} (n={n}: her gecikmede en az {min_pairs} çift, n/3 sınırı)"
+
+
+def _finite(values: np.ndarray) -> tuple[np.ndarray, list[str]]:
+    """NaN/±inf temizliği ve sabit seri uyarısı (M12-T04); sonsuz değer boş sayılır."""
+    v = np.asarray(values, dtype=float)
+    notes: list[str] = []
+    n_inf = int(np.isinf(v).sum())
+    if n_inf:
+        notes.append(f"{n_inf} sonsuz değer boş sayıldı (sıfıra bölme?)")
+        v = np.where(np.isinf(v), np.nan, v)
+    finite = v[~np.isnan(v)]
+    if len(finite) and float(np.std(finite)) < 1e-12:
+        notes.append("seri sabit")
+    return v, notes
+
+
 def _labels(table: pd.DataFrame) -> tuple[str | None, list[str]]:
     tcol = time_column(table)
     if tcol is None:
@@ -56,6 +137,16 @@ class _AnalyticsTool(Tool):
 
     def __init__(self, workspace: AnalysisWorkspace) -> None:
         self.workspace = workspace
+
+    def _axis(self) -> TimeAxis | ToolResult:
+        """Zaman ekseni denetimi; tekrar tarihte hesap yapılmaz (M12-T03)."""
+        axis = validate_time_axis(self.workspace.table)
+        if axis.duplicates:
+            return ToolResult.fail(
+                "INVALID_ARGS", f"Aynı tarihte birden çok satır var ({axis.duplicates} tekrar): hepsini tek seri gibi "
+                "sıralamak yanlış olur.", hint="Önce varlık/kırılımı seçip tek seriye indir (workspace_query ya da lakehouse_query).",
+                layer="data", retryable=False)
+        return axis
 
     def _numeric(self, column: str) -> ToolError | None:
         if not self.workspace.has_table:
@@ -92,7 +183,7 @@ class AnomalyDetectTool(_AnalyticsTool):
     name = "anomaly_detect"
     description = (
         "Aktif tablodaki bir sayısal sütunda olağandışı (aykırı) gözlemleri deterministik olarak bulur: "
-        "IQR ya da z-skoru; trendli seride (bakiye, endeks) dönemlik yüzde değişim üzerinde. Tabloya "
+        "IQR ya da z-skoru; trendli seride (stok ya da endeks düzeyi) dönemlik yüzde değişim üzerinde. Tabloya "
         "<sütun>_anomali ('ok'/'aykırı') ve <sütun>_skor sütunlarını ekler, satır sayısı değişmez. "
         "Kullanıcı olağandışı, aykırı, anomali, sıra dışı dönem sorduğunda veriyi getirdikten SONRA çağır."
     )
@@ -102,10 +193,19 @@ class AnomalyDetectTool(_AnalyticsTool):
         return self._numeric(params.column)
 
     def run(self, params: AnomalyParams) -> ToolResult:
-        table = self.workspace.table
-        assert table is not None
+        axis = self._axis()
+        if isinstance(axis, ToolResult):
+            return axis
+        table = axis.frame
         col = params.column
-        res = detect_anomalies(table[col].to_numpy(dtype=float), method=params.method, basis=params.basis)
+        vals, fin = _finite(table[col].to_numpy(dtype=float))
+        if "seri sabit" in fin:
+            return ToolResult.fail("INVALID_ARGS", f"'{col}' sabit seri: aykırılık tanımsız.", layer="data", retryable=False)
+        res = detect_anomalies(vals, method=params.method, basis=params.basis)
+        if params.basis == "auto" and has_non_positive(vals):
+            fin = fin + ["seride sıfır/negatif değer var: yüzde değişim tabanı kullanılmadı, düzey üzerinde bakıldı"]
+        elif res.basis == "change" and has_non_positive(vals):
+            fin = fin + ["seride sıfır/negatif değer var: işaret değiştiren dönemlerde yüzde değişim hesaplanmadı (boş)"]
         tcol, labels = _labels(table)
         flag_col, score_col = f"{col}_anomali", f"{col}_skor"
         desc = f"anomali({res.method}, {res.basis}, k={res.threshold:g}) {col}"
@@ -141,7 +241,8 @@ class AnomalyDetectTool(_AnalyticsTool):
             "trend_rho": [round(float(res.trend_rho), 2)]}))
         unit = "%" if res.basis == "change" else ""
         card = [
-            f"AYKIRILIK: {col} — yöntem {res.method} (k={res.threshold:g}) | taban: {_BASIS_TEXT[res.basis]} "
+            f"AYKIRILIK: {col} — yöntem {res.method} ({'Tukey çiti k=' if res.method == 'iqr' else '|z|>'}{res.threshold:g}) | taban: {_BASIS_TEXT[res.basis]} "
+            f"| zaman ekseni: {axis.frequency}" + (" (" + "; ".join(axis.notes + fin) + ")" if (axis.notes or fin) else " (düzenli)") + " "
             f"(trend rho={res.trend_rho:.2f}) | normal aralık: [{_fmt(res.lower)}{unit}, {_fmt(res.upper)}{unit}] | "
             f"n={int(np.sum(~np.isnan(res.analysed)))} | aykırı: {res.count}",
             f"Tabloya eklendi: {flag_col}, {score_col}" + (f", {col}_degisim_yuzde" if res.basis == "change" else "")
@@ -151,6 +252,8 @@ class AnomalyDetectTool(_AnalyticsTool):
             card.append("Aykırı dönemler (skora göre):\n" + rows.head(12).to_string(index=False))
         else:
             card.append("Aykırı gözlem yok: hiçbir değer normal aralığın dışına çıkmıyor.")
+        card.append("SINIRLAMA: betimsel ve tek değişkenli; aykırılık seçilen yöntem ve eşiğe bağlıdır, mevsimsellik ayrıştırılmaz, "
+                    "sebep göstermez.")
         card.append("YAPACAĞIN: aykırı dönemleri ve sayıları bu karttan aktar; sebep uydurma, veride sebep yok. "
                     "ARAÇ ÇAĞIRMAYI BIRAK, cevabını yaz.")
         return ToolResult(content="\n".join(card), data=updated)
@@ -180,11 +283,15 @@ class ChangePointsTool(_AnalyticsTool):
         return self._numeric(params.column)
 
     def run(self, params: ChangePointsParams) -> ToolResult:
-        table = self.workspace.table
-        assert table is not None
+        axis = self._axis()
+        if isinstance(axis, ToolResult):
+            return axis
+        table = axis.frame
         col = params.column
-        res = detect_change_points(table[col].to_numpy(dtype=float), basis=params.basis,
-                                   min_size=params.min_size, max_breaks=params.max_breaks)
+        vals, fin = _finite(table[col].to_numpy(dtype=float))
+        if "seri sabit" in fin:
+            return ToolResult.fail("INVALID_ARGS", f"'{col}' sabit seri: kırılma tanımsız.", layer="data", retryable=False)
+        res = detect_change_points(vals, basis=params.basis, min_size=params.min_size, max_breaks=params.max_breaks)
         tcol, labels = _labels(table)
         regime = np.zeros(len(table), dtype=int)
         for j, seg in enumerate(res.segments, start=1):
@@ -210,17 +317,22 @@ class ChangePointsTool(_AnalyticsTool):
             "min_size": [params.min_size], "max_breaks": [params.max_breaks], "trend_rho": [round(float(res.trend_rho), 2)]}))
         card = [
             f"KIRILMA: {col} — ikili bölütleme | taban: {_BASIS_TEXT[res.basis]} (trend rho={res.trend_rho:.2f}) | "
-            f"n={int(np.sum(~np.isnan(res.analysed)))} | kırılma: {len(res.breaks)}",
+            f"n={int(np.sum(~np.isnan(res.analysed)))} | kırılma: {len(res.breaks)} | min segment {params.min_size}, "
+            f"en çok {params.max_breaks} kırılma, ceza 2·log(n)·σ² = {res.penalty:.4g} | zaman ekseni: {axis.frequency}"
+            + (" (" + "; ".join(axis.notes + fin) + ")" if (axis.notes or fin) else ""),
             f"Tabloya eklendi: {col}_rejim; tablo bozulmadı ({len(updated)} satır).",
         ]
         if res.breaks:
             for k, b in enumerate(res.breaks):
                 before, after = res.segments[k], res.segments[k + 1]
-                card.append(f"kırılma {k + 1}: {labels[b]} — önceki rejim ortalaması {_fmt(before.mean)}{unit} "
+                jump = (f"düzey sıçraması (tek dönem değişimi {res.analysed[b]:+.1f}%, rejim ortalamalarına katılmadı); "
+                        if b in res.jumps else "")
+                card.append(f"kırılma {k + 1}: {labels[b]} — {jump}önceki rejim ortalaması {_fmt(before.mean)}{unit} "
                             f"({before.n} gözlem) → sonraki {_fmt(after.mean)}{unit} ({after.n} gözlem)")
             card.append("Rejimler:\n" + segs.to_string(index=False))
         else:
             card.append("Kırılma yok: tek rejim, ortalama " + _fmt(res.segments[0].mean if res.segments else float("nan")) + unit)
+        card.append("SINIRLAMA: betimsel ve tek değişkenli; kırılma yerleri ceza ve en az bölüt ayarına bağlıdır, sebep göstermez; kısa seride (n<2·min segment) kırılma aranmaz.")
         card.append("YAPACAĞIN: kırılma tarihlerini ve rejim ortalamalarını bu karttan aktar; sebep uydurma. "
                     "ARAÇ ÇAĞIRMAYI BIRAK, cevabını yaz.")
         return ToolResult(content="\n".join(card), data=updated)
@@ -253,11 +365,18 @@ class LeadLagTool(_AnalyticsTool):
         return self._numeric(params.column_a) or self._numeric(params.column_b)
 
     def run(self, params: LeadLagParams) -> ToolResult:
-        table = self.workspace.table
-        assert table is not None
+        axis = self._axis()
+        if isinstance(axis, ToolResult):
+            return axis
+        table = axis.frame
         a, b = params.column_a, params.column_b
-        res = lead_lag(table[a].to_numpy(dtype=float), table[b].to_numpy(dtype=float),
-                       max_lag=params.max_lag, basis=params.basis)
+        va, fa = _finite(table[a].to_numpy(dtype=float))
+        vb, fb = _finite(table[b].to_numpy(dtype=float))
+        if "seri sabit" in fa or "seri sabit" in fb:
+            return ToolResult.fail("INVALID_ARGS", "Sabit seride ilişki tanımsız.", layer="data", retryable=False)
+        n_pairs = int((~(np.isnan(va) | np.isnan(vb))).sum())
+        max_lag, cap_note = lag_cap(n_pairs, params.max_lag)
+        res = lead_lag(va, vb, max_lag=max_lag, basis=params.basis)
         # r iki ondalık: model kartı olduğu gibi kopyalar, kanıt paneli birebir bulur (ölçüldü: 0.263 → "yok").
         lag_df = pd.DataFrame({"gecikme": res.lags, "r": [round(r, 2) if r == r else float("nan") for r in res.correlations]})
         self.workspace.note_peek(f"lead_lag({a},{b})", lag_df)
@@ -267,9 +386,9 @@ class LeadLagTool(_AnalyticsTool):
                                    layer="data", retryable=False)
         k = res.best_lag
         if k > 0:
-            lead_text = f"{a}, {b}'den {k} dönem ÖNCE hareket ediyor (A öncü)"
+            lead_text = f"{a}, {b}'den {k} {axis.period_word} ÖNCE hareket ediyor (A öncü)"
         elif k < 0:
-            lead_text = f"{b}, {a}'dan {-k} dönem ÖNCE hareket ediyor (B öncü)"
+            lead_text = f"{b}, {a}'dan {-k} {axis.period_word} ÖNCE hareket ediyor (B öncü)"
         else:
             lead_text = "aynı dönemde birlikte hareket ediyorlar (gecikme 0)"
         strength = "güçlü" if abs(res.best_r) >= 0.7 else "orta" if abs(res.best_r) >= 0.4 else "zayıf"
@@ -280,16 +399,19 @@ class LeadLagTool(_AnalyticsTool):
         if len(g_df):
             self.workspace.note_peek(f"granger({a},{b})", g_df)
         self.workspace.note_peek(f"lead_lag({a},{b}) parametreler", pd.DataFrame({
-            "n": [res.n], "en_guclu_gecikme": [k], "r": [round(res.best_r, 2)], "max_lag": [params.max_lag],
+            "n": [res.n], "en_guclu_gecikme": [k], "r": [round(res.best_r, 2)], "max_lag": [max_lag],
             "p_esik": [0.05]}))   # "p < 0,05" anlamlılık eşiği de kartın sayısıdır (ölçüldü, G17)
         card = [
             f"ÖNCÜL-ARDIL: A={a}, B={b} — taban: {_BASIS_TEXT[res.basis]} | n={res.n} ortak gözlem "
-            f"({len(table)} satır) | gecikme aralığı ±{params.max_lag}",
+            f"({len(table)} satır) | gecikme aralığı ±{max_lag} {axis.period_word} | zaman ekseni: {axis.frequency}"
+            + (" (" + "; ".join(axis.notes + fa + fb + ([cap_note] if cap_note else [])) + ")"
+               if (axis.notes or fa or fb or cap_note) else ""),
             f"En güçlü ilişki: gecikme {k:+d}, r={res.best_r:.2f} ({strength}); {lead_text}.",
             "Gecikme tablosu (pozitif: A önce):\n" + lag_df.to_string(index=False),
         ]
         if len(g_df):
-            card.append("Granger öncüllük testi (p<0,05: öncülük istatistiksel olarak anlamlı):\n" + g_df.to_string(index=False))
+            card.append("Granger öncüllük testi (p<0,05: öncülük istatistiksel olarak anlamlı; ön koşullar — durağanlık, "
+                        "gecikme seçimi, çoklu deneme düzeltmesi — KONTROL EDİLMEDİ, sonuç betimseldir):\n" + g_df.to_string(index=False))
         else:
             card.append("Granger testi: yeterli gözlem yok.")
         card.append("Bu bir öncülük/eşzamanlılık ölçüsüdür, NEDENSELLİK DEĞİLDİR. YAPACAĞIN: 'öncülük ediyor / "

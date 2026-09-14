@@ -179,7 +179,8 @@ def test_ikinci_denemede_de_dogrulanamayan_sayi_isaretlenir() -> None:
 
     answer = agent.ask("2025'te ne oldu?")
 
-    assert "doğrulanamadı" in answer.text
+    # D02 (ADR-0066): uyarıyla korunmaz; doğrulanamayan sayı cevaptan çıkar, geriye anlam kalmazsa dürüst sınır mesajı.
+    assert "10,5" not in answer.text and answer.rejected_claims and "üretemedim" in answer.text
     assert answer.grounding.startswith("MISS")
 
 
@@ -428,3 +429,276 @@ def test_architect_katalogu_degistirince_profil_yeniden_turetilir() -> None:
     assert registry.profile is agent.profile, "araç açıklamaları da yeni profili görür"
     agent.ask("bir daha terfi et")
     assert agent.profile.domain == "hastane kaynaklı veriler", "her katalog değişiminde yeniden türetilir"
+
+
+def test_arac_cagrilmadan_islem_iddiasi_geri_gonderilir() -> None:
+    class _SeeingLLM(_ScriptedLLM):
+        def __init__(self, turns):
+            super().__init__(turns); self.users: list[list[str]] = []
+
+        def chat(self, messages, *, tools=None, temperature=0.0, max_tokens=None):
+            self.users.append([m.content for m in messages if m.role == "user"])
+            return super().chat(messages, tools=tools, temperature=temperature, max_tokens=max_tokens)
+
+    llm = _SeeingLLM([LLMResponse(content="Dosya yüklendi ve birleştirildi; 24 il eşleşti."), LLMResponse(content="Dosyayı okuyamadım.")])
+    agent, tool = _agent(llm)
+    agent.workspace.set_table(pd.DataFrame({"a": [1, 2]}), description="önceki tur")
+    ans = agent.ask("Hastane dosyasını yükle ve birleştir.\n\nDosya: /tmp/x.csv")
+    assert any("HİÇBİR ARAÇ ÇALIŞMADI" in u for u in llm.users[-1]), "iddia modele geri gönderildi"
+    assert any(s.role == "validate" and "işlem iddiası" in (s.thought or "") for s in ans.steps)
+    assert ans.text == "Dosyayı okuyamadım."
+
+
+def test_cok_kisa_donemsiz_soruda_netlestirme_notu() -> None:
+    from types import SimpleNamespace
+    from kkb_agent.core.agent import vague_candidates
+
+    specs = [SimpleNamespace(name=n) for n in ("Krediler (Toplam)", "Tüketici Kredileri, Toplam", "Konut Kredisi, ANKARA (Sektör)", "Konut Kredisi, İZMİR", "Kredi Kartları")]
+    search = lambda q, k: specs
+    assert vague_candidates("Kredi bakiyesini göster", search) == ["Krediler", "Tüketici Kredileri", "Konut Kredisi", "Kredi Kartları"]
+    assert vague_candidates("2025 kredi bakiyesi", search) == [], "dönem varsa kapı yok"
+    assert vague_candidates("Konut kredisi bakiyesi aylık", search) == []
+    assert vague_candidates("Konut kredisi bakiyesi göster", search) == [], "3 içerik sözcüğü: yeterince belirli"
+    assert vague_candidates("Kredi göster", lambda q, k: specs[:2]) == [], "iki aday: soru sormaya değmez"
+
+
+def test_a27_model_kesintisi_kontrollu_cevap_sayi_yok_istek_hatasi_yutulmaz() -> None:
+    """A27: bağlantı/5xx kesintisi açıklamalı cevap olur (sahte başarı, uydurma sayı yok); 400 isteği hatası yukarı çıkar."""
+    import httpx
+    from openai import APIConnectionError, BadRequestError, InternalServerError
+
+    req = httpx.Request("POST", "http://mia.local/v1/chat/completions")
+
+    class _Down:
+        model = "down"
+
+        def __init__(self, exc):
+            self.exc = exc
+
+        def supports_native_tools(self) -> bool:
+            return True
+
+        def chat(self, messages, *, tools=None, temperature=0.0, max_tokens=None):
+            raise self.exc
+
+    for exc in (APIConnectionError(request=req),
+                InternalServerError("bakımda", response=httpx.Response(503, request=req), body=None)):
+        agent, tool = _agent(_Down(exc))
+        ans = agent.ask("2025 konut kredisi ne kadar?")
+        assert "ulaşılamıyor" in ans.text and "Sayı üretmedim" in ans.text
+        assert ans.steps[-1].error_code == "LLM_UNAVAILABLE" and tool.calls == 0
+        assert not any(ch.isdigit() for ch in ans.text.split("(")[0]), "kesinti cevabında sayı yok"
+
+    agent, _ = _agent(_Down(BadRequestError("şema", response=httpx.Response(400, request=req), body=None)))
+    with pytest.raises(BadRequestError):
+        agent.ask("x")
+
+
+def test_l10_kisa_belirsiz_soruda_llm_cagrilmadan_netlestirme_ve_yanitta_kapi_susar() -> None:
+    from types import SimpleNamespace
+
+    class _Search(Tool):
+        name = "lakehouse_search"
+        description = "arama"
+        Params = _Params
+
+        def __init__(self) -> None:
+            names = ("Krediler (Toplam)", "Tüketici Kredileri, Toplam", "Konut Kredisi, ANKARA", "Kredi Kartları")
+            self.lakehouse = SimpleNamespace(search_datasets=lambda q, limit=5: [SimpleNamespace(name=n) for n in names])
+
+        def run(self, params):
+            return ToolResult(content="-")
+
+    llm = _ScriptedLLM([LLMResponse(content="Konut kredisi tablosu hazır.")])
+    agent, _ = _agent(llm)
+    agent.registry.register(_Search())
+    ans = agent.ask("Kredi bakiyesini göster.")
+    assert llm.seen_tool_offers == [], "LLM çağrılmadı"
+    assert ans.text.rstrip().endswith("?") and "- Tüketici Kredileri" in ans.text and ans.steps[0].candidates
+    agent.ask("Konut kredisi")            # bizim soruya kısa yanıt: kapı susar, model çalışır
+    assert llm.seen_tool_offers, "bekleyen soruya yanıt modele gitti"
+
+
+def test_grafik_istegi_tablo_varken_aracsiz_retle_bitmez() -> None:
+    """M16 üçüncü koşu: 'karşılaştırmalı grafik' turunda model chart'ı hiç çağırmadan 'çizilemez' yazdı; bu turda veri
+    üretilmediği için grafik zorunluluğu susuyordu. Tablo varken de bir kez geri gönderilir."""
+
+    class _Chart(Tool):
+        name = "chart"
+        description = "grafik"
+        Params = _Params
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def run(self, params):
+            self.calls += 1
+            return ToolResult(content="GRAFİK: çizildi")
+
+    llm = _ScriptedLLM([
+        LLMResponse(content="Seriler farklı birimde olduğu için grafik çizilemez."),
+        LLMResponse(content="", tool_calls=[ToolCall(id="g1", name="chart", arguments={"year": 2025})]),
+        LLMResponse(content="Grafik hazır."),
+    ])
+    agent, _ = _agent(llm)
+    chart = _Chart()
+    agent.registry.register(chart)
+    agent.workspace.set_table(pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]}), description="önceki tur")
+    ans = agent.ask("Bunu bana karşılaştırmalı grafik olarak göster.")
+    assert chart.calls == 1 and ans.text == "Grafik hazır."
+
+
+def test_aracsiz_turda_tabloda_olmayan_sayilar_geri_gonderilir() -> None:
+    """M16 beşinci koşu: 'faiz düşerken kredi artmayan dönemler' turunda model hiç araç çağırmadan farklar ve yıllarca
+    tekrarlanan uydurma satırlar yazdı. Aktif tabloda olmayan ≥2 sayı + araçsız tur → bir kez geri gönderilir."""
+    from kkb_agent.core.agent import unverified_numbers
+
+    class _SeeingLLM(_ScriptedLLM):
+        def __init__(self, turns):
+            super().__init__(turns); self.users: list[list[str]] = []
+
+        def chat(self, messages, *, tools=None, temperature=0.0, max_tokens=None):
+            self.users.append([m.content for m in messages if m.role == "user"])
+            return super().chat(messages, tools=tools, temperature=temperature, max_tokens=max_tokens)
+
+    llm = _SeeingLLM([
+        LLMResponse(content="Şubat 2021: faiz −0,403 puan, bakiye −522 milyon TL; Mayıs: −1.196."),
+        LLMResponse(content="", tool_calls=[_call(1)]),
+        LLMResponse(content="Tablo hazır."),
+    ])
+    agent, tool = _agent(llm)
+    agent.workspace.set_table(pd.DataFrame({"faiz": [18.388, 17.985], "bakiye": [276785.0, 276263.0]}), description="önceki tur")
+    ans = agent.ask("Faiz düşerken bakiyenin artmadığı aylar var mı?")
+    assert tool.calls == 1 and ans.text.startswith("Tablo hazır")
+    assert any("aktif tabloda yok" in u and "−0,403" in u.replace("-", "−") for u in llm.users[1])
+    # Tablodaki sayıları yorumlayan araçsız cevap geri gönderilmez (farklı işaretle yazılmış mutlak değer de sayılır).
+    assert unverified_numbers("Bakiye 276.263 ve 276.785 milyon TL; faiz 17,99.", agent.workspace.table) == []
+    assert unverified_numbers("2021 ve 2025 arasında 12 ay.", agent.workspace.table) == []
+
+
+# ---------------------------------------------------------------- D02 (ADR-0066): güvenilir son çıkış
+class _MonthsTool(Tool):
+    """Ocak=100, Aralık=110 döndüren veri aracı (bağımsız kontrolün R02 düzeneği)."""
+
+    name = "lakehouse_query"
+    description = "test"
+    Params = _Params
+
+    def __init__(self, workspace) -> None:
+        self.workspace = workspace
+        self.calls = 0
+
+    def run(self, params):
+        self.calls += 1
+        frame = pd.DataFrame({"donem": ["2025-01", "2025-12"], "bakiye": [100.0, 110.0]})
+        self.workspace.set_table(frame, description="bakiye")
+        return ToolResult(content="donem  bakiye\n2025-01  100\n2025-12  110", data=frame)
+
+
+def _months_agent(turns, max_steps=10):
+    llm = _ScriptedLLM(turns)
+    ws = AnalysisWorkspace()
+    registry = ToolRegistry()
+    tool = _MonthsTool(ws)
+    registry.register(tool)
+    return AnalyticsAgent(llm=llm, registry=registry, workspace=ws, max_steps=max_steps), tool, llm
+
+
+def test_d02_model_her_tur_999_dese_de_nihai_cevap_999_tasimaz() -> None:
+    agent, tool, llm = _months_agent([LLMResponse(content="", tool_calls=[_call(1)]),
+                                       LLMResponse(content="Aralık bakiyesi 999 milyon TL.")])
+    ans = agent.ask("2025 aralık bakiyesi ne kadar?")
+    assert "999" not in ans.text, ans.text
+    assert "110" in ans.text and "güvenilir bir açıklama üretemedim" in ans.text
+    assert ans.rejected_claims == ["Aralık bakiyesi 999 milyon TL."]
+    assert len(llm.seen_tool_offers) == 4, "1 araç turu + ilk cevap + 2 geri gönderme; son çıkış yeni model çağrısı yapmaz"
+    narrate = [s for s in ans.steps if s.role != "validate"]
+    assert not any("999" in (s.thought or "") + (s.result_summary or "") for s in narrate), "anlatı adımı sayıyı taşımaz"
+    assert all(s.thought.startswith("grounding: MISS") for s in ans.steps if "999" in (s.thought or "")), \
+        "sayı yalnız etiketli ret kaydında (T03: ayrı iz kaydı)"
+    assert all("999" not in m.content for m in agent._history), "kaydedilen sohbet de temiz"
+
+
+def test_d02_dogru_cumle_kalir_yalniz_yanlis_birim_cikar() -> None:
+    text = ("Ocak bakiyesi 100 milyon TL idi ve yıl boyunca istikrarlı biçimde yükseldi. Aralık bakiyesi 999 milyon TL oldu.\n\n"
+            "| Ay | Bakiye |\n|---|---|\n| Ocak | 100 |\n| Aralık | 999 |")
+    agent, _, _ = _months_agent([LLMResponse(content="", tool_calls=[_call(1)]), LLMResponse(content=text)])
+    ans = agent.ask("2025 bakiyesi nasıl değişti?")
+    assert "999" not in ans.text and "Ocak bakiyesi 100 milyon TL" in ans.text and "| Ocak | 100 |" in ans.text
+    assert "doğrulanamayan 2 ifade cevaptan çıkarıldı" in ans.text
+
+
+def test_d02_dogru_ve_yuvarlanmis_cevap_degismez() -> None:
+    agent, _, llm = _months_agent([LLMResponse(content="", tool_calls=[_call(1)]),
+                                    LLMResponse(content="Aralık bakiyesi 110,0 milyon TL; Ocak'a göre %10 arttı.")])
+    ans = agent.ask("2025 aralık bakiyesi?")
+    assert ans.rejected_claims == [] and "110,0" in ans.text and len(llm.seen_tool_offers) == 2
+
+
+def test_d02_adim_limiti_yolunda_da_uygulanir() -> None:
+    turns = [LLMResponse(content="", tool_calls=[ToolCall(id=f"c{i}", name="lakehouse_query", arguments={"year": 2000 + i})]) for i in range(3)]
+    turns.append(LLMResponse(content="Aralık bakiyesi 999 milyon TL."))
+    agent, _, _ = _months_agent(turns, max_steps=3)
+    ans = agent.ask("2025 aralık bakiyesi?")
+    assert ans.hit_step_limit and "999" not in ans.text and ans.rejected_claims
+
+
+def test_d02_arac_cagirmadan_onceki_tablodan_yanlis_tek_sayi_gecmez() -> None:
+    llm = _ScriptedLLM([LLMResponse(content="Aralık 999 oldu."), LLMResponse(content="Aralık 999 oldu.")])
+    agent, _ = _agent(llm)
+    agent.workspace.set_table(pd.DataFrame({"donem": ["2025-01", "2025-12"], "bakiye": [100.0, 110.0]}), description="önceki tur")
+    ans = agent.ask("Aralıkta ne oldu?")
+    assert "999" not in ans.text and "110" in ans.text, ans.text
+    ok = _agent(_ScriptedLLM([LLMResponse(content="Aralıkta bakiye 110 idi.")]))[0]
+    ok.workspace.set_table(pd.DataFrame({"bakiye": [100.0, 110.0]}), description="önceki tur")
+    assert ok.ask("Aralıkta ne oldu?").text == "Aralıkta bakiye 110 idi.", "tablodaki sayıyla yorum geçer"
+
+
+def test_k02_t10_sure_butcesi_dolunca_sinir_deterministik_yazilir() -> None:
+    llm = _ScriptedLLM([LLMResponse(content="Şu ana kadar bulduklarım kısmi.")])
+    registry = ToolRegistry()
+    tool = _CountingTool()
+    registry.register(tool)
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=10, time_budget_s=1e-9)
+    ans = agent.ask("2025 konut kredisi ne kadar?")
+    assert ans.hit_step_limit and "süre bütçesi" in ans.text and "tamamlanmayan adımlar yapılmadı" in ans.text
+    assert tool.calls == 0
+
+
+def test_k02_t07_erisilemeyen_kaynaktan_sonra_kullanilan_kaynak_adlandirilir() -> None:
+    """A18: a.example 404 verdi, veriler b.example'dan alındı; cevap kaynağı anmıyorsa deterministik kaynak notu eklenir."""
+
+    class _WebParams(BaseModel):
+        url: str
+
+    class _Web(Tool):
+        name = "web_url"
+        description = "web"
+        Params = _WebParams
+
+        def __init__(self, ws):
+            self.ws = ws
+
+        def run(self, params):
+            if "a.example" in params.url:
+                # Gerçek web_url ile aynı yol: erişim sonucu → karar → hata zarfı (kaynak serbest: tur bitmez).
+                from kkb_agent.core.access_policy import classify_access, decide, detect_source_constraint, to_tool_error
+                outcome = classify_access(params.url, http_status=404, environ={})
+                err = to_tool_error(outcome, decide(outcome, detect_source_constraint("2025 değerini bul")))
+                return ToolResult(content=err.render(), ok=False, error=err)
+            self.ws.set_table(pd.DataFrame({"yil": [2025], "deger": [42.0]}), description="b")
+            return ToolResult(content="TABLO YÜKLENDİ\n42", artifacts={"web": {"start_url": params.url, "used": params.url, "visited": [], "blocked": []}})
+
+    def run(final_text):
+        llm = _ScriptedLLM([LLMResponse(content="", tool_calls=[ToolCall(id="w1", name="web_url", arguments={"url": "https://www.a.example/veri"})]),
+                            LLMResponse(content="", tool_calls=[ToolCall(id="w2", name="web_url", arguments={"url": "https://b.example/tablo"})]),
+                            LLMResponse(content=final_text)])
+        ws = AnalysisWorkspace()
+        reg = ToolRegistry()
+        reg.register(_Web(ws))
+        return AnalyticsAgent(llm=llm, registry=reg, workspace=ws, max_steps=6).ask("2025 değerini bul")
+
+    silent = run("2025 değeri 42.")
+    assert "Kaynak notu: a.example adresine erişilemedi; veriler b.example kaynağından alındı." in silent.text
+    named = run("2025 değeri 42 (kaynak: b.example).")
+    assert "Kaynak notu" not in named.text, "cevap kaynağı zaten adlandırıyorsa not eklenmez"

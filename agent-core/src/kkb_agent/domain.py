@@ -117,10 +117,18 @@ class DomainProfile:
         # olan tablo, alanı en iyi temsil eden tablodur.
         spec = max(datasets, key=lambda s: len(s.columns))
 
-        sources = sorted({s.source for s in datasets if s.source})
-        derived_domain = domain or (
-            f"{' ve '.join(sources)} kaynaklı veriler" if sources else cls.domain
-        )
+        # Kullanıcı geri bildirimi (14 Eyl, ADR-0078): "hangi veri setlerine sahipsin" sorusunda Gold anlatılıyordu; Gold ve
+        # kullanıcı yüklemesi (adhoc) kaynaktan türetilmiş katmandır. Alan adı birincil kaynaklardan ve okunur adlarla kurulur;
+        # yalnız türetilmiş katman varsa (boş katalogdan yeni alan) onun kimliği kullanılır.
+        from .source_hints import load_source_hints
+
+        hints = load_source_hints()
+        names, derived = hints.get("source_names", {}), set(hints.get("derived_sources", ()))
+        all_sources = sorted({s.source for s in datasets if s.source})
+        primary = [x for x in all_sources if x not in derived] or all_sources
+        labels = list(dict.fromkeys(names.get(x, x) for x in primary))
+        joined = labels[0] if len(labels) == 1 else ", ".join(labels[:-1]) + " ve " + labels[-1] if labels else ""
+        derived_domain = domain or (f"{joined} kaynaklı veriler" if labels else cls.domain)
 
         measures = [c for c in spec.columns if c.role == ColumnRole.MEASURE]
         dimensions = [c for c in spec.columns if c.role == ColumnRole.DIMENSION]

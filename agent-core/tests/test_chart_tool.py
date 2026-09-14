@@ -158,3 +158,35 @@ def test_gold_join_kolonlari_onekten_birim_ve_etiket_alir(env) -> None:
     assert "Konut Kredisi (milyon TL)" in spec["layer"][0]["encoding"]["y"]["title"]  # katalog adı + birim
     assert UNIT_UNKNOWN in spec["layer"][1]["encoding"]["y"]["title"]              # KTF12 sahte katalogda yok
     assert spec["layer"][0]["encoding"]["x"]["timeUnit"] == "yearmonth"
+
+
+def test_farkli_birimli_iki_seri_ilk_donem_100e_cevrilir_cift_eksen_acilmaz(env) -> None:
+    """M16 kabul bulgusu: 'karşılaştırmalı grafik' L9'a takılıyordu; harness endeksler, model iş yapmaz."""
+    tool, ws, _ = env
+    prov = QueryProvenance(sql="gold-run join_on_period(...)", dataset_ids=["bddk_monthly:konut", "evds:TP.KTF12"], sources=["gold — join"])
+    ws.set_table(pd.DataFrame({
+        "period_end": [date(2025, 2, 28), date(2025, 1, 31)],
+        "bddk_monthly:konut@bddk:10001::value": [110.0, 100.0],
+        "evds:TP.KTF12::value": [39.5, 40.0],
+    }), description="join", provenance=prov)
+    r = tool.validate_and_run({"chart_type": "line", "y_columns": ["bddk_monthly:konut@bddk:10001::value", "evds:TP.KTF12::value"],
+                               "title": "Bakiye ve faiz"})
+    assert r.ok, r.content
+    art = r.artifacts["chart"]
+    assert art["lint_ok"] and art["rebased_to_100"]
+    assert "ilk döneminde 100" in r.content and "98.75" in r.content and "110.0" in r.content
+    spec = json.loads(Path(art["spec_path"]).read_text(encoding="utf-8"))
+    assert "layer" not in spec or all("y" not in (l.get("resolve") or {}) for l in spec.get("layer", []))
+    assert "100" in json.dumps(spec, ensure_ascii=False)
+
+
+def test_ilk_degeri_sifir_olan_seride_endeksleme_yapilmaz(env) -> None:
+    tool, ws, _ = env
+    prov = QueryProvenance(sql="gold-run", dataset_ids=["bddk_monthly:konut"], sources=["gold"])
+    ws.set_table(pd.DataFrame({
+        "period_end": [date(2025, 1, 31), date(2025, 2, 28)],
+        "bddk_monthly:konut@bddk:10001::value": [100.0, 110.0],
+        "evds:TP.KTF12::value": [0.0, 39.5],
+    }), description="join", provenance=prov)
+    r = tool.validate_and_run({"chart_type": "line", "y_columns": ["bddk_monthly:konut@bddk:10001::value", "evds:TP.KTF12::value"], "title": "t"})
+    assert not r.ok and "dual_axis=true" in (r.error.hint or "")

@@ -312,3 +312,21 @@ def test_arama_sonuclari_onayli_adres_olur() -> None:
             return SimpleNamespace(status_code=200, json=lambda: {"results": [{"title": "t", "url": "https://tuik.example/tufe", "content": "c"}]})
     WebSearchTool(TavilySearch(environ={"TAVILY_API_KEY": "k"}, session=S()), registry=reg).validate_and_run({"query": "enflasyon"})
     assert reg.sanctioned_locators == {"https://tuik.example/tufe"}
+
+
+def test_k02_t10_tavily_http_hatasi_ve_baglanti_kopmasi_kontrollu_doner() -> None:
+    """A27: arama sağlayıcısı 503/429 dönerse ya da bağlantı koparsa sahte başarı yok; erişim zarfı ve sebep döner."""
+    for status, reason in ((503, "unreachable"), (429, "rate_limited")):
+        class S:
+            def post(self, url, json=None, headers=None, timeout=None, _s=status):
+                return SimpleNamespace(status_code=_s, json=lambda: {})
+        tool = WebSearchTool(TavilySearch(environ={"TAVILY_API_KEY": "k"}, session=S(), budget=3))
+        r = tool.validate_and_run({"query": "2025 enflasyon"})
+        assert not r.ok and r.error.error_code == "ACCESS_BLOCKED" and r.error.layer == "access" and reason in r.content, (status, r.content)
+        assert not r.error.is_retryable and "k" not in r.content.split()
+
+    class Broken:
+        def post(self, *a, **k):
+            raise ConnectionError("bağlantı koptu")
+    r = WebSearchTool(TavilySearch(environ={"TAVILY_API_KEY": "k"}, session=Broken(), budget=3)).validate_and_run({"query": "enflasyon"})
+    assert not r.ok and r.error.error_code == "ACCESS_BLOCKED" and "unreachable" in r.content

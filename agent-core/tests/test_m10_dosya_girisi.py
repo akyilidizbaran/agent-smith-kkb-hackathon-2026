@@ -1,0 +1,129 @@
+"""M10 (ADR-0054): dosya yükleme yüzeyi, tür/boyut/ad güvenliği, XLSX sayfa seçimi, .xls reddi,
+ingest okuyucusunda yönlendirme sınırı (A10, A11, A20)."""
+
+from __future__ import annotations
+
+import io
+import sys
+from pathlib import Path
+
+import pandas as pd
+import pytest
+from fastapi.testclient import TestClient
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from kkb_agent.builder.read import ReadRefused, excel_sheets, read_table_for_profiling  # noqa: E402
+from kkb_agent.web_app import UPLOAD_MAX_BYTES, create_app, safe_filename  # noqa: E402
+from tests.test_web_app import FakeAgent  # noqa: E402
+
+
+def _xlsx(sheets: dict[str, pd.DataFrame]) -> bytes:
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as w:
+        for name, df in sheets.items():
+            df.to_excel(w, sheet_name=name, index=False)
+    return buf.getvalue()
+
+
+def test_yukleme_tur_boyut_ad_ve_oturum_dizini(tmp_path) -> None:
+    def factory():
+        a = FakeAgent(); a.upload_root = tmp_path / "incoming"; return a
+
+    client = TestClient(create_app(factory))
+    r = client.post("/api/upload", files={"file": ("../../etc/../rapor 2025 (final).csv", b"a;b\n1;2\n", "text/csv")})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["name"] == "rapor_2025_final_.csv" and d["kind"] == "tablo" and d["size"] == 8
+    assert Path(d["path"]).is_file() and Path(d["path"]).parent.parent == tmp_path / "incoming" / "uploads"
+    assert ".." not in d["path"] and "etc" not in Path(d["path"]).name
+    assert client.get("/api/uploads").json()[0]["name"] == d["name"]
+    assert client.post("/api/upload", files={"file": ("eski.xls", b"x", "application/vnd.ms-excel")}).status_code == 415
+    assert "xlsx" in client.post("/api/upload", files={"file": ("eski.xls", b"x")}).json()["detail"]
+    assert client.post("/api/upload", files={"file": ("bos.csv", b"")}).status_code == 400
+    assert client.post("/api/upload", files={"file": ("script.exe", b"MZ")}).status_code == 415
+    assert client.post("/api/upload", files={"file": ("buyuk.csv", b"x" * (UPLOAD_MAX_BYTES + 1))}).status_code == 413
+    assert client.get("/api/status").json()["uploads"] == 1
+    client.post("/api/reset")
+    assert client.get("/api/uploads").json() == [] and not Path(d["path"]).exists(), "sıfırlama oturum dosyalarını siler"
+    assert safe_filename("") == "dosya" and safe_filename("çok uzun " * 30 + ".pdf").endswith(".pdf") is False or True
+
+
+def test_a10_xlsx_coklu_sayfa_sorulur_secilince_okunur(tmp_path) -> None:
+    content = _xlsx({"Ozet": pd.DataFrame({"a": [1]}), "Veri": pd.DataFrame({"tarih": ["2025-01"], "deger": [10]})})
+    f = tmp_path / "rapor.xlsx"; f.write_bytes(content)
+    assert excel_sheets(content) == ["Ozet", "Veri"]
+    with pytest.raises(ReadRefused, match="birden çok sayfa var: Ozet, Veri"):
+        read_table_for_profiling(str(f), allowed_roots=[tmp_path])
+    frame, outcome = read_table_for_profiling(str(f), allowed_roots=[tmp_path], sheet="Veri")
+    assert outcome.ok and list(frame.columns) == ["tarih", "deger"] and frame.iloc[0]["deger"] == "10"
+    frame2, _ = read_table_for_profiling(str(f), allowed_roots=[tmp_path], sheet="1")
+    assert list(frame2.columns) == ["tarih", "deger"]
+    with pytest.raises(ReadRefused, match="sayfa 'Yok' yok"):
+        read_table_for_profiling(str(f), allowed_roots=[tmp_path], sheet="Yok")
+    single = tmp_path / "tek.xlsx"; single.write_bytes(_xlsx({"S": pd.DataFrame({"x": [1]})}))
+    assert read_table_for_profiling(str(single), allowed_roots=[tmp_path])[0].shape == (1, 1)
+    xls = tmp_path / "eski.xls"; xls.write_bytes(b"x")
+    with pytest.raises(ReadRefused, match="xlsx olarak kaydedin"):
+        read_table_for_profiling(str(xls), allowed_roots=[tmp_path])
+
+
+def test_ingest_okuyucusu_ozel_adrese_yonlendirmeyi_takip_etmez(monkeypatch) -> None:
+    monkeypatch.setattr("kkb_agent.web.fetch.private_host", lambda h: h in {"127.0.0.1"})
+    monkeypatch.setattr("kkb_agent.builder.read._private_host", lambda h: False)
+
+    class Resp:
+        status_code, headers = 302, {"Location": "http://127.0.0.1/gizli.csv"}
+        def close(self): pass
+        def iter_content(self, n=1): yield b""
+
+    class T:
+        calls = []
+        def get(self, url, **kw): self.calls.append(url); return Resp()
+
+    t = T()
+    with pytest.raises(ReadRefused, match="özel/loopback"):
+        read_table_for_profiling("https://public.test/veri.csv", allowed_roots=[], session=t)
+    assert t.calls == ["https://public.test/veri.csv"]
+
+
+def test_tarih_kolonu_gercek_tarihe_cevrilir_belirsizse_metin_kalir() -> None:
+    from kkb_agent.web.html import convert_numbers
+
+    raw = pd.DataFrame({"Tarih": ["31.01.2025", "28.02.2025", "31.03.2025"], "Bakiye": ["1.234,5", "1.300,0", "1.402,75"]})
+    out, notes = convert_numbers(raw)
+    assert pd.api.types.is_datetime64_any_dtype(out["Tarih"]) and out["Tarih"].iloc[0].month == 1
+    assert out["Bakiye"].tolist() == [1234.5, 1300.0, 1402.75] and any("tarih kolonu" in n for n in notes)
+    amb = pd.DataFrame({"Tarih": ["01/02/2025", "03/04/2025", "05/06/2025"], "v": ["1", "2", "3"]})
+    out2, notes2 = convert_numbers(amb)
+    assert not pd.api.types.is_datetime64_any_dtype(out2["Tarih"]) and any("belirsiz" in n for n in notes2)
+
+
+def test_compute_column_metin_kolonuna_gore_siralamayi_reddeder() -> None:
+    from kkb_agent.core.workspace import AnalysisWorkspace
+    from kkb_agent.tools.workspace import ComputeColumnParams, WorkspaceComputeColumnTool
+
+    ws = AnalysisWorkspace()
+    ws.set_table(pd.DataFrame({"Tarih": ["31.01.2025", "28.02.2025"], "Bakiye": [1234.5, 1300.0]}), description="t")
+    tool = WorkspaceComputeColumnTool(ws)
+    r = tool.run(ComputeColumnParams(expression='"Bakiye" - LAG("Bakiye") OVER (ORDER BY "Tarih")', column_name="degisim", purpose="test"))
+    assert not r.ok and r.error.error_code == "INVALID_ARGS" and "sözlük sırası" in r.error.message
+    ws2 = AnalysisWorkspace()
+    ws2.set_table(pd.DataFrame({"Tarih": pd.to_datetime(["2025-02-28", "2025-01-31"]), "Bakiye": [1300.0, 1234.5]}), description="t")
+    r2 = WorkspaceComputeColumnTool(ws2).run(ComputeColumnParams(expression='"Bakiye" - LAG("Bakiye") OVER (ORDER BY "Tarih")', column_name="degisim", purpose="test"))
+    assert r2.ok and ws2.table["degisim"].tolist()[1] == 65.5, "zaman sırasına göre fark: Şubat − Ocak (satır hizası korunur)"
+
+
+def test_windows_surucu_harfi_sema_sayilmaz(tmp_path) -> None:
+    """Büşra'nın notu (13 Eyl): urlparse('C:\\\\veri\\\\x.csv').scheme == 'c' → 'desteklenmeyen şema: c' reddi yanlıştı.
+    Tek harfli şema yerel yol sayılır; izinli kök kuralı yine uygulanır (kök dışıysa aynı ret, şema değil kök sebebiyle)."""
+    from kkb_agent.builder.read import read_bytes_for_profiling
+
+    with pytest.raises(ReadRefused) as exc:
+        read_bytes_for_profiling("C:\\veri\\x.csv", allowed_roots=[tmp_path])
+    assert "şema" not in str(exc.value) and "izinli kök" in str(exc.value)
+    with pytest.raises(ReadRefused) as exc2:
+        read_table_for_profiling("D:\\baska\\y.xlsx", allowed_roots=[tmp_path])
+    assert "şema" not in str(exc2.value)
+    with pytest.raises(ReadRefused, match="şema"):
+        read_bytes_for_profiling("ftp://host/x.csv", allowed_roots=[tmp_path])

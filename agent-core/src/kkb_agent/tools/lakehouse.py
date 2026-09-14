@@ -67,7 +67,9 @@ class LakehouseSearchTool(Tool):
                              "tanımlı ama henüz çekilmemiş olduğunu söyle. Yeniden arama yapma.")
             else:
                 lines.append("YAPACAĞIN: soruyu farklı sözcüklerle EN FAZLA bir kez daha ara; yine yoksa "
-                             "kullanıcıya bu verinin havuzda bulunmadığını söyle.")
+                             "kullanıcıya bu verinin havuzda bulunmadığını söyle. Birden çok kalemi birlikte "
+                             "aradıysan her kalemi TEK TEK ara: biri yoksa "
+                             "diğerleriyle devam et, eksik olanı cevapta belirt (M02 bulgusu L3-02).")
             if self._empty_streak >= self.EMPTY_LIMIT or pending:
                 self._empty_streak = 0
                 return ToolResult.fail(
@@ -252,10 +254,12 @@ class LakehouseQueryTool(Tool):
         bu — modele seçenek bırakmamak (ADR-0010). Mesajlar ADR-0017'deki gibi."""
         kapsam_disi_soru = self._soru_kapsam_disi()
         if kapsam_disi_soru:
+            can_fetch = callable(getattr(self._registry, "get", None)) and self._registry.get("ingest_source") is not None
             return ToolError(
                 error_code="OUT_OF_COVERAGE", message=kapsam_disi_soru,
                 hint="Bu dönem için sorgu çalıştırma. Kullanıcıya verinin hangi tarihe "
-                     "kadar yayımlandığını söyle; istersen mevcut son dönemi teklif et.",
+                     "kadar yayımlandığını söyle; istersen mevcut son dönemi teklif et."
+                     + (" Kullanıcı bu dönemi kaynağından çekmek isterse ingest_source ile çek, sonra sorgula." if can_fetch else ""),
                 layer="data",
             )
         if self.gold_available and self._is_period_aggregation(params.sql):
@@ -269,6 +273,18 @@ class LakehouseQueryTool(Tool):
                 hint="gold_align (tek seri) ya da gold_join (birden çok seri) çağır: target_frequency='monthly' "
                      "ya da 'quarterly', period_from/period_to ile dönem. Seri doğrulanmamışsa kullanıcının "
                      "onayı gerekir. Yıllık için gold_align aylık sonucu üzerinde workspace_query kullan.",
+            )
+        bayat = self._bayat_gold(params.sql)
+        if bayat:
+            # K02-T09 (A24): bayat Gold yalnız etiketlenmiyor. Etiketli uyarıyla dönen eski değer cevaba giriyordu;
+            # sorgu çalışmadan reddedilir, tablo kurulmaz.
+            return ToolError(
+                error_code="GOLD_STALE", layer="data", retryable=False,
+                message=(f"{', '.join(bayat)} bayat: Silver bu tablo kurulduktan sonra değişti; bu tablodan sayı verilmez."),
+                hint=("Aynı hesabı canlı Silver'dan gold_align / gold_join ile yeniden yap." if self.gold_available else
+                      "Kullanıcıya tablonun bayat olduğunu ve operatörün `python -m lakehouse gold` ile yeniden kurması "
+                      "gerektiğini söyle; eski değeri verme."),
+                candidates=bayat,
             )
         uyusmazlik = self._frekans_uyusmazligi(params.sql)
         if uyusmazlik:
@@ -284,6 +300,13 @@ class LakehouseQueryTool(Tool):
                 layer="policy",
             )
         return None
+
+    def _bayat_gold(self, sql: str) -> list[str]:
+        stale = getattr(self.lakehouse, "stale_gold_tables", None)
+        if not callable(stale):
+            return []
+        used = {m.lower() for m in re.findall(r"\bgold\.[a-z0-9_]+", sql or "", re.I)}
+        return [t for t in stale() if t.lower() in used]
 
     _ARALIK_SONRASI = re.compile(r"(19\d{2}|20\d{2})\s*'?\s*(?:den|dan|ten|tan)\s+(?:bu yana|beri|itibaren|sonra|günümüze|bugüne)|"
                                  r"(19\d{2}|20\d{2})\s+(?:başından|sonrası|ve sonrası)", re.I)
@@ -351,6 +374,10 @@ class LakehouseQueryTool(Tool):
                 result.data, description=params.purpose, provenance=result.provenance
             )
             self.workspace.title = params.purpose
+        else:
+            # K03 ekran provası bulgusu: bakış modunda (aktif tablo değişmez) dönen sonuç kanıt havuzuna girmiyordu; model faizleri
+            # bu sonuçtan doğru yazdı ("40,54" ← 40.536) ama panel "tabloda yok" dedi. workspace_query'deki gibi bakış kaydı.
+            self.workspace.note_peek(params.sql, result.data)
 
         # Modele TAM tablo değil, özet gider: context window'u koruyoruz.
         df = result.data

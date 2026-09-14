@@ -44,7 +44,7 @@ def test_status_ask_reset_dongusu() -> None:
         made.append(FakeAgent()); return made[-1]
 
     client = TestClient(create_app(factory))
-    assert "AgentSmithler" in client.get("/").text
+    assert "Agent Smith" in client.get("/").text
     s = client.get("/api/status").json()
     assert s["model"] == "sahte" and s["tool_gate"] is True and s["history"] == []
     r = client.post("/api/ask", json={"question": "2025 Aralık konut kredisi bakiyesi?"}).json()
@@ -58,10 +58,12 @@ def test_status_ask_reset_dongusu() -> None:
     assert client.get("/api/status").json()["history"] == []
 
 
-def test_tablo_serilestirme_nan_ve_kirpma() -> None:
-    frame = pd.DataFrame({"a": [1.0, float("nan")] + [3.0] * 300, "b": ["x", "y"] + ["z"] * 300})
+def test_tablo_serilestirme_nan_sonsuz_ve_kirpma() -> None:
+    import json
+    frame = pd.DataFrame({"a": [1.0, float("nan"), float("inf")] + [3.0] * 300, "b": ["x", "y", "w"] + ["z"] * 300})
     d = frame_to_dict(frame)
-    assert d["row_count"] == 302 and d["truncated"] and len(d["rows"]) == 200 and d["rows"][1][0] is None
+    assert d["row_count"] == 303 and d["truncated"] and len(d["rows"]) == 200 and d["rows"][1][0] is None and d["rows"][2][0] is None
+    json.dumps(d, allow_nan=False)   # katı JSON: NaN/Infinity kalmadı (A29)
     assert frame_to_dict(None) is None and frame_to_dict(pd.DataFrame()) is None
 
 

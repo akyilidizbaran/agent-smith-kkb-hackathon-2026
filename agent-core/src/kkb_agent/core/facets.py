@@ -37,11 +37,10 @@ FREQUENCY_WORDS = {
     "quarterly": ("ceyreklik", "uc aylik", "ceyrek"), "yearly": ("yillik",),
 }
 _FREQ_RANK = {"daily": 0, "business_daily": 0, "weekly": 1, "monthly": 2, "quarterly": 3, "yearly": 4}
-SOURCE_WORDS = {
-    "bddk_finturk": ("finturk", "illere gore", "il bazinda", "il bazli"),
-    "bddk_monthly": ("aylik bulten", "bddk aylik"), "bddk_weekly": ("haftalik bulten", "bddk haftalik"),
-    "evds": ("evds", "tcmb", "merkez bankasi"),
-}
+def source_words() -> dict[str, tuple[str, ...]]:
+    """Kaynak yüzü sözcükleri yapılandırmadan (M03-T04): kaynak adı çekirdek kodda yazılı değil."""
+    from ..source_hints import load_source_hints
+    return load_source_hints()["source_words"]
 
 
 @dataclass(frozen=True)
@@ -63,12 +62,12 @@ def extract_facets(question: str) -> Facets:
     # hibrit koşusunda "mevduat faizi 3 aylık" aylık yüzüne takılıp haftalık seriyi geriye attı).
     freqs = [f for f, words in FREQUENCY_WORDS.items() if any(re.search(rf"(?<!\d)(?<!\d )\b{w}", q) for w in words)]
     frequency = freqs[0] if len(freqs) == 1 else None      # iki frekans sözcüğü: karar yok (guard'la aynı kural)
-    sources = tuple(s for s, words in SOURCE_WORDS.items() if any(w in q for w in words))
+    sources = tuple(s for s, words in source_words().items() if any(w in q for w in words))
     return Facets(provinces=provinces, frequency=frequency, sources=sources)
 
 
 def province_of(text: str) -> str | None:
-    """Bir seri adı/kimliğinde geçen il (FinTürk: 'Konut Kredisi, İZMİR (…)', 'bddk_finturk:IZMIR_…')."""
+    """Bir seri adı/kimliğinde geçen il (FinTürk: 'Konut Kredisi, İZMİR (…)', 'kaynak:IZMIR_…')."""
     t = fold(text or "")
     m = _PROVINCE_RE.search(t)
     return _PROVINCE_FOLDED[m.group(1)] if m else None

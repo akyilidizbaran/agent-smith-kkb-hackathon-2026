@@ -35,3 +35,6 @@ incoming/
 
 # Seed edilmiş tasarım kanvası (2,5 MB, çalışma dosyalarından yeniden üretilir)
 docs/design/agentsmithler-arayuz.html
+
+# Veri kökü değişiminde saklanan eski demo kopyası (yerel, geri alınabilir yeniden adlandırma)
+data_prev_*/

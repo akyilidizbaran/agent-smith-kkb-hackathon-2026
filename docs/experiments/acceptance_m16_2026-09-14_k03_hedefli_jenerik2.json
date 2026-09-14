@@ -1,0 +1,131 @@
+{
+  "meta": {
+    "commit": "6f12bbe",
+    "model": "kkbhackathon2026/Qwen3.8-27B",
+    "data": "/Users/baran/Desktop/KKB/data/lakehouse.duckdb",
+    "profile": "analyst",
+    "narrate_temperature": "0",
+    "at": "2026-09-14T13:42:34"
+  },
+  "passed_turns": 4,
+  "total_turns": 4,
+  "scenarios": [
+    {
+      "id": "A08-A09-A32-A33",
+      "title": "finans dışı dosyalar (sentetik)",
+      "passed": true,
+      "turns": [
+        {
+          "question": "Bu dosyadaki aylık acil başvuru sayılarında olağan dışı bir ay var mı?",
+          "passed": true,
+          "seconds": 8.0,
+          "tools": [
+            "web_url",
+            "web_url",
+            "anomaly_detect"
+          ],
+          "failures": [],
+          "rows": 12,
+          "columns": [
+            "tarih",
+            "acil_basvuru",
+            "acil_basvuru_anomali",
+            "acil_basvuru_skor"
+          ],
+          "evidence": "kanıt zinciri tam: 6/6 sayı tabloda · 4 kolon → SQL · 1 web sayfası (sha256+zaman)",
+          "grounding": "OK",
+          "answer_preview": "Evet, var.  **Aralık:** Ocak 2025 – Aralık 2025 (12 ay) **Normal aralık:** 140.574 – 265.304 başvuru **Aykırı ay:** **Aralık 2025 — 410.050 başvuru** (skor 6,14)  Aralık ayı, normal aralığın üst sınırını (265.304) yaklaşık 1,5 kat aşarak be",
+          "evidence_states": {
+            "sayılar": true,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": [],
+          "answer_full": "Evet, var.\n\n**Aralık:** Ocak 2025 – Aralık 2025 (12 ay)\n**Normal aralık:** 140.574 – 265.304 başvuru\n**Aykırı ay:** **Aralık 2025 — 410.050 başvuru** (skor 6,14)\n\nAralık ayı, normal aralığın üst sınırını (265.304) yaklaşık 1,5 kat aşarak belirgin şekilde sıçrıyor. Diğer 11 ay bu aralığın içinde kalıyor.\n\nNot: Bu, tek değişkenli ve betimsel bir tespittir; aykırılığın nedenini veri içermediği için söyleyemiyorum."
+        },
+        {
+          "question": "Bu dosyadaki günlük ziyaret serisinde davranış ne zaman değişti?",
+          "passed": true,
+          "seconds": 8.7,
+          "tools": [
+            "web_url",
+            "web_url",
+            "change_points"
+          ],
+          "failures": [],
+          "rows": 24,
+          "columns": [
+            "donem",
+            "gunluk_ziyaret",
+            "gunluk_ziyaret_rejim"
+          ],
+          "evidence": "kanıt zinciri EKSİK: 6/7 sayı tabloda · 3 kolon → SQL · durum: sayılar ✗ · sorgu izi ✓ · dosya zinciri ✓ · 1 web sayfası (sha256+zaman)",
+          "grounding": "OK",
+          "answer_preview": "Seride (Ocak 2024 – Aralık 2025, 24 ay) büyüme hızında üç kırılma tespit edildi:  | Kırılma | Tarih | Ne değişti | |---|---|---| | 1 | **Temmuz 2024** | Aylık büyüme %0,98 → %0,93 (hafif yavaşlama) | | 2 | **Ocak 2025** | Düzeyde tek dönem ",
+          "evidence_states": {
+            "sayılar": false,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": [
+            "tabloda bulunmayan sayılar: 57,1"
+          ],
+          "answer_full": "Seride (Ocak 2024 – Aralık 2025, 24 ay) büyüme hızında üç kırılma tespit edildi:\n\n| Kırılma | Tarih | Ne değişti |\n|---|---|---|\n| 1 | **Temmuz 2024** | Aylık büyüme %0,98 → %0,93 (hafif yavaşlama) |\n| 2 | **Ocak 2025** | Düzeyde tek dönem sıçrama (+%57,1); ardından büyüme %0,93 → %0,71 |\n| 3 | **Mayıs 2025** | Aylık büyüme %0,71 → %0,66 (yavaşlama) |\n\n**Özet:** Davranışın en belirgin değişimi **Ocak 2025**'te — ziyaret düzeyi tek ayda %57,1 sıçrayıp ardından büyüme hızı kalıcı olarak yavaşladı. Temmuz 2024 ve Mayıs 2025 kırılmaları daha hafif, kademeli yavaşlamalar.\n\nNot: Bu, tek değişkenli ve betimsel bir tespittir; kırılma yerleri ayarlara (ceza, en az bölüt) bağlıdır ve değişimin nedenini göstermez."
+        },
+        {
+          "question": "Nüfus dosyasını yükle.",
+          "passed": true,
+          "seconds": 12.7,
+          "tools": [
+            "web_url",
+            "web_url"
+          ],
+          "failures": [],
+          "rows": 4,
+          "columns": [
+            "il_adi",
+            "nufus_bin"
+          ],
+          "evidence": "kanıt zinciri tam: 4/4 sayı tabloda · 2 kolon → SQL · 1 web sayfası (sha256+zaman)",
+          "grounding": "OK",
+          "answer_preview": "Nüfus dosyası yüklendi: **4 il × 2 sütun** (`il_adi`, `nufus_bin`).  | il_adi | nufus_bin | |---|---| | ankara | 5.864 | | ADANA | 2.274 | | İzmir | 4.462 | | Trabzon | 818 |  Aktif analiz tablosu olarak hazır.  İki uyarı: - Dosya yalnızca ",
+          "evidence_states": {
+            "sayılar": true,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": [],
+          "answer_full": "Nüfus dosyası yüklendi: **4 il × 2 sütun** (`il_adi`, `nufus_bin`).\n\n| il_adi | nufus_bin |\n|---|---|\n| ankara | 5.864 |\n| ADANA | 2.274 |\n| İzmir | 4.462 |\n| Trabzon | 818 |\n\nAktif analiz tablosu olarak hazır.\n\nİki uyarı:\n- Dosya yalnızca **4 il** içeriyor (Ankara, Adana, İzmir, Trabzon).\n- `nufus_bin` kolonundaki sayı biçimi dosyada karışıktı (ör. \"5.864\"); nokta binlik ayracı sayıldı. Birimi dosyanın yazdığı gibi aktarıyorum."
+        },
+        {
+          "question": "Hastane dosyasını da yükle ve nüfus tablosuyla il üzerinden birleştir.",
+          "passed": true,
+          "seconds": 11.6,
+          "tools": [
+            "web_url",
+            "web_url",
+            "workspace_join",
+            "workspace_join"
+          ],
+          "failures": [],
+          "rows": 5,
+          "columns": [
+            "il",
+            "hastane_sayisi",
+            "yatak_sayisi"
+          ],
+          "evidence": "kanıt zinciri tam: 0/0 sayı tabloda · 3 kolon → SQL · 1 web sayfası (sha256+zaman)",
+          "grounding": "",
+          "answer_preview": "Hastane dosyasını yükledim (Adana, Ankara, İzmir, Van — Van iki kez yinelenmiş; `hastane_sayisi` ve `yatak_sayisi` kolonları var). Nüfus tablosuyla il üzerinden birleştirmeye çalıştım ama iki dosyadaki il adları biçim olarak uyuşmuyor: nüfu",
+          "evidence_states": {
+            "sayılar": true,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": [],
+          "answer_full": "Hastane dosyasını yükledim (Adana, Ankara, İzmir, Van — Van iki kez yinelenmiş; `hastane_sayisi` ve `yatak_sayisi` kolonları var). Nüfus tablosuyla il üzerinden birleştirmeye çalıştım ama iki dosyadaki il adları biçim olarak uyuşmuyor: nüfus dosyasında \"ankara\", \"ADANA\", \"İzmir\", \"Trabzon\" varken hastane dosyasında \"Adana\", \"Ankara\", \"İzmir\", \"Van\" yazıyor. Tam eşleşmeyle yalnızca \"İzmir\" tek satır tutuyor; büyük/küçük harf ve boşluk farkını yok sayarsam Adana ve Ankara da eşleşir (3 il). Birleştirme için bu ad farklarının aynı il sayılıp sayılmayacağını onaylaman gerekiyor: büyük/küçük harf ve boşluk farkını yok sayarak birleştireyim mi?"
+        }
+      ]
+    }
+  ]
+}

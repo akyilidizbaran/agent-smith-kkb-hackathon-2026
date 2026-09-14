@@ -1,0 +1,6 @@
+lakehouse-core tam test suite — main entegrasyonu (14 Eylül 2026)
+Sonuç: 1126 passed in 803.63s (0:13:23), çıkış 0
+Koşulan commit: 3175a9c (ilk entegrasyon birleştirmesi)
+Geçerlilik: 51ccc17 birleştirmesinin lakehouse-core ağacı 3175a9c ile aynı (git rev-parse <commit>:lakehouse-core eşit);
+sonraki commit'ler yalnız agent-core ve kabul betiklerini değiştirdi.
+Önceki sayı: feature/agent-engine 1112; artış main'in lakehouse testleri (katalog CLI, EVDS çeyreklik tarihler, grup semantiği).

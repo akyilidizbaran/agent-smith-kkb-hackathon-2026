@@ -132,7 +132,7 @@ def tool_env(tmp_path: Path, monkeypatch):
 
     frames = {"konut.csv": KONUT_2025, "otobus.csv": OTOBUS}
 
-    def fake_read(locator, *, allowed_roots, session=None):
+    def fake_read(locator, *, allowed_roots, session=None, sheet=None):
         from kkb_agent.contracts.access import AccessOutcome
         return frames[Path(locator).name], AccessOutcome(status="ok", source=locator, message="okundu")
 

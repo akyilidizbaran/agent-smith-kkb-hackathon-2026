@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from pathlib import Path
 
 from .adapters.duckdb_lakehouse import DuckDBLakehouse
 from .adapters.gold_cli import GoldCLI
@@ -41,12 +42,14 @@ from .tools.promote import PromoteDraftTool
 from .tools.gold import GOLD_PROMPT_RULES, GoldAlignTool, GoldDecomposeTool, GoldJoinTool
 from .tools.chart import CHART_PROMPT_RULES, ChartTool
 from .tools.workspace_query import WorkspaceQueryTool
+from .tools.real_value import REAL_VALUE_PROMPT_RULES, WorkspaceRealValueTool
+from .tools.workspace_join import WorkspaceJoinTool
 from .vision.ocr import OcrClient
 from .adapters.mia_embedder import EmbeddingCache, MiaEmbedder
 from .core.retriever import RetrievalPolicy
 from .tools.analytics import ANALYTICS_PROMPT_RULES, AnomalyDetectTool, ChangePointsTool, LeadLagTool
 from .tools.web import (
-    WEB_PROMPT_RULES, WEB_SEARCH_PROMPT_RULES, WEB_SEARCH_UNAVAILABLE_RULES, WebSearchTool, WebUrlTool,
+    WEB_PROMPT_RULES, WEB_SEARCH_PROMPT_RULES, WEB_SEARCH_UNAVAILABLE_RULES, WebSearchTool, WebUrlTool, official_source_rules,
 )
 from .web.search import TavilySearch
 
@@ -70,25 +73,51 @@ sayılır: gold_* araçları reddederse kullanıcıya 'doğrulanmamış olsa da 
 'doğrulanmamış olsa da kullan' derse aynı aracı yeniden çağır."""
 
 
-def open_lakehouse(path, *, gold: GoldCLI | None = None) -> SilverLakehouse | DuckDBLakehouse:
-    """Veritabanının şemasına göre adaptörü seçer.
+BUILD_HINT = "veri kurmak için: `make demo-data` (repo kökünde) ya da `uv run python scripts/build_demo_data.py`"
 
-    Şemayı ayrı bir bağlantı açarak yoklamıyoruz: DuckDB aynı dosyaya farklı
-    yapılandırmayla ikinci bağlantıyı reddediyor (sertleştirilmiş bağlantı
-    read_only + locked config kullanıyor). Bunun yerine Silver adaptörünü
-    kurmayı deniyoruz; beklenen ilişkiler yoksa kendi seed adaptörümüze düşüyoruz.
+
+def open_lakehouse(path, *, gold: GoldCLI | None = None, mode: str = "auto") -> SilverLakehouse | DuckDBLakehouse:
+    """Veritabanının şemasına göre adaptörü seçer; mod sessiz düşüşü engeller (M01, ADR-0049).
+
+    demo: Silver şeması şart. DB yoksa ya da şema seed ise açık nedenle durur; seed'e düşmez.
+    seed: geliştirme seed'i (DuckDBLakehouse). auto: Silver'ı dene, yoksa seed (testler, eski davranış).
+    Şemayı ayrı bağlantıyla yoklamıyoruz: DuckDB aynı dosyaya farklı yapılandırmayla ikinci
+    bağlantıyı reddediyor; Silver adaptörünü kurmayı deniyoruz.
     """
+    path = Path(path)
+    if mode not in {"demo", "seed", "auto"}:
+        raise LakehouseError(f"LAKEHOUSE_MODE geçersiz: {mode!r} (demo | seed | auto)")
+    if mode == "seed":
+        return DuckDBLakehouse(path)
+    if mode == "demo" and not path.exists():
+        raise LakehouseError(f"LAKEHOUSE_MODE=demo: veritabanı yok: {path}. {BUILD_HINT}. "
+                             "Geliştirme seed'i istiyorsan LAKEHOUSE_MODE=seed.")
     try:
         return SilverLakehouse(path, gold=gold)
     except LakehouseError as exc:
         if "meta.series" not in str(exc) and "silver.fact_observation" not in str(exc):
             raise
+        if mode == "demo":
+            raise LakehouseError(f"LAKEHOUSE_MODE=demo: {path} Silver şeması taşımıyor (meta.series / "
+                                 f"silver.fact_observation yok); bu bir seed ya da bozuk dosya. {BUILD_HINT}.") from exc
         return DuckDBLakehouse(path)
 
 
-def build_agent(max_steps: int = 10) -> AnalyticsAgent:
+PROFILES = ("analyst", "architect")
+
+
+def architect_enabled(profile: str, *, silver: bool, cli: bool) -> bool:
+    """Architect araçları yalnız architect profilinde VE veri ekibinin şeması + CLI'ı varken (M04-T02).
+    Analyst'te araç kayıt defterine hiç girmez: kapı değil, yokluk — model adıyla çağırsa UNKNOWN_TOOL."""
+    return profile == "architect" and silver and cli
+
+
+def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAgent:
     """Motoru kurar. Yeni araçlar buraya eklenir; agent kodu değişmez."""
     settings = load_settings()
+    agent_profile_name = (profile or settings.agent_profile or "analyst").lower()
+    if agent_profile_name not in PROFILES:
+        raise ValueError(f"AGENT_PROFILE geçersiz: {agent_profile_name!r} (analyst | architect)")
     # Veri ekibinin Silver şeması varsa ona bağlan; yoksa kendi BDDK seed'imize.
     # Gerçek Lakehouse geldiğinde değişen tek şey LAKEHOUSE_PATH olur.
     system_prompt_extra = ""
@@ -99,7 +128,7 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
         database=settings.lakehouse_path,
         launcher=settings.lakehouse_cli,
     )
-    lakehouse = open_lakehouse(settings.lakehouse_path, gold=gold if gold.available else None)
+    lakehouse = open_lakehouse(settings.lakehouse_path, gold=gold if gold.available else None, mode=settings.lakehouse_mode)
     workspace = AnalysisWorkspace()
 
     # Alan profili katalogdan deterministik olarak türetilir; üslup tercihleri
@@ -137,6 +166,8 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
             WorkspaceComputeColumnTool(workspace),
             WorkspaceShowTool(workspace),
             WorkspaceQueryTool(workspace),
+            WorkspaceRealValueTool(lakehouse, workspace, registry=registry),   # M09: reel dönüşüm, Analyst yeteneği
+            WorkspaceJoinTool(workspace),                    # M11: iki oturum tablosu anahtarla
             # Analitik ailesi (ADR-0040): LLM yok, her adaptörde; veri ne olursa olsun aynı.
             AnomalyDetectTool(workspace),
             ChangePointsTool(workspace),
@@ -151,23 +182,26 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
         data_root=settings.lakehouse_path.parent,
         launcher=settings.lakehouse_cli,
     )
-    if isinstance(lakehouse, SilverLakehouse) and cli.available:
+    if architect_enabled(agent_profile_name, silver=isinstance(lakehouse, SilverLakehouse), cli=cli.available):
         settings.ingest_allowed_root.mkdir(parents=True, exist_ok=True)
         registry.register(
             IngestFromUrlTool(lakehouse, cli, allowed_root=settings.ingest_allowed_root, registry=registry, ocr=ocr)
         )
         registry.register(PromoteDraftTool(lakehouse, cli, registry=registry))
+        # K02-T12 (A30): yüklü aralık dışını kayıtlı kaynağından çekme — yalnız Architect, aynı CLI kapısından.
+        from .tools.ingest_source import IngestSourceTool
+        registry.register(IngestSourceTool(lakehouse, cli, registry=registry))
         system_prompt_extra = ARCHITECT_PROMPT_RULES
 
     # Grafik her adaptörde var: veri aktif tablodan gelir, kural araçta (ADR-0032).
     registry.register(
         ChartTool(lakehouse, workspace, chart_dir=settings.chart_dir, geo_dir=settings.geo_dir)
     )
-    system_prompt = SYSTEM_PROMPT + CHART_PROMPT_RULES + WORKSPACE_QUERY_RULES + ANALYTICS_PROMPT_RULES
+    system_prompt = SYSTEM_PROMPT + CHART_PROMPT_RULES + WORKSPACE_QUERY_RULES + ANALYTICS_PROMPT_RULES + REAL_VALUE_PROMPT_RULES
     # Dış kaynak (ADR-0034): web_url her zaman; web_search yalnız arama anahtarı varsa.
     settings.ingest_allowed_root.mkdir(parents=True, exist_ok=True)
     registry.register(WebUrlTool(workspace, allowed_local_root=settings.ingest_allowed_root, registry=registry, ocr=ocr))
-    system_prompt += WEB_PROMPT_RULES
+    system_prompt += WEB_PROMPT_RULES + official_source_rules()
     search = TavilySearch()
     if search.available:
         registry.register(WebSearchTool(search, registry=registry))
@@ -186,15 +220,16 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
         system_prompt = system_prompt + GOLD_PROMPT_RULES
     system_prompt = system_prompt + system_prompt_extra
 
+    if settings.llm_key_missing:
+        raise SystemExit(f"Model anahtarı yok: LLM_API_KEY boş ({settings.llm_base_url}). .env dosyasını doldurun, sonra make preflight.")
     llm = OpenAICompatClient(
         base_url=settings.llm_base_url,
         api_key=settings.llm_api_key,
         model=settings.llm_model,
-        disable_thinking=settings.disable_thinking,
-    )
+        disable_thinking=settings.disable_thinking, timeout=settings.llm_timeout)
     print(
         f"[motor] sağlayıcı={settings.provider_label} model={settings.llm_model} "
-        f"alan={profile.domain!r} araçlar={len(registry)}",
+        f"alan={profile.domain!r} araçlar={len(registry)} profil={agent_profile_name}",
         file=sys.stderr,
     )
     # Ön-yükleme: soruya göre seçilen k serinin kartı + gerçek kırılım değerleri, bütçeyle.
@@ -205,12 +240,16 @@ def build_agent(max_steps: int = 10) -> AnalyticsAgent:
                 lakehouse, question, budget_tokens=settings.preload_budget_tokens, k=settings.preload_k,
                 retrieval_mode=settings.retrieval_mode, small_max=settings.retrieval_small_max,
             )
-    return AnalyticsAgent(
+    agent = AnalyticsAgent(
         llm, registry, workspace=workspace, max_steps=max_steps, profile=profile,
         system_prompt=system_prompt, evidence=EvidenceBuilder(lakehouse), preloader=preloader,
         tool_gate=settings.tool_gate, narrate_temperature=settings.narrate_temperature,
         profile_factory=profile_factory,
+        max_tokens=settings.llm_max_tokens, time_budget_s=settings.agent_time_budget_s,
     )
+    agent.profile_name = agent_profile_name          # analyst | architect (M04)
+    agent.upload_root = settings.ingest_allowed_root
+    return agent
 
 
 def main() -> None:
@@ -221,6 +260,8 @@ def main() -> None:
                         help="Kanıt panelini göster: sayı → SQL → gözlem → artifact → RAW/URL")
     parser.add_argument("--max-steps", type=int, default=10)
     parser.add_argument("--health", action="store_true", help="Lakehouse durumunu göster")
+    parser.add_argument("--preflight", action="store_true", help="Salt-okunur ön kontrol: mod, DB, şema, veri, CLI, dizinler, anahtarlar (M01)")
+    parser.add_argument("--live", action="store_true", help="--preflight ile: MIA'ya bir deneme çağrısı da yap")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -228,6 +269,12 @@ def main() -> None:
         level=logging.INFO if args.verbose else logging.WARNING,
         format="%(levelname)s %(name)s: %(message)s",
     )
+
+    if args.preflight:
+        from .preflight import run_preflight, render
+        checks = run_preflight(load_settings(), live=args.live)
+        print(render(checks))
+        sys.exit(0 if all(c.ok or not c.required for c in checks) else 1)
 
     if args.health:
         agent = build_agent()

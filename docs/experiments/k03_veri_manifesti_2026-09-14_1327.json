@@ -1,0 +1,91 @@
+{
+  "olusturma": "2026-09-14T13:27:26",
+  "commit": "51c066d",
+  "db": "/Users/baran/Desktop/KKB/data/lakehouse.duckdb",
+  "db_sha256": "c2cf0aece473423158bf42113632c88ee7691058e51ed19f09f7f252c405f59d",
+  "db_bayt": 18362368,
+  "katalog_kipi": "tablo yok (DB D04 öncesi kuruldu; okuma varsayılan katalog kipi)",
+  "katalog_seri": 2214,
+  "katalog_durum": {
+    "active": 2214
+  },
+  "yuklu_seri": 681,
+  "silver_gozlem": 43830,
+  "silver_kapsam": [
+    "2016-01-01",
+    "2026-07-03"
+  ],
+  "kaynaga_gore": {
+    "bddk_finturk": {
+      "seri": 648,
+      "gozlem": 27216
+    },
+    "bddk_monthly": {
+      "seri": 20,
+      "gozlem": 2417
+    },
+    "bddk_weekly": {
+      "seri": 1,
+      "gozlem": 547
+    },
+    "evds": {
+      "seri": 12,
+      "gozlem": 13650
+    }
+  },
+  "anlam_guveni_yuklu": {
+    "derived": 2,
+    "verified": 679
+  },
+  "gold": [
+    {
+      "metrik": "konut_faizi_aylik",
+      "satir": 127,
+      "silver_parmak_izi": "efbde6a51887e9b4",
+      "kurulum": "2026-09-14 01:15:01.799651+03"
+    },
+    {
+      "metrik": "konut_kredisi_aylik_vs_haftalik",
+      "satir": 126,
+      "silver_parmak_izi": "efbde6a51887e9b4",
+      "kurulum": "2026-09-14 01:15:01.799651+03"
+    },
+    {
+      "metrik": "konut_kredisi_ceyreklik",
+      "satir": 42,
+      "silver_parmak_izi": "efbde6a51887e9b4",
+      "kurulum": "2026-09-14 01:15:01.799651+03"
+    },
+    {
+      "metrik": "kur_ve_faiz_aylik",
+      "satir": 127,
+      "silver_parmak_izi": "efbde6a51887e9b4",
+      "kurulum": "2026-09-14 01:15:01.799651+03"
+    },
+    {
+      "metrik": "takipteki_tuketici_kirilimi_aylik",
+      "satir": 126,
+      "silver_parmak_izi": "efbde6a51887e9b4",
+      "kurulum": "2026-09-14 01:15:01.799651+03"
+    },
+    {
+      "metrik": "tuketici_kredisi_kirilimi_aylik",
+      "satir": 126,
+      "silver_parmak_izi": "efbde6a51887e9b4",
+      "kurulum": "2026-09-14 01:15:01.799651+03"
+    }
+  ],
+  "meta_tablolari": [
+    "meta.artifact",
+    "meta.artifact_request",
+    "meta.dataset_version",
+    "meta.gold_build",
+    "meta.ingest_warning",
+    "meta.run",
+    "meta.run_artifact",
+    "meta.series",
+    "meta.source"
+  ],
+  "sayi_meta.run": 117,
+  "sayi_meta.artifact": 3468
+}

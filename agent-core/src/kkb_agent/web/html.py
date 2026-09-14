@@ -201,6 +201,35 @@ def convert_numbers(frame: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
                          f"nokta binlik sayıldı")
             continue
         notes.append(f"'{name}' sayı biçimi belirsiz (ör. {sample!r}: binlik mi ondalık mı?); metin bırakıldı")
+    out, date_notes = convert_dates(out)
+    return out, notes + date_notes
+
+
+def convert_dates(frame: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """Tarih biçimi tanınan metin kolonlarını gerçek tarihe çevirir (M10-T04, ADR-0054).
+
+    Ölçüldü (jüri CSV provası): "31.01.2025" metin kalınca `LAG(...) OVER (ORDER BY "Tarih")` sözlük
+    sırasına göre sıralandı (28.02 < 30.04 < 31.01 …) ve aylık değişimler yanlış çıktı; sayılar
+    tabloda olduğu için kanıt paneli de yakalayamadı. Kural: profilci bir biçimi %100 ayrıştırıyorsa
+    çevir; gün/ay belirsizse (tüm günler ≤ 12, iki biçim de geçiyor) metin kalır ve söylenir.
+    """
+    from ..builder.profile import profile_table
+
+    out = frame.copy()
+    notes: list[str] = []
+    for col in profile_table(frame).columns:
+        if not col.date_formats or col.non_empty != col.rows or pd.api.types.is_datetime64_any_dtype(frame[col.name]):
+            continue
+        if col.date_ambiguous:
+            notes.append(f"'{col.name}' tarih ama gün/ay ayrımı belirsiz ({', '.join(col.date_formats)}); metin bırakıldı, kullanıcıya sorulmalı")
+            continue
+        fmt = col.date_formats[0]
+        try:
+            parsed = pd.to_datetime(frame[col.name].map(lambda t: "" if t is None else str(t).strip()), format=fmt, errors="raise")
+        except (ValueError, TypeError):
+            continue
+        out[col.name] = parsed
+        notes.append(f"'{col.name}' tarih kolonu ({fmt})")
     return out, notes
 
 
@@ -371,11 +400,49 @@ def extract_ocr_page(url: str, doc: Any) -> PageContent:
                          f"{worst:.0%}); görüntü kalitesi düşük olabilir, sayılar güvenilmez — kaynağın kendisiyle karşılaştır.")
         else:
             notes.append(f"OCR tutarlılık denetimi: satır toplamları toplam sütunuyla örtüşüyor ({worst:.0%}).")
-    text = "\n".join(p.prose for p in doc.pages if p.prose)[:20000]
+    text = "\n".join(p.prose for p in doc.pages if p.prose)[:MAX_TEXT_CHARS]
     title = Path(urlparse(url).path).name or url
     return PageContent(url=url, title=title, text=text, tables=tables, kind="ocr", notes=notes, table_labels=labels,
                        ocr={"model": doc.model, "pages": [p.page_no for p in doc.pages], "sha256": doc.sha256,
                             "truncated": doc.truncated, "total_pages": doc.total_pages, "quality": quality})
+
+
+MAX_TEXT_CHARS = 400_000
+"""Sayfa/belge metni için güvenlik sınırı (önce 20.000'di; web_url metni pencereyle okur, devam okuması sona ulaşmalı)."""
+
+
+def _xml_tables(content: bytes) -> tuple[pd.DataFrame | None, list[str], str]:
+    """XML → tek tablo (kullanıcı geri bildirimi, ADR-0078): TCMB kur XML'i açılıyor ama "tablo yok" deniyordu.
+
+    Kayıt, çocukları yaprak olan ve en sık tekrar eden öğedir (TCMB'de `Currency`); satır = öznitelikler + yaprak çocukların metni.
+    Kök öznitelikleri (bülten tarihi gibi) not olur. Varlık çözümleme ve ağ erişimi kapalı (XXE yok)."""
+    from collections import Counter
+
+    from lxml import etree
+
+    parser = etree.XMLParser(recover=True, resolve_entities=False, no_network=True, huge_tree=False)
+    root = etree.fromstring(content, parser)
+    if root is None:
+        return None, [], ""
+
+    def children(el: Any) -> list[Any]:
+        return [c for c in el if isinstance(c.tag, str)]
+
+    counts: Counter = Counter()
+    for el in root.iter():
+        if isinstance(el.tag, str) and children(el) and all(not children(c) for c in children(el)):
+            counts[el.tag] += 1
+    if not counts:
+        return None, [], ""
+    tag, _ = counts.most_common(1)[0]
+    rows = []
+    for el in root.iter(tag):
+        row = {etree.QName(k).localname: v for k, v in el.attrib.items()}
+        row.update({etree.QName(c).localname: (c.text or "").strip() for c in children(el)})
+        rows.append(row)
+    notes = ["XML kök öznitelikleri: " + ", ".join(f"{etree.QName(k).localname}={v}" for k, v in root.attrib.items())] if root.attrib else []
+    title = f"{etree.QName(root).localname} — {etree.QName(tag).localname} kayıtları ({len(rows)})"
+    return pd.DataFrame(rows).fillna(""), notes, title
 
 
 def extract_page(content: bytes, media_type: str, url: str, *, ocr: Any = None,
@@ -396,6 +463,17 @@ def extract_page(content: bytes, media_type: str, url: str, *, ocr: Any = None,
             return PageContent(url=url, title=Path(path).name, kind="document",
                                text=f"(PDF/görsel belge; OCR başarısız: {exc})", notes=[f"OCR başarısız: {exc}"])
         return extract_ocr_page(url, doc)
+    looks_xml = (kind in ("text/xml", "application/xml") or (kind.endswith("+xml") and kind != "application/xhtml+xml")
+                 or path.endswith(".xml") or content[:200].lstrip().startswith(b"<?xml"))
+    if looks_xml and b"<html" not in content[:2000].lower():
+        try:
+            frame, xml_notes, xml_title = _xml_tables(content)
+        except Exception as exc:  # noqa: BLE001 — bozuk XML metin olarak düşer, uydurma yok
+            frame, xml_notes, xml_title = None, [f"XML ayrıştırılamadı: {exc}"], ""
+        if frame is not None and len(frame):
+            converted, notes = convert_numbers(frame)
+            return PageContent(url=url, title=xml_title or path.rsplit("/", 1)[-1], tables=[converted], kind="data",
+                               notes=xml_notes + notes)
     if kind in ("text/csv", "application/json", "application/vnd.ms-excel",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") or path.endswith(DATA_SUFFIXES):
         try:
@@ -407,14 +485,14 @@ def extract_page(content: bytes, media_type: str, url: str, *, ocr: Any = None,
 
     text = content.decode("utf-8", errors="replace")
     if kind not in ("text/html", "application/xhtml+xml") and "<html" not in text[:2000].lower():
-        return PageContent(url=url, title="", text=_clean_text(text)[:20000], kind="text")
+        return PageContent(url=url, title="", text=_clean_text(text)[:MAX_TEXT_CHARS], kind="text")
 
     from lxml import html as lh
 
     try:
         doc = lh.fromstring(text)
     except Exception:  # noqa: BLE001
-        return PageContent(url=url, title="", text=_clean_text(re.sub(r"<[^>]+>", " ", text))[:20000], kind="text")
+        return PageContent(url=url, title="", text=_clean_text(re.sub(r"<[^>]+>", " ", text))[:MAX_TEXT_CHARS], kind="text")
     for bad in doc.xpath("//script|//style|//noscript|//nav|//footer|//header"):
         bad.drop_tree()
     title_nodes = doc.xpath("//title")
@@ -445,7 +523,7 @@ def extract_page(content: bytes, media_type: str, url: str, *, ocr: Any = None,
         converted, table_notes = convert_numbers(raw)
         tables.append(converted)
         notes.extend(table_notes)
-    return PageContent(url=url, title=title, text=body_text[:20000], tables=tables,
+    return PageContent(url=url, title=title, text=body_text[:MAX_TEXT_CHARS], tables=tables,
                        links=links, data_links=data_links, kind="html", notes=notes)
 
 

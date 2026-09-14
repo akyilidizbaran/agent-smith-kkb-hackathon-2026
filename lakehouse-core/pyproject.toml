@@ -1,0 +1,27 @@
+[project]
+name = "kkb-agentic-analytics"
+version = "0.1.0"
+description = "Local-first generic data lakehouse foundation"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pandas",
+    "pyarrow",
+    "duckdb",
+    "requests",
+    "pyyaml",
+    "pytest",
+    # XLSX is the only supported format with no standard-library reader. openpyxl is the
+    # single addition for the generic ingestion slice; it is opened in read_only mode, with formula-bearing workbooks
+    # explicitly refused so no formula is evaluated and no external link is followed. HTML tables are read
+    # with the standard library's html.parser instead, which is why lxml, html5lib and
+    # beautifulsoup4 are deliberately absent.
+    "openpyxl",
+    "truststore>=0.10.4",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -1,0 +1,24 @@
+DEMO VERİSİ — DB /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/data/lakehouse.duckdb · veri kökü /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/data · lakehouse-core /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/lakehouse-core
+seri seti: 2 seri → /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/data/ingest_series.txt
+✓ bootstrap (2 s)
+    status: success
+    database: /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/data/lakehouse.duckdb
+    catalog_mode: default
+    catalog_series_count: 2214
+✓ ingest (canlı: BDDK + EVDS) (5 s)
+    === SUMMARY ===
+      [WARNING] bddk_monthly:1534_Toplam
+    
+    2/2 series ingested successfully (ok 1, warning 1, shared 0, failed 0, skipped 0; missing from catalog 0).
+✓ silver (3 s)
+    rows staged            : 683
+    boundary duplicates    : 8
+    rows published         : 675
+    series published       : 2
+✓ gold (1 s)
+      - konut_kredisi_aylik_vs_haftalik: NO_OBSERVATIONS -- the series is catalogued but the current Silver snapshot holds no observations for it
+      - tuketici_kredisi_kirilimi_aylik: NO_OBSERVATIONS -- the series is catalogued but the current Silver snapshot holds no observations for it
+      - takipteki_tuketici_kirilimi_aylik: NO_OBSERVATIONS -- the series is catalogued but the current Silver snapshot holds no observations for it
+      - kur_ve_faiz_aylik: NO_OBSERVATIONS -- the series is catalogued but the current Silver snapshot holds no observations for it
+✓ izinli dosya kökü: /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/data/incoming
+Sonraki adım: uv run python -m kkb_agent.cli --preflight

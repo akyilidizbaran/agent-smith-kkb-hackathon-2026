@@ -41,8 +41,25 @@ bunu açıkça söyle ve kullanıcıya sor; başka bir kaynağa kendiliğinden g
 Taradığın ama kullanmadığın sayfaları cevapta anlatma; kanıt paneline yazılır."""
 
 WEB_SEARCH_PROMPT_RULES = """
-Kullanıcı bir adres vermediyse ve veri havuzunda yoksa web_search ile ara; arama sonucu veri değildir, \
-uygun sayfayı web_url ile aç ve sayıyı tablodan al."""
+Kullanıcı bir adres vermediyse ve veri havuzunda yoksa ya da kullanıcı "internetten araştır/bul/getir" dediyse KENDİN \
+ARAŞTIR: web_search ile ara; resmi kaynağın adres kalıbını biliyorsan (aşağıda) doğrudan web_url ile aç. Kullanıcıdan adres \
+isteme, izin bekleme. Arama sonucu veri değildir: uygun sayfayı web_url ile aç ve sayıyı tablodan al."""
+
+TEXT_WINDOW = 8000
+"""Belge/sayfa metninden bir çağrıda gösterilen karakter (önce 1500'dü; tek sayfalık özgeçmiş yarıda kesiliyordu)."""
+
+
+def official_source_rules() -> str:
+    """Resmi kamu veri adresleri ve bilinen adres kalıpları (kaynak adı kodda değil, `source_hints.json`'da; ADR-0078)."""
+    from ..source_hints import load_source_hints
+
+    hints = load_source_hints()
+    hosts, patterns = hints.get("official_hosts", ()), hints.get("url_patterns", ())
+    if not hosts and not patterns:
+        return ""
+    lines = ["", "RESMİ KAMU KAYNAKLARI: şu alan adlarındaki adresleri kullanıcı yazmasa da web_url ile açabilirsin: " + ", ".join(hosts) + "."]
+    lines += [f"- {p}" for p in patterns]
+    return "\n".join(lines)
 
 WEB_SEARCH_UNAVAILABLE_RULES = """
 Web araması bu ortamda KAPALI (arama anahtarı yok). Kullanıcı internette aramanı isterse bunu söyle ve \
@@ -54,11 +71,35 @@ _YEAR = re.compile(r"\b(19|20)\d{2}\b")
 def _plain(frame) -> str:
     """Kart tablosu: bilimsel gösterim yok (ölçüldü: 93.824.682.381 kartta 9.38e+10 çıkıyordu, model
     sayıyı yazamıyordu); ondalık gerekiyorsa en çok 2 basamak."""
+    import pandas as pd
+
     def fmt(v: float) -> str:
         if v != v:
             return "NaN"
         return f"{v:.2f}".rstrip("0").rstrip(".") if abs(v) < 1e15 else f"{v:.6g}"
-    return frame.to_string(index=False, float_format=fmt)
+
+    # K03 canlı tekrar bulgusu (14 Eyl): pandas sağa hizalıyordu; kısa metin değerlerin önünde dolgu boşluğu çıktı ("  ADANA",
+    # "   Van") ve model verideki adların başında boşluk olduğunu yazdı. Metin sola, sayı sağa hizalanır; satır başında dolgu yok.
+    cols = list(frame.columns)
+    numeric = [pd.api.types.is_numeric_dtype(frame[c]) and not pd.api.types.is_bool_dtype(frame[c]) for c in cols]
+    dates = [pd.api.types.is_datetime64_any_dtype(frame[c]) for c in cols]
+
+    def cell(v, is_num: bool, is_date: bool) -> str:
+        if v is None or (isinstance(v, float) and v != v) or v is pd.NaT:
+            return "NaN" if is_num else ""
+        if is_date:
+            return pd.Timestamp(v).strftime("%Y-%m-%d")
+        if is_num and isinstance(v, float):
+            return fmt(v)
+        return str(v)
+
+    rows = [[cell(v, n, d) for v, n, d in zip(row, numeric, dates)] for row in frame.itertuples(index=False, name=None)]
+    widths = [max([len(str(c))] + [len(r[i]) for r in rows]) for i, c in enumerate(cols)]
+
+    def line(values: list[str]) -> str:
+        return "  ".join(v.rjust(w) if n else v.ljust(w) for v, w, n in zip(values, widths, numeric)).rstrip()
+
+    return "\n".join([line([str(c) for c in cols]), *(line(r) for r in rows)])
 
 
 class WebUrlParams(BaseModel):
@@ -71,6 +112,7 @@ class WebUrlParams(BaseModel):
     max_pages: int = Field(default=1, ge=1, le=5, description="Tarama bütçesi: en çok kaç sayfa (aynı alan adı)")
     pages: str | None = Field(default=None, description="PDF için hangi sayfalar: '3', '2-4', '1,5' (varsayılan ilk 5); belge uzunsa kart söyler")
     max_depth: int = Field(default=0, ge=0, le=1, description="Bağlantı derinliği: 0 yalnız verilen sayfa, 1 bir adım")
+    text_from: int = Field(default=0, ge=0, description="Metin uzunsa kaldığın karakterden devam: kart 'text_from=N ile yeniden çağır' der")
 
 
 class WebUrlTool(Tool):
@@ -110,6 +152,16 @@ class WebUrlTool(Tool):
         user_text = (getattr(reg, "user_text", None) or getattr(reg, "active_question", "") or "")
         sanctioned = getattr(reg, "sanctioned_locators", set()) or set()
         if not locator_from_user(params.url, user_text, sanctioned):
+            # Resmi kamu veri kaynağı (TCMB, BDDK, TÜİK …): adres kalıbını model kurabilir. Okuma yalnız bu alan adlarına gider,
+            # sızdırma kanalı açmaz (kullanıcı geri bildirimi: "internetten araştır" dendiğinde TCMB kur sayfası açılamıyordu).
+            from urllib.parse import urlparse
+
+            from ..source_hints import load_source_hints
+
+            parsed = urlparse(params.url)
+            host = (parsed.hostname or "").lower()
+            if parsed.scheme == "https" and any(host == h or host.endswith("." + h) for h in load_source_hints().get("official_hosts", ())):
+                return None
             return ToolError(
                 error_code="INTENT_REQUIRED", layer="policy", retryable=False,
                 message=(f"'{params.url}' kullanıcının mesajında ya da arama sonuçlarında yok; bir "
@@ -170,6 +222,21 @@ class WebUrlTool(Tool):
                     candidates=[f"#{i}" for i in range(len(flat))],
                 )
             page, table = flat[params.table_index]
+            ocr_meta = (page.page.ocr or {}) if page.page else {}  # type: ignore[union-attr]
+            if ocr_meta and ocr_meta.get("quality") in ("düşük", "belirsiz"):
+                from .gold import unverified_consent
+                user_text = (getattr(self._registry, "user_text", None) or getattr(self._registry, "active_question", "") or "")
+                if not unverified_consent(user_text):
+                    # K02-T06 (A12): düşük kaliteli OCR tablosu aktif tablo olmaz; doğrulanmamış değer kesin sonuç gibi kullanılmaz.
+                    dikkat = [n for n in (page.page.notes or []) if n.startswith("DİKKAT")]  # type: ignore[union-attr]
+                    return ToolResult.fail(
+                        "LOW_QUALITY_SOURCE",
+                        f"Belgedeki tablo #{params.table_index} OCR kalite denetiminden geçmedi (kalite: {ocr_meta.get('quality')}); "
+                        "bu tablodan sayı verilmez. " + " ".join(dikkat),
+                        hint=("Kullanıcıya daha net bir görüntü ya da metin katmanlı PDF iste. Doğrulanmamış olduğunu bilerek "
+                              "kullanmayı açıkça kabul ederse ('doğrulanmamış olsa da kullan') aynı çağrıyı yinele."),
+                        layer="data", retryable=False,
+                    )
             local_index = next((i for (pp, i, tt) in tables if pp is page and tt is table), 0)
             labels = getattr(page.page, "table_labels", []) or []
             table_label = labels[local_index] if local_index < len(labels) else ""
@@ -182,7 +249,7 @@ class WebUrlTool(Tool):
                 warnings=[f"Kaynak web sayfası; içerik sha256 {page.fetch.sha256[:12]}…, çekim "
                           f"{page.fetch.fetched_at:%Y-%m-%d %H:%M} UTC, HTTP {page.fetch.http_status}. "
                           "Birimler sayfanın kendi beyanı; katalog doğrulaması yok."]
-                         + ([page.page.notes[0]] if page.page.ocr and page.page.notes else []),  # type: ignore[union-attr]
+                         + (list(page.page.notes) if page.page.ocr and page.page.notes else []),  # type: ignore[union-attr]
             )
             self.workspace.set_table(table, description=params.purpose, provenance=prov)
             self.workspace.title = params.purpose
@@ -221,9 +288,15 @@ class WebUrlTool(Tool):
         for p in pages_with_tables:
             for n in p.page.notes:  # type: ignore[union-attr]
                 lines.append(f"NOT: {n}")
-        excerpt = (first.page.text or "")[:1500]  # type: ignore[union-attr]
+        full_text = first.page.text or ""  # type: ignore[union-attr]
+        start = min(params.text_from, len(full_text))
+        excerpt = full_text[start:start + TEXT_WINDOW]
         if excerpt:
-            lines.append("METİN (ilk 1500 karakter):\n" + excerpt)
+            end = start + len(excerpt)
+            lines.append(f"METİN (karakter {start}–{end} / {len(full_text)}):\n" + excerpt)
+            if end < len(full_text):
+                lines.append(f"METİN DEVAM EDİYOR: {len(full_text) - end} karakter kaldı. Tamamı gerekiyorsa aynı adresi text_from={end} ile "
+                             "yeniden oku; okumadığın bölümü özetleme ve 'yarıda kesildi' deme.")
         if len(result.pages) > 1:
             lines.append("DİĞER SAYFALAR: " + "; ".join(f"{p.url} ({p.page.title if p.page else ''})" for p in result.pages[1:]))
         if result.blocked:
@@ -293,7 +366,9 @@ class WebSearchTool(Tool):
         for i, h in enumerate(hits, start=1):
             lines.append(f"{i}. {h.title} — {h.url}\n   {h.snippet}")
         lines.append("YAPACAĞIN: sayı okuma; uygun adresi web_url ile aç ve tabloyu yükle.")
-        return ToolResult(content="\n".join(lines), artifacts={"web_search": {"query": params.query, "hits": [h.url for h in hits]}})
+        return ToolResult(content="\n".join(lines), artifacts={"web_search": {"query": params.query, "hits": [h.url for h in hits],
+                                                                        "results": [{"url": h.url, "title": h.title} for h in hits]}})
 
 
-__all__ = ["WEB_PROMPT_RULES", "WEB_SEARCH_PROMPT_RULES", "WEB_SEARCH_UNAVAILABLE_RULES", "WebSearchTool", "WebUrlTool"]
+__all__ = ["TEXT_WINDOW", "WEB_PROMPT_RULES", "WEB_SEARCH_PROMPT_RULES", "WEB_SEARCH_UNAVAILABLE_RULES", "WebSearchTool", "WebUrlTool",
+           "official_source_rules"]

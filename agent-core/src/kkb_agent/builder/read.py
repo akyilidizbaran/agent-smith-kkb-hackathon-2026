@@ -13,8 +13,6 @@ bot engeli, giriş sayfası, 404 burada sınıflandırılır, yorumlanmaz.
 from __future__ import annotations
 
 import io
-import ipaddress
-import socket
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlparse
@@ -42,12 +40,34 @@ def _under(path: Path, roots: Iterable[Path]) -> bool:
     return False
 
 
-def _table_from_bytes(content: bytes, name: str) -> pd.DataFrame:
-    """Tip çıkarımı YOK: her hücre metin. Boş hücre boş kalır, NaN olmaz."""
+def excel_sheets(content: bytes) -> list[str]:
+    """XLSX sayfa adları (M10-T05): birden çok sayfa varsa kullanıcı/model seçer, sessizce ilki alınmaz."""
+    with pd.ExcelFile(io.BytesIO(content)) as xf:
+        return [str(n) for n in xf.sheet_names]
 
+
+def _table_from_bytes(content: bytes, name: str, *, sheet: str | int | None = None) -> pd.DataFrame:
+    """Tip çıkarımı YOK: her hücre metin. Boş hücre boş kalır, NaN olmaz.
+
+    XLSX: `sheet` ad ya da 0-tabanlı indeks; verilmemişse ve birden çok sayfa varsa ReadRefused ile
+    sayfa listesi döner (belirsizlik sorulur). Legacy .xls desteklenmez (xlrd yok) — açıkça söylenir.
+    """
     suffix = Path(name.split("?")[0]).suffix.lower()
+    if suffix == ".xls":
+        raise ReadRefused("eski Excel (.xls) desteklenmiyor; dosyayı .xlsx olarak kaydedin")
     if suffix in (".xlsx", ".xlsm"):
-        return pd.read_excel(io.BytesIO(content), dtype=str, keep_default_na=False).fillna("")
+        names = excel_sheets(content)
+        if sheet is None and len(names) > 1:
+            raise ReadRefused("Excel dosyasında birden çok sayfa var: " + ", ".join(names) + " — `sheet` ile birini seç")
+        target: str | int = 0 if sheet is None else sheet
+        if isinstance(target, str) and target.isdigit():
+            target = int(target)
+        if isinstance(target, str) and target not in names:
+            raise ReadRefused(f"sayfa '{target}' yok; sayfalar: {', '.join(names)}")
+        if isinstance(target, int) and not (0 <= target < len(names)):
+            raise ReadRefused(f"sayfa indeksi {target} yok; {len(names)} sayfa var")
+        frame = pd.read_excel(io.BytesIO(content), sheet_name=target, dtype=str, keep_default_na=False, engine="openpyxl")
+        return frame.fillna("")
     text = content.decode("utf-8-sig", errors="replace")
     if suffix == ".json":
         frame = pd.read_json(io.StringIO(text), dtype=False)
@@ -57,15 +77,9 @@ def _table_from_bytes(content: bytes, name: str) -> pd.DataFrame:
 
 
 def _private_host(host: str) -> bool:
-    try:
-        infos = socket.getaddrinfo(host, None)
-    except socket.gaierror:
-        return False
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-            return True
-    return False
+    """Web getirmeyle aynı kural (M05-T03); `web.addresses` paket içinden import etmez, döngü yok."""
+    from ..web.addresses import blocked_host
+    return blocked_host(host) is not None
 
 
 def read_bytes_for_profiling(
@@ -79,14 +93,20 @@ def read_bytes_for_profiling(
     """(içerik, medya türü, erişim sonucu) — tablo dosyası da PDF/görsel de aynı kurallarla okunur."""
 
     parsed = urlparse(locator)
+    if len(parsed.scheme) == 1:
+        # Windows sürücü harfi: urlparse("C:\\veri\\x.csv").scheme == "c" — şema değil yerel yol (Büşra'nın notu, 13 Eyl)
+        parsed = urlparse("")
     if parsed.scheme in ("http", "https"):
         if _private_host(parsed.hostname or ""):
             raise ReadRefused("özel/loopback adreslere erişim yok")
         if session is None:
             from ..web.session import default_session
             session = default_session()
+        from ..web.fetch import FetchRefused, guarded_get   # döngüsel import: web.html → builder.read
         try:
-            resp = session.get(locator, timeout=30, allow_redirects=True, stream=True)
+            resp, _final = guarded_get(session, locator, timeout=30, stream=True)
+        except FetchRefused as exc:
+            raise ReadRefused(str(exc)) from exc
         except Exception:  # noqa: BLE001
             return None, "", classify_access(locator, http_status=None, environ=environ)
         chunks, size = [], 0
@@ -123,19 +143,26 @@ def read_table_for_profiling(
     max_bytes: int = MAX_BYTES_DEFAULT,
     session: Any = None,
     environ: dict[str, str] | None = None,
+    sheet: str | int | None = None,
 ) -> tuple[pd.DataFrame | None, AccessOutcome]:
     """(tablo, erişim sonucu). Tablo yalnız `outcome.ok` iken dolu."""
 
     parsed = urlparse(locator)
+    if len(parsed.scheme) == 1:
+        # Windows sürücü harfi: urlparse("C:\\veri\\x.csv").scheme == "c" — şema değil yerel yol (Büşra'nın notu, 13 Eyl)
+        parsed = urlparse("")
     if parsed.scheme in ("http", "https"):
         if _private_host(parsed.hostname or ""):
             raise ReadRefused("özel/loopback adreslere erişim yok")
         if session is None:
             from ..web.session import default_session
             session = default_session()
+        from ..web.fetch import FetchRefused, guarded_get   # döngüsel import: web.html → builder.read
         try:
-            resp = session.get(locator, timeout=30, allow_redirects=True, stream=True)
-        except Exception as exc:  # noqa: BLE001 — DNS/TLS/timeout → unreachable
+            resp, _final = guarded_get(session, locator, timeout=30, stream=True)
+        except FetchRefused as exc:
+            raise ReadRefused(str(exc)) from exc
+        except Exception:  # noqa: BLE001 — DNS/TLS/timeout → unreachable
             return None, classify_access(locator, http_status=None, environ=environ)
         chunks, size = [], 0
         for chunk in resp.iter_content(65536):
@@ -151,7 +178,7 @@ def read_table_for_profiling(
         )
         if not outcome.ok:
             return None, outcome
-        return _table_from_bytes(content, parsed.path or locator), outcome
+        return _table_from_bytes(content, parsed.path or locator, sheet=sheet), outcome
 
     if parsed.scheme not in ("", "file"):
         raise ReadRefused(f"desteklenmeyen şema: {parsed.scheme}")
@@ -162,8 +189,8 @@ def read_table_for_profiling(
         return None, classify_access(str(path), http_status=404, environ=environ)
     if path.stat().st_size > max_bytes:
         raise ReadRefused(f"dosya {max_bytes} bayt sınırını aşıyor")
-    frame = _table_from_bytes(path.read_bytes(), path.name)
+    frame = _table_from_bytes(path.read_bytes(), path.name, sheet=sheet)
     return frame, classify_access(str(path), http_status=200, environ=environ)
 
 
-__all__ = ["MAX_BYTES_DEFAULT", "ReadRefused", "read_bytes_for_profiling", "read_table_for_profiling"]
+__all__ = ["MAX_BYTES_DEFAULT", "ReadRefused", "excel_sheets", "read_bytes_for_profiling", "read_table_for_profiling"]

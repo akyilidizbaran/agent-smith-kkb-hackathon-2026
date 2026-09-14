@@ -148,6 +148,11 @@ class DatasetSpec(BaseModel):
         "unit_multiplier ile gerçek TL'ye çevrilmiştir.'",
     )
     last_refreshed: date | None = None
+    semantic_confidence: str | None = Field(
+        default=None,
+        description="Katalogdaki anlam güveni: 'verified' ya da doğrulanmamış ('derived', ...). None: bilinmiyor/Gold. "
+        "Doğrulanmamış endekste baz yılı güvenilmez; reel dönüşüm açık rıza ister (ADR-0075).",
+    )
 
     # ---- yardımcılar ----
     def measures(self) -> list[ColumnSpec]:

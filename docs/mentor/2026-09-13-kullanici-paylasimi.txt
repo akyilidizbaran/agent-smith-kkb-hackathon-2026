@@ -1,0 +1,112 @@
+Son mentör görüşmelerinde verilen cevaplar şu şekildeydi 
+
+1. soru Merhabalar Mehmet Bey, Web URL Agent'ı ve genel mimariyi tasarlarken dört noktada takıldık ve görüşünüzü almak istiyoruz.
+
+1. Üyelik, bot engeli ve CAPTCHA isteyen kaynaklar
+Bunu tahmin etmek yerine gerçek sitelerde denedik:
+
+Moody's'in Türkiye rating raporu linki doğrudan login sayfasına yönlendiriyor.
+S&P Global Ratings otomatik istemciye 403 "Security Controls Triggered" dönüyor, hesap olsa bile içeri almıyor.
+Statista ve REIDIN'de veri ücretli üyelik arkasında, kayıt formları reCAPTCHA'lı.
+Borsa İstanbul DataStore üyelik istiyor ve sayfa JavaScript olmadan açılmıyor.
+Ajanın kendi başına hesap açmasını ya da CAPTCHA geçmeye çalışmasını doğru bulmuyoruz. Düşündüğümüz çözüm: demoda geçebilecek kaynaklara ekip olarak önceden bir hesap açıp anahtarı yapılandırmada tutmak (TCMB EVDS API anahtarını bugün böyle kullanıyoruz). Ajan giriş duvarına ya da bot engeline çarpınca durup kullanıcıya "bu kaynağa otomatik erişilemiyor, dosyayı siz yükleyin ya da ekip hesabını kullanayım" demek.
+
+Demo günü vereceğiniz URL'ler herkese açık kaynaklar mı olacak, yoksa giriş isteyen bir kaynakla karşılaşabilir miyiz?
+Ekip hesabı yaklaşımı sizce uygun mu?
+Erişilemeyen kaynakta durup kullanıcıdan dosya istemek kabul edilebilir bir davranış mı, yoksa ajanın alternatif kaynak bulması mı bekleniyor?
+
+
+
+2. Verilen linkin alt sayfalarına inme derinliği
+Kullanıcı bir site linki verdiğinde ajan sadece o sayfaya mı bakmalı, yoksa aynı sitedeki alt sayfaları, tabloları ve PDF bağlantılarını da taramalı mı? Biz aynı alan adında kalarak, robots.txt'ye uyarak, 2 (gerekirse 3) seviye derinliğe kadar tarayıp bulduklarını listeleyen, sonra ihtiyaç olanı indiren bir yapı düşünüyoruz. Her seviye 3-4 saniye sürüyor; daha derine inmek hem yavaşlıyor hem anlamlı sonuç vermiyor.
+
+Demo için beklenen derinlik nedir? 2-3 seviye yeterli mi, yoksa yalnızca verilen sayfa mı bekleniyor?
+
+
+
+3. Verilen kaynakta veri bulunamayınca
+Kullanıcı "şu sitenin linki, buradan 2025 aylık enflasyon verisini getir" dedi ama o sitede bu veri yok; başka bir sitede ya da bizim veri tabanımızda var. Ajan ne yapmalı?
+
+(a) "Belirttiğiniz kaynakta bulamadım, ancak X sitesinde / veri tabanımızda bu siteden alınmış veri var" deyip o veriyle cevaplamak
+(b) Kaynak değiştirmeden önce kullanıcıya sormak
+(c) Sadece verilen kaynağa bağlı kalıp "bulunamadı" demek
+Biz (a)'ya eğilimliyiz. Değerlendirmede kaynak sadakati mi yoksa sonuca ulaşma mı daha önemli, bilmek isteriz. Ayrıca ajanın taradığı ama kullanmadığı alt sayfaları cevapta kısaca belirtmesini ister misiniz, yoksa gereksiz kalabalık mı olur?
+
+
+
+4. Mimari: tek agent + deterministik katmanlar
+Açılış toplantısındaki "harness'ı güçlü yapın, LLM'e en az işi bırakın" yönlendirmesinden yola çıkarak tek bir agent yazdık. Model yalnızca soruyu anlayıp hangi aracı çağıracağına karar veriyor; her araç çağrısının doğrulanması (seri var mı, dönem kapsamda mı, alt toplam çift sayıldı mı), uydurma rakam kontrolü ve alan kuralları LLM'e gitmeyen, deterministik kodla yapılıyor. Ölçümlerimizde bu yapı 3 turda cevap veriyor; Planner, Verifier, Narrator gibi ayrı agentlara bölmek her adımı ayrı bir LLM turuna çevirdiği için hem yavaşlatıyor hem zayıf modelde hata payını artırıyordu.
+
+Değerlendirmede çok agentlı bir yapı bekleniyor mu, yoksa "tek agent, çok sayıda kod tabanlı güvenlik katmanı" yaklaşımı harness gücü olarak sayılıyor mu? Eğer çok agentlı tasarım puan getiriyorsa, hangi tür bir iş bölümünün anlamlı bulunduğunu (örneğin veri toplama / analiz / anlatım ayrımı) söyleyebilirseniz çok mutlu oluruz.
+
+
+1. soru cevabı Merhabalar, elinize sağlık. Soruların tamamı doğru noktalara dokunuyor. Benim yaklaşımım şu olur:
+1. Login / CAPTCHA / bot engeli
+Ajanın kendi kendine hesap açması, CAPTCHA aşmaya çalışması veya site güvenlik mekanizmalarını bypass etmesi kesinlikle beklediğim bir davranış değil.
+Önceden açılmış, kullanım hakkı olan bir hesap/API key ile çalışmanız mantıklı. Yalnız credential’ı doğrudan config içine gömmek yerine secret/env/vault benzeri ayrı bir katmanda tutun.
+Kaynağa erişilemiyorsa ajan bunu açıkça söylemeli ve seçenek sunmalı:
+
+Yetkili credential varsa onunla devam et
+Kullanıcıdan dosya yüklemesini iste
+Uygun başka bir kaynak bul
+Burada alternatif kaynak bulabilmesi artı olur. Fakat kaynak değişikliğini gizlice yapmasın. Kullanıcı özellikle “bu kaynaktan getir” dediyse, “bu kaynağa erişemedim, alternatif olarak X kaynağında aynı veriyi buldum” şeklinde provenance’ı korusun.
+Demo açısından da mimariyi yalnızca “biz önceden hesap açarız” varsayımına bağlamayın. Hiç erişemeyeceğiniz bir URL verilse bile kontrollü şekilde degrade olabilmeli.
+2. Alt sayfalara inme
+Ben sabit olarak “mutlaka 3 seviye crawl et” şeklinde düşünmezdim.
+2-3 seviye üst sınır olarak gayet makul; ama esas olarak budget-based / relevance-based crawling tasarlayın.
+Örneğin verilen sayfada doğrudan CSV, JSON, XLSX, PDF, tablo, API endpoint veya yüksek relevanslı bir link bulunduysa önce oraya gidin. Gereksiz bütün navigation ağacını taramayın.
+Same-domain, robots.txt uyumu, maksimum depth + maksimum page/time budget olması bence iyi bir tasarım olur.
+Yani önemli olan depth=2 veya depth=3 değil; ajanın neden o linke gittiğinin deterministik ve kontrol altında olması.
+3. Verilen kaynakta veri yoksa
+Burada (a)’nın biraz kontrollü versiyonunu tercih ederim.
+Kullanıcı “2025 aylık enflasyonu bul” dediyse sonuca ulaşmak daha önemli olabilir ve alternatif kaynağa geçebilirsiniz.
+Ama kullanıcı “bu URL’den / bu kurumdan getir” dediyse kaynak sadakati constraint haline gelir. O durumda başka kaynağın verisini sanki ilk kaynaktan gelmiş gibi kullanmamalısınız.
+Örneğin:
+“Belirttiğiniz kaynakta bu veri bulunamadı. TCMB/ TÜİK tarafında ilgili veri mevcut. Alternatif kaynağı kullanarak devam edebilirim.”
+Böylece hem sonuç odaklı kalırsınız hem provenance bozulmaz.
+Taradığınız fakat kullanmadığınız bütün sayfaları final cevaba dökmeye gerek yok. Kullanıcı isterse gösterebileceğiniz bir trace/evidence panelinde bulunması daha doğru olur. Final cevap sade kalsın.
+4. Tek agent + deterministik katmanlar
+Burada özellikle multi-agent yapmaya çalışmazdım.
+Multi-agent olması kendi başına mimari kalite veya harness gücü göstermiyor. Hatta sizin ölçtüğünüz gibi gereksiz LLM round-trip, latency ve hata yüzeyi yaratıyorsa tersine kötü bir tercih olabilir.
+Tek orchestration agent + deterministik:
+
+source selection
+fetch
+parsing
+normalization
+schema validation
+range/period validation
+business rules
+provenance
+hallucination/rakam kontrolü
+policy enforcement
+bence açılıştaki “LLM’e mümkün olduğunca az belirsiz iş bırakın” yaklaşımına çok daha uygun.
+İsterseniz mimaride Planner / Retriever / Validator / Narrator gibi logical responsibilities gösterebilirsiniz; bunların her birinin ayrı LLM agent olması gerekmiyor.
+Ben jüri karşısında özellikle şu soruya hazırlıklı olurdum:
+“Yarın size web URL yerine REST API, database, stream veya farklı authentication kullanan bir kaynak verdiğimizde ne değişecek?”
+İdeal cevap “agentı yeniden yazacağız” değil; yeni source adapter / capability tanımı ekleyeceğiz, orchestration ve validation katmanı değişmeyecek olmalı.
+Bence şu an odaklanmanız gereken asıl nokta agent sayısını artırmak değil, bu source abstraction + access policy + provenance + fallback sözleşmesini çok temiz hale getirmek.
+
+
+2. soru 
+
+Merhabalar Mehmet bey, bizler de tanıştığımıza çok memnun olduk umarım güzel bir süreç geçirebiliriz. Tam olarak mimarimizi geliştirmeye başlamadan önce size bir kaç sorumuz olacaktı yardımcı olabilirseniz çok seviniriz.
+1. Kota ve hız sınırı
+   MIA için dakika başına istek / token sınırı ve günlük tavan nedir bunun belirtilmiş bir sınırı veya dökümantasyonu bulunmakta mıdır acaba? Yoksa dilediğimiz gibi geliştirme yapabilir miyiz bu kapsamda.
+
+2. Web araması için dış servis
+   Şartnamedeki Web Search Tool için bir arama servisi (ör. SerpAPI,
+   Tavily, DuckDuckGo API) kullanmak "dış bulut servisi" kısıtına
+   giriyor mu? LLM servisi olmadığı için serbest olduğunu düşünüyoruz
+   ama teyit etmek istedik.
+
+3. Yerel yardımcı modeller
+   Geliştirme ve demo sırasında, MIA'nın yanında yerel çalışan küçük
+   yardımcı modeller (ör. sentence-transformer tabanlı reranker, BM25
+   gibi klasik arama algoritmaları) kullanmamız kurallara uygun mu?
+   LLM olarak yalnızca MIA kullanılacak; soru sadece retrieval
+   katmanındaki yardımcı bileşenler için.
+
+Teşekkürler.
+
+2. soru cevabı

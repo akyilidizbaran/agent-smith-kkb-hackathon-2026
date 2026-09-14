@@ -46,6 +46,7 @@ class IngestParams(BaseModel):
     locator: str = Field(description="Yerel dosya yolu ya da http(s) URL'i (CSV, TSV, XLSX, JSON; PDF/PNG/JPG belgeler OCR ile okunur)")
     table_index: int | None = Field(default=None, description="PDF/görselde birden çok tablo varsa hangisi (0 tabanlı); boşsa en büyük tablo")
     pages: str | None = Field(default=None, description="PDF için hangi sayfalar: '3', '2-4' (varsayılan ilk 5)")
+    sheet: str | None = Field(default=None, description="Excel'de sayfa adı ya da 0 tabanlı indeks; birden çok sayfa varsa zorunlu")
     name: str = Field(description="Serinin okunabilir adı, ör. 'İl bazında konut satışları'")
     series_key: str | None = Field(
         default=None,
@@ -234,8 +235,7 @@ class IngestFromUrlTool(Tool):
                 frame, outcome, doc_note, cli_locator = self._read_document(params)
             else:
                 frame, outcome = read_table_for_profiling(
-                    params.locator, allowed_roots=[self.allowed_root], session=self.session
-                )
+                    params.locator, allowed_roots=[self.allowed_root], session=self.session, sheet=params.sheet)
         except ReadRefused as exc:
             return ToolResult.fail(
                 "ACCESS_BLOCKED", f"Kaynak okunamadı: {exc}",
@@ -413,6 +413,11 @@ class IngestFromUrlTool(Tool):
         if crosscheck is not None:
             card.extend(crosscheck.lines())
         card.append(render_for_model(outcome, decision).splitlines()[0])
+        # D03 (ADR-0068): eklenen taslak, kapsamı kartta gösterilmiş bekleyen terfi işlemi olur.
+        from ..core.approvals import PendingOp, book_of
+        book_of(self._registry).register(PendingOp(
+            series_id=series_id, operation="promote", shown_turn=int(getattr(self._registry, "turn", 0) or 0),
+            summary=f"{series_id} ({params.name}) taslağı kataloğa aktif seri olarak alınacak"))
         return ToolResult(content="\n".join(card),
                           artifacts={"ingest": out, "proposal": mapping, "relevance": relevance,
                                      **({"crosscheck": crosscheck} if crosscheck is not None else {})})

@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AgentSmithler</title>
+<title>Agent Smith</title>
+<link rel="icon" type="image/svg+xml" href="/static/agent-smith.svg">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
   :root { --ink: #1f1d1a; --paper: #f6f4ef; --card: #fbfaf7; --line: #e3ded4; --line2: #efece5; --muted: #6b665d; --muted2: #8a8478;
@@ -14,7 +15,7 @@
   .mono { font-family: "IBM Plex Mono", monospace; }
   header { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid var(--line); background: var(--card); }
   header .brand { font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600; font-size: 18px; letter-spacing: -0.01em; }
-  header .sub { font-size: 12px; color: var(--muted); margin-left: 14px; }
+  header .sub { font-size: 12px; color: var(--muted); margin-left: 6px; }
   .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid #d9d3c7; border-radius: 999px; background: #fff; font-size: 12px; color: var(--muted); }
   .layout { display: grid; grid-template-columns: 248px minmax(0, 1fr) 392px; height: calc(100vh - 56px); min-height: 0; }
   aside.left { border-right: 1px solid var(--line); padding: 20px 16px; display: flex; flex-direction: column; gap: 22px; background: var(--card); overflow: auto; }
@@ -97,8 +98,9 @@
 </head>
 <body>
 <header>
-  <div style="display:flex;align-items:center"><span class="brand">AgentSmithler</span><span class="sub">Lakehouse Agent · KKB Hackathon 2026</span></div>
+  <div style="display:flex;align-items:center;gap:10px"><img src="/static/agent-smith.svg" alt="Agent Smith" width="32" height="32" style="display:block;border-radius:8px"><span class="brand">Agent Smith</span><span class="sub">Lakehouse Agent · KKB Hackathon 2026</span></div>
   <div style="display:flex;align-items:center;gap:10px">
+    <span class="pill" id="pill-profile" title="Profil: Analyst okur; Architect kataloğa yazar. Geçiş operatör anahtarıyla.">profil …</span>
     <span class="pill" id="pill-model">bağlanıyor…</span>
     <span class="pill" id="pill-budget"></span>
   </div>
@@ -123,6 +125,7 @@
       <div class="label">Roller</div>
       <div style="font-size:12px;color:#4a463f;line-height:1.45">Analist okur, Architect yazar. Yazma yalnız taslak ve onayla.</div>
       <button class="ghost" id="btn-reset" style="height:32px;border:1px solid #d9d3c7;border-radius:6px;background:transparent;font:inherit;font-size:12px;color:var(--muted);cursor:pointer">Oturumu sıfırla</button>
+      <button class="ghost" id="btn-wipe" hidden style="height:32px;border:1px solid #e5b4b4;border-radius:6px;background:var(--red-bg);font:inherit;font-size:12px;color:var(--red);cursor:pointer" title="Yalnız Architect: veri kökündeki DB, RAW/Bronze/Silver, yüklemeler ve önbellek silinir; kod ve .env dokunulmaz">Tam veri sıfırlama…</button>
     </div>
   </aside>
 
@@ -130,7 +133,10 @@
     <div id="thread"></div>
     <div class="trace">
       <div class="chips" id="trace"><span class="label" style="margin-right:4px">Araç izi</span><span class="status">henüz soru yok</span></div>
+      <div id="attach" class="chips" hidden></div>
       <div class="askrow">
+        <input type="file" id="file" hidden accept=".csv,.tsv,.txt,.xlsx,.xlsm,.json,.pdf,.png,.jpg,.jpeg,.webp">
+        <button class="ghost" id="btn-file" title="Dosya yükle (CSV, XLSX, JSON, PDF, görsel; en çok 25 MB)" style="background:transparent;color:var(--muted);border:1px solid #d9d3c7">📎 Dosya</button>
         <textarea id="q" placeholder="Soru sor, dosya ya da adres ver…"></textarea>
         <button id="btn-ask">Sor</button>
       </div>
@@ -182,6 +188,8 @@ async function loadStatus() {
     $("st-line").textContent = `retrieval: ${s.retrieval_mode || "–"} · araç: ${s.tools.length} · kapı: ${s.tool_gate ? "açık" : "kapalı"}`;
     $("pill-model").textContent = `Veri havuzu bağlı · ${s.model || "model"}`;
     $("pill-budget").textContent = s.search_budget_remaining === null || s.search_budget_remaining === undefined ? "web_search kapalı" : `Arama bütçesi ${s.search_budget_remaining}`;
+    const prof = s.profile || "analyst"; $("pill-profile").textContent = `Profil: ${prof === "architect" ? "Architect (yazma açık)" : "Analyst (salt-okunur)"}${s.profile_switch ? " ▾" : ""}`;
+    $("pill-profile").style.borderColor = prof === "architect" ? "var(--amber)" : "#d9d3c7"; $("btn-wipe").hidden = prof !== "architect";
     lastStatus = s;
   } catch (e) { $("pill-model").textContent = "durum alınamadı"; }
 }
@@ -202,12 +210,57 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") { const g 
 async function openStatus() {       // veri havuzu kartları ve üst rozetler → sistem durumu (/api/status)
   const r = await fetch("/api/status"); const s = await r.json(); lastStatus = s;
   const rows = [["Model", s.model], ["Veri havuzu", `${fmtInt(s.catalog_series)} katalog serisi · ${fmtInt(s.loaded_series)} yüklü · ${fmtInt(s.silver_rows)} Silver gözlemi · ${fmtInt(s.gold_tables)} Gold tablosu`],
+    ["Hazır oluş", s.readiness && s.readiness.catalog_total ? `katalog ${fmtInt(s.readiness.catalog_total)} · anlamı doğrulanmış ${fmtInt(s.readiness.semantics_verified)} · birim+ölçüm tipi tanımlı ${fmtInt(s.readiness.semantics_defined)} · yüklü ${fmtInt(s.readiness.loaded_series)} · Gold'a hazır ${fmtInt(s.readiness.gold_ready_series)}` : "–"],
     ["Retrieval kademesi", s.retrieval_mode], ["Araç kapısı", s.tool_gate ? "açık (soruya göre alt küme)" : "kapalı"], ["Araçlar (" + s.tools.length + ")", s.tools.join(", ")],
     ["Arama bütçesi", s.search_budget_remaining === null ? "web_search kapalı" : `${s.search_budget_remaining} arama kaldı (süreç başına)`], ["Bu oturum", `${s.history.length} soru`],
+    ["Oturum", "bellekte tutulur; sunucu yeniden başlarsa sohbet, tablolar ve yüklenen dosyalar silinir (tek bilgisayar demosu)"],
     ["Uç noktalar", "GET /api/status · POST /api/ask · GET /api/answers · GET /api/answers/{i} · POST /api/reset · GET /static/…"]];
   showModal("Sistem durumu", `<div class="kv">${rows.map(([k, v]) => `<div class="k">${esc(k)}</div><div class="v">${esc(v ?? "–")}</div>`).join("")}</div>`);
 }
 ["st-catalog", "st-loaded", "st-silver", "st-gold", "pill-model", "pill-budget"].forEach((id) => { const el = $(id); (el.closest(".stat") || el).addEventListener("click", openStatus); });
+// ---- Profil geçişi (M04): istek parametresi yetki vermez; Architect için operatör anahtarı istenir
+$("pill-profile").addEventListener("click", () => {
+  if (!lastStatus || !lastStatus.profile_switch) { showModal("Profil", `<div class="kv"><div class="k">Durum</div><div class="v">Profil başlatmada seçilir (AGENT_PROFILE). Oturumda geçiş için ARCHITECT_TOKEN tanımlı değil.</div></div>`); return; }
+  const cur = lastStatus.profile || "analyst";
+  showModal("Profil değiştir", `<div class="kv"><div class="k">Şu an</div><div class="v">${esc(cur)}</div><div class="k">Hedef</div><div class="v"><select id="pf-sel"><option value="analyst" ${cur === "analyst" ? "selected" : ""}>Analyst — salt-okunur</option><option value="architect" ${cur === "architect" ? "selected" : ""}>Architect — kataloğa yazma, terfi, sıfırlama</option></select></div><div class="k">Operatör anahtarı</div><div class="v"><input id="pf-tok" type="password" placeholder="ARCHITECT_TOKEN" style="width:260px"></div><div class="k"></div><div class="v"><button id="pf-go" class="jbtn">Geç</button> <span id="pf-msg" class="status"></span></div><div class="k">Not</div><div class="v">Geçiş oturumu temizler (sohbet, tablolar, yüklemeler).</div></div>`);
+  $("pf-go").addEventListener("click", async () => {
+    const r = await fetch("/api/profile", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({profile: $("pf-sel").value, token: $("pf-tok").value})});
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { $("pf-msg").textContent = d.detail || r.status; return; }
+    $("gmodal").hidden = true; $("thread").innerHTML = ""; answers = []; activeIndex = -1; renderSession(); lastEvidence = null; $("btn-journey").disabled = true; $("ev-body").innerHTML = ""; loadStatus();
+  });
+});
+// ---- Architect tam sıfırlama (ADR-0056, ADR-0069): önizleme → kapsama bağlı onay kodu → silme, doğrulama, yeniden kurulum
+async function wipePreview(catalog) {
+  const r = await fetch("/api/architect/reset", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({catalog})});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { showModal("Tam veri sıfırlama", `<div class="kv"><div class="k">Ret</div><div class="v">${esc(d.detail || r.status)}</div></div>`); return; }
+  const rows = (items) => (items || []).map((t) => `${esc(t.label)} — <code>${esc(t.path)}</code>`).join("<br>");
+  const outside = (d.outside || []).length ? `<div class="k">Kapsam dışı ayar</div><div class="v" style="color:var(--red)">${rows(d.outside)}<br>Bu yollar veri kökü dışında: sıfırlama yapılmaz.</div>` : "";
+  showModal("Tam veri sıfırlama — onay", `<div class="kv"><div class="k">Silinecek</div><div class="v">${rows(d.target_details) || "(hedef yok)"}</div>`
+    + `<div class="k">Zaten yok</div><div class="v">${rows(d.absent) || "—"}</div>${outside}`
+    + `<div class="k">Korunan</div><div class="v">${esc(d.excluded)}</div>`
+    + `<div class="k">Katalog</div><div class="v"><label><input type="checkbox" id="wp-cat" ${d.catalog === "varsayilan" ? "checked" : ""}> Başlangıç kataloğunu yeniden yükle (işaretsiz: boş katalog, yeni alan)</label></div>`
+    + `<div class="k">Uyarı</div><div class="v" style="color:var(--red)">${esc(d.note)}</div>`
+    + `<div class="k">Onay kodu</div><div class="v"><code>${esc(d.confirm)}</code> → <input id="wp-code" placeholder="kodu yaz" style="width:140px" ${d.refused ? "disabled" : ""}> `
+    + `<button id="wp-go" class="jbtn" style="border-color:#e5b4b4;background:var(--red-bg);color:var(--red)" ${d.refused ? "disabled" : ""}>Sil ve kur</button> <span id="wp-msg" class="status"></span></div></div>`);
+  $("wp-cat").addEventListener("change", () => wipePreview($("wp-cat").checked ? "varsayilan" : "bos"));   // kapsam değişti: yeni kod
+  $("wp-go").addEventListener("click", async () => {
+    if ($("wp-code").value.trim() !== d.confirm) { $("wp-msg").textContent = "kod eşleşmiyor"; return; }
+    $("wp-go").disabled = true; $("wp-msg").textContent = "okuyucular kapatılıyor, siliniyor, kuruluyor…";
+    const r2 = await fetch("/api/architect/reset", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({confirm: d.confirm, catalog: d.catalog})});
+    const d2 = await r2.json().catch(() => ({}));
+    if (!r2.ok) { $("wp-msg").textContent = d2.detail || r2.status; $("wp-go").disabled = false; return; }
+    const res = (d2.results || []).map((x) => `<span style="color:${x.status === "silinemedi" ? "var(--red)" : "inherit"}">${esc(x.status)}</span> — ${esc(x.label)} <code>${esc(x.path)}</code>${x.detail ? " · " + esc(x.detail) : ""}`).join("<br>");
+    const ok = (o) => (o && o.ok ? "✓" : "✗") + " " + esc((o || {}).detail || "");
+    $("gm-body").innerHTML = `<div class="kv"><div class="k">Durum</div><div class="v" style="color:${d2.status === "tamamlandı" ? "var(--teal)" : "var(--red)"}">${esc(d2.status)}</div>`
+      + `<div class="k">Hedefler</div><div class="v">${res || "—"}</div><div class="k">Bootstrap</div><div class="v">${ok(d2.bootstrap)}</div>`
+      + `<div class="k">Doğrulama</div><div class="v">${ok(d2.verify)}</div><div class="k">Ajan</div><div class="v">${ok(d2.agent)}</div>`
+      + `<div class="k">Sonra</div><div class="v">Eski sohbet, tablo ve grafik bağlantıları temizlendi. Yeni veriyi dosya/URL ile yükle; alan profili yeni kataloğa göre kurulur.</div></div>`;
+    $("thread").innerHTML = ""; answers = []; activeIndex = -1; renderSession(); loadStatus();
+  });
+}
+$("btn-wipe").addEventListener("click", () => wipePreview("bos"));
 
 let answers = [];          // bu oturumun tam cevap yükleri (sunucudaki /api/answers ile aynı)
 let activeIndex = -1;
@@ -232,7 +285,8 @@ async function loadAnswers() {      // sayfa yenilenince sohbet sunucudan geri g
 
 function renderAnswer(p) {
   const thread = $("thread");
-  const q = document.createElement("div"); q.className = "q"; q.id = "ans-" + p.index; q.textContent = p.question; thread.appendChild(q);
+  const q = document.createElement("div"); q.className = "q"; q.id = "ans-" + p.index;
+  q.textContent = (p.question || "").replace(/\n\nDosya: (\S+)/g, (m, path) => "\n📎 " + path.split("/").pop().replace(/^[0-9a-f]{8}_/, "")); thread.appendChild(q);
   const a = document.createElement("div"); a.className = "a"; a.dataset.i = p.index;
   let html = `<div class="text">${mdToHtml(p.text)}</div>`;
   const hasTable = p.table && p.table.rows && p.table.rows.length;
@@ -241,14 +295,27 @@ function renderAnswer(p) {
     html += `<div class="${hasTable && hasChart ? "grid2" : ""}">`;
     if (hasTable) {
       const numeric = p.table.columns.map((c, j) => p.table.rows.some((r) => typeof r[j] === "number"));
-      html += `<div class="box"><div class="head"><span>${esc(p.table_title || "Aktif tablo")}</span><span>${fmtInt(p.table.row_count)} satır${p.table.truncated ? " (ilk 200)" : ""}</span></div><div class="tablewrap"><table class="data"><thead><tr>${p.table.columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${p.table.rows.slice(0, 60).map((r) => "<tr>" + r.map((v, j) => `<td class="${numeric[j] ? "num" : ""}">${esc(fmtCell(v))}</td>`).join("") + "</tr>").join("")}</tbody></table></div></div>`;
+      html += `<div class="box"><div class="head"><span>${esc(p.table_title || "Aktif tablo")}${p.table_scope ? ` <span class="badge ${p.table_scope.startsWith("oturum") ? "gap" : "ok"}" style="font-size:11px;margin-left:6px">${esc(p.table_scope)}</span>` : ""}</span><span>${fmtInt(p.table.row_count)} satır${p.table.truncated ? " (ilk 200 gösteriliyor; indirme tam tablo)" : ""} · <a href="/api/answers/${p.index}/table.csv">CSV</a> · <a href="/api/answers/${p.index}/table.xlsx">XLSX</a></span></div><div class="tablewrap"><table class="data"><thead><tr>${p.table.columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${p.table.rows.slice(0, 60).map((r) => "<tr>" + r.map((v, j) => `<td class="${numeric[j] ? "num" : ""}">${esc(fmtCell(v))}</td>`).join("") + "</tr>").join("")}</tbody></table></div></div>`;
     }
     if (hasChart) {
-      html += p.charts.filter((c) => c.png).map((c) => `<div class="box chart"><img alt="grafik" src="data:image/png;base64,${c.png}"><div class="cap">${esc(c.title || "Grafik")} · belirtim araçta kuruldu, sayılar tablodan · denetçi: ${c.lint_ok === false ? "UYARI" : c.lint_ok ? "geçti" : "–"}</div></div>`).join("");
+      html += p.charts.filter((c) => c.png).map((c, k) => `<div class="box chart"><img alt="grafik" src="data:image/png;base64,${c.png}"><div class="cap">${esc(c.title || "Grafik")} · belirtim araçta kuruldu, sayılar tablodan · denetçi: ${c.lint_ok === false ? "UYARI" : c.lint_ok ? "geçti" : "–"} · <a href="/api/answers/${p.index}/chart/${k}.png">PNG indir</a></div></div>`).join("");
     }
     html += `</div>`;
   }
+  if (p.access_options && p.access_options.length) {   // erişim engelinde seçenekler (M06): eyleme bağlı düğmeler
+    const label = {upload_file: "📎 Dosyayı yükle", use_credential: "Ekip hesabı (tanımlı bağlayıcı)", alternative_source: "Başka kaynakta ara", retry_later: "Tekrar dene"};
+    html += `<div class="chips"><span class="label">Seçenekler</span>${p.access_options.map((k) => `<button class="jbtn" data-opt="${esc(k)}">${esc(label[k] || k)}</button>`).join("")}</div>`;
+  }
+  html += `<div class="status" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span>Bu cevap:</span><a href="/api/answers/${p.index}/report.html" target="_blank">HTML rapor</a>${hasTable ? `<a href="/api/answers/${p.index}/table.csv">tam tablo CSV</a><a href="/api/answers/${p.index}/table.xlsx">XLSX</a>` : ""}<span>· cevap #${p.index}, sürüme bağlı</span></div>`;
   a.innerHTML = html; thread.appendChild(a); thread.scrollTop = thread.scrollHeight;
+  a.querySelectorAll("[data-opt]").forEach((b) => b.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    const base = (p.question || "").split("\n\nDosya:")[0];
+    if (b.dataset.opt === "upload_file") { $("btn-file").click(); return; }
+    if (b.dataset.opt === "retry_later") { $("q").value = base; ask(); return; }
+    if (b.dataset.opt === "alternative_source") { $("q").value = base + "\n\nBelirttiğim kaynağa erişilemiyorsa aynı veriyi başka bir kaynakta ara ve kaynak değişikliğini cevapta açıkça belirt."; ask(); return; }
+    if (b.dataset.opt === "use_credential") { $("q").value = base + "\n\nBu veri tanımlı bağlayıcıyla (ekip anahtarı) çekilebiliyorsa o yoldan getir."; ask(); }
+  }));
   a.querySelectorAll(".chart img").forEach((img) => img.addEventListener("click", () => showModal(p.table_title || "Grafik", `<div class="lightbox" style="padding:12px"><img alt="grafik" src="${img.src}"></div>`)));
   a.addEventListener("click", () => { if (activeIndex !== p.index) { activeIndex = p.index; renderSession(); renderTrace(p); renderEvidence(p); } });
 }
@@ -269,11 +336,14 @@ function renderEvidence(p) {
   lastEvidence = ev || null; $("btn-journey").disabled = !ev;
   if (!ev) { badge.className = "badge none"; badge.textContent = "—"; $("ev-summary").textContent = "Bu cevap için tablo yok."; body.innerHTML = ""; return; }
   badge.className = "badge " + (ev.complete ? "ok" : "gap"); badge.textContent = ev.complete ? "tam" : "EKSİK";
+  const st = ev.states || {};
+  badge.title = Object.entries(st).map(([k, v]) => `${k}: ${v ? "✓" : "✗"}`).join(" · ");
   $("ev-summary").textContent = ev.summary;
   let html = "";
-  if (ev.numbers && ev.numbers.length) {
-    html += `<div><div class="label" style="margin-bottom:6px">Cevaptaki sayılar <span style="font-weight:400;text-transform:none;letter-spacing:0">(tıkla → o sayının yolculuğu)</span></div><div class="numbers">${ev.numbers.map((n, i) => `<span class="num ${n.matched ? "" : "miss"}" data-i="${i}" title="${esc(n.column || "")} ${esc(n.row_key || "")}">${esc(n.text)}</span>`).join("")}</div></div>`;
+  if (ev.states && Object.keys(ev.states).length) {   // üç ayrı durum (M13): iddialar, sorgu izi, dosya zinciri
+    html += `<div class="numbers" style="margin-bottom:2px">${Object.entries(ev.states).map(([k, v]) => `<span class="badge ${v ? "ok" : "gap"}" style="font-size:11px">${esc(k)} ${v ? "✓" : "✗"}</span>`).join("")}${ev.inspected_rows && ev.table_rows > ev.inspected_rows ? `<span class="badge none" style="font-size:11px">ilk ${ev.inspected_rows}/${ev.table_rows} satır incelendi</span>` : ""}</div>`;
   }
+  // Cevap sayılarının listesi panelde gösterilmez (kullanıcı geri bildirimi, ADR-0078): sağda kanıt zinciri yeter.
   const nodes = [];
   (ev.columns || []).slice(0, 3).forEach((c) => nodes.push({t: `Kolon · ${c.column}`, d: c.sql || "provenance yok", amber: !c.sql}));
   if (ev.observation_count) { const o = ev.observations[0] || {}; nodes.push({t: `Silver gözlemi · ${ev.observation_count} gözlem`, d: `${o.series_id || ""} · ${o.observation_date || ""} · quality ${o.quality_flag || ""}`}); nodes.push({t: "Artifact → Bronze → RAW", d: `${(o.artifact_sha256 || "").slice(0, 12)}… · run ${(o.run_id || "").slice(0, 8)} · HTTP ${o.http_status ?? "–"}`}); nodes.push({t: "Kaynak", d: `${o.locator || ""} · çekim ${o.fetched_at || ""}`}); }
@@ -284,19 +354,49 @@ function renderEvidence(p) {
   if (ev.gaps && ev.gaps.length) html += `<div class="note amber"><strong>Kopuk halkalar</strong><br>${ev.gaps.map(esc).join("<br>")}</div>`;
   if (ev.consulted_unused && ev.consulted_unused.length) html += `<div class="note"><strong>Danışılıp kullanılmayan</strong><br>${ev.consulted_unused.map(esc).join(" · ")}</div>`;
   if (ev.web_unused && ev.web_unused.length) html += `<div class="note"><strong>Taranıp kullanılmayan</strong><br>${ev.web_unused.map((w) => esc((w.url || "") + " · " + (w.note || ""))).join("<br>")}</div>`;
+  if (ev.context_sources && ev.context_sources.length) html += `<div class="note"><strong>Bağlam kaynakları (web araması; veri değil)</strong><br>${ev.context_sources.map((w) => esc((w.url || "") + " · " + (w.title || "") + " · arama: " + (w.query || ""))).join("<br>")}</div>`;
   body.innerHTML = html;
   body.querySelectorAll(".num").forEach((el) => el.addEventListener("click", () => openJourney(Number(el.dataset.i))));
 }
 
+// ---- Dosya girişi (M10): dosya oturuma özel dizine yüklenir; soruya sunucudaki kopyanın yolu eklenir
+// (Architect/web_url yalnız kullanıcı metninde geçen adresi açar — bu yol kullanıcının mesajıdır).
+let pending = [];
+async function uploadFile(file) {
+  const fd = new FormData(); fd.append("file", file, file.name);
+  const chip = document.createElement("span"); chip.className = "chip"; chip.textContent = `⏳ ${file.name}`; $("attach").hidden = false; $("attach").appendChild(chip);
+  try {
+    const r = await fetch("/api/upload", {method: "POST", body: fd});
+    const d = await r.json();
+    if (!r.ok) { chip.className = "chip err"; chip.textContent = `✗ ${file.name}: ${d.detail || r.status}`; return; }
+    pending.push(d); chip.textContent = `📎 ${d.name} · ${d.kind} · ${(d.size / 1024).toFixed(0)} KB`; chip.title = d.path;
+    const x = document.createElement("button"); x.textContent = "×"; x.style.cssText = "border:0;background:transparent;cursor:pointer;color:var(--muted);margin-left:4px"; x.addEventListener("click", () => { pending = pending.filter((p) => p.path !== d.path); chip.remove(); if (!pending.length) $("attach").hidden = true; }); chip.appendChild(x);
+    if (!$("q").value.trim()) $("q").value = d.kind.startsWith("belge") || d.kind.startsWith("görsel") ? "Bu belgedeki tabloyu oku ve özetle." : "Bu dosyayı analiz et.";
+    $("q").focus();
+  } catch (e) { chip.className = "chip err"; chip.textContent = `✗ ${file.name}: ${e}`; }
+}
+$("btn-file").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", async (e) => { for (const f of e.target.files) await uploadFile(f); e.target.value = ""; });
+document.addEventListener("dragover", (e) => { e.preventDefault(); });
+document.addEventListener("drop", async (e) => { e.preventDefault(); for (const f of e.dataTransfer.files) await uploadFile(f); });
+
 async function ask() {
-  const q = $("q").value.trim(); if (!q) return;
+  let q = $("q").value.trim(); if (!q && !pending.length) return;
+  const shown = q || "Bu dosyayı analiz et.";
+  if (pending.length) q = (q || shown) + "\n\n" + pending.map((p) => `Dosya: ${p.path}`).join("\n");
   $("btn-ask").disabled = true; $("q").value = "";
-  const busy = document.createElement("div"); busy.className = "busy"; busy.textContent = "ajan çalışıyor… (planla → araç çağır → doğrula)"; $("thread").appendChild(busy);
+  const files = pending.map((f) => f.name);
+  pending = []; $("attach").innerHTML = ""; $("attach").hidden = true;
+  // Mesaj cevap beklenmeden konuşma bandına çıkar, altında "Düşünüyor…" (kullanıcı geri bildirimi, ADR-0078).
+  const pq = document.createElement("div"); pq.className = "q"; pq.textContent = shown + (files.length ? "\n" + files.map((f) => "📎 " + f).join("\n") : "");
+  $("thread").appendChild(pq);
+  const busy = document.createElement("div"); busy.className = "busy"; busy.textContent = "Düşünüyor…"; $("thread").appendChild(busy);
+  pq.scrollIntoView({behavior: "smooth", block: "start"});
   try {
     const r = await fetch("/api/ask", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({question: q})});
     busy.remove();
     if (!r.ok) { const e = await r.json().catch(() => ({detail: r.statusText})); const d = document.createElement("div"); d.className = "err"; d.textContent = "Hata: " + (e.detail || r.status); $("thread").appendChild(d); return; }
-    const p = await r.json(); answers.push(p); activeIndex = p.index; renderAnswer(p); renderTrace(p); renderEvidence(p); renderSession();
+    const p = await r.json(); pq.remove(); answers.push(p); activeIndex = p.index; renderAnswer(p); renderTrace(p); renderEvidence(p); renderSession();
     if (p.search_budget_remaining !== null && p.search_budget_remaining !== undefined) $("pill-budget").textContent = `Arama bütçesi ${p.search_budget_remaining}`;
   } catch (e) { busy.remove(); const d = document.createElement("div"); d.className = "err"; d.textContent = "Bağlantı hatası: " + e; $("thread").appendChild(d); }
   finally { $("btn-ask").disabled = false; $("q").focus(); }

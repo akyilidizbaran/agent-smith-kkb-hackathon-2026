@@ -1,0 +1,146 @@
+{
+  "meta": {
+    "commit": "bd32404",
+    "work": "/private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80b/scratchpad/k01_bizimdal",
+    "at": "2026-09-14T15:30:56",
+    "model": "betikli (LLM çağrısı yok)",
+    "demo_db_sha256_once": "c2cf0aece473423158bf42113632c88ee7691058e51ed19f09f7f252c405f59d",
+    "demo_db_sha256_sonra": "c2cf0aece473423158bf42113632c88ee7691058e51ed19f09f7f252c405f59d"
+  },
+  "passed": 21,
+  "total": 22,
+  "steps": [
+    {
+      "id": "T01-kurulum",
+      "beklenen": "geçici kökte DB başlangıç kataloğuyla kurulur",
+      "gozlenen": "status: success · database: /private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80b/scratchpad/k01_bizimdal/data/lakehouse.duckdb · catalog_mode: default · catalog_series_count: 2214",
+      "ok": true
+    },
+    {
+      "id": "T01-uygulama",
+      "beklenen": "web uygulaması geçici DB ile açılır (Analyst)",
+      "gozlenen": "{'profile': 'analyst', 'model': 'kkbhackathon2026/Qwen3.8-27B'}",
+      "ok": true
+    },
+    {
+      "id": "T02-kural-sorusu",
+      "beklenen": "birebir eşitlik sonucu değiştiriyor: birleştirme yapılmaz, kural sorulur",
+      "gozlenen": "{'index': 4, 'role': 'execute', 'thought': '', 'tool': 'workspace_join', 'args': {'left': 'k1', 'right': 'k3', 'left_key': 'il_adi', 'right_key': 'il', 'purpose': 'nüfus ve hastane'}, 'ok': False, 'error_code': 'INVALID_ARGS', 'summary': \"HATA[INVALID_ARGS]: Anahtar kuralı sonucu değiştiriyor: birebir eşitlikle 1 sol satır eşleşiyor, key_policy='metin_normal' (baş/son boşluk ve büyük/küçük harf farkı yok sayıldı (Türkçe İ/ı dahil)) ile 3 (ör. 'ankara' ↔ 'Ankara'). Eşdeğerlik varsayılmadı.\\nADAYLAR: metin_normal\\nYAPACAĞIN: Kullanıcıya \", 'duration_ms': 0, 'candidates': ['metin_normal']}",
+      "ok": true
+    },
+    {
+      "id": "T02-kaynaklar",
+      "beklenen": "iki dosya ayrı kaynak kimliğiyle oturumda (k1 nüfus, k2 hastane, k3 tekil)",
+      "gozlenen": "[('k1', 'nüfus tablosu'), ('k2', 'hastane tablosu'), ('k3', 'yinelenen Van satırını tekilleştir')]",
+      "ok": true
+    },
+    {
+      "id": "T03-degerler",
+      "beklenen": "birleşim + takip hesabı beklenen değerler (ankara 16,371…, ADANA 18,029…, İzmir 16,360…, Trabzon boş)",
+      "gozlenen": "{'ankara': 16.3711, 'ADANA': 18.0299, 'İzmir': 16.3604, 'Trabzon': None}",
+      "ok": true
+    },
+    {
+      "id": "T03-kaynak",
+      "beklenen": "her kolon kendi dosyasının provenance'ını ve anahtar kuralını taşır",
+      "gozlenen": "{'nufus_bin': ['web — a34a2711_nufus_il.csv'], 'hastane_sayisi': ['web — f3885a57_hastane_il.csv']}",
+      "ok": true
+    },
+    {
+      "id": "T02-indirme",
+      "beklenen": "tam tablo CSV/XLSX ve HTML rapor aynı 4 satırı ve hesap kolonunu taşır",
+      "gozlenen": "{'csv_satir': 4, 'xlsx_satir': 4, 'rapor': 200}",
+      "ok": true
+    },
+    {
+      "id": "T03-ortak-katalog",
+      "beklenen": "Analyst oturumu ortak kataloğu değiştirmez (sayı ve içerik parmak izi)",
+      "gozlenen": "{'önce': (2214, '3cd5b095ed39cffaba902297a8138293'), 'sonra': (2214, '3cd5b095ed39cffaba902297a8138293')}",
+      "ok": true
+    },
+    {
+      "id": "T04-profil",
+      "beklenen": "anahtarla Architect'e geçiş; oturum temizlenir",
+      "gozlenen": "{'ok': True, 'profile': 'architect'}",
+      "ok": true
+    },
+    {
+      "id": "T04-taslak",
+      "beklenen": "gerçek CLI ile taslak seri yazılır (status draft)",
+      "gozlenen": "{'adım': {'index': 1, 'role': 'execute', 'thought': '', 'tool': 'ingest_from_url', 'args': {'locator': '/private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80b/scratchpad/k01_bizimdal/data/incoming/uploads/cb716aff/b32fe42f_acil_basvuru_aylik.csv', 'name': 'Acil başvuru (aylık)', 'series_key': 'acil_basvuru', 'unit': 'kişi', 'measure_type': 'flow_periodic', 'default_agg': 'sum'}, 'ok': True, 'error_code': None, 'summary': 'EKLENDİ: adhoc:acil_basvuru — Acil başvuru (aylık)\\nkatalog adı: acil_basvuru — b32fe42f_acil_basvuru_aylik.csv (taslak)\\nkaynak: /private/tmp/",
+      "ok": true
+    },
+    {
+      "id": "T04-gecersiz-onay",
+      "beklenen": "onaysız ve 'yayınlama' turlarında terfi reddedilir; DB (satır, Silver sayısı, dosya özeti) değişmez",
+      "gozlenen": "{'retler': ['INTENT_REQUIRED', 'INTENT_REQUIRED'], 'parmak_izi_aynı': True}",
+      "ok": true
+    },
+    {
+      "id": "T04-yayin",
+      "beklenen": "güncel açık onayla yalnız bu işlem: aktif seri ve Silver'da 12 satır",
+      "gozlenen": "{'durum': [('active',)], 'silver': 12, 'adım_ok': True}",
+      "ok": true
+    },
+    {
+      "id": "T04-gold",
+      "beklenen": "finans dışı yayımlanmış seride Gold çeyreklik toplam modelden bağımsız beklenenle aynı",
+      "gozlenen": "{'beklenen': [544435.0, 602860.0, 661140.0, 788930.0], 'gözlenen': [544435.0, 602860.0, 661140.0, 788930.0], 'adım': 'Gold align: adhoc:acil_basvuru → quarterly: 4 dönem hesaplandı (2025-03-31 → 2025-12-31)\\nKural (katalogdan): kural: flow_periodic → sum, birim kişi\\nSütunlar: period_start, period_end, value, quality_f'}",
+      "ok": true
+    },
+    {
+      "id": "T05-onizleme",
+      "beklenen": "önizleme kapsamı (DB, RAW/Bronze, yüklemeler, grafikler) ve boş katalog seçimi gösterir",
+      "gozlenen": "{'hedefler': ['veritabanı', 'RAW', 'Bronze', 'oturum yüklemeleri', 'grafikler'], 'not': 'Silme geri alınamaz; eski cevapların kanıt zinciri kopar. Katalog BOŞ kurulacak; başlangıç kataloğu yüklenmez.'}",
+      "ok": true
+    },
+    {
+      "id": "T05-sifirlama",
+      "beklenen": "fiziksel sıfırlama tamamlandı; şema var, meta.series 0, kip none; eski grafik ve yüklemeler yok",
+      "gozlenen": "{'durum': 'tamamlandı', 'doğrulama': {'ok': True, 'series': 0, 'catalog_mode': 'none', 'detail': 'boş katalog doğrulandı'}, 'ajan': {'ok': True, 'detail': 'ajan yeni veriyle kuruldu'}, 'seri': 0}",
+      "ok": true
+    },
+    {
+      "id": "T05-korunan",
+      "beklenen": "veri kökü dışındaki kontrol dosyası ve asıl demo DB değişmedi",
+      "gozlenen": "{'kontrol': True, 'demo_db_aynı': True}",
+      "ok": true
+    },
+    {
+      "id": "T05-yeni-alan",
+      "beklenen": "boş katalogdan yeni alan: yalnız adhoc:web_ziyaret aktif; finans serisi geri gelmedi",
+      "gozlenen": "{'katalog': [('adhoc:web_ziyaret', 'active')], 'ingest_ok': [True], 'promote_ok': [True]}",
+      "ok": true
+    },
+    {
+      "id": "T05-analiz",
+      "beklenen": "yeni alanda analiz: rejim 2025-01-31'de değişir (düzey sıçraması), araç başarılı",
+      "gozlenen": "{'kırılmalar': [], 'adım_ok': None}",
+      "ok": false
+    },
+    {
+      "id": "T06-yeniden-bootstrap",
+      "beklenen": "bayraksız bootstrap kayıtlı boş kipi korur (1 seri, finans kataloğu yok)",
+      "gozlenen": "status: success · database: /private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80b/scratchpad/k01_bizimdal/data/lakehouse.duckdb · catalog_mode: none · catalog_series_count: 1",
+      "ok": true
+    },
+    {
+      "id": "T06-sizinti",
+      "beklenen": "yeniden başlatmada alan profili yalnız yeni katalogdan; arama eski finans serisi döndürmez",
+      "gozlenen": "{'alan': 'adhoc kaynaklı veriler', 'sızan': [], 'arama': 'Bu konuyla ilgili SORGULANABİLİR seri yok.\\nYAPACAĞIN: soruyu farklı sözcüklerle EN FAZLA bir kez daha ara; yine yoksa kullanıcıya bu verinin havuzda bulunmadığını söyle. Birden çok kalemi birlikte ara'}",
+      "ok": true
+    },
+    {
+      "id": "T06-onbellek",
+      "beklenen": "sıfırlama sonrası eski embedding önbelleği yok",
+      "gozlenen": "önbellek dizini yok",
+      "ok": true
+    },
+    {
+      "id": "T06-analyst-yazamaz",
+      "beklenen": "Analyst profilinde kalıcı yazma araçları kayıtlı değil",
+      "gozlenen": "['web_url', 'workspace_join']",
+      "ok": true
+    }
+  ]
+}

@@ -7,6 +7,8 @@ yalnız diskten gelir.
 
 from __future__ import annotations
 
+import hashlib
+
 import sys
 from datetime import date
 from pathlib import Path
@@ -26,7 +28,8 @@ from kkb_agent.core.evidence import EvidenceBuilder  # noqa: E402
 from kkb_agent.core.workspace import AnalysisWorkspace  # noqa: E402
 from tests.test_silver_lakehouse import DDL, _series  # noqa: E402
 
-SHA_A = "a" * 64
+RAW_A = b'{"konut": [100, 110]}'
+SHA_A = hashlib.sha256(RAW_A).hexdigest()   # D06: RAW içerik adresli; fikstür gerçek özet taşır
 SHA_B = "b" * 64
 ARTIFACT_DDL = """
 CREATE TABLE meta.artifact (
@@ -51,12 +54,15 @@ def lake(tmp_path: Path) -> SilverLakehouse:
         )
     con.execute(
         "INSERT INTO meta.artifact VALUES (?, 'bddk_monthly', 'ds', 'https://www.bddk.org.tr/x', 'application/json',"
-        " 100, 200, '2026-09-12 12:35:53+03', '/data/raw/bddk_monthly/a.json', now(), now())", [SHA_A])
+        " 100, 200, '2026-09-12 12:35:53+03', ?, now(), now())", [SHA_A, str(tmp_path / "data" / "raw" / "bddk_monthly" / "a.json")])
     # SHA_B: artifact kaydı yok → locator/fetched_at eksik, zincir kopuk
     con.close()
     bronze = tmp_path / "data" / "bronze" / "source_id=bddk_monthly" / "dataset_id=ds"
     bronze.mkdir(parents=True)
     (bronze / f"artifact_sha256={SHA_A}.parquet").write_bytes(b"PAR1")
+    raw = tmp_path / "data" / "raw" / "bddk_monthly" / "a.json"
+    raw.parent.mkdir(parents=True)
+    raw.write_bytes(RAW_A)
     return SilverLakehouse(db)
 
 
@@ -75,7 +81,7 @@ def test_adaptor_gozlemden_artifact_ve_raw_a_iner(lake: SilverLakehouse) -> None
     jan, mar = obs
     assert jan.artifact_sha256 == SHA_A and jan.locator == "https://www.bddk.org.tr/x"
     assert jan.fetched_at is not None and jan.fetched_at.year == 2026 and jan.http_status == 200
-    assert jan.raw_path == "/data/raw/bddk_monthly/a.json"
+    assert jan.raw_path.endswith("/data/raw/bddk_monthly/a.json") and jan.raw_digest_ok is True and jan.chain_state == "tam"
     assert jan.bronze_path is not None and jan.bronze_path.endswith(f"artifact_sha256={SHA_A}.parquet")
     assert jan.complete
     assert mar.artifact_sha256 == SHA_B and mar.locator is None and not mar.complete
@@ -190,7 +196,7 @@ def test_onceki_tablo_surumundeki_sayi_zinciri_kirmaz() -> None:
                                                artifacts=[{"kind": "web", "used": "https://x.example/p.csv",
                                                            "visited": [{"url": "https://x.example/p.csv", "sha256": "ab" * 32, "fetched_at": "t", "status": 200}]}])
     m = {n.text: n for n in panel.numbers}
-    assert m["65"].matched and m["65"].row_key == "önceki tablo (-1)" and m["67"].matched
+    assert m["65"].matched and m["65"].row_key.startswith("önceki tablo k1 · web") and m["67"].matched
     assert panel.complete, panel.gaps
 
 
@@ -228,8 +234,8 @@ def test_satir_sayisi_ve_isaret_yazimi_zinciri_kirmaz() -> None:
     panel = EvidenceBuilder(Silverish()).build("soru", "40 satır var; alt sınır −2,31 (mutlak 2,31); 65 gözlem.", ws, [], artifacts=[])
     m = {n.text: n for n in panel.numbers}
     assert m["40"].matched and m["40"].column == "(satır sayısı)"
-    assert m["-2,31"].matched and not m["-2,31"].row_key.startswith("işaret")   # Unicode eksi ASCII'ye çevrildi
-    assert m["2,31"].matched and m["2,31"].row_key.startswith("işaret")          # işaretsiz yazım: ters işaretle eşleşir
+    assert m["-2,31"].matched and not m["-2,31"].row_key.startswith("işaret yazımı")   # Unicode eksi ASCII'ye çevrildi
+    assert m["2,31"].matched and m["2,31"].row_key.startswith("işaret yazımı")          # işaretsiz yazım: ters işaretle eşleşir
     assert m["65"].matched and panel.complete, panel.gaps
 
 
@@ -250,5 +256,77 @@ def test_sorudaki_yil_ve_metin_kalmis_hucre_sayi_sayilir() -> None:
     assert m["2026"].matched and m["2026"].column == "(soruda geçiyor)"
     assert m["13.837"].matched and m["13.837"].column == "TL | Miktar" and "metin hücre" in m["13.837"].row_key
     assert m["1.017"].matched and m["93.824.682.381"].matched
-    assert panel.complete, panel.gaps
+    # K02-T06 (A12): hücreler eşleşse de kaynak OCR tahmini; sayılar doğrulanmış sayılmaz, zincir (URL+sha+zaman) tam kalır.
+    assert panel.ocr_unverified and not panel.claims_ok and panel.chain_ok and not panel.complete
+    assert any(g.startswith("sayılar OCR ile görüntüden okundu") for g in panel.gaps)
     assert panel.web_sources[0]["ocr"]["model"] == "ocr"
+
+
+def test_raw_yolu_veri_koku_tasininca_yeni_kokte_bulunur(tmp_path) -> None:
+    """Veri kökü taşınınca kayıtlı mutlak RAW yolu bayatlar; adaptör aynı göreli yolu yeni kökte bulur (14 Eyl bulgusu)."""
+    from kkb_agent.adapters.silver_lakehouse import SilverLakehouse
+
+    lake = SilverLakehouse.__new__(SilverLakehouse)
+    lake.db_path = tmp_path / "data" / "lakehouse.duckdb"
+    moved = tmp_path / "data" / "raw" / "kaynak" / "2026-09-13" / "abc.json"
+    moved.parent.mkdir(parents=True); moved.write_text("{}")
+    old = str(tmp_path / "eski_kok" / "raw" / "kaynak" / "2026-09-13" / "abc.json")
+    assert lake._resolve_raw(old) == str(moved)
+    assert lake._resolve_raw(str(tmp_path / "eski_kok" / "raw" / "yok.json")).endswith("yok.json")
+    assert lake._resolve_raw(None) is None
+
+
+def test_a23_raw_baytlari_kayitli_ozetle_uyusmazsa_zincir_tam_degil(lake, tmp_path) -> None:
+    """A23: RAW içerik adreslidir. Dosya var ama baytları değişmişse Bronze bulunsa da fiziksel kanıt sayılmaz."""
+    ws = AnalysisWorkspace()
+    r = lake.execute_sql("SELECT observation_date, value AS bakiye FROM silver.fact_observation "
+                         "WHERE series_id = 'bddk_monthly:konut' AND observation_date < '2025-03-01' ORDER BY 1")
+    ws.set_table(r.data, description="iki ay", provenance=r.provenance)
+    raw = tmp_path / "data" / "raw" / "bddk_monthly" / "a.json"   # fikstürün gerçek RAW dosyası
+
+    raw.write_bytes(b'{"degismis": true}')
+    obs = lake.evidence_for_observations("bddk_monthly:konut", [date(2025, 1, 28)])
+    assert obs[0].raw_digest_ok is False and obs[0].bronze_path and not obs[0].file_present
+    bad = EvidenceBuilder(lake).build("soru", "Ocak 100, Şubat 110 milyon TL.", ws, [])
+    assert not bad.complete and any("uyuşmuyor" in g for g in bad.gaps), bad.gaps
+
+    # Aynı yol, doğru baytlar: özet tutar (içerik adresli sahte sha ile değil, gerçek sha256 ile)
+    lake2_sha = hashlib.sha256(b"dogru").hexdigest()
+    assert lake._raw_digest_ok(lake2_sha, str(raw)) is False
+    raw.write_bytes(b"dogru")
+    assert lake._raw_digest_ok(lake2_sha, str(raw)) is True, "önbellek boyut/mtime değişince yenilenir"
+    assert lake._raw_digest_ok(lake2_sha, str(tmp_path / "yok.json")) is None
+
+
+def test_eslesmeyen_sayi_dosya_zinciri_rozetini_kirmizi_yapmaz(lake) -> None:
+    """M16 (14 Eyl): 13/14 sayı eşleşince 'dosya zinciri ✗' da görünüyordu; üç rozet bağımsızdır."""
+    ws = AnalysisWorkspace()
+    r = lake.execute_sql("SELECT observation_date, value AS bakiye FROM silver.fact_observation "
+                         "WHERE series_id = 'bddk_monthly:konut' AND observation_date < '2025-03-01' ORDER BY 1")
+    ws.set_table(r.data, description="iki ay", provenance=r.provenance)
+    panel = EvidenceBuilder(lake).build("soru", "Ocak 100, Şubat 110, fark 999 milyon TL.", ws, [])
+    assert panel.states() == {"sayılar": False, "sorgu izi": True, "dosya zinciri": True}, panel.gaps
+    assert not panel.complete and any(g.startswith("tabloda bulunmayan sayılar") for g in panel.gaps)
+
+
+def test_noktali_uc_haneli_sayi_hem_binlik_hem_ondalik_okunur(lake) -> None:
+    """M16 üçüncü koşu: model faizi '17.985' yazdı (ondalık), bakiyeyi '276.263' (binlik); ikisi de tablodaysa eşleşir."""
+    ws = AnalysisWorkspace()
+    ws.set_table(pd.DataFrame({"observation_date": [date(2025, 1, 28)], "bakiye": [276263.0], "faiz": [17.985]}),
+                 description="iki kolon")
+    panel = EvidenceBuilder(lake).build("soru", "Bakiye 276.263 milyon TL, faiz 17.985.", ws, [])
+    got = {n.text: n.matched for n in panel.numbers}
+    assert got == {"276.263": True, "17.985": True}, panel.numbers
+    miss = EvidenceBuilder(lake).build("soru", "Faiz 19.450.", ws, [])
+    assert [n.matched for n in miss.numbers] == [False]
+
+
+def test_m13_t05_gosterilen_hassasiyetin_yarim_birimi_yuvarlama_maddi_fark_degil(lake) -> None:
+    """M16 dördüncü koşu: faiz değişimi −0,403 cevapta "−0,40" yazıldı; göreli %0,5 (0,002) yuvarlamayı reddediyordu."""
+    ws = AnalysisWorkspace()
+    ws.set_table(pd.DataFrame({"observation_date": [date(2025, 1, 28), date(2025, 2, 28)],
+                               "degisim": [-0.403, -0.0575], "bakiye": [100.0, 250.0]}), description="değişim")
+    ok = EvidenceBuilder(lake).build("soru", "Değişim −0,40 ve −0,06 puan.", ws, [])
+    assert [n.matched for n in ok.numbers] == [True, True], ok.numbers
+    bad = EvidenceBuilder(lake).build("soru", "Bakiye 100,6 ve 255 oldu; değişim −0,41.", ws, [])
+    assert [n.matched for n in bad.numbers] == [False, False, False], "yarım birimi aşan fark maddi sayılır"

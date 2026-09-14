@@ -48,6 +48,13 @@ ErrorCode = Literal[
     # Niyet kapısı (ADR-0037): kaynak kullanıcının mesajından gelmedi ya da yazma isteği yok.
     # Araç çıktısındaki bir talimat modeli yönlendirmiş olabilir; kullanıcıya sorulur.
     "INTENT_REQUIRED",
+    # Dosya sorulan şeyle ilgisiz (Büşra, builder/relevance.py, V3 §3.9): dönem/terim/katalog ölçütlerinin hiçbiri
+    # tutmuyor; yazılmaz, kullanıcıya sorulur. Aynı dosyayı tekrar istemek sonucu değiştirmez, onay ayrı çağrıdır.
+    "FILE_IRRELEVANT",
+    # Bayat Gold (K02-T09, A24): Silver tablo kurulduktan sonra değişti; eski tablodan sayı verilmez, canlı Silver'dan yeniden hesaplanır.
+    "GOLD_STALE",
+    # Düşük kaliteli OCR (K02-T06, A12): tablo yapısı çözülemedi ya da satır toplamları tutmuyor; doğrulanmamış sayı verilmez.
+    "LOW_QUALITY_SOURCE",
     # veri katmanı — sorgu çalıştı, sonuç ne söylüyor
     "OUT_OF_COVERAGE",
     "EMPTY_RESULT",
@@ -71,6 +78,9 @@ ErrorCode = Literal[
 NOT_RETRYABLE: frozenset[str] = frozenset({
     "OUT_OF_COVERAGE",   # veri yok; kaç kez sorulursa sorulsun yok
     "UNSAFE_SQL",        # politika; farklı yazımı denemek sınırı aşma girişimi olur
+    "FILE_IRRELEVANT",   # aynı dosya aynı soruyla yine ilgisiz; kullanıcı onayı ayrı çağrıdır
+    "GOLD_STALE",        # aynı bayat tabloyu yeniden sorgulamak eski sonucu verir; yeniden hesaplama ayrı çağrıdır
+    "LOW_QUALITY_SOURCE",  # aynı görüntü yine aynı kalitede okunur; daha iyi dosya ya da açık kabul ayrı çağrıdır
     # UNKNOWN_TOOL burada DEĞİL: on üç araçla model ara sıra ad uyduruyor ("workspace");
     # aday listesiyle bir sonraki tur düzeltiyor. Ölçüldü: tekrar denenmez sayılınca
     # araçsız son tura düşüp veri çekmeden cevap yazdı (G11a, gerçek DB).
@@ -94,6 +104,9 @@ class ToolError:
     candidates: list[str] = field(default_factory=list)
     layer: Literal["schema", "reference", "policy", "data", "workspace", "harness", "access"] = "data"
     retryable: bool | None = None  # None → NOT_RETRYABLE tablosuna bak
+    # K02-T07 (A18): tekrar denenemez hata turu bitirir mi? None → evet (eski davranış). Kaynak SABİT DEĞİLKEN erişim hatası
+    # False taşır: aynı adres tekrar denenmez ama model başka kaynağı deneyebilir (kaynak değişikliği cevapta söylenir).
+    terminal: bool | None = None
 
     @property
     def is_retryable(self) -> bool:

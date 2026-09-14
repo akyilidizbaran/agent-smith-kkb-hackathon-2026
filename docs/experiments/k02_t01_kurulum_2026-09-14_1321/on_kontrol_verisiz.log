@@ -1,0 +1,13 @@
+cd agent-core && uv run python -m kkb_agent.cli --preflight
+ÖN KONTROL (salt-okunur)
+  ✓ mod                LAKEHOUSE_MODE=demo
+  ✗ veri kökü          /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/data
+  ✗ veritabanı         /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/data/lakehouse.duckdb yok · veri kurmak için: make demo-data
+  ✓ lakehouse-core     /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/lakehouse-core · CLI çalışıyor (uv run python)
+  ✗ izinli dosya kökü  /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/data/incoming yok → jüri dosyası buraya konur; make demo-data oluşturur
+  ✓ grafik dizini      /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_t01c/data/charts ilk grafikte oluşturulur
+  ✓ model              https://mia.csp.kloudeks.com/v1 · kkbhackathon2026/Qwen3.8-27B · anahtar var
+  ✓ yardımcı modeller  embedding kkbhackathon2026/Qwen3-Embedding-8B · vision kkbhackathon2026/Unlimited-OCR
+  ✓ anahtarlar         MIA var · EVDS var · Tavily var (yalnız var/yok)
+SONUÇ: HAZIR DEĞİL — veri kökü, veritabanı, izinli dosya kökü
+make: *** [preflight] Error 1

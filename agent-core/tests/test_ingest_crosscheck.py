@@ -133,7 +133,7 @@ def env(tmp_path: Path, monkeypatch):
                                sanctioned_locators=set())
     tool = IngestFromUrlTool(lake, cli, allowed_root=incoming, registry=registry)
 
-    def fake_read(locator, *, allowed_roots, session=None):
+    def fake_read(locator, *, allowed_roots, session=None, sheet=None):
         from kkb_agent.contracts.access import AccessOutcome
         return KONUT_CSV.copy(), AccessOutcome(status="ok", source=locator, message="okundu")
 

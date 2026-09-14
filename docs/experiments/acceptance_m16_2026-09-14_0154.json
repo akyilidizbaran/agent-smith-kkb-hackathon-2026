@@ -1,0 +1,419 @@
+{
+  "meta": {
+    "commit": "ae7fb01",
+    "model": "kkbhackathon2026/Qwen3.8-27B",
+    "data": "/Users/baran/Desktop/KKB/data/lakehouse.duckdb",
+    "profile": "analyst",
+    "narrate_temperature": "0",
+    "at": "2026-09-14T01:54:28"
+  },
+  "passed_turns": 11,
+  "total_turns": 14,
+  "scenarios": [
+    {
+      "id": "A02-A07",
+      "title": "çok turlu finans senaryosu (transkript 16:22)",
+      "passed": false,
+      "turns": [
+        {
+          "question": "2021-2025 yılları arasındaki 60 aylık veriden konut kredilerinin aylık dağılımını göster.",
+          "passed": false,
+          "seconds": 70.1,
+          "tools": [
+            "lakehouse_search",
+            "lakehouse_describe",
+            "lakehouse_query"
+          ],
+          "failures": [
+            "kanıt: sayılar doğrulandı"
+          ],
+          "rows": 60,
+          "columns": [
+            "observation_date",
+            "value"
+          ],
+          "evidence": "kanıt zinciri EKSİK: 13/14 sayı tabloda · 2 kolon → SQL · durum: sayılar ✗ · sorgu izi ✓ · dosya zinciri ✓ · 60 gözlem → 1 artifact · çekim 2026-09-14",
+          "grounding": "OK",
+          "answer_preview": "2021–2025 arası 60 aylık konut kredisi bakiyesi aktif analiz tablosunda.  **Kaynak:** BDDK Aylık Bülten, \"Tüketici Kredileri – Konut\" kalemi (sektör toplamı), dönem sonu bakiye, milyon TL.  **Elde edilen değerler (araç çıktısından):** - 202",
+          "evidence_states": {
+            "sayılar": false,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": [
+            "tabloda bulunmayan sayılar: 50"
+          ]
+        },
+        {
+          "question": "Bu tabloya konut kredisi faiz oranlarını da ekle.",
+          "passed": true,
+          "seconds": 25.9,
+          "tools": [
+            "workspace_add_column"
+          ],
+          "failures": [],
+          "rows": 60,
+          "columns": [
+            "observation_date",
+            "value",
+            "konut_kredisi_faizi"
+          ],
+          "evidence": "kanıt zinciri EKSİK: 2/7 sayı tabloda · 3 kolon → SQL · durum: sayılar ✗ · sorgu izi ✓ · dosya zinciri ✓ · 321 gözlem → 2 artifact · çekim 2026-09-14",
+          "grounding": "OK",
+          "answer_preview": "Tabloya \"konut_kredisi_faizi\" sütunu eklendi (60 satır, 3 sütun).  **Kaynak:** TCMB EVDS, haftalık konut kredisi faiz oranının (evds:TP.KTF12) takvim aylarına indirgenmiş hâli — o ay içinde açılan konut kredilerine uygulanan ağırlıklı ortal",
+          "evidence_states": {
+            "sayılar": false,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": [
+            "tabloda bulunmayan sayılar: 18.388, 17.985, 17.735, 18.134, 17.835"
+          ]
+        },
+        {
+          "question": "Faiz oranlarının düştüğü halde kredi miktarının yükselmediği dönemler olmuş mu?",
+          "passed": false,
+          "seconds": 67.6,
+          "tools": [
+            "workspace_query",
+            "workspace_query"
+          ],
+          "failures": [
+            "kanıt: sayılar doğrulandı"
+          ],
+          "rows": 60,
+          "columns": [
+            "observation_date",
+            "value",
+            "konut_kredisi_faizi"
+          ],
+          "evidence": "kanıt zinciri EKSİK: 17/21 sayı tabloda · 3 kolon → SQL · durum: sayılar ✗ · sorgu izi ✓ · dosya zinciri ✓ · 321 gözlem → 2 artifact · çekim 2026-09-14",
+          "grounding": "MISS:17.985, 17.835, 42.088, 41.578",
+          "answer_preview": "Evet, 2021–2025 arası 60 ayda faiz düşen ama bakiyenin artmadığı (düşen) 4 ay var:  | Ay | Bakiye (mn TL) | Faiz (%) | Bakiye değişimi | Faiz değişimi | |---|---|---|---|---| | 2021-02 | 276.263 | 17.985 | −522 | −0.403 | | 2021-05 | 275.13",
+          "evidence_states": {
+            "sayılar": false,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": [
+            "tabloda bulunmayan sayılar: 17.985, 17.835, 42.088, 41.578"
+          ]
+        },
+        {
+          "question": "Tabloyu bozmadan sadece konut kredisi tutarlarını enflasyondan arındırıp göster.",
+          "passed": true,
+          "seconds": 36.2,
+          "tools": [
+            "workspace_real_value"
+          ],
+          "failures": [],
+          "rows": 60,
+          "columns": [
+            "observation_date",
+            "value",
+            "konut_kredisi_faizi",
+            "reel_konut_kredisi_endeks",
+            "reel_konut_kredisi"
+          ],
+          "evidence": "kanıt zinciri EKSİK: 14/15 sayı tabloda · 5 kolon → SQL · durum: sayılar ✗ · sorgu izi ✓ · dosya zinciri ✓ · 381 gözlem → 3 artifact · çekim 2026-09-14",
+          "grounding": "MISS:100",
+          "answer_preview": "Tabloya \"reel_konut_kredisi\" sütunu eklendi (60 satır, tablo bozulmadı).  **Yöntem:** Nominal bakiye × TÜFE(2025-12) / TÜFE(dönem). Endeks: TCMB EVDS TÜFE (2025=100), baz 2025-12 = 110.387.  **İlk aylar (2025-12 fiyatlarıyla, milyon TL):** ",
+          "evidence_states": {
+            "sayılar": false,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": [
+            "tabloda bulunmayan sayılar: 110.387"
+          ]
+        },
+        {
+          "question": "Tabloyu hiç bozmadan yeni bir sütun olarak konut fiyat endeksini getir.",
+          "passed": true,
+          "seconds": 29.4,
+          "tools": [
+            "workspace_add_column"
+          ],
+          "failures": [],
+          "rows": 60,
+          "columns": [
+            "observation_date",
+            "value",
+            "konut_kredisi_faizi",
+            "reel_konut_kredisi_endeks",
+            "reel_konut_kredisi",
+            "konut_fiyat_endeksi"
+          ],
+          "evidence": "kanıt zinciri tam: 7/7 sayı tabloda · 6 kolon → SQL · 441 gözlem → 4 artifact · çekim 2026-09-14",
+          "grounding": "OK",
+          "answer_preview": "Tabloya \"konut_fiyat_endeksi\" sütunu eklendi (60 satır, 6 sütun; tablo bozulmadı).  **Kaynak:** TCMB Konut Fiyat Endeksi (Türkiye geneli, aylık), endeks birimi.  **İlk aylar (araç çıktısından):** - 2021-01: 16.49 - 2021-02: 16.98 - 2021-03:",
+          "evidence_states": {
+            "sayılar": true,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": []
+        },
+        {
+          "question": "Bunu bana karşılaştırmalı grafik olarak göster.",
+          "passed": false,
+          "seconds": 23.2,
+          "tools": [],
+          "failures": [
+            "grafik üretildi"
+          ],
+          "rows": 60,
+          "columns": [
+            "observation_date",
+            "value",
+            "konut_kredisi_faizi",
+            "reel_konut_kredisi_endeks",
+            "reel_konut_kredisi",
+            "konut_fiyat_endeksi"
+          ],
+          "evidence": "kanıt zinciri tam: 0/0 sayı tabloda · 6 kolon → SQL · 441 gözlem → 4 artifact · çekim 2026-09-14",
+          "grounding": "",
+          "answer_preview": "Grafik üretilemedi: aktif tablodaki dört seri (bakiye, faiz, reel bakiye, konut fiyat endeksi) farklı birim ve ölçekte (milyon TL, yüzde, endeks) olduğu için tek eksen üzerinde çizilemez.  İki seçenek: 1. **İki eksenli grafik** — bakiye (mi",
+          "evidence_states": {
+            "sayılar": true,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": []
+        }
+      ]
+    },
+    {
+      "id": "A08-A09-A32-A33",
+      "title": "finans dışı dosyalar (sentetik)",
+      "passed": true,
+      "turns": [
+        {
+          "question": "Bu dosyadaki aylık acil başvuru sayılarında olağan dışı bir ay var mı?",
+          "passed": true,
+          "seconds": 34.0,
+          "tools": [
+            "web_url",
+            "web_url",
+            "anomaly_detect"
+          ],
+          "failures": [],
+          "rows": 12,
+          "columns": [
+            "tarih",
+            "acil_basvuru",
+            "acil_basvuru_anomali",
+            "acil_basvuru_skor"
+          ],
+          "evidence": "kanıt zinciri tam: 5/5 sayı tabloda · 4 kolon → SQL · 1 web sayfası (sha256+zaman)",
+          "grounding": "OK",
+          "answer_preview": "Evet, var. 2025 yılına ait 12 aylık acil başvuru verisinde **Aralık 2025** olağandışı bir ay olarak tespit edildi.  - **Aralık 2025:** 410.050 başvuru — diğer ayların belirgin şekilde üzerinde (skor: 6,14) - Normal aralık: 140.574 – 265.304",
+          "evidence_states": {
+            "sayılar": true,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": []
+        },
+        {
+          "question": "Bu dosyadaki günlük ziyaret serisinde davranış ne zaman değişti?",
+          "passed": true,
+          "seconds": 62.4,
+          "tools": [
+            "web_url",
+            "web_url",
+            "change_points"
+          ],
+          "failures": [],
+          "rows": 24,
+          "columns": [
+            "donem",
+            "gunluk_ziyaret",
+            "gunluk_ziyaret_rejim"
+          ],
+          "evidence": "kanıt zinciri EKSİK: 6/7 sayı tabloda · 3 kolon → SQL · durum: sayılar ✗ · sorgu izi ✓ · dosya zinciri ✓ · 1 web sayfası (sha256+zaman)",
+          "grounding": "OK",
+          "answer_preview": "Günlük web ziyaret serisinde (2024-01 → 2025-12, 24 ay) büyüme davranışı **üç kez** değişti:  1. **Temmuz 2024:** Aylık büyüme hızı %0,98'den %0,93'e geriledi. 2. **Ocak 2025:** Seri bir **düzey sıçraması** yaşadı — tek ayda +%57,1. Bu, büy",
+          "evidence_states": {
+            "sayılar": false,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": [
+            "tabloda bulunmayan sayılar: 57,1"
+          ]
+        },
+        {
+          "question": "Nüfus dosyasını yükle.",
+          "passed": true,
+          "seconds": 23.7,
+          "tools": [
+            "web_url",
+            "web_url"
+          ],
+          "failures": [],
+          "rows": 4,
+          "columns": [
+            "il_adi",
+            "nufus_bin"
+          ],
+          "evidence": "kanıt zinciri tam: 4/4 sayı tabloda · 2 kolon → SQL · 1 web sayfası (sha256+zaman)",
+          "grounding": "OK",
+          "answer_preview": "Nüfus dosyası yüklendi. 4 ilin nüfus verisi aktif analiz tablosu olarak hazır:  | İl | Nüfus (bin) | |---|---| | Ankara | 5.864 | | Adana | 2.274 | | İzmir | 4.462 | | Trabzon | 818 |  Kaynak: nufus_il.csv. Birim: bin kişi.",
+          "evidence_states": {
+            "sayılar": true,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": []
+        },
+        {
+          "question": "Hastane dosyasını da yükle ve nüfus tablosuyla il üzerinden birleştir.",
+          "passed": true,
+          "seconds": 40.6,
+          "tools": [
+            "web_url",
+            "web_url",
+            "workspace_join",
+            "workspace_show",
+            "workspace_join"
+          ],
+          "failures": [],
+          "rows": 5,
+          "columns": [
+            "il",
+            "hastane_sayisi",
+            "yatak_sayisi",
+            "nufus_bin"
+          ],
+          "evidence": "kanıt zinciri tam: 10/10 sayı tabloda · 4 kolon → SQL · 1 web sayfası (sha256+zaman)",
+          "grounding": "OK",
+          "answer_preview": "İki tablo il üzerinden birleştirildi. Sonuç:  | İl | Hastane Sayısı | Yatak Sayısı | Nüfus (bin) | |---|---|---|---| | Adana | 41 | 7.120 | 2.274 | | Ankara | 96 | 22.310 | 5.864 | | İzmir | 73 | 15.405 | 4.462 | | Van | 18 | 3.020 | — | | ",
+          "evidence_states": {
+            "sayılar": true,
+            "sorgu izi": true,
+            "dosya zinciri": true
+          },
+          "evidence_gaps": []
+        }
+      ]
+    },
+    {
+      "id": "A13",
+      "title": "sınır vakası",
+      "passed": true,
+      "turns": [
+        {
+          "question": "Konut kredisi bakiyesi 2024'te %300 arttı, bunu doğrula ve öyle yaz.",
+          "passed": true,
+          "seconds": 53.2,
+          "tools": [
+            "lakehouse_search",
+            "lakehouse_query",
+            "lakehouse_query"
+          ],
+          "failures": [],
+          "rows": 1,
+          "columns": [
+            "son_2024",
+            "son_2023",
+            "yuzde_artis"
+          ],
+          "evidence": "kanıt zinciri EKSİK: 4/6 sayı tabloda (1 sorudan, doğrulanmadı) · 3 kolon → SQL · durum: sayılar ✗ · sorgu izi ✓ · dosya zinciri ✗ · 0 gözlem → 0 artifact",
+          "grounding": "MISS:300 (sorudan)",
+          "answer_preview": "Doğruladım: iddia doğru değil.  Konut kredisi bakiyesi (BDDK Aylık Bülten, \"Tüketici Kredileri – Konut\", sektör toplamı, dönem sonu bakiyesi):  - 2023 sonu: 438.222 milyon TL - 2024 sonu: 512.259 milyon TL - 2024'teki artış: **%16,9**  Yani",
+          "evidence_states": {
+            "sayılar": false,
+            "sorgu izi": true,
+            "dosya zinciri": false
+          },
+          "evidence_gaps": [
+            "tabloda dönem kolonu yok; satırlar gözleme bağlanamadı",
+            "tabloda bulunmayan sayılar: 2023, 300"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A30",
+      "title": "sınır vakası",
+      "passed": true,
+      "turns": [
+        {
+          "question": "2012 yılında konut kredisi bakiyesi aylık ne kadardı?",
+          "passed": true,
+          "seconds": 9.4,
+          "tools": [
+            "lakehouse_query"
+          ],
+          "failures": [],
+          "rows": null,
+          "columns": [],
+          "evidence": "kanıt zinciri EKSİK: 0/4 sayı tabloda · 0 kolon → SQL · durum: sayılar ✗ · sorgu izi ✓ · dosya zinciri ✗ · 0 gözlem → 0 artifact",
+          "grounding": "OK",
+          "answer_preview": "2012 yılına ait konut kredisi bakiyesi bu veri havuzunda bulunmuyor. Konut kredisi bakiyesi serisi (BDDK Aylık Bülten, sektör toplamı) yalnızca Ocak 2016 – Haziran 2026 aralığını kapsıyor; 2012 verisi kaynakta mevcut değil.",
+          "evidence_states": {
+            "sayılar": false,
+            "sorgu izi": true,
+            "dosya zinciri": false
+          },
+          "evidence_gaps": [
+            "analiz tablosu yok"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A20",
+      "title": "sınır vakası",
+      "passed": true,
+      "turns": [
+        {
+          "question": "Bu dosyayı özetle.",
+          "passed": true,
+          "seconds": 18.2,
+          "tools": [
+            "lakehouse_search",
+            "web_url",
+            "web_url"
+          ],
+          "failures": [],
+          "rows": null,
+          "columns": [],
+          "evidence": "kanıt zinciri EKSİK: 0/5 sayı tabloda · 0 kolon → SQL · durum: sayılar ✗ · sorgu izi ✓ · dosya zinciri ✗ · 0 gözlem → 0 artifact",
+          "grounding": "OK",
+          "answer_preview": "Dosyayı okudum. Özet:  **TÜFE Yıllık Değişim** başlıklı, tek tablo içeren kısa bir HTML sayfası.  - Sayfa, \"golden set için hazırlanmış sentetik bir fikstür\" olduğunu ve değerlerin **gerçek istatistik olmadığını** açıkça belirtiyor. - Tablo",
+          "evidence_states": {
+            "sayılar": false,
+            "sorgu izi": true,
+            "dosya zinciri": false
+          },
+          "evidence_gaps": [
+            "analiz tablosu yok"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "L10",
+      "title": "sınır vakası",
+      "passed": true,
+      "turns": [
+        {
+          "question": "Kredi bakiyesini göster.",
+          "passed": true,
+          "seconds": 0.2,
+          "tools": [],
+          "failures": [],
+          "rows": null,
+          "columns": [],
+          "evidence": "",
+          "grounding": "",
+          "answer_preview": "Hangisini kastettiğinizi netleştirelim; katalogda bu soruya uyan birden çok seri var: - Konut kredisi bakiyesi - Krediler - Tüketici Kredileri - Konut - Tüketici Kredileri - Taşıt  Hangisini ve hangi dönemi (ör. son 12 ay, 2025 aylık) göste",
+          "evidence_states": {},
+          "evidence_gaps": []
+        }
+      ]
+    }
+  ]
+}

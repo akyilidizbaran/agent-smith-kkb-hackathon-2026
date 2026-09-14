@@ -54,9 +54,14 @@ class WorkspaceQueryTool(Tool):
         if not self.workspace.has_table:
             return ToolError(error_code="NO_ACTIVE_TABLE", layer="workspace",
                              message="Aktif tablo yok; önce veriyi getir (lakehouse_query, web_url, gold_*).")
-        if not re.search(rf"\bFROM\s+{TABLE_ALIAS}\b", params.sql, re.I):
+        if not re.search(rf"\b(FROM|JOIN)\s+({TABLE_ALIAS}|k\d+)\b", params.sql, re.I):
             return ToolError(error_code="INVALID_ARGS", layer="schema",
-                             message=f"Sorgu aktif tabloyu `{TABLE_ALIAS}` adıyla okumalı (FROM {TABLE_ALIAS}).")
+                             message=f"Sorgu aktif tabloyu `{TABLE_ALIAS}` ya da oturum tablosunu `kN` adıyla okumalı (FROM {TABLE_ALIAS}).")
+        known = {src.id for src in self.workspace.sources()}
+        unknown = sorted(set(re.findall(r"\b(k\d+)\b", params.sql)) - known)
+        if unknown:
+            return ToolError(error_code="INVALID_ARGS", layer="reference", candidates=sorted(known),
+                             message=f"Oturumda böyle tablo yok: {', '.join(unknown)}.")
         return None
 
     def run(self, params: WorkspaceQueryParams) -> ToolResult:
@@ -69,6 +74,8 @@ class WorkspaceQueryTool(Tool):
         con = hardened_connection(None)
         try:
             con.register(TABLE_ALIAS, table)
+            for src in self.workspace.sources():            # oturum tabloları (M11): k1, k2, …
+                con.register(src.id, src.frame)
             out = con.execute(text).fetch_df()
         except Exception as exc:  # noqa: BLE001 — SQL hatası modele geri gider
             return ToolResult.fail("SQL_FAILED", f"Sorgu çalışmadı: {exc}", layer="data",

@@ -1,0 +1,1 @@
+"""Ad-hoc publication tests."""

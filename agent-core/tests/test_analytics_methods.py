@@ -92,3 +92,18 @@ def test_iqr_sifirsa_zskoruna_duser() -> None:
     x[24:] = x[24:] * 1.15
     r = detect_anomalies(x)
     assert r.method.startswith("zscore") and r.flags[24] and r.count == 1
+
+
+def test_a33_trendli_seride_duzey_sicramasi_yuzde_tabaninda_dogru_ayda() -> None:
+    """M16 (14 Eyl): fikstürde 2025-01 düzey kırılması yüzde tabanında Ekim 2024'e kayıyordu (min segment gömmesi)."""
+    import pandas as pd
+    from pathlib import Path
+    from kkb_agent.analytics.methods import detect_change_points, level_jumps
+
+    df = pd.read_csv(Path(__file__).parent / "fixtures" / "generic" / "web_ziyaret_kirilma.csv", sep=";")
+    res = detect_change_points(df["gunluk_ziyaret"].to_numpy(dtype=float), basis="auto")
+    jan = int(df.index[df["donem"] == "2025-01-31"][0])
+    assert res.basis == "change" and jan in res.jumps and jan in res.breaks
+    assert all(abs(b - jan) >= 4 for b in res.breaks if b != jan), "aynı olay ikinci kez sayılmadı"
+    rng = np.random.default_rng(7)
+    assert level_jumps(rng.normal(1.0, 0.3, 200)) == [], "saf gürültüde sıçrama yok"

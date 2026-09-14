@@ -30,6 +30,11 @@ class ToolRegistry:
         # Konuşma boyunca kullanıcının yazdığı her şey (niyet kapısı, ADR-0037): yazma ve
         # dışarı çıkma yeteneği olan araçlar adresi yalnız buradan kabul eder.
         self.user_text: str = ""
+        # D03 (ADR-0068): bu turun kullanıcı mesajı ve tur sayacı; kalıcı yazma onayı yalnız buna bakar.
+        self.current_message: str = ""
+        self.turn: int = 0
+        from .approvals import ApprovalBook
+        self.approvals = ApprovalBook()
         # Kullanıcının istediği bir aramanın döndürdüğü adresler; web_url için onaylı sayılır.
         self.sanctioned_locators: set[str] = set()
 

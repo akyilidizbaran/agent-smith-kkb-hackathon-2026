@@ -19,6 +19,8 @@ modele gösterir.
 
 from __future__ import annotations
 
+import hashlib
+
 import re
 import time
 from datetime import date, datetime
@@ -331,6 +333,10 @@ class SilverLakehouse:
             out[spec.dataset_id] = spec
         return out
 
+    def stale_gold_tables(self) -> list[str]:
+        """Silver kurulduktan sonra değişmiş Gold tabloları (parmak izi farklı). K02-T09: sorgu aracı bunlardan sayı vermez."""
+        return sorted(k for k, v in getattr(self, "_gold_meta", {}).items() if v.get("stale"))
+
     def _gold_spec(self, row: tuple, *, stale: bool, series_catalog: dict[str, DatasetSpec]) -> DatasetSpec:
         (metric_id, function, series_ids, target, name_tr, description, aliases, tags,
          allow_unverified, row_count, fingerprint, built_at, build_id) = row
@@ -522,6 +528,7 @@ class SilverLakehouse:
             tags=list(tags or []),
             notes=notes,
             last_refreshed=None,
+            semantic_confidence=confidence,
         )
 
     # ---------- Katalog ----------
@@ -759,6 +766,43 @@ class SilverLakehouse:
         )
 
     # ---------- Kanıt zinciri (EvidenceCapable, ADR-0033) ----------
+    def _resolve_raw(self, raw_path: str | None) -> str | None:
+        """RAW yolu kayıtta mutlak; veri kökü taşınınca (demo köküne alma, başka makinede kurulum) bayatlar.
+        Kayıtlı yol yoksa aynı göreli yol bu veritabanının `raw/` kökünde aranır; bulunamazsa kayıt olduğu gibi
+        döner (file_present yanlış kalır, uydurulmaz). Ölçüldü 14 Eyl: kök taşındıktan sonra dosya zinciri ✗."""
+        if not raw_path:
+            return raw_path
+        p = Path(raw_path)
+        if p.exists():
+            return raw_path
+        parts = p.parts
+        if "raw" in parts:
+            tail = parts[len(parts) - 1 - list(reversed(parts)).index("raw") + 1:]
+            candidate = self.db_path.parent / "raw" / Path(*tail)
+            if candidate.exists():
+                return str(candidate)
+        return raw_path
+
+    def _raw_digest_ok(self, artifact_sha256: str, raw_path: str | None) -> bool | None:
+        """RAW baytlarının sha256'sı kayıttaki artifact özetiyle aynı mı (A23). Dosya yoksa None (ayrı sayılır).
+        Önbellek (yol, boyut, mtime) anahtarlı: aynı cevapta yüzlerce gözlem aynı birkaç dosyaya iner."""
+        if not raw_path:
+            return None
+        p = Path(raw_path)
+        try:
+            st = p.stat()
+        except OSError:
+            return None
+        cache: dict[tuple[str, int, int], str] = self.__dict__.setdefault("_digest_cache", {})
+        key = (str(p), st.st_size, st.st_mtime_ns)
+        if key not in cache:
+            h = hashlib.sha256()
+            with p.open("rb") as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b""):
+                    h.update(chunk)
+            cache[key] = h.hexdigest()
+        return cache[key] == artifact_sha256
+
     def _bronze_path(self, artifact_sha256: str) -> str | None:
         """Bronze parquet: `<data>/bronze/**/artifact_sha256=<sha>.parquet`. Yoksa None, uydurulmaz."""
         root = self.db_path.parent / "bronze"
@@ -783,10 +827,11 @@ class SilverLakehouse:
             raise LakehouseError(f"meta.artifact okunamadı: {exc}") from exc
         out: dict[str, dict[str, Any]] = {}
         for sha, source_id, dataset_id, locator, status, fetched, raw_path in rows:
+            resolved = self._resolve_raw(raw_path)
             out[sha] = {
                 "source_id": source_id, "dataset_id": dataset_id, "locator": locator,
-                "http_status": status, "fetched_at": _parse_ts(fetched), "raw_path": raw_path,
-                "bronze_path": self._bronze_path(sha),
+                "http_status": status, "fetched_at": _parse_ts(fetched), "raw_path": resolved,
+                "bronze_path": self._bronze_path(sha), "raw_digest_ok": self._raw_digest_ok(sha, resolved),
             }
         for sha in artifact_sha256s:
             out.setdefault(sha, {"locator": None, "fetched_at": None, "http_status": None,
@@ -850,7 +895,8 @@ class SilverLakehouse:
                 value=None if value is None else float(value), quality_flag=str(flag),
                 artifact_sha256=str(sha), vintage_id=vintage, run_id=run_id,
                 fetched_at=_parse_ts(fetched), locator=locator, http_status=status,
-                raw_path=raw_path, bronze_path=self._bronze_path(str(sha)), relation=relation,
+                raw_path=(resolved := self._resolve_raw(raw_path)), bronze_path=self._bronze_path(str(sha)), relation=relation,
+                raw_digest_ok=self._raw_digest_ok(str(sha), resolved), checked_at=datetime.now(),
             ))
         return out
 
@@ -862,6 +908,27 @@ class SilverLakehouse:
 
     def gold_join(self, series_ids: list[str], target_frequency: str, *, allow_unverified: bool = False) -> QueryResult:
         return self._gold_call("join_on_period", list(series_ids), target_frequency, allow_unverified=allow_unverified)
+
+    def readiness(self) -> dict[str, int]:
+        """Katalog → anlamı doğrulanmış → yüklü → Gold'a hazır; her biri ayrı sayılır.
+
+        Gold'a hazır: yüklü, anlamı `verified`, ölçüm tipi bilinen (Gold toplama/hizalama kuralı
+        ölçüm tipinden gelir; `derived` seri Gold'da yalnız açık rızayla kullanılır, ADR-0039)."""
+        row = self._conn().execute(
+            f"""
+            WITH loaded AS (SELECT DISTINCT series_id FROM {SILVER_RELATION})
+            SELECT count(*) FILTER (WHERE s.source_id <> 'adhoc'),
+                   count(*) FILTER (WHERE s.source_id <> 'adhoc' AND s.semantic_confidence = 'verified'),
+                   count(*) FILTER (WHERE s.source_id <> 'adhoc' AND s.unit IS NOT NULL AND s.measure_type <> 'unknown'),
+                   count(*) FILTER (WHERE l.series_id IS NOT NULL),
+                   count(*) FILTER (WHERE l.series_id IS NOT NULL AND s.semantic_confidence = 'verified'
+                                    AND s.measure_type <> 'unknown')
+            FROM meta.series s LEFT JOIN loaded l USING (series_id)
+            WHERE s.status <> 'deprecated'
+            """
+        ).fetchone()
+        return {"catalog_total": int(row[0]), "semantics_verified": int(row[1]), "semantics_defined": int(row[2]),
+                "loaded_series": int(row[3]), "gold_ready_series": int(row[4])}
 
     def health(self) -> dict[str, Any]:
         n_obs = self._conn().execute(f"SELECT count(*) FROM {SILVER_RELATION}").fetchone()[0]
@@ -883,6 +950,8 @@ class SilverLakehouse:
             "draft_series": sum(1 for sid, rel in self._relation_by_series.items()
                                 if rel == ADHOC_RELATION and sid in self._catalog),
             "gold_tables": len(self._gold_meta),
+            # Ayrı sayılar (M08-T11): "681 anlamı tanımlı" ≠ "681 yüklü" ≠ "Gold'a hazır".
+            **self.readiness(),
             "stale_gold_tables": sum(1 for m in self._gold_meta.values() if m["stale"]),
             "gold_run_available": self.gold is not None,
             # Sayı önce, örnek sonra: 1600 kimliği ekrana dökmek teşhis değil gürültüdür.

@@ -8,6 +8,7 @@ geçmezse grafik yazılmaz: kesik eksenli bir stok grafiği yanlış bir sayı k
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Literal
 
@@ -34,7 +35,9 @@ chart aracını YALNIZ kullanıcı grafik, çizim, görselleştirme ya da harita
 istemediyse çağırma, tablo yeter. İstediyse önce veriyi aktif tabloya getir \
 (lakehouse_query ya da gold_*), sonra chart aracını çağır. Eksen, ölçek ve işaretleme kararını \
 araç verir: stok için sıfırdan başlayan eksen, birim ve dönem başlıkta, uyarılı gözlem işaretli. \
-dual_axis ve log_scale alanlarını YALNIZ kullanıcı açıkça istediyse true yap. Grafiği kendin \
+dual_axis ve log_scale alanlarını YALNIZ kullanıcı açıkça istediyse true yap. Seriler farklı birimdeyse de \
+chart aracını çağır: araç zaman eksenli çizgi grafikte her seriyi ilk döneminde 100'e çevirerek karşılaştırmalı \
+çizer; birim farkı yüzünden grafiği kendin reddetme. Grafiği kendin \
 metinle çizmeye kalkma; cevapta grafiği tek cümleyle tanıt. Dosya yolunu YAZMA, sistem grafiği \
 cevabın altında ayrıca gösterir."""
 
@@ -236,23 +239,37 @@ class ChartTool(Tool):
             return ToolResult.fail("INVALID_ARGS", str(exc), layer="schema")
 
         report = lint_spec(spec, table, intent)
+        rebased = False
+        if not report.ok and self._can_rebase(report, params, table, x):
+            # M16 kabul bulgusu (14 Eyl): "karşılaştırmalı grafik" isteğinde iki farklı birimli seri L9'a takıldı ve
+            # model grafiği hiç vermedi. Çift eksen yanıltıcı olduğu için kendiliğinden açılmaz (ADR-0034); bunun
+            # yerine her seri kendi ilk döneminde 100'e çevrilir — birim tektir, eğilim karşılaştırması dürüsttür.
+            table, intent = self._rebase_to_100(table, intent, list(params.y_columns))
+            spec = build_spec(table, intent)
+            report = lint_spec(spec, table, intent)
+            rebased = report.ok
         if not report.ok:
             # Denetçi geçmedi: bu modelin değil, inşacının hatasıdır ya da veri kurala uymuyor
             # (ör. haritada sınırı olmayan il). Dosya YAZILMAZ; sebep kullanıcıya gider.
             return ToolResult.fail(
                 "TOOL_FAILED",
                 "Grafik denetçiden geçmedi, dosya yazılmadı:\n" + report.render(),
-                hint="Kullanıcıya grafiğin hangi kural yüzünden üretilmediğini söyle; sayıları tablodan ver.",
+                hint=("Kullanıcıya grafiğin hangi kural yüzünden üretilmediğini söyle; sayıları tablodan ver. "
+                      "Farklı birimli seriler için kullanıcı açıkça isterse dual_axis=true (tam iki seri) ile yeniden çağır."),
                 layer="harness", retryable=False,
             )
         files = render_chart(spec, out_dir=self.chart_dir)
 
-        y_desc = ", ".join(f"{c} ({units.get(c)})" for c in params.y_columns)
-        shown_cols = [c for c in ([x] if x else []) + list(params.y_columns) if c in table.columns]
+        y_cols = list(intent.y)
+        y_desc = ", ".join(f"{c} ({intent.unit_labels.get(c) or units.get(c)})" for c in y_cols)
+        shown_cols = [c for c in ([x] if x else []) + y_cols if c in table.columns]
         card = [
             f"GRAFİK: {spec['title']['text'] if isinstance(spec.get('title'), dict) else params.title}",
             report.render().splitlines()[0] + f" | tür: {params.chart_type} | x: {x or params.province_column} | y: {y_desc} | {len(table)} satır",
             *report.render().splitlines()[1:],
+            *(["NOT: seriler farklı birimde olduğu için her biri ilk döneminde 100 olacak şekilde endekslendi "
+               "(çift eksen kullanılmadı). Cevapta bunu tek cümleyle söyle; düzey sayılarını önceki tablodan ver."]
+              if rebased else []),
             *files.lines(),
             # Çizilen satırlar burada: model sayıları yeniden sorgulamaya kalkmasın (ölçüldü: grafik
             # sonrası 8 fazla adım, sırf tabloyu "doğrulamak" için).
@@ -260,14 +277,51 @@ class ChartTool(Tool):
             "YAPACAĞIN: ARAÇ ÇAĞIRMAYI BIRAK; cevapta grafiği tek cümleyle tanıt, sayıları yukarıdaki tablodan ver.",
         ]
         artifact = {
-            "kind": params.chart_type, "title": intent.title,
+            # K02-T05 (A07/A26): arayüz ve rapor PNG'deki başlığın aynısını taşır — birim ve dönem dahil (yalnız konu değil).
+            "kind": params.chart_type, "title": spec["title"]["text"] if isinstance(spec.get("title"), dict) else intent.title,
+            "topic": intent.title,
             "spec_path": str(files.spec_path),
             "png_path": str(files.png_path) if files.png_path else None,
             "svg_path": str(files.svg_path) if files.svg_path else None,
-            "lint": report.render(), "lint_ok": report.ok,
+            "lint": report.render(), "lint_ok": report.ok, "rebased_to_100": rebased,
             "render_error": files.render_error,
         }
         return ToolResult(content="\n".join(card), artifacts={"chart": artifact})
+
+    _REBASE_UNIT = "endeks (ilk dönem = 100)"
+
+    @staticmethod
+    def _can_rebase(report, params: ChartParams, table: pd.DataFrame, x: str | None) -> bool:
+        """Yalnız tek kusur farklı birimse, zaman ekseninde çizgi grafikse ve her serinin ilk değeri pozitifse."""
+        if params.chart_type != "line" or params.dual_axis or x is None or not _is_datelike(table[x]):
+            return False
+        rules = {r.rule for r in report.failures}
+        # axis_unit yalnız birimi bilinmeyen seri yüzünden düşer; endekslenince eksen birimi tektir.
+        if "single_unit_axis" not in rules or not rules <= {"single_unit_axis", "axis_unit"}:
+            return False
+        ordered = table.sort_values(x)
+        for c in params.y_columns:
+            first = ordered[c].dropna()
+            if first.empty or float(first.iloc[0]) <= 0:
+                return False
+        return True
+
+    def _rebase_to_100(self, table: pd.DataFrame, intent: ChartIntent, y: list[str]) -> tuple[pd.DataFrame, ChartIntent]:
+        frame = table.sort_values(intent.x).reset_index(drop=True)
+        new_cols: list[str] = []
+        labels: dict[str, str] = {}
+        for c in y:
+            base = float(frame[c].dropna().iloc[0])
+            name = f"{c}_100"
+            frame[name] = (frame[c] / base * 100).round(2)
+            new_cols.append(name)
+            labels[name] = f"{intent.labels.get(c) or c} (ilk dönem = 100)"
+        rebased = replace(
+            intent, y=tuple(new_cols), unit_labels={c: self._REBASE_UNIT for c in new_cols},
+            labels=labels, level_columns=frozenset(), dual_axis=False,
+            title=intent.title if "100" in intent.title else f"{intent.title} (ilk dönem = 100)",
+        )
+        return frame, rebased
 
     def _period_from_history(self) -> str:
         """Harita için dönem: tablo tek dönemse ilk tarih kolonundan, yoksa başlıktan."""
