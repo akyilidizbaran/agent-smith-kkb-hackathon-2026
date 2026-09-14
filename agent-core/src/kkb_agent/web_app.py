@@ -113,6 +113,7 @@ def evidence_to_dict(panel: Any) -> dict[str, Any] | None:
         "artifacts": _json_safe(getattr(panel, "artifacts", {})),
         "web_sources": _json_safe(getattr(panel, "web_sources", [])),
         "web_unused": _json_safe(getattr(panel, "web_unused", [])),
+        "context_sources": _json_safe(getattr(panel, "context_sources", [])),
         "consulted_unused": list(getattr(panel, "consulted_unused", [])),
         "gaps": list(getattr(panel, "gaps", [])),
         "table_rows": int(getattr(panel, "table_rows", 0) or 0),
@@ -277,6 +278,8 @@ def report_html(payload: dict[str, Any], frame: pd.DataFrame | None, *, model: s
         srcs += [str(x) for x in (c.get("sources") or [])]
     for w in ev.get("web_sources") or []:
         srcs.append(f"{w.get('url')} · sha256 {str(w.get('sha256') or '')[:16]}… · {w.get('fetched_at') or ''}")
+    for w in ev.get("context_sources") or []:
+        srcs.append(f"bağlam (web araması, veri değil): {w.get('url')} · {w.get('title') or ''} · arama '{w.get('query') or ''}'")
     obs = ev.get("observations") or []
     if obs:
         o = obs[0]

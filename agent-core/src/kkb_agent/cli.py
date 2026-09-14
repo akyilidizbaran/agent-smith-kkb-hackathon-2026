@@ -166,7 +166,7 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
             WorkspaceComputeColumnTool(workspace),
             WorkspaceShowTool(workspace),
             WorkspaceQueryTool(workspace),
-            WorkspaceRealValueTool(lakehouse, workspace),   # M09: reel dönüşüm, Analyst yeteneği
+            WorkspaceRealValueTool(lakehouse, workspace, registry=registry),   # M09: reel dönüşüm, Analyst yeteneği
             WorkspaceJoinTool(workspace),                    # M11: iki oturum tablosu anahtarla
             # Analitik ailesi (ADR-0040): LLM yok, her adaptörde; veri ne olursa olsun aynı.
             AnomalyDetectTool(workspace),

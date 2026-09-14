@@ -308,7 +308,8 @@ class WebSearchTool(Tool):
         for i, h in enumerate(hits, start=1):
             lines.append(f"{i}. {h.title} — {h.url}\n   {h.snippet}")
         lines.append("YAPACAĞIN: sayı okuma; uygun adresi web_url ile aç ve tabloyu yükle.")
-        return ToolResult(content="\n".join(lines), artifacts={"web_search": {"query": params.query, "hits": [h.url for h in hits]}})
+        return ToolResult(content="\n".join(lines), artifacts={"web_search": {"query": params.query, "hits": [h.url for h in hits],
+                                                                        "results": [{"url": h.url, "title": h.title} for h in hits]}})
 
 
 __all__ = ["WEB_PROMPT_RULES", "WEB_SEARCH_PROMPT_RULES", "WEB_SEARCH_UNAVAILABLE_RULES", "WebSearchTool", "WebUrlTool"]

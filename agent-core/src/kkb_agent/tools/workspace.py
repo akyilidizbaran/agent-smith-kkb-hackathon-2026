@@ -16,12 +16,14 @@ ekleyebilir veya mevcut sütunlardan yeni sütun türetebilir.
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 
 import duckdb
 import pandas as pd
 from pydantic import BaseModel, Field
 
 from ..adapters.duckdb_lakehouse import hardened_connection
+from ..contracts.catalog import SemanticType
 from ..contracts.lakehouse import QueryProvenance, LakehouseClient, LakehouseError
 from ..core.errors import ToolError
 from ..core.tool import Tool, ToolResult
@@ -181,11 +183,15 @@ class WorkspaceAddColumnTool(Tool):
                 layer="data",
             )
 
+        checks, warnings = self._source_checks(params, matched, len(table))
+        provenance = result.provenance
+        if warnings and provenance is not None:
+            provenance = replace(provenance, warnings=[*provenance.warnings, *warnings])
         self.workspace.add_column(
             params.column_name,
             pd.Series(aligned.to_numpy(), index=table.index),
             description=params.purpose,
-            provenance=result.provenance,
+            provenance=provenance,
         )
 
         note = ""
@@ -198,11 +204,37 @@ class WorkspaceAddColumnTool(Tool):
                 f"'{params.column_name}' sütunu eklendi{note}. Tablo bozulmadı: "
                 f"{len(updated)} satır, {len(updated.columns)} sütun.\n"
                 f"Sütunlar: {', '.join(updated.columns)}\n"
-                f"İlk 5 satır:\n{updated.head(5).to_string(index=False)}"
+                + "".join(f"{line}\n" for line in checks)
+                + f"İlk 5 satır:\n{updated.head(5).to_string(index=False)}"
             ),
             data=updated,
-            provenance=result.provenance,
+            provenance=provenance,
         )
+
+    def _source_checks(self, params: AddColumnParams, matched: int, rows: int) -> tuple[list[str], list[str]]:
+        """K02-T03 (A05, ADR-0075): eklenen kolonun birimi, ölçüm tipi, dönem eşleşmesi ve anlam güveni karta yazılır;
+        doğrulanmamış anlam (ör. baz yılı doğrulanmamış endeks) provenance uyarısı olur, kanıt paneline ve dışa aktarıma iner."""
+        try:
+            spec = self.lakehouse.get_dataset(params.dataset_id)
+        except LakehouseError:
+            return [], []
+        measure = spec.column(params.value_column) if hasattr(spec, "column") else None
+        kind = getattr(getattr(measure, "semantic_type", None), "value", None) or "bilinmiyor"
+        freq = getattr(getattr(spec, "frequency", None), "value", None) or "?"
+        cov = getattr(spec, "coverage", None)
+        confidence = getattr(spec, "semantic_confidence", None)
+        lines = [f"Birim: {getattr(measure, 'unit', None) or 'belirtilmemiş'} · ölçüm tipi: {kind} · kaynak frekansı: {freq}"
+                 + (f" · kaynak kapsamı {cov.start} → {cov.end}" if cov is not None else ""),
+                 f"Dönem eşleşmesi: {matched}/{rows} satır"]
+        warnings: list[str] = []
+        if kind == SemanticType.INDEX.value:
+            lines.append("Endeks: baz yılı " + ("katalogda doğrulanmış seri" if confidence == "verified" else "DOĞRULANMAMIŞ")
+                         + "; farklı bazlı endekslerle birleştirilmez, kaynak kolonlar olduğu gibi kalır.")
+        if confidence not in (None, "verified"):
+            warnings.append(f"{params.dataset_id}: anlamı katalogda doğrulanmamış (semantic_confidence={confidence})"
+                            + ("; endeks baz yılı doğrulanmadı, reel dönüşümde ve farklı bazlı endeksle birlikte kullanılmaz" if kind == SemanticType.INDEX.value else ""))
+            lines.append("UYARI: " + warnings[-1] + ". Cevapta bunu söyle.")
+        return lines, warnings
 
     @staticmethod
     def _normalize(s: pd.Series) -> pd.Index:
@@ -211,7 +243,7 @@ class WorkspaceAddColumnTool(Tool):
             return pd.Index(pd.to_datetime(s).dt.normalize())
         if s.dtype == object:
             try:
-                return pd.Index(pd.to_datetime(s).normalize())
+                return pd.Index(pd.to_datetime(s).dt.normalize())   # Series: .dt (python date nesneleri AttributeError veriyordu)
             except (ValueError, TypeError):
                 return pd.Index(s)
         return pd.Index(s)

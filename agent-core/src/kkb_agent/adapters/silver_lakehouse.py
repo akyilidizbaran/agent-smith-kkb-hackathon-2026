@@ -528,6 +528,7 @@ class SilverLakehouse:
             tags=list(tags or []),
             notes=notes,
             last_refreshed=None,
+            semantic_confidence=confidence,
         )
 
     # ---------- Katalog ----------

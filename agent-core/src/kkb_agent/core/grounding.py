@@ -42,7 +42,10 @@ def _ascii_minus(text: str) -> str:
     return _DATE_TOKEN.sub(" ", (text or "").replace("\u2212", "-"))
 
 
-def numbers_in(text: str) -> list[float]:
+def numbers_in(text: str, *, both_readings: bool = False) -> list[float]:
+    """Metindeki sayılar. `both_readings`: araç çıktısı havuzu için — "18.388" tek nokta + üç hane hem pandas
+    ondalığı (18,388) hem Türkçe binlik (18388) olabilir; ikisi de havuza girer (K02 bulgusu, 14 Eyl: Gold aylık faiz
+    18.388 binlik okundu, modelin doğru yazdığı "%18,39" MISS sayıldı). Cevap metni tek (Türkçe) okumayla ayrışır."""
     out: list[float] = []
     for m in _NUM_RE.finditer(_ascii_minus(text)):
         raw = m.group(0)
@@ -52,6 +55,11 @@ def numbers_in(text: str) -> list[float]:
             re.fullmatch(r"[-+]?\d{1,3}(\.\d{3})+", raw) and not re.fullmatch(r"[-+]?0\.\d{3}", raw)
         ):
             # "0.263" binlik değil ondalıktır (korelasyon katsayısı; ölçüldü, G17).
+            if both_readings and raw.count(".") == 1:
+                try:
+                    out.append(float(raw))
+                except ValueError:
+                    pass
             raw = raw.replace(".", "")
         try:
             out.append(float(raw))
@@ -83,7 +91,7 @@ def grounding_check(question: str, answer: str, tool_texts: list[str], tolerance
     """
     pool: set[float] = set()
     for t in tool_texts:
-        pool.update(numbers_in(t))
+        pool.update(numbers_in(t, both_readings=True))
     asked = set(numbers_in(question))
     periods = period_numbers(question)
     missing: list[str] = []

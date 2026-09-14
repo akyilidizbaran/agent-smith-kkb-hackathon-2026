@@ -23,12 +23,15 @@ from ..core.errors import ToolError
 from ..core.evidence import _time_column
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
+from .gold import unverified_consent
 
 REAL_VALUE_PROMPT_RULES = """
 
 REEL DEĞER KURALI: "enflasyondan arındır / reel / sabit fiyatlarla" istendiğinde workspace_real_value kullan \
 (endeks: fiyat endeksi serisi; compute_column ile elle formül YAZMA). Baz dönemi kullanıcı söylemediyse tablonun son \
-dönemini ver ve cevapta "<baz dönem> fiyatlarıyla" diye açıkça belirt. Farklı bazlı iki endeksi birleştirme."""
+dönemini ver ve cevapta "<baz dönem> fiyatlarıyla" diye açıkça belirt. Farklı bazlı iki endeksi birleştirme. \
+Anlamı (baz yılı) doğrulanmamış endeks reel dönüşümde kullanılmaz; araç reddederse doğrulanmış endeks seç ya da \
+kullanıcıya 'doğrulanmamış olsa da kullanayım mı?' diye sor."""
 
 
 class RealValueParams(BaseModel):
@@ -49,9 +52,16 @@ class WorkspaceRealValueTool(Tool):
     )
     Params = RealValueParams
 
-    def __init__(self, lakehouse: LakehouseClient, workspace: AnalysisWorkspace) -> None:
+    def __init__(self, lakehouse: LakehouseClient, workspace: AnalysisWorkspace, *, registry: object | None = None) -> None:
         self.lakehouse = lakehouse
         self.workspace = workspace
+        self._registry = registry
+
+    def _consent(self) -> bool:
+        """Rıza yalnız GÜNCEL mesajdan (D03): önceki turdaki 'yine de kullan' bu hesaba sayılmaz."""
+        reg = self._registry
+        text = getattr(reg, "current_message", None) or getattr(reg, "user_text", None) or getattr(reg, "active_question", "") or ""
+        return unverified_consent(text)
 
     # ------------------------------------------------------------ doğrulama
     def loaded_index_series(self) -> list[tuple[str, str]]:
@@ -107,6 +117,31 @@ class WorkspaceRealValueTool(Tool):
                              hint="Ölçüm tipi 'index' olan bir fiyat endeksi serisi seç.")
         return None
 
+    def check_policy(self, params: RealValueParams) -> ToolError | None:
+        """K02-T03 (A05, ADR-0075): baz yılı doğrulanmamış endeksle reel değer sessizce üretilmez. Katalogda
+        semantic_confidence 'verified' olmayan endeks (ör. KFE 'derived') yalnız kullanıcının açık rızasıyla kullanılır."""
+        try:
+            spec = self.lakehouse.get_dataset(params.index_dataset_id)
+        except LakehouseError:
+            return None
+        confidence = getattr(spec, "semantic_confidence", None)
+        if confidence in (None, "verified") or self._consent():
+            return None
+        verified = [sid for sid, _ in self.loaded_index_series() if self._confidence(sid) == "verified"]
+        return ToolError(
+            error_code="UNVERIFIED_SEMANTICS", layer="policy", retryable=False, candidates=verified,
+            message=(f"'{params.index_dataset_id}' endeksinin anlamı katalogda doğrulanmamış (semantic_confidence={confidence}): "
+                     "baz yılı güvenilmez, reel dönüşümde kullanılmaz."),
+            hint=("Doğrulanmış bir fiyat endeksi seç" + (f" ({', '.join(verified[:4])})" if verified else "")
+                  + " ya da kullanıcıya 'doğrulanmamış olsa da kullanayım mı?' diye sor; açık rıza verirse yeniden çağır."),
+        )
+
+    def _confidence(self, dataset_id: str) -> str | None:
+        try:
+            return getattr(self.lakehouse.get_dataset(dataset_id), "semantic_confidence", None)
+        except LakehouseError:
+            return None
+
     # ------------------------------------------------------------ hesap
     def run(self, params: RealValueParams) -> ToolResult:
         table = self.workspace.table
@@ -157,6 +192,12 @@ class WorkspaceRealValueTool(Tool):
             sources=[f"türetilmiş sütun — {formula}", *list(getattr(result.provenance, "sources", []) or [])],
         )
         self.workspace.add_column(params.column_name, real.round(4), description=params.purpose, provenance=prov)
+        confidence = getattr(spec, "semantic_confidence", None)
+        unverified = [] if confidence in (None, "verified") else [
+            f"UYARI: {params.index_dataset_id} endeksinin anlamı doğrulanmamış (semantic_confidence={confidence}); baz yılı "
+            "doğrulanmadı, kullanıcının açık rızasıyla kullanıldı. Cevapta bunu söyle."]
+        if unverified:
+            prov.warnings = [*prov.warnings, *unverified]
         missing = int((~usable).sum())
         updated = self.workspace.table
         assert updated is not None
@@ -166,6 +207,7 @@ class WorkspaceRealValueTool(Tool):
             f"Endeks: {params.index_dataset_id} (kapsam {coverage}) · baz {params.base_period} = {base_value:g}",
             f"Tabloya eklendi: {index_col}, {params.column_name}. Tablo bozulmadı: {len(updated)} satır.",
             *notes,
+            *unverified,
             "Farklı bazlı endeksler birleştirilmedi. Cevapta 'baz dönem fiyatlarıyla' ifadesini ve sayıları tablodan aktar.",
             "İlk 5 satır:\n" + updated[[tcol, params.value_column, index_col, params.column_name]].head(5).to_string(index=False),
         ]

@@ -277,7 +277,9 @@ class ChartTool(Tool):
             "YAPACAĞIN: ARAÇ ÇAĞIRMAYI BIRAK; cevapta grafiği tek cümleyle tanıt, sayıları yukarıdaki tablodan ver.",
         ]
         artifact = {
-            "kind": params.chart_type, "title": intent.title,
+            # K02-T05 (A07/A26): arayüz ve rapor PNG'deki başlığın aynısını taşır — birim ve dönem dahil (yalnız konu değil).
+            "kind": params.chart_type, "title": spec["title"]["text"] if isinstance(spec.get("title"), dict) else intent.title,
+            "topic": intent.title,
             "spec_path": str(files.spec_path),
             "png_path": str(files.png_path) if files.png_path else None,
             "svg_path": str(files.svg_path) if files.svg_path else None,

@@ -860,6 +860,8 @@ class AnalyticsAgent:
                 if result.artifacts.get("web"):   # erişilemeyen sayfa da kanıt paneline girer
                     artifacts.append({"kind": "web", **result.artifacts["web"]})
                     self.workspace.remember_web(result.artifacts["web"])  # sonraki turların zinciri için
+                if result.ok and result.artifacts.get("web_search"):   # K02-T04: bağlam kaynağı, veri değil (ADR-0075)
+                    artifacts.append({"kind": "web_search", **result.artifacts["web_search"]})
                 if result.error is not None and not result.error.is_retryable and getattr(result.error, "terminal", None) is not False:
                     terminal = result.error
                 log.info("adım %d: %s -> %s", i, call.name, "ok" if result.ok else "HATA")

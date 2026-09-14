@@ -356,6 +356,7 @@ function renderEvidence(p) {
   if (ev.gaps && ev.gaps.length) html += `<div class="note amber"><strong>Kopuk halkalar</strong><br>${ev.gaps.map(esc).join("<br>")}</div>`;
   if (ev.consulted_unused && ev.consulted_unused.length) html += `<div class="note"><strong>Danışılıp kullanılmayan</strong><br>${ev.consulted_unused.map(esc).join(" · ")}</div>`;
   if (ev.web_unused && ev.web_unused.length) html += `<div class="note"><strong>Taranıp kullanılmayan</strong><br>${ev.web_unused.map((w) => esc((w.url || "") + " · " + (w.note || ""))).join("<br>")}</div>`;
+  if (ev.context_sources && ev.context_sources.length) html += `<div class="note"><strong>Bağlam kaynakları (web araması; veri değil)</strong><br>${ev.context_sources.map((w) => esc((w.url || "") + " · " + (w.title || "") + " · arama: " + (w.query || ""))).join("<br>")}</div>`;
   body.innerHTML = html;
   body.querySelectorAll(".num").forEach((el) => el.addEventListener("click", () => openJourney(Number(el.dataset.i))));
 }

@@ -414,6 +414,13 @@ class EvidenceBuilder:
                     if entry not in panel.web_sources:
                         panel.web_sources.append(entry)
         for art in artifacts:
+            if art.get("kind") == "web_search":
+                # K02-T04 (A06, ADR-0075): arama sonucu dış bağlamdır; veri kaynaklarından ayrı ve "veri değil" diye kaydedilir.
+                for r in art.get("results") or [{"url": u} for u in art.get("hits") or []]:
+                    entry = {"url": r.get("url"), "title": r.get("title"), "query": art.get("query"), "note": "web araması — bağlam, veri değil"}
+                    if entry not in panel.context_sources:
+                        panel.context_sources.append(entry)
+                continue
             if art.get("kind") != "web":
                 continue
             used = art.get("used")
@@ -430,6 +437,8 @@ class EvidenceBuilder:
                 panel.web_unused.append({"url": b.get("url"), "note": f"erişilemedi: {b.get('status')} / {b.get('reason')}"})
             for url, reason in art.get("skipped", [])[:10]:
                 panel.web_unused.append({"url": url, "note": f"atlandı: {reason}"})
+        used = {w.get("url") for w in panel.web_sources}
+        panel.context_sources[:] = [c for c in panel.context_sources if c.get("url") not in used]   # açılıp tabloya giren sayfa veri kaynağıdır
 
     # ------------------------------------------------------------------ giriş
     def build(

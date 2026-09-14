@@ -154,6 +154,7 @@ class EvidencePanel:
     chart_paths: list[str] = field(default_factory=list)
     web_sources: list[dict[str, Any]] = field(default_factory=list)   # kullanılan sayfa: url, sha256, fetched_at
     web_unused: list[dict[str, Any]] = field(default_factory=list)    # taranıp kullanılmayan / erişilemeyen
+    context_sources: list[dict[str, Any]] = field(default_factory=list)  # K02-T04: web araması sonucu — bağlam, veri değil (ADR-0075)
     inspected_rows: int = 0         # kaç satır incelendi (ilk N); tablo daha büyükse kapsam notu
     ocr_unverified: bool = False    # K02-T06 (A12): sayılar OCR ile görüntüden okunmuş bir tablodan; kesin sonuç sayılmaz
 
@@ -292,6 +293,11 @@ class EvidencePanel:
             lines.append("TARANDI, KULLANILMADI / ERİŞİLEMEDİ:")
             for w in self.web_unused:
                 lines.append(f"  {w.get('url')} — {w.get('note')}")
+        if self.context_sources:
+            lines.append("")
+            lines.append("BAĞLAM KAYNAĞI (web araması; veri değil, sayıları doğrulanmış sayılmaz):")
+            for w in self.context_sources:
+                lines.append(f"  {w.get('url')} — {w.get('title') or ''} (arama: {w.get('query') or ''})")
         if self.consulted_unused:
             lines.append("")
             lines.append("DANIŞILDI, KULLANILMADI: " + ", ".join(self.consulted_unused))
@@ -328,6 +334,7 @@ class EvidencePanel:
             "chart_paths": self.chart_paths,
             "web_sources": self.web_sources,
             "web_unused": self.web_unused,
+            "context_sources": self.context_sources,
         }
 
 
