@@ -288,6 +288,7 @@ def to_tool_error(outcome: AccessOutcome, decision: FallbackDecision) -> ToolErr
         hint=None,
         candidates=[o.kind for o in decision.options],
         layer="access",
+        terminal=decision.action != "try_alternative",
     )
 
 

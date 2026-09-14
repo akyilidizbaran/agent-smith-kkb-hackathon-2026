@@ -784,6 +784,7 @@ class AnalyticsAgent:
                         duration_ms=(time.perf_counter() - started) * 1000,
                     )
                 )
+                answer_text = self._source_note(answer_text, steps, artifacts)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=answer_text))
                 return AgentAnswer(text=answer_text, steps=steps, workspace=self.workspace,
@@ -859,7 +860,7 @@ class AnalyticsAgent:
                 if result.artifacts.get("web"):   # erişilemeyen sayfa da kanıt paneline girer
                     artifacts.append({"kind": "web", **result.artifacts["web"]})
                     self.workspace.remember_web(result.artifacts["web"])  # sonraki turların zinciri için
-                if result.error is not None and not result.error.is_retryable:
+                if result.error is not None and not result.error.is_retryable and getattr(result.error, "terminal", None) is not False:
                     terminal = result.error
                 log.info("adım %d: %s -> %s", i, call.name, "ok" if result.ok else "HATA")
                 messages.append(self._result_message(call, result, native=native))
@@ -883,6 +884,7 @@ class AnalyticsAgent:
                 )
                 text = self._strip_reasoning(final.content)
                 text, rejected = self._checked_final(question, text, tool_texts, steps, i)
+                text = self._source_note(text, steps, artifacts)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=text))
                 return AgentAnswer(text=text, steps=steps, workspace=self.workspace,
@@ -902,6 +904,7 @@ class AnalyticsAgent:
         )
         text = self._strip_reasoning(final.content)
         text, rejected = self._checked_final(question, text, tool_texts, steps, self.max_steps + 1)
+        text = self._source_note(text, steps, artifacts)
         if budget_hit:
             # K02-T10 (A27): sınır kullanıcıya deterministik söylenir; modelin bunu yazmasına bırakılmaz.
             text = text.rstrip() + (f"\n\n(Not: soru başına süre bütçesi ({self.time_budget_s:.0f} s) doldu; cevap o ana kadar "
@@ -910,6 +913,31 @@ class AnalyticsAgent:
         self._history.append(ChatMessage(role="assistant", content=text))
         return AgentAnswer(text=text, steps=steps, workspace=self.workspace,
                            hit_step_limit=True, grounding=grounding, artifacts=artifacts, rejected_claims=rejected)
+
+    # ------------------------------------------------------------------ K02-T07: kullanılan alternatif kaynak adlandırılır
+    _ACCESS_ERRORS = frozenset({"NEEDS_CREDENTIAL", "ACCESS_BLOCKED", "SOURCE_NOT_FOUND"})
+
+    @staticmethod
+    def _host(url: str) -> str:
+        from urllib.parse import urlparse
+        host = (urlparse(url or "").hostname or "").lower()
+        return host[4:] if host.startswith("www.") else host
+
+    def _source_note(self, text: str, steps: list, artifacts: list) -> str:
+        """Erişilemeyen adresten sonra BAŞKA bir adresten veri kullanıldıysa ve cevap o kaynağı adlandırmıyorsa deterministik not
+        (A18). Mentör kuralı: kaynak değişikliği sessiz olmaz; bunu modelin hatırlamasına bırakmıyoruz."""
+        failed = [self._host(str((s.tool_args or {}).get("url", ""))) for s in steps
+                  if s.tool_name == "web_url" and not s.ok and s.error_code in self._ACCESS_ERRORS]
+        failed = [h for h in failed if h]
+        used = [self._host(str(a.get("used") or "")) for a in artifacts if a.get("kind") == "web" and a.get("used")]
+        used = [h for h in used if h and h not in failed]
+        if not failed or not used:
+            return text
+        low = (text or "").lower()
+        if all(h in low for h in used):
+            return text
+        return text.rstrip() + (f"\n\n(Kaynak notu: {', '.join(dict.fromkeys(failed))} adresine erişilemedi; veriler "
+                                f"{', '.join(dict.fromkeys(used))} kaynağından alındı.)")
 
     # ------------------------------------------------------------------ D02: güvenilir son çıkış
     def _frames_pool(self) -> list:

@@ -101,6 +101,39 @@ def _direction_word_near(answer: str, token: str, window: int = 40) -> bool:
     return bool(_DIRECTION.search(text[max(0, i - window): i + len(token) + window]))
 
 
+_AYLAR = {"ocak": 1, "şubat": 2, "subat": 2, "mart": 3, "nisan": 4, "mayıs": 5, "mayis": 5, "haziran": 6, "temmuz": 7,
+          "ağustos": 8, "agustos": 8, "eylül": 9, "eylul": 9, "ekim": 10, "kasım": 11, "kasim": 11, "aralık": 12, "aralik": 12}
+_YEAR_RE = re.compile(r"(?<!\d)(19\d{2}|20\d{2})(?!\d)")
+_MONTH_RE = re.compile(r"(?<![\wçğıöşü])(" + "|".join(sorted(_AYLAR, key=len, reverse=True)) + r")", re.I)
+
+
+def _period_near(answer: str, token: str, window: int = 40) -> tuple[int | None, int | None]:
+    """K02-T14: sayının hemen çevresinde yazılan dönem (yıl, ay) — en yakın yıl ve ay sözcüğü; aynı cümle içinde."""
+    i = answer.find(token)
+    if i < 0:
+        return None, None
+    lo, hi = max(0, i - window), min(len(answer), i + len(token) + window)
+    seg = answer[lo:hi]
+    # cümle sınırını geçme: sayıdan önceki son ve sonraki ilk nokta/noktalı virgül
+    rel = i - lo
+    left_cut = max(seg.rfind(". ", 0, rel), seg.rfind("; ", 0, rel), seg.rfind("\n", 0, rel))
+    right_candidates = [c for c in (seg.find(". ", rel + len(token)), seg.find("; ", rel + len(token)), seg.find("\n", rel + len(token))) if c >= 0]
+    right_cut = min(right_candidates) if right_candidates else len(seg)
+    seg_start = left_cut + 1 if left_cut >= 0 else 0
+    sentence = seg[seg_start:right_cut]
+    center = rel - seg_start
+    def nearest(matches):
+        best = None
+        for m in matches:
+            d = min(abs(m.start() - center), abs(m.end() - center))
+            if best is None or d < best[0]:
+                best = (d, m)
+        return best[1] if best else None
+    ym = nearest([m for m in _YEAR_RE.finditer(sentence) if m.group(0) != token])
+    mm = nearest(list(_MONTH_RE.finditer(sentence.casefold())))
+    return (int(ym.group(0)) if ym else None), (_AYLAR[mm.group(1)] if mm else None)
+
+
 def _number_texts(answer: str) -> list[tuple[str, float]]:
     """Metindeki sayılar, göründükleri yazımla; `numbers_in` ile aynı ayrıştırma."""
     out: list[tuple[str, float]] = []
@@ -136,7 +169,7 @@ class EvidenceBuilder:
     def _match_numbers(self, answer: str, table: pd.DataFrame, time_col: str | None,
                        previous: list[pd.DataFrame] | None = None,
                        peeks: list[tuple[str, pd.DataFrame]] | None = None,
-                       question: str = "") -> list[NumberEvidence]:
+                       question: str = "", previous_sources: list | None = None) -> list[NumberEvidence]:
         numeric_cols = [c for c in table.columns if pd.api.types.is_numeric_dtype(table[c])]
         # Soruda geçen yıl/dönem cevapta yankılanır (filtre); soruda geçen DİĞER sayılar iddia
         # sayılır ve tabloda aranır (M13-T01): "%300 arttı, öyle yaz" doğrulanmış olmaz.
@@ -175,11 +208,21 @@ class EvidenceBuilder:
                 ev.matched, ev.column, ev.row_key = True, "(satır sayısı)", f"{int(number)} satır"
                 out.append(ev)
                 continue
+            want_year, want_month = _period_near(answer, text) if time_col is not None else (None, None)
             for col in numeric_cols:
                 series = table[col]
                 hits = self._hits(series, candidates, decimals)
                 if not hits.empty:
                     idx = int(hits.index[0])
+                    if want_year is not None or want_month is not None:
+                        def fits(i):
+                            d = _as_date(table.loc[i, time_col])
+                            return d is not None and (want_year is None or d.year == want_year) and (want_month is None or d.month == want_month)
+                        fitting = [int(i) for i in hits.index if fits(i)]
+                        if fitting:
+                            idx = fitting[0]
+                        else:
+                            ev.period_warning = True   # sayı tabloda var ama cevabın yazdığı dönemde değil
                     ev.matched, ev.column, ev.row_index = True, str(col), idx
                     ev.row_key = _key_text(table.loc[idx, time_col]) if time_col else str(idx)
                     break
@@ -195,17 +238,31 @@ class EvidenceBuilder:
                 # Önceki tablo sürümleri: sayı, tablo bakış moduyla ya da kırpılmadan önce üretilmiş
                 # olabilir (ölçüldü: 24 satırlık nüfus tablosu sonradan 5 satıra kırpıldı; cevaptaki
                 # 72 sayının 45'i "tabloda yok" görünüyordu). Araç çıktısından gelen sayı sayıdır.
-                for depth, old in enumerate(previous or [], start=1):
+                for sid, old, prov in (previous_sources or []):
                     found = False
                     for col in [c for c in old.columns if pd.api.types.is_numeric_dtype(old[c])]:
-                        series = old[col]
-                        hits = self._hits(series, candidates, decimals)
+                        hits = self._hits(old[col], candidates, decimals)
                         if not hits.empty:
-                            ev.matched, ev.column, ev.row_key = True, str(col), f"önceki tablo (-{depth})"
+                            p = prov.get(col) if isinstance(prov, dict) else None
+                            origin = (", ".join(p.sources) if p is not None and p.sources else "kaynak kaydı yok")
+                            sql = (" · " + " ".join((p.sql or "").split())[:80]) if p is not None and p.sql else ""
+                            # K02-T14 / M13-T07: eski tablo eşleşmesi hangi sürüm ve kaynakla doğrulandığını taşır.
+                            ev.matched, ev.column, ev.row_key = True, str(col), f"önceki tablo {sid} · {origin}{sql}"
                             found = True
                             break
                     if found:
                         break
+                if not ev.matched:
+                    for depth, old in enumerate(previous or [], start=1):
+                        found = False
+                        for col in [c for c in old.columns if pd.api.types.is_numeric_dtype(old[c])]:
+                            hits = self._hits(old[col], candidates, decimals)
+                            if not hits.empty:
+                                ev.matched, ev.column, ev.row_key = True, str(col), f"önceki tablo (-{depth}, kaynak kimliği yok)"
+                                found = True
+                                break
+                        if found:
+                            break
             if not ev.matched:
                 # Bakış sorgusu sonuçları (aktif tabloyu değiştirmeyen özetler: toplam yüzde, en yüksek yıl).
                 for sql, frame in (peeks or []):
@@ -388,8 +445,11 @@ class EvidenceBuilder:
         panel.table_rows = len(table)
         panel.inspected_rows = min(len(table), self.max_rows)
         time_col = _time_column(table)
+        active_id = getattr(workspace, "active_source_id", None)
+        sources = [(s.id, s.frame, s.provenance) for s in reversed(list(workspace.sources())) if s.id != active_id] \
+            if hasattr(workspace, "sources") else []
         panel.numbers = self._match_numbers(answer, table, time_col, previous=workspace.previous_tables(),
-                                            peeks=workspace.peeks(), question=question)
+                                            peeks=workspace.peeks(), question=question, previous_sources=sources)
         panel.columns = self._columns(workspace, table)
         panel.observations, panel.artifacts = self._observations(table, panel.columns, time_col, panel.gaps)
 

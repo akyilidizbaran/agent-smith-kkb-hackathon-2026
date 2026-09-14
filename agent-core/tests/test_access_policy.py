@@ -172,3 +172,7 @@ def test_hata_zarfina_donusum_tekrar_denenemez() -> None:
         assert err.error_code == code and err.layer == "access"
         assert code in NOT_RETRYABLE and err.is_retryable is False
         assert "TEKRAR DENEMEYLE ÇÖZÜLMEZ" in err.render()
+        assert err.terminal is False, "kaynak serbest: aynı adres tekrar denenmez ama tur bitmez, alternatif denenebilir (K02-T07)"
+    pinned = classify_access(SRC, http_status=404, environ={})
+    assert to_tool_error(pinned, decide(pinned, detect_source_constraint("bu siteden getir"))).terminal is True, \
+        "kaynak sabit: tur biter, kullanıcıya sorulur"

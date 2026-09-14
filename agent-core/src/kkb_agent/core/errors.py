@@ -104,6 +104,9 @@ class ToolError:
     candidates: list[str] = field(default_factory=list)
     layer: Literal["schema", "reference", "policy", "data", "workspace", "harness", "access"] = "data"
     retryable: bool | None = None  # None → NOT_RETRYABLE tablosuna bak
+    # K02-T07 (A18): tekrar denenemez hata turu bitirir mi? None → evet (eski davranış). Kaynak SABİT DEĞİLKEN erişim hatası
+    # False taşır: aynı adres tekrar denenmez ama model başka kaynağı deneyebilir (kaynak değişikliği cevapta söylenir).
+    terminal: bool | None = None
 
     @property
     def is_retryable(self) -> bool:

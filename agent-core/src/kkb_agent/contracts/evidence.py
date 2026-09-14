@@ -124,6 +124,7 @@ class NumberEvidence:
     matched: bool = False
     sign_warning: bool = False      # büyüklük tabloda var ama işaret ters ve metinde yön sözcüğü yok
     from_question: bool = False     # sayı soruda geçiyor; tabloda yoksa doğrulanmamış iddia
+    period_warning: bool = False    # K02-T14: cevap sayının yanında bir dönem yazıyor ama sayı tabloda BAŞKA dönemde
 
 
 @dataclass
@@ -166,7 +167,7 @@ class EvidencePanel:
         """Cevaptaki her sayı bir araç çıktısında, doğru işaretle; sorudan kopya doğrulanmamış sayı yok."""
         if self.ocr_unverified and self.numbers:
             return False             # tabloda eşleşse de tablo OCR tahmini: sayı doğrulanmış sayılmaz
-        return all(n.matched and not n.sign_warning for n in self.numbers)
+        return all(n.matched and not n.sign_warning and not n.period_warning for n in self.numbers)
 
     @property
     def provenance_ok(self) -> bool:
@@ -215,6 +216,7 @@ class EvidencePanel:
         parts = [
             f"{self.matched_numbers}/{len(self.numbers)} sayı tabloda"
             + (f" ({sum(1 for n in self.numbers if n.sign_warning)} işaret uyarısı)" if any(n.sign_warning for n in self.numbers) else "")
+            + (f" ({sum(1 for n in self.numbers if n.period_warning)} dönem uyuşmazlığı)" if any(n.period_warning for n in self.numbers) else "")
             + (f" ({sum(1 for n in self.numbers if n.from_question and not n.matched)} sorudan, doğrulanmadı)"
                if any(n.from_question and not n.matched for n in self.numbers) else ""),
             f"{len(self.columns)} kolon → SQL",
@@ -240,7 +242,7 @@ class EvidencePanel:
         for n in self.numbers[:30]:
             if n.matched:
                 where = f" (satır {n.row_index})" if n.row_index is not None else ""
-                warn = "  ⚠ tabloda ters işaret" if n.sign_warning else ""
+                warn = ("  ⚠ tabloda ters işaret" if n.sign_warning else "") + ("  ⚠ tabloda başka dönemde" if n.period_warning else "")
                 lines.append(f"  {n.text:>14}  → {n.column} @ {n.row_key}{where}{warn}")
             else:
                 lines.append(f"  {n.text:>14}  → " + ("SORUDAN, TABLODA YOK (doğrulanmamış iddia)" if n.from_question else "TABLODA YOK"))

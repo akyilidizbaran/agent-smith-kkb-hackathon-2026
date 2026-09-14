@@ -97,3 +97,4 @@ sıfırdan başlatmamak için kayıt tutulur.
 | [0071](0071-bayat-gold-reddi.md) | K02-T09: parmak izi canlı Silver'dan farklı gold.* tablosuna sorgu GOLD_STALE ile reddedilir; canlı Silver'dan yeniden hesap ya da operatörün gold build'i | Kabul edildi |
 | [0072](0072-ocr-kalite-kapisi.md) | K02-T06: düşük/belirsiz kaliteli OCR tablosu yüklenmez (LOW_QUALITY_SOURCE), açık kabulle uyarılı; OCR kaynaklı sayılar doğrulanmış sayılmaz | Kabul edildi |
 | [0073](0073-architect-kaynaktan-cekme.md) | K02-T12: Architect'e ingest_source — katalogdaki serinin dönemi kayıtlı kaynağından run kayıtlı toplu betikle çekilir, Silver yenilenir; erişilemezse sebep | Kabul edildi |
+| [0074](0074-kaynak-notu-ve-donem-bagi.md) | K02-T07/T14: serbest kaynakta erişim hatası turu bitirmez (ToolError.terminal), kullanılan alternatif kaynak cevapta deterministik not; sayı yanında yazılan döneme bağlanır, önceki tablo eşleşmesi kaynak kimliğiyle | Kabul edildi |

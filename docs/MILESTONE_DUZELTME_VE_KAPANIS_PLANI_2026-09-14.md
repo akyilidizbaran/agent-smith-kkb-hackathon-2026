@@ -183,14 +183,14 @@ Dayanak: [M16 kabul raporu](M16_KABUL_RAPORU.md). Aşağıdakiler her biri yeni 
 | K02-T04 | A06 | Faiz düşerken kredi artmayan dönemleri araçla hesapla; dış bağlamı ayrıca kaynaklandır, nedensellik diye sunma |
 | K02-T05 | A07/A26 | Grafik ve eski cevap raporundaki dönem/birim/kaynak/uyarı ve sürüm tutarlılığı; önceki ek testler tam kapsamı karşılıyorsa statüyü kanıtla düzelt |
 | K02-T06 | A12 | **Kapandı 14 Eyl (ADR-0072):** düşük/belirsiz kaliteli OCR tablosu `LOW_QUALITY_SOURCE` ile yüklenmez, açık kabulle bütün DİKKAT notlarıyla yüklenir; OCR kaynaklı sayılar panelde doğrulanmış sayılmaz; `tests/test_k02_ocr.py` |
-| K02-T07 | A18 | Alternatif kaynak kullanıldığında gerçek cevabın kullanılan kaynağı adlandırması |
+| K02-T07 | A18 | **Kapandı 14 Eyl (ADR-0074):** serbest kaynakta erişim hatası turu bitirmez (`ToolError.terminal=False`), başka kaynaktan veri kullanılır ve cevap kaynağı anmıyorsa deterministik 'Kaynak notu' eklenir; sabit kaynakta tur biter ve sorulur; `tests/test_agent_loop.py`, `tests/test_access_policy.py` |
 | K02-T08 | A22 | **Kapandı 14 Eyl:** `lakehouse-core/tests/scripts/test_run_catalog_ingestion.py::test_a22_warned_artifact_ingested_twice_is_idempotent_and_keeps_each_runs_warning` — tek artifact, iki koşu bağı, koşu başına uyarı satırı, Bronze dosyası ve özeti değişmez |
 | K02-T09 | A24 | **Kapandı 14 Eyl (ADR-0071):** bayat gold.* tablosuna sorgu `GOLD_STALE` ile reddedilir, eski değer dönmez; canlı Silver'dan gold_align/gold_join ile yeniden hesap; `tests/test_k02_bayat_gold.py` |
 | K02-T10 | A27 | **Kapandı 14 Eyl:** Tavily 503/429/bağlantı kopması `ACCESS_BLOCKED` ve sebep (`tests/test_web.py`); süre bütçesi dolunca deterministik sınır notu (`tests/test_agent_loop.py`); model kesintisi ve OCR yokluğu önceki testlerde |
-| K02-T11 | A28 | Yeni alan/profil/oturumda eski izin, tablo ve alan bağlamı sızmaz; K01 ile birlikte kapatılabilir |
+| K02-T11 | A28 | **Kapandı 14 Eyl (K01):** sıfırlama ve yeni alan sonrası yeniden başlatmada alan profili yalnız yeni katalogdan, arama eski finans serisi döndürmedi, önbellek yok, oturum/cevap/tablo temiz; profil geçişi oturumu temizler (`scripts/k01_kabul.py` T05/T06, `docs/experiments/k01_kabul_2026-09-14_1227.json`) |
 | K02-T12 | A30 | **Kapandı 14 Eyl (ADR-0073):** Architect `ingest_source` (run kayıtlı toplu betik + Silver), erişilemezse sebep ve Silver yenilenmez (`tests/test_k02_kaynaktan_cek.py`); canlı prova `scripts/k02_a30_canli.py` 5/5: geçici kökte 2015-12 konut kredisi gerçek BDDK'dan çekildi (143.248, run kayıtlı), demo DB değişmedi (`docs/experiments/k02_a30_canli_2026-09-14_1237.json`) |
 | K02-T13 | A32/A33 | **Kapandı 14 Eyl:** anomali kartı yöntem ve eşiği (Tukey k=1.5 / \|z\|>3), taban ve SINIRLAMA; kırılma kartı ceza formülü ve sayısal değeri, min segment, en çok kırılma ve SINIRLAMA; `tests/test_analytics_tools.py` metin denetimleri |
-| K02-T14 | M13-T04/T07 | Aynı sayının yanlış dönem/kolon/varlıkta bulunması doğrulama sayılmaz; eski tablo eşleşmesi doğru sürüm/kaynakla sunulur |
+| K02-T14 | M13-T04/T07 | **Kapandı 14 Eyl (ADR-0074):** sayı cevabın yanında yazdığı dönemde değilse `period_warning`, 'sayılar' rozeti yeşil olmaz; önceki tablo eşleşmesi kaynak kimliği, kaynak ve SQL ile; `tests/test_k02_donem_bagi.py` |
 
 **Diğer eşlemeler:** A09 → D01/D07/K01; A21 → D03/D04/D05/K01; A23 → D06. Önceden tam kabul edilmiş diğer vakalar ilgili kod değişikliğinden etkileniyorsa regresyonda korunur. Her eksik için yeni canlı çağrı gerekmez; ağ/LLM davranışı gerektirmeyen kontroller deterministik yapılır.
 

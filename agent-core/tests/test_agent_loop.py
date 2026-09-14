@@ -663,3 +663,42 @@ def test_k02_t10_sure_butcesi_dolunca_sinir_deterministik_yazilir() -> None:
     ans = agent.ask("2025 konut kredisi ne kadar?")
     assert ans.hit_step_limit and "süre bütçesi" in ans.text and "tamamlanmayan adımlar yapılmadı" in ans.text
     assert tool.calls == 0
+
+
+def test_k02_t07_erisilemeyen_kaynaktan_sonra_kullanilan_kaynak_adlandirilir() -> None:
+    """A18: a.example 404 verdi, veriler b.example'dan alındı; cevap kaynağı anmıyorsa deterministik kaynak notu eklenir."""
+
+    class _WebParams(BaseModel):
+        url: str
+
+    class _Web(Tool):
+        name = "web_url"
+        description = "web"
+        Params = _WebParams
+
+        def __init__(self, ws):
+            self.ws = ws
+
+        def run(self, params):
+            if "a.example" in params.url:
+                # Gerçek web_url ile aynı yol: erişim sonucu → karar → hata zarfı (kaynak serbest: tur bitmez).
+                from kkb_agent.core.access_policy import classify_access, decide, detect_source_constraint, to_tool_error
+                outcome = classify_access(params.url, http_status=404, environ={})
+                err = to_tool_error(outcome, decide(outcome, detect_source_constraint("2025 değerini bul")))
+                return ToolResult(content=err.render(), ok=False, error=err)
+            self.ws.set_table(pd.DataFrame({"yil": [2025], "deger": [42.0]}), description="b")
+            return ToolResult(content="TABLO YÜKLENDİ\n42", artifacts={"web": {"start_url": params.url, "used": params.url, "visited": [], "blocked": []}})
+
+    def run(final_text):
+        llm = _ScriptedLLM([LLMResponse(content="", tool_calls=[ToolCall(id="w1", name="web_url", arguments={"url": "https://www.a.example/veri"})]),
+                            LLMResponse(content="", tool_calls=[ToolCall(id="w2", name="web_url", arguments={"url": "https://b.example/tablo"})]),
+                            LLMResponse(content=final_text)])
+        ws = AnalysisWorkspace()
+        reg = ToolRegistry()
+        reg.register(_Web(ws))
+        return AnalyticsAgent(llm=llm, registry=reg, workspace=ws, max_steps=6).ask("2025 değerini bul")
+
+    silent = run("2025 değeri 42.")
+    assert "Kaynak notu: a.example adresine erişilemedi; veriler b.example kaynağından alındı." in silent.text
+    named = run("2025 değeri 42 (kaynak: b.example).")
+    assert "Kaynak notu" not in named.text, "cevap kaynağı zaten adlandırıyorsa not eklenmez"

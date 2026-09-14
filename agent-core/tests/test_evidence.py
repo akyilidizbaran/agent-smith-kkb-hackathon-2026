@@ -196,7 +196,7 @@ def test_onceki_tablo_surumundeki_sayi_zinciri_kirmaz() -> None:
                                                artifacts=[{"kind": "web", "used": "https://x.example/p.csv",
                                                            "visited": [{"url": "https://x.example/p.csv", "sha256": "ab" * 32, "fetched_at": "t", "status": 200}]}])
     m = {n.text: n for n in panel.numbers}
-    assert m["65"].matched and m["65"].row_key == "önceki tablo (-1)" and m["67"].matched
+    assert m["65"].matched and m["65"].row_key.startswith("önceki tablo k1 · web") and m["67"].matched
     assert panel.complete, panel.gaps
 
 
