@@ -179,7 +179,8 @@ def test_ikinci_denemede_de_dogrulanamayan_sayi_isaretlenir() -> None:
 
     answer = agent.ask("2025'te ne oldu?")
 
-    assert "doğrulanamadı" in answer.text
+    # D02 (ADR-0066): uyarıyla korunmaz; doğrulanamayan sayı cevaptan çıkar, geriye anlam kalmazsa dürüst sınır mesajı.
+    assert "10,5" not in answer.text and answer.rejected_claims and "üretemedim" in answer.text
     assert answer.grounding.startswith("MISS")
 
 
@@ -573,3 +574,81 @@ def test_aracsiz_turda_tabloda_olmayan_sayilar_geri_gonderilir() -> None:
     # Tablodaki sayıları yorumlayan araçsız cevap geri gönderilmez (farklı işaretle yazılmış mutlak değer de sayılır).
     assert unverified_numbers("Bakiye 276.263 ve 276.785 milyon TL; faiz 17,99.", agent.workspace.table) == []
     assert unverified_numbers("2021 ve 2025 arasında 12 ay.", agent.workspace.table) == []
+
+
+# ---------------------------------------------------------------- D02 (ADR-0066): güvenilir son çıkış
+class _MonthsTool(Tool):
+    """Ocak=100, Aralık=110 döndüren veri aracı (bağımsız kontrolün R02 düzeneği)."""
+
+    name = "lakehouse_query"
+    description = "test"
+    Params = _Params
+
+    def __init__(self, workspace) -> None:
+        self.workspace = workspace
+        self.calls = 0
+
+    def run(self, params):
+        self.calls += 1
+        frame = pd.DataFrame({"donem": ["2025-01", "2025-12"], "bakiye": [100.0, 110.0]})
+        self.workspace.set_table(frame, description="bakiye")
+        return ToolResult(content="donem  bakiye\n2025-01  100\n2025-12  110", data=frame)
+
+
+def _months_agent(turns, max_steps=10):
+    llm = _ScriptedLLM(turns)
+    ws = AnalysisWorkspace()
+    registry = ToolRegistry()
+    tool = _MonthsTool(ws)
+    registry.register(tool)
+    return AnalyticsAgent(llm=llm, registry=registry, workspace=ws, max_steps=max_steps), tool, llm
+
+
+def test_d02_model_her_tur_999_dese_de_nihai_cevap_999_tasimaz() -> None:
+    agent, tool, llm = _months_agent([LLMResponse(content="", tool_calls=[_call(1)]),
+                                       LLMResponse(content="Aralık bakiyesi 999 milyon TL.")])
+    ans = agent.ask("2025 aralık bakiyesi ne kadar?")
+    assert "999" not in ans.text, ans.text
+    assert "110" in ans.text and "güvenilir bir açıklama üretemedim" in ans.text
+    assert ans.rejected_claims == ["Aralık bakiyesi 999 milyon TL."]
+    assert len(llm.seen_tool_offers) == 4, "1 araç turu + ilk cevap + 2 geri gönderme; son çıkış yeni model çağrısı yapmaz"
+    narrate = [s for s in ans.steps if s.role != "validate"]
+    assert not any("999" in (s.thought or "") + (s.result_summary or "") for s in narrate), "anlatı adımı sayıyı taşımaz"
+    assert all(s.thought.startswith("grounding: MISS") for s in ans.steps if "999" in (s.thought or "")), \
+        "sayı yalnız etiketli ret kaydında (T03: ayrı iz kaydı)"
+    assert all("999" not in m.content for m in agent._history), "kaydedilen sohbet de temiz"
+
+
+def test_d02_dogru_cumle_kalir_yalniz_yanlis_birim_cikar() -> None:
+    text = ("Ocak bakiyesi 100 milyon TL idi ve yıl boyunca istikrarlı biçimde yükseldi. Aralık bakiyesi 999 milyon TL oldu.\n\n"
+            "| Ay | Bakiye |\n|---|---|\n| Ocak | 100 |\n| Aralık | 999 |")
+    agent, _, _ = _months_agent([LLMResponse(content="", tool_calls=[_call(1)]), LLMResponse(content=text)])
+    ans = agent.ask("2025 bakiyesi nasıl değişti?")
+    assert "999" not in ans.text and "Ocak bakiyesi 100 milyon TL" in ans.text and "| Ocak | 100 |" in ans.text
+    assert "doğrulanamayan 2 ifade cevaptan çıkarıldı" in ans.text
+
+
+def test_d02_dogru_ve_yuvarlanmis_cevap_degismez() -> None:
+    agent, _, llm = _months_agent([LLMResponse(content="", tool_calls=[_call(1)]),
+                                    LLMResponse(content="Aralık bakiyesi 110,0 milyon TL; Ocak'a göre %10 arttı.")])
+    ans = agent.ask("2025 aralık bakiyesi?")
+    assert ans.rejected_claims == [] and "110,0" in ans.text and len(llm.seen_tool_offers) == 2
+
+
+def test_d02_adim_limiti_yolunda_da_uygulanir() -> None:
+    turns = [LLMResponse(content="", tool_calls=[ToolCall(id=f"c{i}", name="lakehouse_query", arguments={"year": 2000 + i})]) for i in range(3)]
+    turns.append(LLMResponse(content="Aralık bakiyesi 999 milyon TL."))
+    agent, _, _ = _months_agent(turns, max_steps=3)
+    ans = agent.ask("2025 aralık bakiyesi?")
+    assert ans.hit_step_limit and "999" not in ans.text and ans.rejected_claims
+
+
+def test_d02_arac_cagirmadan_onceki_tablodan_yanlis_tek_sayi_gecmez() -> None:
+    llm = _ScriptedLLM([LLMResponse(content="Aralık 999 oldu."), LLMResponse(content="Aralık 999 oldu.")])
+    agent, _ = _agent(llm)
+    agent.workspace.set_table(pd.DataFrame({"donem": ["2025-01", "2025-12"], "bakiye": [100.0, 110.0]}), description="önceki tur")
+    ans = agent.ask("Aralıkta ne oldu?")
+    assert "999" not in ans.text and "110" in ans.text, ans.text
+    ok = _agent(_ScriptedLLM([LLMResponse(content="Aralıkta bakiye 110 idi.")]))[0]
+    ok.workspace.set_table(pd.DataFrame({"bakiye": [100.0, 110.0]}), description="önceki tur")
+    assert ok.ask("Aralıkta ne oldu?").text == "Aralıkta bakiye 110 idi.", "tablodaki sayıyla yorum geçer"

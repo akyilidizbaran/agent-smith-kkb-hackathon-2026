@@ -374,3 +374,30 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
 - M02 revize önerisi: üç dengeli ilk tekrar, kritik/dalgalı vakalara bütçeli ek tekrar. Yakın skor eşitlik kanıtı değildir. Kesin model bütçesi ve eşikler hâlâ açık.
 - Bu tur 15 ilgili offline test geçti (0,41 s); tarihsiz grup toplamı A=30/B=7 doğrulandı. Promotion check_policy eski onay + güncel “yayınlama” metninde ret üretmedi; yalnız politika çağrısı yapıldı, CLI/DB yazımı yapılmadı. Onay işlem kapsamına bağlanmalı.
 - Uygulama kodu, dal ve veri değiştirilmedi; yalnız değerlendirme/plan/hafıza yazıldı.
+
+## 12. Milestone uygulamalarının bağımsız kontrolü — 14 Eylül 2026
+
+- Kullanıcı uyguladığı milestone'ların doğru ve eksiksiz olup olmadığını sordu. İncelenen HEAD `196dcfe`, son uygulama commit'i `cc793be`. Rapor: `docs/MILESTONE_DOGRULAMA_2026-09-14.md`. Bu tur düzeltme/merge/push yapılmadı; izlenmeyen `.claude/` dizinine dokunulmadı.
+- Agent testleri 418/418 (4,07 s); hedefli lakehouse Gold/toplu ingestion/ad-hoc provenance/observability 176/176 (213,20 s). Tam lakehouse suite, canlı MIA/OCR ve Playwright bu tur yeniden koşulmadı; önceki M16 kayıtları bağımsız yeni ölçüm sayılmadı.
+- Salt okunur preflight başarılı: 2.214 katalog, 681 yüklü seri, 43.830 gözlem, 6 Gold, 3.468 artifact, 117 run. Eski varsayılan seed/eksik CLI yolu problemi mevcut ortamda giderilmiş.
+- Asıl 192 görevde 152 `[x]`, 27 `[~]`, 13 `[ ]`; ek EK görevleri hariç. M16 kendi kaydı 14 tam/19 kısmi kabul gösteriyor; bütün milestone'lar kapanmış sayılamaz.
+- Yeniden üretilen açıklar: join float64 dönüşümü 9007199254740992/9007199254740993 kimliklerini eşleştiriyor; `001`/`1` ve boş kimlikler de örtük eşleşiyor. Join yardımcı `__k` kolonu kullanıcıda varsa sessiz siliniyor.
+- Harness kontrollü modelde gerçek Aralık=110 iken 999 iddiasını iki geri gönderme sonrası yalnız uyarıyla nihai yanıta taşıyor. Onaylı/eksik kanıtı uyarıyla sunma ile bilinen yanlış sayıyı düzeltme ayrılmalı.
+- Promotion politika kontrolünde geçmiş onay + güncel “yayınlama” hâlâ ret üretmiyor; bu tur gerçek CLI/promotion çağrılmadı. M04-T09 tam kabul değil.
+- Reset callback'inin kullandığı bootstrap yeni geçici DB'yi 2.214 finans katalog kaydıyla kurdu; boş katalog kabulü yok. Şema-only seçenek alt katmanda mevcut ama reset/sonraki yazma yollarına taşınmalı. Reset sonrası geçici kökte eski charts/old.png kaldı; silme hataları ignore_errors ile başarı diye listelenebilir.
+- Kanıt zinciri: RAW yok + Bronze var iken chain_ok=True; Bronze da sonradan silinince mevcut nesne yine True. Fiziksel halka doğrulaması ve kısmi zincir sunumu tamamlanmalı.
+- Sonraki adım: rapordaki R01–R07'yi düzelt, A09/A21c gerçek uçtan uca geçici veri kökünde kapanmalı; sonra kısmi kabul senaryoları ve başka kişi kurulum provası. Asıl demo verisine bu kontrolde dokunulmadı.
+
+## 13. İnceleme sonrası düzeltme ve kapanış planı — 14 Eylül 2026
+
+- Kullanıcı incelemede yapılması gereken kapsamları ayrıntılı Markdown dosyası olarak istedi. `docs/MILESTONE_DUZELTME_VE_KAPANIS_PLANI_2026-09-14.md` oluşturuldu; ana milestone planının yerini almaz, kontrol raporunun uygulama ekidir.
+- Yedi düzeltme paketi D01–D07, rapordaki R01–R07 ile eşleşir: kayıpsız join, yanlış sayı için güvenilir nihai çıkış, işlem kapsamlı onay, boş katalog bootstrap, eksiksiz reset, fiziksel kanıt doğrulama, yardımcı kolon çakışmalarını önleme.
+- K01–K04: gerçek CLI/UI ile A09/A21c kabulü, kısmi A01–A33 senaryoları, son sürüm/başka ekip üyesi provası ve ana plan/ADR/kanıt durumlarının tutarlı kapanışı. Her pakette neden, görev, bağımlılık ve beklenen kabul sonucu kayıtlı.
+- Bu tur yalnız yeni plan ve hafıza yazıldı; ana planın tamamlanma işaretleri değiştirilmedi, uygulama kodu/veri üzerinde işlem yapılmadı. Görevler kabul kanıtı oluşana kadar açık kalacak.
+
+## 14. Düzeltme planının uygulanması — 14 Eylül 2026
+
+- **D01/D07 (ADR-0065):** join anahtarı açık kural; `tam` varsayılan (tamsayı kayıpsız, metin olduğu gibi, zaman damgası saatiyle), tip farkı ya da gevşek kuralın sonucu değiştirmesi sorulur, boş anahtar eşleşmez, ≥2^53 float kimlik reddedilir. Yardımcı kolon kaldırıldı; `__k=preserve-me` korunur, sonek çakışması sayı sonekiyle çözülür, kural kart ve provenance'ta. M11 ve A09 testleri artık `metin_normal`'ı açık seçiyor (ankara ↔ Ankara sorulur).
+- **D02 (ADR-0066):** doğrulanamayan sayı taşıyan cümle/madde/tablo satırı son çıkışta çıkarılır; anlam kalmazsa deterministik tablo özeti. Döngü kilidi, adım/süre sınırı ve araçsız turda da; araçsız eşik 1 sayı, havuza önceki tablolar ve bakışlar girdi. Her tur 999 diyen model testinde nihai metin, sohbet ve anlatı adımı 999 taşımıyor.
+- Ajan testleri 418 → 432.
+

@@ -18,6 +18,8 @@ from __future__ import annotations
 import json
 import logging
 import re
+
+import pandas as pd
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -155,16 +157,23 @@ def vague_candidates(question: str, search) -> list[str]:
     return heads[:4] if len(heads) >= 3 else []
 
 
-def unverified_numbers(answer: str, table) -> list[str]:
+def unverified_numbers(answer: str, table, extra_frames=()) -> list[str]:
     """Aktif tabloda bulunmayan cevap sayıları (yıl ve ≤31 küçük tam sayı hariç). Tolerans: göreli %0,5 ya da virgüllü
     yazımda gösterilen hassasiyetin yarım birimi; tek noktalı üç haneli yazım binlik ve ondalık olarak iki kez denenir."""
     if table is None or len(table) == 0:
         return []
     import numpy as np
-    numeric = table.select_dtypes("number")
-    if numeric.empty:
+    arrays = []
+    for frame in (table, *extra_frames):
+        if frame is None or len(frame) == 0:
+            continue
+        numeric = frame.select_dtypes("number")
+        if not numeric.empty:
+            arrays.append(numeric.to_numpy(dtype=float).ravel())
+        arrays.append(np.asarray([float(len(frame))]))          # "60 ay": satır sayısı araçtandır
+    if not arrays:
         return []
-    values = numeric.to_numpy(dtype=float).ravel()
+    values = np.concatenate(arrays)
     values = values[np.isfinite(values)]
     out: list[str] = []
     for m in _NUM_RE.finditer(_ascii_minus(answer or "")):
@@ -182,6 +191,72 @@ def unverified_numbers(answer: str, table) -> list[str]:
             if raw not in out:
                 out.append(raw)
     return out
+
+
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-ZÇĞİÖŞÜ0-9*(\"'])")
+_TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{3,}")
+
+
+def drop_unverified_units(text: str, is_bad) -> tuple[str, list[str]]:
+    """D02 (ADR-0066): doğrulanamayan sayı taşıyan birimleri (tablo satırı, madde, cümle) çıkarır; kalan metni döner.
+
+    Birim: markdown tablo satırı ya da madde bütünüyle; düz satırlar cümle cümle. Satırları kalmayan tablonun başlığı da
+    düşer. `is_bad(birim) -> bool` karar verir; bu fonksiyon sayı bilmez."""
+    lines = (text or "").split("\n")
+    kept: list[str] = []
+    removed: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            kept.append(line)
+            continue
+        if stripped.startswith("|") or _TABLE_SEP.match(stripped) or re.match(r"^([-*•]|\d+[.)])\s+", stripped):
+            if _TABLE_SEP.match(stripped) or not is_bad(stripped):
+                kept.append(line)
+            else:
+                removed.append(stripped)
+            continue
+        parts = _SENTENCE_SPLIT.split(line)
+        good = [p for p in parts if not is_bad(p)]
+        removed.extend(p.strip() for p in parts if is_bad(p))
+        if good:
+            kept.append(" ".join(good))
+    # başlığı ve ayırıcısı kalıp satırı kalmayan tablolar
+    out: list[str] = []
+    i = 0
+    while i < len(kept):
+        if (i + 1 < len(kept) and kept[i].strip().startswith("|") and _TABLE_SEP.match(kept[i + 1].strip())
+                and (i + 2 >= len(kept) or not kept[i + 2].strip().startswith("|"))):
+            i += 2
+            continue
+        out.append(kept[i])
+        i += 1
+    clean = re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
+    return clean, removed
+
+
+def _fmt_cell(v) -> str:
+    if v is None or (not isinstance(v, str) and pd.isna(v)):
+        return ""
+    if isinstance(v, float):
+        return str(int(v)) if v.is_integer() else repr(v).replace(".", ",")
+    if hasattr(v, "strftime"):
+        return v.strftime("%Y-%m-%d")
+    return str(v)
+
+
+def table_digest(frame, max_rows: int = 12) -> str:
+    """Doğrulanmış tablodan deterministik markdown özet: sayılar hücrenin kendisi (virgül ondalık, ayraçsız)."""
+    if frame is None or len(frame) == 0:
+        return ""
+    cols = [c for c in frame.columns if not str(c).endswith(("artifact_sha256_list", "vintage_id_list", "run_id_list"))][:6]
+    part = frame[cols]
+    if len(part) > max_rows:
+        part = part.tail(max_rows)
+    head = "| " + " | ".join(map(str, cols)) + " |\n|" + "---|" * len(cols)
+    rows = ["| " + " | ".join(_fmt_cell(v) for v in row) + " |" for row in part.itertuples(index=False)]
+    note = f"\n\n(Tablonun son {len(part)} satırı; tamamı {len(frame)} satır, indirilebilir.)" if len(frame) > len(part) else ""
+    return head + "\n" + "\n".join(rows) + note
 
 
 NO_TOOL_NUMBERS_NOTE = ("Bu turda HİÇBİR ARAÇ ÇALIŞMADI ve cevabındaki şu sayılar aktif tabloda yok: {nums}. Sayı uydurma ve "
@@ -263,6 +338,9 @@ class AgentAnswer:
     #: Araçların ürettiği çıktı dosyaları (grafik belirtimi/PNG; ADR-0032). CLI yolu basar,
     #: koşucular varlığını denetler. Metnin içine gömülmez: dosya yolu cevabın parçası değil.
     artifacts: list[dict[str, Any]] = field(default_factory=list)
+    #: D02 (ADR-0066): son çıkışta cevaptan çıkarılan doğrulanamayan ifadeler. Metne, arayüz yüküne ve dışa aktarıma
+    #: GİRMEZ; yalnız koşucular ve testler okur.
+    rejected_claims: list[str] = field(default_factory=list)
     #: Kanıt paneli (ADR-0033): cevaptaki sayı → hücre → SQL → gözlem → artifact → RAW/URL.
     #: Cevap üretildikten SONRA kurulur; kurulamazsa None, cevap düşmez.
     evidence: Any = None
@@ -546,6 +624,7 @@ class AnalyticsAgent:
         causal_rounds = 0                    # nedensellik dili için geri gönderme sayısı (en çok 2)
         miss_rounds = 0                      # araç çıktısında olmayan sayı için geri gönderme sayısı (en çok 2)
         grounding = ""                       # son ölçüm; AgentAnswer'a taşınır
+        rejected: list[str] = []             # D02: cevaptan çıkarılan, doğrulanamayan iddialar (dışa aktarılmaz)
         action_claim_nudged = False          # araçsız işlem iddiası / okunmamış dosya bir kez geri gönderilir
 
         for i in range(1, self.max_steps + 1):
@@ -615,9 +694,11 @@ class AnalyticsAgent:
 
                 acted_this_turn = any(s.tool_name and s.ok for s in steps)
                 loose_numbers = ([] if acted_this_turn or action_claim_nudged
-                                 else unverified_numbers(self._strip_reasoning(response.content or ""), self.workspace.table))
+                                 else unverified_numbers(self._strip_reasoning(response.content or ""), self.workspace.table,
+                                                         self._frames_pool()))
+                # D02-T05: araçsız turda tek doğrulanamayan sayı da yeter (önce ≥2 idi; tek yanlış sayı kapıyı atlatıyordu).
                 if not acted_this_turn and not action_claim_nudged and (
-                    _ACTION_CLAIM.search(response.content or "") or _FILE_REF.search(question) or len(loose_numbers) >= 2
+                    _ACTION_CLAIM.search(response.content or "") or _FILE_REF.search(question) or len(loose_numbers) >= 1
                 ):
                     action_claim_nudged = True
                     steps.append(AgentStep(index=i, role="validate", ok=False,
@@ -625,7 +706,7 @@ class AnalyticsAgent:
                                            duration_ms=(time.perf_counter() - started) * 1000))
                     messages.append(ChatMessage(role="assistant", content=response.content))
                     messages.append(ChatMessage(role="user", content=(
-                        NO_TOOL_NUMBERS_NOTE.format(nums=", ".join(loose_numbers[:10])) if len(loose_numbers) >= 2
+                        NO_TOOL_NUMBERS_NOTE.format(nums=", ".join(loose_numbers[:10])) if len(loose_numbers) >= 1
                         and not (_ACTION_CLAIM.search(response.content or "") or _FILE_REF.search(question))
                         else ACTION_CLAIM_NOTE)))
                     continue
@@ -683,12 +764,13 @@ class AnalyticsAgent:
                             )
                         )
                         continue
-                    if regenerated and grounding.startswith("MISS"):
-                        answer_text += (
-                            "\n\n(Not: anlatımdaki şu değerler araç çıktısında birebir "
-                            "doğrulanamadı: " + grounding.split("|")[0][5:].strip()
-                            + ". Kesin değerler için tabloya bakın.)"
-                        )
+                    if grounding.startswith("MISS"):
+                        answer_text, rejected = self._final_exit(question, answer_text, tool_texts, steps, i)
+                elif not acted_this_turn and self.workspace.has_table:
+                    # D02-T05: önceki turun tablosuyla araçsız verilen cevap da doğrulama kapısından geçer.
+                    pool = self._frames_pool()
+                    if unverified_numbers(answer_text, self.workspace.table, pool):
+                        answer_text, rejected = self._final_exit(question, answer_text, None, steps, i)
 
                 steps.append(
                     AgentStep(
@@ -702,7 +784,7 @@ class AnalyticsAgent:
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=answer_text))
                 return AgentAnswer(text=answer_text, steps=steps, workspace=self.workspace,
-                                   grounding=grounding, artifacts=artifacts)
+                                   grounding=grounding, artifacts=artifacts, rejected_claims=rejected)
 
             # --- Araçları çalıştır ---
             messages.append(
@@ -797,10 +879,11 @@ class AnalyticsAgent:
                     temperature=self.narrate_temperature,
                 )
                 text = self._strip_reasoning(final.content)
+                text, rejected = self._checked_final(question, text, tool_texts, steps, i)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=text))
                 return AgentAnswer(text=text, steps=steps, workspace=self.workspace,
-                                   grounding=grounding, artifacts=artifacts)
+                                   grounding=grounding, artifacts=artifacts, rejected_claims=rejected)
 
         # --- Adım limiti ---
         final = self._chat(
@@ -815,8 +898,55 @@ class AnalyticsAgent:
             ]
         )
         text = self._strip_reasoning(final.content)
+        text, rejected = self._checked_final(question, text, tool_texts, steps, self.max_steps + 1)
+        self._history.append(ChatMessage(role="user", content=question))
+        self._history.append(ChatMessage(role="assistant", content=text))
         return AgentAnswer(text=text, steps=steps, workspace=self.workspace,
-                           hit_step_limit=True, grounding=grounding, artifacts=artifacts)
+                           hit_step_limit=True, grounding=grounding, artifacts=artifacts, rejected_claims=rejected)
+
+    # ------------------------------------------------------------------ D02: güvenilir son çıkış
+    def _frames_pool(self) -> list:
+        return [*self.workspace.previous_tables(), *(frame for _, frame in self.workspace.peeks())]
+
+    def _checked_final(self, question: str, text: str, tool_texts: list[str], steps: list, index: int) -> tuple[str, list[str]]:
+        """Geri gönderme hakkı olmayan çıkışlar (döngü kilidi, adım/süre sınırı): aynı doğrulama, aynı deterministik çıkış."""
+        if tool_texts and grounding_check(question, text, tool_texts).startswith("MISS"):
+            return self._final_exit(question, text, tool_texts, steps, index)
+        if not tool_texts and self.workspace.has_table and unverified_numbers(text, self.workspace.table, self._frames_pool()):
+            return self._final_exit(question, text, None, steps, index)
+        return text, []
+
+    def _final_exit(self, question: str, text: str, tool_texts: list[str] | None, steps: list, index: int) -> tuple[str, list[str]]:
+        """Yeniden yazma bütçesi bitti ve cevapta doğrulanamayan sayı var (D02, ADR-0066).
+
+        Yanlış sayı uyarıyla da KORUNMAZ: o sayıyı taşıyan birim (cümle, madde, tablo satırı) çıkarılır. Geriye anlamlı
+        metin kalmazsa deterministik cevap kurulur: doğrulanmış tablonun özeti ve güvenilir açıklama üretilemediği.
+        Model yeniden çağrılmaz; çıkarılan iddialar yalnız `rejected_claims`'te kalır (metne, izde sayıyla, dışa aktarıma girmez)."""
+        pool = self._frames_pool()
+
+        def bad(unit: str) -> bool:
+            if tool_texts:
+                return grounding_check(question, unit, tool_texts).startswith("MISS")
+            return bool(unverified_numbers(unit, self.workspace.table, pool))
+
+        clean, removed = drop_unverified_units(text, bad)
+        if not removed:
+            return text, []
+        substantive = len(re.sub(r"[\W\d_]+", "", clean)) >= 40
+        table = self.workspace.table
+        if substantive:
+            final = clean + f"\n\n(Araç çıktısıyla doğrulanamayan {len(removed)} ifade cevaptan çıkarıldı; doğrulanmış değerler tabloda.)"
+        elif table is not None and len(table):
+            final = ("Bu soru için güvenilir bir açıklama üretemedim: anlatımdaki değerler araç çıktısıyla doğrulanamadığı için "
+                     "cevaptan çıkarıldı. Araçların ürettiği doğrulanmış tablo:\n\n" + table_digest(table))
+        else:
+            final = ("Bu soru için doğrulanmış bir sayısal cevap üretemedim; araç çıktısıyla desteklenmeyen ifadeleri vermedim.")
+        steps.append(AgentStep(index=index, role="validate", ok=False,
+                               thought=f"son çıkış: doğrulanamayan {len(removed)} ifade cevaptan çıkarıldı"
+                                       + ("" if substantive else "; deterministik tablo özeti verildi"),
+                               result_summary=f"{len(removed)} ifade çıkarıldı"))
+        log.warning("D02 son çıkış: %d ifade çıkarıldı", len(removed))
+        return final, removed
 
     # ------------------------------------------------------------------
     def _chat(self, messages: list[ChatMessage], *, tools: Any = None, temperature: float = 0.0) -> LLMResponse:

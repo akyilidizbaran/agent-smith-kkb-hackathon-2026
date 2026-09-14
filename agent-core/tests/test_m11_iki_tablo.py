@@ -41,7 +41,11 @@ def test_a09_birlestirme_eslesmeyen_ve_coktan_bire_karta_yazilir() -> None:
     tool = WorkspaceJoinTool(ws)
     p = JoinParams(left="k1", right="k2", left_key="il", purpose="nüfus ve hastane")
     assert tool.validate_refs(p) is None
-    r = tool.run(p)
+    asked = tool.run(p)
+    assert not asked.ok and "metin_normal" in asked.error.candidates and "ör. '" in asked.error.message, \
+        "D01: boşluk/büyük-küçük harf eşdeğerliği varsayılmaz, sorulur"
+    assert ws.active_source_id == "k2", "sorunca tablo kurulmaz"
+    r = tool.run(JoinParams(left="k1", right="k2", left_key="il", key_policy="metin_normal", purpose="nüfus ve hastane"))
     t = ws.table
     assert r.ok and len(t) == 4 and list(t.columns) == ["il", "nufus", "hastane"], "left: sol satırlar korunur, anahtar tekrarlanmaz"
     assert t.loc[t["il"] == "Ankara", "hastane"].iloc[0] == 120 and t.loc[t["il"] == "Adana", "hastane"].iloc[0] == 40, "boşluk/büyük-küçük farkı eşleşir"
@@ -65,7 +69,9 @@ def test_ad_cakismasi_sonek_hic_eslesmeme_ve_tarih_anahtari() -> None:
     ws = AnalysisWorkspace()
     ws.set_table(pd.DataFrame({"tarih": pd.to_datetime(["2025-01-31", "2025-02-28"]), "deger": [1.0, 2.0]}), description="a")
     ws.set_table(pd.DataFrame({"tarih": ["2025-01-31", "2025-02-28"], "deger": [10.0, 20.0]}), description="b")
-    r = WorkspaceJoinTool(ws).run(JoinParams(left="k1", right="k2", left_key="tarih", purpose="x"))
+    asked = WorkspaceJoinTool(ws).run(JoinParams(left="k1", right="k2", left_key="tarih", purpose="x"))
+    assert not asked.ok and asked.error.candidates == ["tarih_gun"], "tarih ↔ metin eşdeğerliği açık kural ister"
+    r = WorkspaceJoinTool(ws).run(JoinParams(left="k1", right="k2", left_key="tarih", key_policy="tarih_gun", purpose="x"))
     assert r.ok and ws.table["deger_k2"].tolist() == [10.0, 20.0] and "deger → deger_k2" in r.content
     ws.set_table(pd.DataFrame({"kod": ["x"], "v": [1]}), description="c")
     ws.set_table(pd.DataFrame({"kod": ["y"], "w": [1]}), description="d")

@@ -146,7 +146,9 @@ def test_a09_yuklenen_iki_tarihsiz_tablo_beklenen_sonucla_birlesir() -> None:
     dup = tool.run(JoinParams(left="k1", right="k2", left_key="il_adi", right_key="il", purpose="nüfus ve hastane"))
     assert not dup.ok and "Van" in dup.error.message, "sağda yinelenen anahtar (Van) → ret"
     ws.set_table(hastane.drop_duplicates(), description="hastane tekil", provenance=QueryProvenance(sql="workspace_query tekil", dataset_ids=[], sources=["web — hastane_il.csv"]))
-    ok = tool.run(JoinParams(left="k1", right="k3", left_key="il_adi", right_key="il", purpose="nüfus ve hastane"))
+    asked = tool.run(JoinParams(left="k1", right="k3", left_key="il_adi", right_key="il", purpose="nüfus ve hastane"))
+    assert not asked.ok and "metin_normal" in asked.error.candidates, "D01: 'ankara' ↔ 'Ankara' eşdeğerliği sorulur"
+    ok = tool.run(JoinParams(left="k1", right="k3", left_key="il_adi", right_key="il", key_policy="metin_normal", purpose="nüfus ve hastane"))
     t = ws.table
     assert ok.ok and "Eşleşen 3 · yalnız solda 1 · yalnız sağda 1" in ok.content
     assert t.loc[t["il_adi"] == "ankara", "hastane_sayisi"].iloc[0] == 96 and pd.isna(t.loc[t["il_adi"] == "Trabzon", "hastane_sayisi"].iloc[0])
