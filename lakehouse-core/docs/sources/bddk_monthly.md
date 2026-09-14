@@ -194,3 +194,60 @@ What this means for Source Access, and where the line is:
   are deliberately absent from this track.
 - No revision has been *observed* in this project yet; the statement above is the source's,
   not a measurement of ours.
+
+## Genişletme (2026-09-13): 19 kalem daha, hepsi canlı doğrulandı
+
+Kalem ağacı `/BultenAylik/tr/Home/Gelismis` sayfasının HTML'indeki `<optgroup>`/`<option>`
+listesinden okundu (option `value` virgüllü kimlik listesidir; ilk kimlik Sektör tarafının
+kararlı kalem kimliğidir, `1534,288,219,238` → `1534`). Her kalem için `GelismisRaporGetir`
+2025-12 tek dönem, `taraf=10001`, `paraBirimi=TL`, `gosterimTuru=grid` ile çağrıldı; yanıtın
+kendi kolon başlığı birimi taşır (`"(milyon TL)"` ya da `"(%)"`), bu yüzden birim payload'dan
+değil başlıktan okunur. Rasyolar ve KOBİ kalemlerinde sütun `Toplam` değildir:
+`KalemSutunGetir?kalemNoList=<id>` sütun adını verir (`544?Rasyo`, `334?NakdiKrediTp` …).
+KOBİ kalemi bu turda alınmadı (hangi sütunun toplam olduğu doğrulanmadı).
+
+| Kalem | `kalemSutun` | Yanıt kolon başlığı | 2025-12 değeri |
+|---|---|---|---|
+| Tüketici Kredileri | `1533?Toplam` | `Tüketici Kredileri - Tüketici Kredileri (milyon TL)-Toplam` | **2939960** |
+| Taşıt | `1535?Toplam` | `Tüketici Kredileri - Tüketici Kredileri - Taşıt (milyon TL)-Toplam` | **52044** |
+| İhtiyaç | `1536?Toplam` | `Tüketici Kredileri - Tüketici Kredileri - İhtiyaç (milyon TL)-Toplam` | **2208946** |
+| Bireysel Kredi Kartları | `1539?Toplam` | `Tüketici Kredileri - Bireysel Kredi Kartları (milyon TL)-Toplam` | **2804381** |
+| Toplam Tük.Krd.+BKK | `1543?Toplam` | `Tüketici Kredileri - Toplam - Tük. Krd. (Dövize End. Dahil) ve Bireysel Kredi Kartları (milyon TL)-Toplam` | **5744345** |
+| Takipteki Tüketici | `1544?Toplam` | `Tüketici Kredileri - Takipteki Tüketici Krd. (milyon TL)-Toplam` | **116867** |
+| Takipteki Konut | `1545?Toplam` | `Tüketici Kredileri - Takipteki Konut Kredileri (milyon TL)-Toplam` | **1128** |
+| Takipteki Taşıt | `1546?Toplam` | `Tüketici Kredileri - Takipteki Taşıt Kredileri (milyon TL)-Toplam` | **334** |
+| Takipteki İhtiyaç | `1547?Toplam` | `Tüketici Kredileri - Takipteki İhtiyaç Kredileri (milyon TL)-Toplam` | **115405** |
+| Takipteki BKK | `1548?Toplam` | `Tüketici Kredileri - Takipteki Bireysel Kredi Kartları (milyon TL)-Toplam` | **124652** |
+| Krediler (Bilanço) | `1160?Toplam` | `Bilanço - Krediler (milyon TL)-Toplam` | **23127970** |
+| Takipteki Alacaklar | `1676?Toplam` | `Bilanço - Takipteki Alacaklar (milyon TL)-Toplam` | **593647** |
+| Toplam Aktifler | `1688?Toplam` | `Bilanço - Toplam Aktifler (milyon TL)-Toplam` | **46946798** |
+| Toplam Özkaynaklar | `1717?Toplam` | `Bilanço - Toplam Özkaynaklar (milyon TL)-Toplam` | **4155620** |
+| Toplam Mevduat | `1357?Toplam` | `Mevduat Türler İtibarıyla - 11  Toplam Mevduat (milyon TL)-Toplam` | **27223190** |
+| Toplam Mevduat Yurt İçi | `1344?Toplam` | `Mevduat Türler İtibarıyla - 4   Toplam Mevduat - Yurt İçi Yerleşik (milyon TL)-Toplam` | **25549894** |
+| NPL oranı (%) | `544?Rasyo` | `Rasyolar - Takipteki Alacaklar (Brüt) / Toplam Nakdi Krediler (%)-Rasyo` | **2.47437** |
+| Kredi/Mevduat (%) | `1749?Rasyo` | `Rasyolar - Toplam Nakdi Krediler / Toplam Mevduat (%)-Rasyo` | **88.120059** |
+| SYR (%) | `1746?Rasyo` | `Rasyolar - Yasal Özkaynak / Risk Ağırlıklı Kalemler Toplamı (%)-Rasyo` | **19.687081** |
+
+Ham yanıtlar ve kalem ağacı bu turda ölçüldü; katalog girişleri `catalog/series/bddk_monthly.yml`
+"Genişletme" bloğunda. Bilanço, Mevduat ve Rasyolar tablolarının kalemleri aynı uçtan aynı
+sözleşmeyle döner; frekans aylık, Sektör tarafı, TL. Alınmayan: KOBİ kredileri (sütun belirsiz),
+haftalık bültenin ek kalemleri (konumsal kimlik, `docs/sources/bddk_weekly.md`).
+
+## Kümülatif kalemler (2026-09-14): Kar Zarar tablosu yıl içi birikimlidir
+
+Brief'in "bazı BDDK verileri yıllık bazda kümülatif gider; ayrıştırılmalı" notu için Kar Zarar
+tablosundan iki kalem canlı ölçüldü (`GelismisRaporGetir`, 2025-01 → 2026-02, `taraf=10001`,
+`paraBirimi=TL`; kalem ağacı `Gelismis` sayfasının `<optgroup label="Kar Zarar">` listesinden).
+Her iki kalem de **yılbaşından itibaren birikir ve Ocak'ta sıfırlanır**:
+
+| Kalem | `kalemSutun` | 2025-01 | 2025-06 | 2025-12 | 2026-01 | 2026-02 |
+|---|---|---|---|---|---|---|
+| Dönem Net Kârı (Zararı) | `194?Toplam` | 47347 | 422459 | 940183 | 87249 | 169401 |
+| Toplam Faiz (Kar Payı) Gelirleri | `158?Toplam` | 621187 | 3855642 | 8355475 | 789354 | 1497867 |
+
+Bilanço tablosundaki `1715?Toplam` ("Bilanço - Dönem Karı (Zararı)") 194 ile aynı değerleri
+döndürüyor (aynı ölçümün ikinci adresi); katalogda yalnız 194 var. Katalog: `measure_type:
+flow_ytd`, `cumulative_reset: yearly`; aylık akım Gold `decompose_cumulative` ile türetilir
+(`catalog/gold/kredi_kirilimi.yml`, `net_kar_aylik`). "Paylaşım başlangıcından itibaren
+kümülatif" giden bir kalem bu turda bulunamadı; Kar Zarar tablosundaki tüm kalemler aynı yıl içi
+kalıptadır (yalnız 194 ve 158 ölçüldü).

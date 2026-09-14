@@ -15,9 +15,9 @@ Different parts of this integration carry **different levels of evidence**. Pass
 | Connector HTTP behaviour (retry, classification, key handling, RAW write) | **Verified by test only** | All connector tests use a **fake in-process session**. No socket is opened. |
 | Parser response shape (envelope, `Tarih`, `UNIXTIME`, string values, nulls) | **Verified against `/fe` captures** | Fixtures came from the EVDS3 web application's own `POST /igmevdsms-dis/fe` endpoint, not from the documented keyed endpoint |
 | **Official keyed endpoint, successful live data** | **LIVE_NOT_VERIFIED** | Prior diagnostics on 2026-09-11 returned HTTP 401 with the available credential; no successful authenticated data response was obtained. No authentication diagnostics were repeated in Phase 3.3A. |
-| **`TP.FG.J0` (TÜFE) response, live or captured** | ❌ **NOT VERIFIED** | No response has ever been captured. `tests/integration/test_evds_cpi_silver.py` uses a clearly-labelled **synthetic** payload and is a contract test only |
+| **`TP.FG.J0` (TÜFE) response, live or captured** | **CAPTURED LIVE** 2026-09-11 | `tests/fixtures/raw/evds/evds_cpi_monthly_live_keyed.json`, from the documented key-authenticated endpoint — see "Live keyed capture" below. `tests/integration/test_evds_cpi_silver.py` still uses its synthetic payload, so gate step 4 is open |
 | **`TP.FG.J0` reference/base (`2003=100`)** | **VERIFIED_PUBLIC** | TCMB-hosted Central Bank Review appendix explicitly maps the code to general CPI (2003=100); corroborated by public EVDS listing and TÜİK methodology below. This is not live API evidence. |
-| **`TP.FG.J0` 2025-01 value** | **LIVE_NOT_VERIFIED** | No authoritative observation was verified in this phase; no numeric assertion is adopted. |
+| **`TP.FG.J0` values against a published figure** | **AGREES** 2026-09-11 | Year-on-year change computed from the live response reproduces TÜİK's published December headline inflation exactly: 2023-12 **64,77%**, 2024-12 **44,38%**. This is a consistency check on the captured values, not a substitute for gate step 4. |
 
 ### What this means in practice
 
@@ -91,7 +91,32 @@ See [the evidence matrix and confidence decision](../branches/evds-cpi-semantic-
 
 The public reference/base may now be stated with the scope above. The existing promotion
 gate is unchanged: public semantics do not substitute for steps 1, 2 and 4 or establish
-current provider status. No live fixture was created; the synthetic contract test remains.
+current provider status.
+
+### Live keyed capture (2026-09-11) — gate steps 1 and 2 are now met
+
+A working `EVDS_API_KEY` became available and the documented endpoint was called for real.
+
+| | |
+|---|---|
+| Endpoint | `GET https://evds3.tcmb.gov.tr/igmevdsms-dis/series=TP.FG.J0&startDate=01-01-2021&endDate=30-06-2026&type=json` (key passed as a header, never in a committed file) |
+| Captured | 2026-09-11 |
+| HTTP status | 200, `application/json` |
+| Observations returned | 61 (2021-01 … 2026-01) |
+| Fixture | `tests/fixtures/raw/evds/evds_cpi_monthly_live_keyed.json` — four observations, response body only, no key in the bytes, the filename or the metadata |
+| Known-value agreement | Year-on-year from the captured index: 2023-12 → **64,77%**, 2024-12 → **44,38%**, matching TÜİK's published December headline inflation |
+| Index level | 2021-01 = 513,30 and 2023-12 = 1.859,38, consistent with the `2003=100` reference established from public sources above |
+
+Two contract differences from the web-application captures were found in the same call and
+apply to every EVDS series, not only this one — monthly `Tarih` is `2021-1` rather than
+`01-2021`, and `seriesNames` is absent entirely. Both are recorded in
+`tests/fixtures/raw/evds/README.md`; the Silver mapping now reads the date from `UNIXTIME`
+(`src/lakehouse/silver/adapters/_evds_time.py`).
+
+**What is still open:** gate step 4 — `tests/integration/test_evds_cpi_silver.py` has to be
+re-pointed at this fixture with the synthetic payload deleted rather than kept beside it.
+Until then `semantic_confidence` stays `derived`, and a presentation must not call this series
+live-provider-verified.
 
 ### Required smoke test once an API key exists
 
@@ -176,5 +201,50 @@ locator, artifact metadata, logs, or exception messages. `.env` is git-ignored a
 - **Successful authenticated data from the documented keyed endpoint remains unverified.**
   Prior requests returned HTTP 401; see "Verification status" and the pending smoke test.
   `/fe` is a shape-discovery tool only and must not become a production fallback.
-- The exact `Tarih` format for quarterly, semi-annual and yearly frequencies is unverified.
+- Quarterly `Tarih` was read from real keyed-endpoint Bronze rows on 2026-09-14
+  (`TP.BIRIMFIYAT.TR`, `TP.BK.TR`): `YYYY-Qn`, with `UNIXTIME` at the quarter's first day;
+  Silver accepts exactly that spelling (`_evds_time.evds_quarter_bounds`). Semi-annual and
+  yearly `Tarih` formats remain unverified and are still refused.
 - No rate limit is documented. The guide only advises fetching once per day.
+
+## Küratörlü ek (2026-09-13): kur, faiz, mevduat faizi, kart harcaması, para arzı, TÜFE
+
+`catalog/series/evds.yml` üretilen bloğun altına elle yazılmış 8 giriş eklendi; TÜFE genel
+endeksi (`TP.TUKFIY2025.GENEL`) üretilmiş girdi olarak duruyordu, semantiği küratörlü yapıldı.
+Kanıt: EVDS'nin kendi `/datagroups/mode=0` ve `/serieList/fe/type=json&code=<grup>` yanıtları
+(13 Eylül, `EVDS_API_KEY` ile). Frekans `FREQUENCY_STR`'den, birim veri grubunun `BIRIMI`
+alanından; ölçüm tipi ve indirgeme kuralı serinin adından ve tanımından (oran → avg,
+stok → last, akım → sum).
+
+| Seri | Veri grubu | FREQUENCY_STR | BIRIMI | Katalog |
+|---|---|---|---|---|
+| TP.DK.USD.A.YTL, TP.DK.EUR.A.YTL | bie_dkdovytl Döviz Kurları | GÜNLÜK | Türk lirası | daily, TRY, rate, avg |
+| TP.BISPOLFAIZ.TUR | bie_bispolfaiz Merkez Bankaları Politika Faiz Oranı | AYLIK | Yüzde | monthly, pct, rate, avg |
+| TP.APIFON4 | bie_apifon TCMB Net Fonlaması ve AOFM | İŞ GÜNÜ | milyon TL ve yüzde (bu seri yüzde) | business_daily, pct, rate, avg |
+| TP.TRY.MT02 | bie_mt100h Mevduat Faiz Oranları (Akım) | HAFTALIK(CUMA) | Ağırlıklı ortalama | weekly/friday, pct, rate, avg |
+| TP.KKHARTUT.KT1 | bie_kkhartut Kart Harcama Tutarı (Akım) | HAFTALIK(CUMA) | bin TL | weekly/friday, TRY_th, flow_periodic, sum |
+| TP.HPBITABLO1.11, .18 | bie_hpbitablo1 Para Arzı (M2, M3) | HAFTALIK(CUMA) | bin TL | weekly/friday, TRY_th, stock, last |
+| TP.TUKFIY2025.GENEL | bie_tukfiy2025 TÜFE (2025=100) | AYLIK | (boş) | monthly, index, index, last |
+
+Alınmayan: TLREF (`bie_bisttlref`), rezervler. `bie_kt100h`/`bie_kt210a` kredi faizlerinin
+diğer serileri 2026-09-14'te grup semantiğiyle `rate/pct/avg` olarak etiketlendi (aşağı).
+
+## Grup semantiği (2026-09-14): üretilmiş 1.533 seriye anlam
+
+Üretilmiş blok `measure_type: unknown` ile geliyordu ve Silver bunları (doğru olarak)
+yayınlamıyordu. EVDS veri grubu başına bir kez incelenip karar `scripts/apply_evds_group_semantics.py`
+içindeki tabloya yazıldı; yalnız `unknown` girişler değişti, küratörlü satırlara dokunulmadı.
+Kanıt grup adı ve seri adı kalıbı (EVDS `tumSeriler` ağacı); değerlerden çıkarım yok. Güven
+`derived` kalır.
+
+| Veri grubu | Seri | measure_type | unit | default_agg | Gerekçe |
+|---|---|---|---|---|---|
+| bie_tukfiy2025 | 348 | index | index | last | TÜFE alt kalem endeksleri (2025=100) |
+| bie_akonutsat1–4 | 664 | flow_periodic | adet | sum | konut ve iş yeri satış adetleri (toplam/ipotekli/ilk el/ikinci el; il, Türkiye, arındırılmış) |
+| bie_birimfiyat, bie_bk | 152 | stock | TRY_per_m2 | last | konut birim fiyat / kira seviyesi (çeyreklik) |
+| bie_ykke, bie_kfe, bie_ykfe, bie_yokfend | 41 | index | index | last | kira ve bölgesel/yeni/eski konut fiyat endeksleri |
+| bie_kt210a, bie_kt100h | 19 | rate | pct | avg | kredi faiz oranları (stok / akım) |
+| bie_tukkre, bie_vdkre, bie_kybtkttk | 309 | — | — | — | **`status: deprecated`**: "(Arşiv)" grupları, kaynak artık üretmiyor (boş ya da bayt-özdeş yanıt, Bronze'a giremiyor) |
+
+Sonuç (kopya DB): Silver 672 → 1.901 seri; `unknown` 0. İpotekli satış payı
+(`TP.AKONUTSAT2.KTRTOPLAM` / `TP.AKONUTSAT1.KTRTOPLAM`) 2021-01 %15,3 → 2026-06 %20,0.

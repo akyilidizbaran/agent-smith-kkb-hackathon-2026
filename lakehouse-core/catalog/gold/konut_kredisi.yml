@@ -1,0 +1,62 @@
+# Gold metric catalog — housing credit (konut kredisi)
+#
+# Human-authored, reviewed, versioned in Git. Each entry names ONE call of a Gold function
+# (docs/gold-contract.md) that `python -m lakehouse gold` materializes as `gold.<metric_id>`.
+# The entry chooses WHICH series and WHICH target period; it cannot choose HOW the numbers
+# combine — that is still read from meta.series at build time. A metric the function
+# refuses is recorded as refused in meta.gold_build and has no table.
+
+gold_catalog_schema_version: "1.0"
+
+metrics:
+  - metric_id: konut_kredisi_ceyreklik
+    name_tr: Konut kredisi bakiyesi, çeyreklik (sektör toplamı)
+    description: >-
+      BDDK Aylık Bülten'deki sektör toplam konut kredisi bakiyesi (bddk_monthly:1534_Toplam)
+      takvim çeyreklerine indirgenmiş hâli. Stok seri olduğu için her çeyreğin değeri o
+      çeyreğin SON ayının bakiyesidir (kural: last, katalogdan). Satır etiketi çeyrek sonu
+      (period_end); observations sütunu çeyreğe kaç aylık gözlemin girdiğini,
+      quality_flag eksik ya da uyarılı gözlem olup olmadığını söyler.
+    aliases:
+      - çeyreklik konut kredisi
+      - çeyreklik konut kredisi bakiyesi
+      - konut kredisi çeyrek
+      - üç aylık konut kredisi
+    tags: [kredi, konut, bankacilik, bddk, stok, gold, ceyreklik]
+    function: align_frequency
+    series_ids: [bddk_monthly:1534_Toplam]
+    target_frequency: quarterly
+
+  - metric_id: konut_kredisi_aylik_vs_haftalik
+    name_tr: Konut kredisi bakiyesi, aylık bülten ile haftalık bültenin ay sonu değeri yan yana
+    description: >-
+      Aynı büyüklüğün iki BDDK kaynağı tek dönem ekseninde: bddk_monthly:1534_Toplam (aylık
+      bülten, ay sonu) ve bddk_weekly:5690_3 (haftalık bülten, ayın son haftası; kural last).
+      Dış birleştirme: yalnız bir kaynağın yayımladığı ay da görünür, öbür sütun boş kalır
+      (is_complete_period=false). Kaynaklar arası mutabakat ve haftalık bültenin ay sonuna
+      ne kadar yaklaştığı buradan okunur. Kolonlar "<seri>@<varlık>::value" biçimindedir
+      (ör. "bddk_monthly:1534_Toplam@bddk:10001::value").
+    aliases:
+      - aylık ve haftalık konut kredisi karşılaştırması
+      - konut kredisi kaynak mutabakatı
+      - haftalık bülten aylık bülten farkı
+    tags: [kredi, konut, bankacilik, bddk, stok, gold, mutabakat]
+    function: join_on_period
+    series_ids: [bddk_monthly:1534_Toplam, bddk_weekly:5690_3]
+    target_frequency: monthly
+
+  - metric_id: konut_faizi_aylik
+    name_tr: Konut kredisi faiz oranı, aylık ortalama (akım, %)
+    description: >-
+      TCMB EVDS haftalık konut kredisi faiz oranının (evds:TP.KTF12) takvim aylarına
+      indirgenmiş hâli. Oran serisi olduğu için ay değeri haftalık gözlemlerin
+      ortalamasıdır (kural: avg, katalogdan); observations sütunu aya kaç haftanın
+      girdiğini söyler. Yeni açılan kredilere uygulanan orandır, stokun ortalama faizi değil.
+    aliases:
+      - aylık konut kredisi faizi
+      - aylık ortalama konut faizi
+      - konut faizi aylık
+    tags: [faiz, konut, kredi, tcmb, gold, aylik]
+    function: align_frequency
+    series_ids: [evds:TP.KTF12]
+    target_frequency: monthly

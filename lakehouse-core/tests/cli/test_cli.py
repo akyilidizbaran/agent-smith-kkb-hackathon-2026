@@ -11,6 +11,7 @@ from typing import Any
 
 import duckdb
 
+from src.lakehouse.catalog.series import load_catalog_files
 from src.lakehouse.cli import main
 from tests.generic._support import write_bytes, write_csv, xlsx_bytes
 
@@ -135,6 +136,7 @@ def test_help_is_a_real_module_entrypoint() -> None:
     assert "bootstrap" in completed.stdout
     assert "ingest" in completed.stdout
     assert "ingest-file" in completed.stdout
+    assert "gold" in completed.stdout and "gold-run" in completed.stdout
     assert "--api-key" not in completed.stdout
     assert completed.stderr == ""
 
@@ -172,7 +174,13 @@ def test_fresh_bootstrap_and_repeat_are_idempotent(tmp_path: Path) -> None:
 
     assert first.returncode == second.returncode == 0
     assert "status: success" in first.stdout
-    assert _read(database, "SELECT count(*) FROM meta.series")[0][0] == 5
+    # Counted from the repository catalog rather than written as a literal: the catalog grows
+    # as sources and series are added, and a hard-coded size makes an unrelated catalog commit
+    # fail this test. What bootstrap must guarantee is that the real catalog is loaded whole
+    # and that a second run neither duplicates nor drops a row.
+    expected_series = len(load_catalog_files(ROOT / "catalog" / "series"))
+    assert expected_series >= 5, "repository catalog precondition"
+    assert _read(database, "SELECT count(*) FROM meta.series")[0][0] == expected_series
     assert _read(database, "SELECT count(*) FROM meta.artifact")[0][0] == 0
 
 
@@ -344,3 +352,254 @@ def test_ambiguous_generic_input_fails_through_production_parser(
     assert result != 0
     assert "delimiter" in captured.err
     assert _read(tmp_path / "data" / "lakehouse.duckdb", "SELECT status FROM meta.run")[0][0] == "failed"
+
+
+def _bronze_from_bddk_monthly_fixture(tmp_path: Path) -> tuple[Path, Path]:
+    """One real BDDK monthly artifact in Bronze; returns (database, data_root)."""
+
+    from src.lakehouse.parsers.bddk_monthly import BddkMonthlyParser
+    from src.lakehouse.storage.parquet import ParquetStorage
+    from src.lakehouse.storage.raw import RawStorage
+
+    database = tmp_path / "data" / "lakehouse.duckdb"
+    data_root = tmp_path / "data"
+    fixture = ROOT / "tests/fixtures/raw/bddk_monthly/bddk_monthly_housing_loans.json"
+    asset = RawStorage(data_root / "raw").store(
+        source_id="bddk_monthly",
+        dataset_id="bddk_monthly_housing_loans",
+        locator="fixture://bddk_monthly",
+        content=fixture.read_bytes(),
+        media_type="application/json",
+        fetched_at=FIXED_TIME,
+        extension="json",
+        metadata={"requested_kalem_sutun": ["1534?Toplam"]},
+    )
+    ParquetStorage(data_root / "bronze").write(BddkMonthlyParser().parse(asset))
+    return database, data_root
+
+
+def test_silver_command_publishes_bronze_into_the_trusted_query_surface(
+    tmp_path: Path, capsys: Any
+) -> None:
+    """The step that was missing between ``ingest`` and anything that reads Silver.
+
+    Without this command a complete, successful ingestion still left
+    ``silver.fact_observation`` empty, because the only callers of the snapshot operation were
+    tests. The command is what makes "source to agent" a path an operator can run.
+    """
+
+    database, data_root = _bronze_from_bddk_monthly_fixture(tmp_path)
+
+    exit_code = main(["silver", "--database", str(database), "--data-root", str(data_root)])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "status: success" in output
+    assert "bronze artifacts staged: 1" in output
+    published = _read(
+        database, "SELECT count(*) FROM silver.fact_observation"
+    )[0][0]
+    assert published > 0
+    assert f"rows published         : {published}" in output
+
+
+def test_gold_command_caches_reviewed_metrics_and_records_the_rest_as_refused(
+    tmp_path: Path, capsys: Any
+) -> None:
+    """The committed metric catalog against a Silver holding only the BDDK monthly housing series.
+
+    One metric can be built (the quarterly housing-loan stock); every other catalogued metric
+    needs series this Silver does not hold, so the functions refuse them with
+    ``NO_OBSERVATIONS``. The refusal is a recorded outcome with a reason, not a silently
+    missing table. The refused count follows the committed catalog (2026-09-13: five, after
+    ``catalog/gold/kredi_kirilimi.yml`` added three), so it is derived, not hardcoded.
+    """
+
+    database, data_root = _bronze_from_bddk_monthly_fixture(tmp_path)
+    assert main(["silver", "--database", str(database), "--data-root", str(data_root)]) == 0
+    capsys.readouterr()
+
+    exit_code = main(["gold", "--database", str(database), "--data-root", str(data_root)])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "status: success" in output
+    assert "tables built           : 1" in output
+    assert "gold.konut_kredisi_ceyreklik" in output
+    from src.lakehouse.gold.catalog import load_gold_catalog_files
+
+    catalogued = len(load_gold_catalog_files(Path("catalog/gold")))
+    assert catalogued >= 3
+    assert f"metrics refused        : {catalogued - 1}" in output
+    assert "NO_OBSERVATIONS" in output
+    quarters = _read(database, "SELECT count(*) FROM gold.konut_kredisi_ceyreklik")[0][0]
+    assert quarters > 0
+    ledger = _read(
+        database,
+        "SELECT metric_id, status FROM meta.gold_build WHERE is_current ORDER BY metric_id",
+    )
+    assert ("konut_kredisi_ceyreklik", "built") in ledger
+    assert ("konut_faizi_aylik", "refused") in ledger
+    assert ("konut_kredisi_aylik_vs_haftalik", "refused") in ledger
+    assert len(ledger) == catalogued and sum(1 for _, st in ledger if st == "built") == 1
+
+
+def test_gold_run_writes_one_call_as_json_and_exits_3_on_refusal(
+    tmp_path: Path, capsys: Any
+) -> None:
+    """The read-only single-call path an agent in another process uses."""
+
+    database, data_root = _bronze_from_bddk_monthly_fixture(tmp_path)
+    assert main(["silver", "--database", str(database), "--data-root", str(data_root)]) == 0
+    capsys.readouterr()
+    out = tmp_path / "gold" / "align.json"
+
+    exit_code = main([
+        "gold-run", "--database", str(database), "--function", "align_frequency",
+        "--series", "bddk_monthly:1534_Toplam", "--target", "quarterly", "--out", str(out),
+    ])
+    stdout = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "status: success" in stdout and "function: align_frequency" in stdout
+    document = json.loads(out.read_text(encoding="utf-8"))
+    assert document["function"] == "align_frequency"
+    assert "period_end" in document["columns"] and "artifact_sha256_list" in document["columns"]
+    assert len(document["rows"]) == int(_kv(stdout)["rows"])
+
+    refused = main([
+        "gold-run", "--database", str(database), "--function", "decompose_cumulative",
+        "--series", "bddk_monthly:1534_Toplam", "--out", str(tmp_path / "gold" / "dec.json"),
+    ])
+    stdout = capsys.readouterr().out
+    assert refused == 3
+    assert "status: refused" in stdout and "reason: NOT_DECOMPOSABLE" in stdout
+    assert not (tmp_path / "gold" / "dec.json").exists()
+
+    missing_target = main([
+        "gold-run", "--database", str(database), "--function", "align_frequency",
+        "--series", "bddk_monthly:1534_Toplam", "--out", str(tmp_path / "gold" / "x.json"),
+    ])
+    assert missing_target == 2
+    assert "--target is required" in capsys.readouterr().err
+
+
+def _kv(text: str) -> dict[str, str]:
+    pairs = (line.partition(":") for line in text.splitlines() if ":" in line)
+    return {key.strip(): value.strip() for key, _, value in pairs}
+
+
+# ------------------------------------------------ catalog-resolved known-source datasets
+
+
+class _WeeklySession(SyntheticSession):
+    """Same controlled transport, answering for the catalogued weekly series TP.KTF12."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.response = SyntheticResponse(
+            {
+                "totalCount": 2,
+                "items": [
+                    {"Tarih": "02-01-2026", "TP_KTF12": "40.10",
+                     "UNIXTIME": {"$numberLong": "1767301200"}},
+                    {"Tarih": "09-01-2026", "TP_KTF12": "40.30",
+                     "UNIXTIME": {"$numberLong": "1767906000"}},
+                ],
+                "seriesNames": {"TP_KTF12": "SYNTHETIC"},
+            }
+        )
+
+
+def test_catalog_dataset_ingests_without_a_known_sources_entry(
+    tmp_path: Path, monkeypatch: Any, capsys: Any
+) -> None:
+    """A dataset that exists only in catalog/series/*.yml resolves through the same
+    windowed pipeline as the hand-registered CPI entry; no code registration needed."""
+
+    from src.lakehouse.application import KNOWN_SOURCES
+
+    assert ("evds", "evds_housing_interest") not in KNOWN_SOURCES
+    monkeypatch.setenv("EVDS_API_KEY", "cli-test-key")
+    database = tmp_path / "data" / "lakehouse.duckdb"
+    session = _WeeklySession()
+
+    result = main(
+        [
+            "ingest", "--source", "evds", "--dataset", "evds_housing_interest",
+            "--start-date", "2026-01-01", "--end-date", "2026-02-28",
+            "--database", str(database), "--data-root", str(tmp_path / "data"),
+        ],
+        session=session,
+        clock=lambda: FIXED_TIME,
+    )
+    out = capsys.readouterr().out
+
+    assert result == 0
+    assert "status: success" in out
+    assert any("series=TP.KTF12" in url for url in session.urls)
+    assert _read(database, "SELECT dataset_id FROM meta.run")[0][0] == "evds_housing_interest"
+    assert _read(database, "SELECT count(*) FROM meta.run_artifact")[0][0] == 1
+
+
+def test_catalog_resolution_joins_a_dataset_s_series_and_rejects_mixed_frequencies(
+    tmp_path: Path,
+) -> None:
+    from src.lakehouse.application import _resolve_known_source
+
+    root = tmp_path / "catalog"
+    root.mkdir()
+    (root / "evds.yml").write_text(
+        "\n".join(
+            [
+                'catalog_schema_version: "1.0"',
+                "source_id: evds",
+                "series:",
+                *_entry("TP.A", "evds_pair", "monthly"),
+                *_entry("TP.B", "evds_pair", "monthly"),
+                *_entry("TP.OLD", "evds_pair", "monthly", status="deprecated"),
+                *_entry("TP.C", "evds_mixed", "monthly"),
+                *_entry("TP.D", "evds_mixed", "daily"),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    pair = _resolve_known_source("evds", "evds_pair", catalog_root=root)
+    assert pair.series == "TP.A-TP.B"  # deprecated TP.OLD is not requested
+    assert pair.frequency == "monthly"
+
+    try:
+        _resolve_known_source("evds", "evds_mixed", catalog_root=root)
+    except ValueError as exc:
+        assert "mixes frequencies" in str(exc)
+    else:
+        raise AssertionError("mixed-frequency dataset must be rejected")
+
+    try:
+        _resolve_known_source("evds", "evds_missing", catalog_root=root)
+    except ValueError as exc:
+        assert "unknown dataset" in str(exc) and "evds_pair" in str(exc)
+    else:
+        raise AssertionError("unknown dataset must be rejected")
+
+    # The hand-verified table still wins and needs no catalog at all.
+    assert _resolve_known_source("evds", "evds_cpi", catalog_root=root).series == "TP.FG.J0"
+
+
+def _entry(code: str, dataset_id: str, frequency: str, *, status: str = "active") -> list[str]:
+    lines = [
+        f"  - series_id: evds:{code}",
+        f"    native_code: {code}",
+        f"    dataset_id: {dataset_id}",
+        f"    name_tr: Test {code}",
+        f"    description: Test serisi {code}.",
+        f"    frequency: {frequency}",
+        "    measure_type: unknown",
+        "    semantic_confidence: derived",
+        "    semantic_source: source_service",
+        f"    status: {status}",
+    ]
+    if frequency == "weekly":
+        lines.insert(6, "    week_anchor: friday")
+    return lines

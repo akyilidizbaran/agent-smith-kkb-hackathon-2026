@@ -7,9 +7,10 @@ bring a series nobody catalogued in advance, and a table cannot grow a column fo
 function applies the catalog's rule to whatever series it is handed, so a new series needs a
 new `meta.series` row and nothing else.
 
-Nothing in this layer materializes anything. These functions read
-`silver.fact_observation` and `meta.series` and return DataFrames. Persisting Gold tables is
-deliberately out of scope until the functions have been trusted for a while.
+The functions read `silver.fact_observation` and `meta.series` and return DataFrames.
+They remain the source of truth. Section 9 describes the one thing that *is* persisted since
+P1: a reviewed, named call of a function may be cached as a `gold.<metric_id>` table by
+`python -m lakehouse gold`, with build provenance on every row and every refusal recorded.
 
 ---
 
@@ -325,9 +326,76 @@ arrives no function in this repository performs it.
   quarter containing an unattributable month *means* — refuse the quarter, or report it as
   partial with the count — and that decision has not been taken. Until it is, downsampling a
   decomposed series is out of scope rather than half-supported.
-- **No persisted Gold tables.** Materialization comes after the functions have been trusted.
+- **No Gold table that is not a catalogued call.** Materialization (section 9) only caches
+  calls named in `catalog/gold/*.yml`; nothing derives a table from a query, a model
+  request or a previous Gold table.
 - **No deflation, no rebasing, no real-terms conversion.** It needs a verified base year.
 - **No `semiannual`, `yearly` or `daily` targets.** Only what is tested.
 - **No revision or current-vintage selection.** Fail-closed until a policy exists.
 - **No interpolation, forward-fill, back-fill or zero-fill.** Ever.
 - **No rounding.** Values are returned as computed.
+
+---
+
+## 9. Materialization: named metric tables (P1)
+
+`python -m lakehouse gold` reads `catalog/gold/*.yml` — human-authored, reviewed, versioned
+in Git like the series catalog — and caches each entry as `gold.<metric_id>`. An entry
+names **which** function, **which** series and **which** target period. It cannot name how
+the numbers combine; the function still reads `meta.series` at build time, so every rule in
+sections 1–7 holds unchanged for a table.
+
+```yaml
+gold_catalog_schema_version: "1.0"
+metrics:
+  - metric_id: konut_kredisi_ceyreklik          # gold.<metric_id>, plain identifier
+    name_tr: ...
+    description: ...
+    aliases: [...]
+    tags: [...]
+    function: align_frequency                    # align_frequency | decompose_cumulative | join_on_period
+    series_ids: [bddk_monthly:1534_Toplam]       # one for align/decompose, two or more for join
+    target_frequency: quarterly                  # monthly | quarterly; absent for decompose
+    # allow_unverified_semantics: true           # only with unverified_reason: "<who consented, why>"
+```
+
+Three rules keep the cache honest:
+
+1. **A refusal is recorded, never papered over.** If the function refuses a metric the
+   build continues, the metric's row in `meta.gold_build` says `refused` with the reason
+   from section 1.2, and any table a previous build left for it is **dropped**. A stale
+   table that still answers is worse than a missing one. The report lists every refusal.
+2. **Every row carries its build.** Besides the per-row provenance the functions emit
+   (`artifact_sha256_list`, `source_observation_dates`, ...), each materialized row has
+   `gold_metric_id`, `gold_function`, `gold_build_id`, `gold_built_at`,
+   `gold_catalog_content_sha256` and `silver_fingerprint`.
+3. **Staleness is detectable, not assumed.** `silver_fingerprint` is an `md5` over every
+   Silver observation in a fixed order. After `silver` rebuilds, the live fingerprint
+   differs from the one recorded on the table and in `meta.gold_build`; a reader that
+   compares the two knows the table is behind. Run `gold` after every `silver`.
+
+`meta.gold_build` (bootstrap `030_gold_build.sql`) keeps one row per (build, metric) with
+status `built` or `refused`, the row count, the refusal reason, the catalog content hash and
+the Silver fingerprint; `is_current` marks the latest row per metric. History is never
+deleted. A metric removed from the catalog loses its table on the next build (only tables
+this command built are ever dropped) and its ledger rows are marked not current.
+
+Column types are declared, not inferred: `value`-like columns are `DOUBLE` (an all-NULL
+column stays `DOUBLE`), period columns `DATE`, counts `INTEGER`, `source_observation_dates`
+`DATE[]`, the other lists `VARCHAR[]`. Joined frames keep their `<series>[@entity]::field`
+column names.
+
+### `gold-run`: one call, read-only, for another process
+
+```
+python -m lakehouse gold-run --database data/lakehouse.duckdb \
+    --function align_frequency --series bddk_monthly:1534_Toplam --target quarterly \
+    --out /tmp/align.json
+```
+
+Runs exactly one function on the hardened read-only profile (`connect_untrusted`) and writes
+the frame as one JSON document (`columns`, `rows`; dates ISO, lists arrays, missing `null`).
+It exists for the agent layer, which does not import this package and may not hold a
+writable handle. A refusal prints `status: refused`, `reason:` and `message:` and exits
+**3** — an outcome, distinct from exit 2 (an error). `--allow-unverified-semantics` relays a
+human's consent exactly as the keyword argument does (section 7); it is not a model's knob.

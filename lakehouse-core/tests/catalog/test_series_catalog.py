@@ -63,16 +63,23 @@ def _file(entries: str, *, source_id: str = "evds", version: str | None = None) 
 
 
 def test_repository_catalog_parses_and_has_the_expected_series() -> None:
+    """The original four hand-verified series must always remain in the repository catalog.
+
+    Catalog files legitimately grow (new sources, new source-derived series), so this checks
+    a subset rather than exact equality -- the repo catalog is not expected to hold only these
+    four series forever.
+    """
+
     records = load_catalog_files(REPO_CATALOG)
 
     by_id = {record.series_id: record for record in records}
-    assert set(by_id) == {
+    assert {
         "evds:TP.KTF12",
         "evds:TP.KFE.TR",
         "evds:TP.FG.J0",
         "bddk_monthly:1534_Toplam",
         "bddk_weekly:5690_3",
-    }
+    }.issubset(set(by_id))
 
 
 def test_evds_housing_interest_record_matches_the_verified_source_evidence() -> None:

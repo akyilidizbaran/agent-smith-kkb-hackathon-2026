@@ -13,6 +13,7 @@ from ...parsers.evds import EVDS_SCHEMA_VERSION
 from ...silver.foundation import SILVER_STAGING_COLUMNS, SilverValidationError
 from ...storage.parquet import ParquetIdentity
 from ._context import lineage_fields, staging_frame
+from ._evds_time import evds_month_bounds, evds_point_date
 
 
 SUPPORTED_KTF12_SERIES_ID = "evds:TP.KTF12"
@@ -70,27 +71,6 @@ def _validate_input(
         )
 
 
-def _observation_date(raw: object, row_number: int) -> date:
-    if (
-        not isinstance(raw, str)
-        or len(raw) != 10
-        or raw[2] != "-"
-        or raw[5] != "-"
-        or not raw[:2].isdigit()
-        or not raw[3:5].isdigit()
-        or not raw[6:].isdigit()
-    ):
-        raise SilverValidationError(
-            f"invalid EVDS date_raw at row {row_number}: {raw!r}"
-        )
-    try:
-        return datetime.strptime(raw, "%m-%d-%Y").date()
-    except ValueError as exc:
-        raise SilverValidationError(
-            f"invalid EVDS date_raw at row {row_number}: {raw!r}"
-        ) from exc
-
-
 def _staging_record(
     row: pd.Series,
     *,
@@ -126,8 +106,9 @@ def evds_ktf12_to_staging(
 ) -> pd.DataFrame:
     """Map ``TP.KTF12`` Bronze rows to the generic Silver staging contract.
 
-    The EVDS ``date_raw`` value is parsed strictly as ``MM-DD-YYYY``. No Friday alignment,
-    numeric coercion, or catalog semantic enrichment is performed by this adapter.
+    The observation's calendar date comes from ``UNIXTIME`` rather than from the field order of
+    ``Tarih``, which differs between EVDS endpoints (see :mod:`._evds_time`). No Friday
+    alignment, numeric coercion, or catalog semantic enrichment is performed by this adapter.
     """
 
     _validate_input(
@@ -144,31 +125,13 @@ def evds_ktf12_to_staging(
         records.append(
             _staging_record(
                 row,
-                observation_date=_observation_date(row["date_raw"], row_number),
+                observation_date=evds_point_date(row, row_number),
                 period_start=None,
                 period_end=None,
                 lineage=lineage,
             )
         )
     return staging_frame(records)
-
-
-_KFE_DATE_PATTERN = re.compile(r"^\d{2}-\d{4}$")
-
-
-def _period_bounds(raw: object, row_number: int) -> tuple[date, date]:
-    if not isinstance(raw, str) or _KFE_DATE_PATTERN.fullmatch(raw) is None:
-        raise SilverValidationError(
-            f"invalid EVDS KFE date_raw at row {row_number}: {raw!r}"
-        )
-    try:
-        period_start = datetime.strptime(raw, "%m-%Y").date().replace(day=1)
-        period_end = period_start.replace(day=monthrange(period_start.year, period_start.month)[1])
-    except ValueError as exc:
-        raise SilverValidationError(
-            f"invalid EVDS KFE date_raw at row {row_number}: {raw!r}"
-        ) from exc
-    return period_start, period_end
 
 
 def _evds_monthly_to_staging(
@@ -198,7 +161,7 @@ def _evds_monthly_to_staging(
         vintage_id=vintage_id,
     )
     for row_number, (_, row) in enumerate(frame.iterrows()):
-        period_start, period_end = _period_bounds(row["date_raw"], row_number)
+        period_start, period_end = evds_month_bounds(row, row_number)
         records.append(
             _staging_record(
                 row,

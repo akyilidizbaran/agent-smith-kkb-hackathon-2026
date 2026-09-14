@@ -36,3 +36,506 @@ series:
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
+
+  # --- Genişletme (13 Eylül 2026): kalem ağacı /BultenAylik/tr/Home/Gelismis sayfasından, her kalem
+  #     2025-12 için canlı doğrulandı (docs/sources/bddk_monthly.md, 'Genişletme' bölümü). Aynı
+  #     uç, aynı taraf (Sektör), aynı para birimi (TL); yalnız kalem kimliği değişir.
+
+  - series_id: bddk_monthly:1533_Toplam
+    native_code: 1533?Toplam
+    dataset_id: bddk_monthly_tuketici_kredileri
+    name_tr: Tüketici Kredileri, Toplam (Sektör)
+    description: >-
+      BDDK Aylık Bülten, Tüketici Kredileri tablosu, "Tüketici Kredileri" kalemi (konut + taşıt + ihtiyaç + dövize endeksli); bireysel kredi kartları HARİÇ. Sektör tarafı, Toplam sütunu. Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL; kaynağın kendi yanıtındaki kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 1533, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 2939960) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - tüketici kredileri
+      - tüketici kredisi toplamı
+      - bireysel krediler
+      - toplam tüketici kredisi
+    tags: [kredi, tuketici, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1535_Toplam
+    native_code: 1535?Toplam
+    dataset_id: bddk_monthly_tasit_kredisi
+    name_tr: Tüketici Kredileri - Taşıt, Toplam (Sektör)
+    description: >-
+      BDDK Aylık Bülten, Tüketici Kredileri tablosu, "Tüketici Kredileri - Taşıt" kalemi. Sektör tarafı, Toplam sütunu. Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL; kaynağın kendi yanıtındaki kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 1535, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 52044) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - taşıt kredisi
+      - taşıt kredileri
+      - araç kredisi
+      - otomobil kredisi
+      - taşıt kredisi bakiyesi
+    tags: [kredi, tasit, tuketici, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1536_Toplam
+    native_code: 1536?Toplam
+    dataset_id: bddk_monthly_ihtiyac_kredisi
+    name_tr: Tüketici Kredileri - İhtiyaç, Toplam (Sektör)
+    description: >-
+      BDDK Aylık Bülten, Tüketici Kredileri tablosu, "Tüketici Kredileri - İhtiyaç" kalemi. Sektör tarafı, Toplam sütunu. Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL; kaynağın kendi yanıtındaki kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 1536, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 2208946) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - ihtiyaç kredisi
+      - ihtiyaç kredileri
+      - tüketici kredisi ihtiyaç
+      - ihtiyaç kredisi bakiyesi
+    tags: [kredi, ihtiyac, tuketici, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1539_Toplam
+    native_code: 1539?Toplam
+    dataset_id: bddk_monthly_bireysel_kredi_kartlari
+    name_tr: Bireysel Kredi Kartları, Toplam (Sektör)
+    description: >-
+      BDDK Aylık Bülten, Tüketici Kredileri tablosu, "Bireysel Kredi Kartları" kalemi (taksitli + taksitsiz). Sektör tarafı, Toplam sütunu. Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL; kaynağın kendi yanıtındaki kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 1539, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 2804381) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - bireysel kredi kartları
+      - kredi kartı bakiyesi
+      - kredi kartı borcu
+      - kredi kartı alacakları
+    tags: [kredi, kredi_karti, tuketici, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1543_Toplam
+    native_code: 1543?Toplam
+    dataset_id: bddk_monthly_tuketici_kredileri_ve_kkart_toplam
+    name_tr: Tüketici Kredileri (Dövize Endeksli Dahil) ve Bireysel Kredi Kartları Toplamı (Sektör)
+    description: >-
+      BDDK Aylık Bülten, Tüketici Kredileri tablosu, "Toplam - Tük. Krd. (Dövize End. Dahil) ve Bireysel Kredi Kartları" kalemi. Sektör tarafı, Toplam sütunu. Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL; kaynağın kendi yanıtındaki kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 1543, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 5744345) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - hanehalkı kredileri toplamı
+      - tüketici kredileri ve kredi kartları toplamı
+      - bireysel krediler ve kartlar
+    tags: [kredi, tuketici, kredi_karti, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1544_Toplam
+    native_code: 1544?Toplam
+    dataset_id: bddk_monthly_takipteki_tuketici_kredileri
+    name_tr: Takipteki Tüketici Kredileri, Toplam (Sektör)
+    description: >-
+      BDDK Aylık Bülten, Tüketici Kredileri tablosu, "Takipteki Tüketici Krd." kalemi: tahsili gecikmiş (donuk) tüketici kredisi bakiyesi. Sektör tarafı, Toplam sütunu. Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL; kaynağın kendi yanıtındaki kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 1544, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 116867) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - takipteki tüketici kredileri
+      - batık tüketici kredisi
+      - tüketici kredisi takipteki alacaklar
+      - tüketici kredisi NPL
+    tags: [kredi, takip, npl, tuketici, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1545_Toplam
+    native_code: 1545?Toplam
+    dataset_id: bddk_monthly_takipteki_konut_kredileri
+    name_tr: Takipteki Konut Kredileri, Toplam (Sektör)
+    description: >-
+      BDDK Aylık Bülten, Tüketici Kredileri tablosu, "Takipteki Konut Kredileri" kalemi. Sektör tarafı, Toplam sütunu. Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL; kaynağın kendi yanıtındaki kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 1545, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 1128) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - takipteki konut kredileri
+      - batık konut kredisi
+      - konut kredisi takipteki alacaklar
+      - konut kredisi NPL
+    tags: [kredi, konut, takip, npl, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1546_Toplam
+    native_code: 1546?Toplam
+    dataset_id: bddk_monthly_takipteki_tasit_kredileri
+    name_tr: Takipteki Taşıt Kredileri, Toplam (Sektör)
+    description: >-
+      BDDK Aylık Bülten, Tüketici Kredileri tablosu, "Takipteki Taşıt Kredileri" kalemi. Sektör tarafı, Toplam sütunu. Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL; kaynağın kendi yanıtındaki kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 1546, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 334) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - takipteki taşıt kredileri
+      - batık taşıt kredisi
+      - taşıt kredisi NPL
+    tags: [kredi, tasit, takip, npl, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1547_Toplam
+    native_code: 1547?Toplam
+    dataset_id: bddk_monthly_takipteki_ihtiyac_kredileri
+    name_tr: Takipteki İhtiyaç Kredileri, Toplam (Sektör)
+    description: >-
+      BDDK Aylık Bülten, Tüketici Kredileri tablosu, "Takipteki İhtiyaç Kredileri" kalemi. Sektör tarafı, Toplam sütunu. Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL; kaynağın kendi yanıtındaki kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 1547, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 115405) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - takipteki ihtiyaç kredileri
+      - batık ihtiyaç kredisi
+      - ihtiyaç kredisi NPL
+    tags: [kredi, ihtiyac, takip, npl, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1548_Toplam
+    native_code: 1548?Toplam
+    dataset_id: bddk_monthly_takipteki_bireysel_kredi_kartlari
+    name_tr: Takipteki Bireysel Kredi Kartları, Toplam (Sektör)
+    description: >-
+      BDDK Aylık Bülten, Tüketici Kredileri tablosu, "Takipteki Bireysel Kredi Kartları" kalemi. Sektör tarafı, Toplam sütunu. Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL; kaynağın kendi yanıtındaki kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 1548, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 124652) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - takipteki kredi kartları
+      - batık kredi kartı
+      - kredi kartı NPL
+      - kredi kartı takipteki alacaklar
+    tags: [kredi, kredi_karti, takip, npl, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1160_Toplam
+    native_code: 1160?Toplam
+    dataset_id: bddk_monthly_krediler
+    name_tr: Krediler, Toplam (Sektör, Bilanço)
+    description: >-
+      BDDK Aylık Bülten, Bilanço tablosu, "Krediler" kalemi: bankacılık sektörünün toplam nakdi kredi bakiyesi (canlı krediler; takipteki alacaklar ayrı kalemdir). Sektör tarafı, Toplam sütunu. Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL; kaynağın kendi yanıtındaki kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 1160, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 23127970) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - toplam krediler
+      - kredi hacmi
+      - bankacılık sektörü kredileri
+      - toplam kredi bakiyesi
+      - nakdi krediler
+    tags: [kredi, bilanco, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1676_Toplam
+    native_code: 1676?Toplam
+    dataset_id: bddk_monthly_takipteki_alacaklar
+    name_tr: Takipteki Alacaklar, Toplam (Sektör, Bilanço)
+    description: >-
+      BDDK Aylık Bülten, Bilanço tablosu, "Takipteki Alacaklar" kalemi: brüt tahsili gecikmiş alacaklar (tüm kredi türleri). Sektör tarafı, Toplam sütunu. Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL; kaynağın kendi yanıtındaki kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 1676, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 593647) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - takipteki alacaklar
+      - batık krediler
+      - sorunlu krediler
+      - NPL
+      - donuk alacaklar
+    tags: [kredi, takip, npl, bilanco, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1688_Toplam
+    native_code: 1688?Toplam
+    dataset_id: bddk_monthly_toplam_aktifler
+    name_tr: Toplam Aktifler (Sektör, Bilanço)
+    description: >-
+      BDDK Aylık Bülten, Bilanço tablosu, "Toplam Aktifler" kalemi: bankacılık sektörünün bilanço büyüklüğü. Sektör tarafı, Toplam sütunu. Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL; kaynağın kendi yanıtındaki kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 1688, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 46946798) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - toplam aktifler
+      - aktif büyüklüğü
+      - bilanço büyüklüğü
+      - bankacılık sektörü aktifleri
+      - sektör aktif toplamı
+    tags: [bilanco, aktif, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1717_Toplam
+    native_code: 1717?Toplam
+    dataset_id: bddk_monthly_toplam_ozkaynaklar
+    name_tr: Toplam Özkaynaklar (Sektör, Bilanço)
+    description: >-
+      BDDK Aylık Bülten, Bilanço tablosu, "Toplam Özkaynaklar" kalemi. Sektör tarafı, Toplam sütunu. Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL; kaynağın kendi yanıtındaki kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 1717, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 4155620) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - toplam özkaynaklar
+      - özkaynak
+      - sermaye
+      - bankacılık sektörü özkaynağı
+    tags: [bilanco, ozkaynak, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1357_Toplam
+    native_code: 1357?Toplam
+    dataset_id: bddk_monthly_toplam_mevduat
+    name_tr: Toplam Mevduat (Sektör)
+    description: >-
+      BDDK Aylık Bülten, Mevduat Türler İtibarıyla tablosu, "11 Toplam Mevduat" kalemi: yurt içi + yurt dışı yerleşik, TP + YP + kıymetli maden. Sektör tarafı, Toplam sütunu. Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL; kaynağın kendi yanıtındaki kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 1357, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 27223190) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - toplam mevduat
+      - mevduat hacmi
+      - bankacılık sektörü mevduatı
+      - mevduat toplamı
+      - toplam mevduat bakiyesi
+    tags: [mevduat, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1344_Toplam
+    native_code: 1344?Toplam
+    dataset_id: bddk_monthly_toplam_mevduat_yurt_ici
+    name_tr: Toplam Mevduat - Yurt İçi Yerleşik (Sektör)
+    description: >-
+      BDDK Aylık Bülten, Mevduat Türler İtibarıyla tablosu, "4 Toplam Mevduat - Yurt İçi Yerleşik" kalemi. Sektör tarafı, Toplam sütunu. Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL; kaynağın kendi yanıtındaki kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 1344, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 25549894) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - yurt içi yerleşik mevduat
+      - yurt içi mevduat
+      - yerleşiklerin mevduatı
+    tags: [mevduat, bankacilik, bddk, stok]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:544_Rasyo
+    native_code: 544?Rasyo
+    dataset_id: bddk_monthly_npl_orani
+    name_tr: Takipteki Alacaklar (Brüt) / Toplam Nakdi Krediler (%) (Sektör)
+    description: >-
+      BDDK Aylık Bülten, Rasyolar tablosu, "Takipteki Alacaklar (Brüt) / Toplam Nakdi Krediler (%)" kalemi: sektörün takipteki alacak oranı. Sektör tarafı, Rasyo sütunu. Dönem sonu oranıdır (stok niteliğinde): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Yüzde; kaynağın kendi kolon başlığı "(%)" diyor. Kaynak kalem kimliği 544, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 2.47437) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - takipteki alacak oranı
+      - NPL oranı
+      - batık kredi oranı
+      - sorunlu kredi oranı
+      - takip oranı
+    tags: [rasyo, npl, kredi, bankacilik, bddk, oran]
+    frequency: monthly
+    unit: pct
+    measure_type: ratio
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1749_Rasyo
+    native_code: 1749?Rasyo
+    dataset_id: bddk_monthly_kredi_mevduat_orani
+    name_tr: Toplam Nakdi Krediler / Toplam Mevduat (%) (Sektör)
+    description: >-
+      BDDK Aylık Bülten, Rasyolar tablosu, "Toplam Nakdi Krediler / Toplam Mevduat (%)" kalemi. Sektör tarafı, Rasyo sütunu. Dönem sonu oranıdır (stok niteliğinde): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Yüzde; kaynağın kendi kolon başlığı "(%)" diyor. Kaynak kalem kimliği 1749, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 88.120059) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - kredi mevduat oranı
+      - kredi/mevduat
+      - kredilerin mevduata oranı
+    tags: [rasyo, kredi, mevduat, bankacilik, bddk, oran]
+    frequency: monthly
+    unit: pct
+    measure_type: ratio
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:1746_Rasyo
+    native_code: 1746?Rasyo
+    dataset_id: bddk_monthly_sermaye_yeterlilik_orani
+    name_tr: Yasal Özkaynak / Risk Ağırlıklı Kalemler Toplamı (%) (Sektör)
+    description: >-
+      BDDK Aylık Bülten, Rasyolar tablosu, "Yasal Özkaynak / Risk Ağırlıklı Kalemler Toplamı (%)" kalemi: sermaye yeterliliği standart rasyosu. Sektör tarafı, Rasyo sütunu. Dönem sonu oranıdır (stok niteliğinde): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
+      BİRİM: Yüzde; kaynağın kendi kolon başlığı "(%)" diyor. Kaynak kalem kimliği 1746, taraf 10001, para birimi TL; kalem
+      ağacı ve 2025-12 canlı doğrulaması (değer 19.687081) docs/sources/bddk_monthly.md'de.
+    aliases:
+      - sermaye yeterlilik oranı
+      - sermaye yeterliliği rasyosu
+      - SYR
+      - sermaye yeterliliği
+    tags: [rasyo, sermaye, ozkaynak, bankacilik, bddk, oran]
+    frequency: monthly
+    unit: pct
+    measure_type: ratio
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  # ---------------------------------------------------------------- Kümülatif (2026-09-14)
+  # Gelir tablosu kalemleri yıl içi kümülatiftir: her ay, yılbaşından o aya kadar biriken
+  # tutarı verir ve Ocak'ta sıfırlanır. 2025-01..2026-02 canlı ölçüldü (docs/sources/
+  # bddk_monthly.md, "Kümülatif kalemler"). Bu yüzden measure_type flow_ytd + cumulative_reset
+  # yearly: aylık akım Gold'un decompose_cumulative fonksiyonuyla türetilir, seri olduğu gibi
+  # toplanmaz.
+  - series_id: bddk_monthly:194_Toplam
+    native_code: 194?Toplam
+    dataset_id: bddk_monthly_donem_net_kari
+    name_tr: Dönem Net Kârı (Zararı), yılbaşından itibaren kümülatif (Sektör, Kar Zarar)
+    description: >-
+      BDDK Aylık Bülten, Kar Zarar tablosu, "DÖNEM NET KARI (ZARARI)" kalemi. Sektör tarafı, Toplam sütunu.
+      YIL İÇİ KÜMÜLATİFTİR: Ocak değeri Ocak ayının kârı, Şubat değeri Ocak+Şubat, Aralık değeri tüm yılın
+      kârıdır; bir sonraki Ocak'ta sıfırdan başlar. Canlı ölçüm 2025: 47347 (Oca), 118214 (Şub), ... 940183
+      (Ara); 2026-01: 87249. Aylık kâr için önce ayrıştırılmalı (Gold decompose_cumulative, kural yearly);
+      bu seri hiçbir zaman doğrudan toplanmamalı veya ortalanmamalıdır.
+      BİRİM: Milyon TL; kaynağın kendi kolon başlığı "(milyon TL)" diyor. Kaynak kalem kimliği 194, taraf
+      10001, para birimi TL. Bilanço tablosundaki 1715 aynı değerleri taşır (aynı ölçüm, ikinci adres).
+    aliases:
+      - dönem net kârı
+      - net kâr
+      - bankacılık sektörü kârı
+      - sektör kârı
+      - net dönem kârı
+    tags: [kar, gelir_tablosu, bankacilik, bddk, kumulatif, flow_ytd]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: flow_ytd
+    cumulative_reset: yearly
+    default_agg: sum
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active
+
+  - series_id: bddk_monthly:158_Toplam
+    native_code: 158?Toplam
+    dataset_id: bddk_monthly_faiz_gelirleri
+    name_tr: Toplam Faiz Gelirleri, yılbaşından itibaren kümülatif (Sektör, Kar Zarar)
+    description: >-
+      BDDK Aylık Bülten, Kar Zarar tablosu, "Toplam Faiz (Kar Payı) Gelirleri" kalemi. Sektör tarafı, Toplam
+      sütunu. YIL İÇİ KÜMÜLATİFTİR: her ay yılbaşından o aya kadar biriken faiz gelirini verir, Ocak'ta
+      sıfırlanır. Canlı ölçüm 2025: 621187 (Oca), 1187191 (Şub), ... 8355475 (Ara); 2026-01: 789354. Aylık
+      akım için Gold decompose_cumulative (kural yearly) kullanılır; doğrudan toplanmaz.
+      BİRİM: Milyon TL; kolon başlığı "(milyon TL)". Kaynak kalem kimliği 158, taraf 10001, para birimi TL.
+    aliases:
+      - faiz gelirleri
+      - toplam faiz gelirleri
+      - bankaların faiz geliri
+      - kar payı gelirleri
+    tags: [faiz, gelir, gelir_tablosu, bankacilik, bddk, kumulatif, flow_ytd]
+    frequency: monthly
+    unit: TRY_mn
+    measure_type: flow_ytd
+    cumulative_reset: yearly
+    default_agg: sum
+    semantic_confidence: verified
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenAylik
+    status: active

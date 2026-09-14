@@ -26,6 +26,40 @@ kept observations. No value was edited, added, or invented.
 > test to run once a key exists. Re-capture from the documented endpoint then, and replace
 > these files if anything differs.
 
+## The re-capture happened, and things differed (2026-09-11)
+
+A working `EVDS_API_KEY` became available and the documented keyed endpoint was called live.
+The envelope is identical as expected, but `Tarih` is **not**:
+
+| frequency | web application capture | documented keyed endpoint |
+|---|---|---|
+| weekly / daily | `01-08-2021` | `08-01-2021` |
+| monthly | `01-2021` | `2021-1` |
+
+A third difference: the keyed endpoint sends **no `seriesNames`** field at all, so `series_name`
+comes through as null. The parser already reads that field defensively and nothing joins on it,
+so nothing breaks — but the fixture envelope check used to *require* `seriesNames`, which was a
+property of one endpoint rather than of the contract.
+
+Same observations — 8 January 2021 and January 2021 — written with the day and month the other
+way round, and with the month's year first. Only one of the two differences announced itself:
+the monthly shape stopped parsing, while `08-01-2021` read cleanly as **1 August 2021** and
+produced a wrong date in silence.
+
+The old captures are kept rather than replaced. They are real responses from a real endpoint,
+and keeping both shapes side by side is what lets the mapping prove it handles either. The
+Silver mapping now reads the date from `UNIXTIME`, which both payloads carry and which has no
+field-order ambiguity, and treats a `Tarih` that disagrees with it as a source change
+(`src/lakehouse/silver/adapters/_evds_time.py`).
+
+| File | Endpoint | Captured |
+|---|---|---|
+| `evds_ktf12_weekly_live_keyed.json` | documented, key-authenticated | 2026-09-11 |
+| `evds_kfe_monthly_live_keyed.json` | documented, key-authenticated | 2026-09-11 |
+
+Neither live file contains a key, a header, or any part of a request — response bodies only,
+trimmed to five observations.
+
 ## Files
 
 | File | Series | Frequency | Why it exists |

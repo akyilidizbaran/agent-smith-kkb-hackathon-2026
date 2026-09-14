@@ -1,0 +1,33 @@
+{
+  "totalCount": 4,
+  "items": [
+    {
+      "Tarih": "2023-12",
+      "TP_FG_J0": "1859.38000000",
+      "UNIXTIME": {
+        "$numberLong": "1701378000"
+      }
+    },
+    {
+      "Tarih": "2024-12",
+      "TP_FG_J0": "2684.55000000",
+      "UNIXTIME": {
+        "$numberLong": "1733000400"
+      }
+    },
+    {
+      "Tarih": "2025-12",
+      "TP_FG_J0": "3513.87000000",
+      "UNIXTIME": {
+        "$numberLong": "1764536400"
+      }
+    },
+    {
+      "Tarih": "2026-1",
+      "TP_FG_J0": "3683.83000000",
+      "UNIXTIME": {
+        "$numberLong": "1767214800"
+      }
+    }
+  ]
+}

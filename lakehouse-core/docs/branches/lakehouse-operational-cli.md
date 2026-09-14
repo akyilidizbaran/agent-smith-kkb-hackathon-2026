@@ -22,8 +22,11 @@ uv run python -m lakehouse ingest \
 
 The EVDS date range is required. Long ranges are automatically split into deterministic
 365-day windows while short ranges remain one request; see
-docs/branches/evds-windowing.md. Only the explicitly registered evds/evds_cpi dataset is
-dispatched by this CLI.
+docs/branches/evds-windowing.md. Dispatch is resolved from the hand-verified
+`KNOWN_SOURCES` table first (`evds/evds_cpi`) and otherwise from the Git-versioned catalog:
+any active EVDS dataset in `catalog/series/*.yml` is accepted, its `native_code`(s) and
+`frequency` supply the request, and an unknown dataset is still rejected before any database
+is touched (since 2026-09-14, `docs/branches/lakehouse-cli-catalog-fallback.md`).
 
 For a local or public tabular artifact, publication needs an explicit layout and semantic
 statement. The following is the minimum local CSV shape:

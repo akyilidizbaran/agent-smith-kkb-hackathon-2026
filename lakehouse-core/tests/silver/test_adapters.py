@@ -161,7 +161,7 @@ def test_evds_adapter_maps_real_bronze_shape_and_preserves_raw_value(
     assert "unixtime" not in staging.columns
 
 
-def test_evds_adapter_preserves_source_day_and_rejects_malformed_date(
+def test_evds_adapter_reads_the_day_from_unixtime_not_from_the_field_order(
     tmp_path: Path,
 ) -> None:
     frame, identity = _bronze_from_fixture(
@@ -172,15 +172,29 @@ def test_evds_adapter_preserves_source_day_and_rejects_malformed_date(
         parser=EvdsParser(),
         metadata={"requested_series": ["TP.KTF12"]},
     )
-    one = frame.iloc[[0]].copy()
-    one.loc[one.index[0], "date_raw"] = "01-07-2021"
+    # The captured fixtures spell a weekly date dd/mm the American way round; the live keyed
+    # endpoint spells the same observation the other way. Both must land on the same day,
+    # because UNIXTIME — carried in both payloads — is what the adapter actually reads.
+    unixtime = frame.iloc[0]["unixtime"]
+    assert unixtime, "fixture precondition: UNIXTIME is present"
 
-    staging = evds_ktf12_to_staging(one, identity=identity)
-    assert staging.loc[0, "observation_date"] == date(2021, 1, 7)
+    for spelling in ("01-08-2021", "08-01-2021"):
+        one = frame.iloc[[0]].copy()
+        one.loc[one.index[0], "date_raw"] = spelling
+        one.loc[one.index[0], "unixtime"] = "1610060400"  # 2021-01-08 in Istanbul
 
-    invalid = one.copy()
-    invalid.loc[invalid.index[0], "date_raw"] = "2021-01-07"
-    with pytest.raises(SilverValidationError, match="invalid EVDS date_raw"):
+        staging = evds_ktf12_to_staging(one, identity=identity)
+        assert staging.loc[0, "observation_date"] == date(2021, 1, 8), spelling
+
+    # A Tarih that matches neither reading of UNIXTIME is a source change, not a date.
+    conflicting = frame.iloc[[0]].copy()
+    conflicting.loc[conflicting.index[0], "date_raw"] = "09-03-2022"
+    with pytest.raises(SilverValidationError, match="disagrees with UNIXTIME"):
+        evds_ktf12_to_staging(conflicting, identity=identity)
+
+    invalid = frame.iloc[[0]].copy()
+    invalid.loc[invalid.index[0], "date_raw"] = "2021/01/07"
+    with pytest.raises(SilverValidationError, match="no recognised shape"):
         evds_ktf12_to_staging(invalid, identity=identity)
 
 
