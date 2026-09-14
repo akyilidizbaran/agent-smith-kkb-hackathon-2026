@@ -93,12 +93,18 @@ _DIRECTION = re.compile(r"düş|azal|geril|küçül|negatif|eksi|ters|daral|kayb
 
 
 def _direction_word_near(answer: str, token: str, window: int = 40) -> bool:
-    """Sayının ±40 karakter çevresinde yön sözcüğü var mı ("2,31 düştü", "negatif 0,54")."""
+    """Sayının İŞARETSİZ yazıldığı her yerde ±40 karakter çevresinde yön sözcüğü var mı ("2,31 düştü", "negatif 0,54").
+
+    K03 canlı tekrar bulgusu (14 Eyl): pencere metindeki İLK geçişe bakıyordu. Cevap aynı büyüklüğü önce tabloda işaretli
+    ("−0,51 puan"), sonra yorumda işaretsiz ("faiz düşüşü küçük (0,06–0,51 puan)") yazınca ilk geçişin çevresinde yön
+    sözcüğü yoktu; doğru cevap "işaret uyarısı" aldı. Artık işaretli geçişler atlanır, işaretsiz geçişlerden biri yeter."""
     text = _ascii_minus(answer or "")
-    i = text.find(token)
-    if i < 0:
-        return False
-    return bool(_DIRECTION.search(text[max(0, i - window): i + len(token) + window]))
+    for m in re.finditer(r"(?<![\d.,])" + re.escape(token) + r"(?![\d,]|\.\d)", text):
+        if m.start() > 0 and text[m.start() - 1] in "-+":
+            continue
+        if _DIRECTION.search(text[max(0, m.start() - window): m.end() + window]):
+            return True
+    return False
 
 
 _AYLAR = {"ocak": 1, "şubat": 2, "subat": 2, "mart": 3, "nisan": 4, "mayıs": 5, "mayis": 5, "haziran": 6, "temmuz": 7,
@@ -282,9 +288,10 @@ class EvidenceBuilder:
                 # Açık ters işaret ("+0,54" vs -0.54) burada değil: eşleşmez, TABLODA YOK.
                 frames = [table, *(previous or []), *[f for _, f in (peeks or [])]]
                 for frame in frames:
+                    # Yuvarlama toleransı işaretli eşleşmeyle aynı (M13-T05): "0,06" ↔ −0,062, "0,4" ↔ −0,403 (K03 canlı tekrar bulgusu).
                     hit_col = next(
                         (str(c) for c in frame.columns if pd.api.types.is_numeric_dtype(frame[c])
-                         and not frame[c][(frame[c] + number).abs() <= max(abs(number) * self.tolerance, 1e-9)].empty),
+                         and not self._hits(-frame[c].astype("float64"), [number], decimals).empty),
                         None,
                     )
                     if hit_col:
