@@ -188,7 +188,7 @@ Dayanak: [M16 kabul raporu](M16_KABUL_RAPORU.md). Aşağıdakiler her biri yeni 
 | K02-T09 | A24 | **Kapandı 14 Eyl (ADR-0071):** bayat gold.* tablosuna sorgu `GOLD_STALE` ile reddedilir, eski değer dönmez; canlı Silver'dan gold_align/gold_join ile yeniden hesap; `tests/test_k02_bayat_gold.py` |
 | K02-T10 | A27 | **Kapandı 14 Eyl:** Tavily 503/429/bağlantı kopması `ACCESS_BLOCKED` ve sebep (`tests/test_web.py`); süre bütçesi dolunca deterministik sınır notu (`tests/test_agent_loop.py`); model kesintisi ve OCR yokluğu önceki testlerde |
 | K02-T11 | A28 | Yeni alan/profil/oturumda eski izin, tablo ve alan bağlamı sızmaz; K01 ile birlikte kapatılabilir |
-| K02-T12 | A30 | **Uygulandı 14 Eyl (ADR-0073):** Architect `ingest_source` (run kayıtlı toplu betik + Silver), erişilemezse sebep; `tests/test_k02_kaynaktan_cek.py`; canlı prova ayrı kayıtta |
+| K02-T12 | A30 | **Kapandı 14 Eyl (ADR-0073):** Architect `ingest_source` (run kayıtlı toplu betik + Silver), erişilemezse sebep ve Silver yenilenmez (`tests/test_k02_kaynaktan_cek.py`); canlı prova `scripts/k02_a30_canli.py` 5/5: geçici kökte 2015-12 konut kredisi gerçek BDDK'dan çekildi (143.248, run kayıtlı), demo DB değişmedi (`docs/experiments/k02_a30_canli_2026-09-14_1237.json`) |
 | K02-T13 | A32/A33 | **Kapandı 14 Eyl:** anomali kartı yöntem ve eşiği (Tukey k=1.5 / \|z\|>3), taban ve SINIRLAMA; kırılma kartı ceza formülü ve sayısal değeri, min segment, en çok kırılma ve SINIRLAMA; `tests/test_analytics_tools.py` metin denetimleri |
 | K02-T14 | M13-T04/T07 | Aynı sayının yanlış dönem/kolon/varlıkta bulunması doğrulama sayılmaz; eski tablo eşleşmesi doğru sürüm/kaynakla sunulur |
 

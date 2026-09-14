@@ -1,0 +1,43 @@
+{
+  "meta": {
+    "commit": "0764f61",
+    "series": "bddk_monthly:1534_Toplam",
+    "start": "2015-12-01",
+    "end": "2015-12-31",
+    "work": "/private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_a30"
+  },
+  "passed": 5,
+  "total": 5,
+  "steps": [
+    {
+      "id": "kurulum",
+      "beklenen": "geçici kökte başlangıç kataloğu",
+      "ok": true,
+      "gozlenen": "status: success · database: /private/tmp/claude-501/-Users-baran-Desktop-KKB/832bea8e-fe0c-42ca-8945-d6e77dd9963e/scratchpad/k02_a30/data/lakehouse.duckdb · catalog_mode: default · catalog_series_count: 2214"
+    },
+    {
+      "id": "once",
+      "beklenen": "istenen dönem yüklü değil",
+      "ok": true,
+      "gozlenen": "0"
+    },
+    {
+      "id": "arac",
+      "beklenen": "ingest_source gerçek kaynaktan çekti ve Silver'ı yeniledi",
+      "ok": true,
+      "gozlenen": "{'süre_s': 5.6, 'özet': 'KAYNAKTAN ÇEKİLDİ: bddk_monthly:1534_Toplam · 2015-12-01 → 2015-12-31 · durum warning\\nrun 4bf6568c-e49e-49dd-a976-dcbbeca671ea · yeni artifact 1 · satır 1 · uyarı 1\\nSilver yeniden kuruldu; seri artık bu dönemi de kapsıyor.\\nYAPACAĞIN: şimdi lakehouse_query ile istenen dönemi sorgula; sayıları o tablo', 'hata': None}"
+    },
+    {
+      "id": "sonra",
+      "beklenen": "istenen dönemin gözlemi Silver'da, run kaydıyla",
+      "ok": true,
+      "gozlenen": "{'gözlem': [['2015-12-31', 143248.0]], 'run': 1}"
+    },
+    {
+      "id": "demo-db",
+      "beklenen": "asıl demo DB değişmedi",
+      "ok": true,
+      "gozlenen": "aynı"
+    }
+  ]
+}
