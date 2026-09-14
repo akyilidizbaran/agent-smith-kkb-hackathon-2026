@@ -28,6 +28,7 @@ from ..domain import DomainProfile
 from ..llm.base import ChatMessage, LLMClient, ToolCall
 from .errors import ToolError
 from .grounding import causal_language, grounding_check, _NUM_RE, _ascii_minus, numbers_in
+from .small_talk import capability_reply, strip_filler_opening
 from .small_talk import is_small_talk, small_talk_reply, trim_unsolicited_offers
 from . import tool_gate
 
@@ -78,6 +79,10 @@ Sorgu sonucunda birimler ayrıca bildirilir. Cevabında sayıyı YAZDIĞIN birim
 DİĞER KURALLAR:
 - ASLA veri uydurma. Bir sayıyı ancak bir araçtan aldıysan söyleyebilirsin. \
 İstenen dönem tablonun kapsamı dışındaysa "bu veri kaynakta yok" de.
+- Veri havuzunda, araç çıktısında ya da okuduğun kaynakta olmayan bilgiyi GENEL BİLGİNDEN yazma; kişiler hakkında \
+hiç yazma (ad benzerliğinden tahmin yürütme). Bilmiyorsan tek cümleyle "bu konuda elimde bilgi yok" de.
+- Özür dileme; "anladım", "not aldım", "haklısın" gibi dolgu cümlesi yazma. Yetenek sorusunu ("internetten araştırabilir \
+misin?") doğrudan evet/hayır ve kısa açıklamayla cevapla.
 - Her cevapta sayıların kaynağını belirt (hangi kurum, hangi tablo, hangi dönem).
 MEVCUT TABLO ÜZERİNDE ÇALIŞMA:
 Aktif bir analiz tablosu varsa ve kullanıcı "tabloyu bozmadan", "bu tabloya", "yeni sütun \
@@ -140,6 +145,26 @@ _MATCH_TALK = re.compile(r"eşleş|esles|uyuş|uyus|birleştir|birlestir|anahtar
 JOIN_NOTE = ("Birleştirme istendi ama bu turda workspace_join çağrılmadı; iki tablonun anahtarlarının eşleşip eşleşmediğini ya da "
              "hangi satırların tuttuğunu tahminle yazamazsın. Önce workspace_join çağır; araç kural seçeneklerini ve eşleşme sayılarını "
              "döndürür, kullanıcıya onları aktar.")
+
+# Kullanıcı geri bildirimi (14 Eyl, ADR-0078): "Elif Sena Önsöz" sorusunda model veri havuzunda kayıt olmadığını söyleyip "genel
+# bilgimden" diyerek başka birine ait uydurma bir biyografi yazdı. Genel bilgiden cevap bir kez geri gönderilir; sürerse yayımlanmaz.
+_GENERAL_KNOWLEDGE = re.compile(
+    r"genel bilgi(?:m|mden|me göre|lerim|lerimden|lerime göre|ye göre|den)\b|genel kültür(?:ümden|üme göre|e göre)|kendi bilgimden|"
+    r"eğitim veri(?:m|lerim)(?:den|e göre)", re.I)
+GENERAL_KNOWLEDGE_NOTE = ("Cevabında veri havuzunda, araç çıktısında ya da okuduğun bir kaynakta olmayan bilgiyi genel bilginden yazdın. "
+                          "Bunu yapma; kişiler hakkında hiç yazma. Bilgi araçtan gelmiyorsa yalnız 'bu konuda elimde bilgi yok' de.")
+NO_INFO_TEXT = "Bu konuda veri havuzunda ya da incelediğim bir kaynakta bilgi yok; genel bilgiden cevap vermiyorum."
+
+
+def _drop_general_knowledge(text: str, *, acted: bool) -> tuple[str, bool]:
+    """Genel bilgi işareti taşıyan cevap: araç çalışmadıysa tamamı yerine NO_INFO_TEXT; çalıştıysa yalnız o paragraflar düşer."""
+    if not _GENERAL_KNOWLEDGE.search(text or ""):
+        return text, False
+    if not acted:
+        return NO_INFO_TEXT, True
+    kept = [p for p in re.split(r"\n\s*\n", text) if not _GENERAL_KNOWLEDGE.search(p)]
+    return ("\n\n".join(kept).strip() or NO_INFO_TEXT), True
+
 
 _STOP = frozenset({"göster", "goster", "getir", "ver", "nedir", "ne", "kadar", "nasıl", "nasil", "listele", "bana", "lütfen",
                    "lutfen", "bir", "bu", "şu", "su", "ile", "ve", "mi", "mı", "mu", "mü", "olan", "tablo", "tabloyu"})
@@ -493,6 +518,13 @@ class AnalyticsAgent:
         self.workspace = AnalysisWorkspace()
 
     # ------------------------------------------------------------------
+    def _catalog_specs(self) -> list:
+        lake = getattr(self.registry.get("lakehouse_query"), "lakehouse", None)
+        try:
+            return list(lake.list_datasets()) if lake is not None else []
+        except Exception:  # noqa: BLE001 — katalog okunamazsa yetenek cevabı "yüklü seri yok" der, soru düşmez
+            return []
+
     def ask(self, question: str) -> AgentAnswer:
         """Bir soruyu uçtan uca cevaplar; cevaba kanıt panelini iliştirir."""
         self._usage = {"prompt": 0, "completion": 0, "calls": 0}
@@ -505,6 +537,14 @@ class AnalyticsAgent:
             self._history.append(ChatMessage(role="assistant", content=text))
             step = AgentStep(index=1, role="narrate", thought="selamlaşma — LLM çağrılmadı", result_summary=text)
             return AgentAnswer(text=text, steps=[step], workspace=self.workspace, usage=dict(self._usage))
+        cap = capability_reply(question, tools=set(self.registry.names()), datasets=self._catalog_specs)
+        if cap is not None:
+            # Yetenek/veri seti sorusu: sistemin kendi durumu (kayıtlı araçlar, katalog) deterministik anlatılır (ADR-0078).
+            self.last_gate = None
+            self._history.append(ChatMessage(role="user", content=question))
+            self._history.append(ChatMessage(role="assistant", content=cap))
+            step = AgentStep(index=1, role="narrate", thought="yetenek sorusu — LLM çağrılmadı", result_summary=cap)
+            return AgentAnswer(text=cap, steps=[step], workspace=self.workspace, usage=dict(self._usage))
         clarify = self._vague_clarification(question)
         if clarify is not None:
             return clarify
@@ -535,6 +575,17 @@ class AnalyticsAgent:
             for step in reversed(answer.steps):
                 if step.role == "narrate":
                     step.thought = (step.thought or "nihai cevap") + " · öneri kuyruğu kırpıldı"
+                    break
+        acted = any(s.tool_name and s.ok for s in answer.steps)
+        cleaned, dropped = _drop_general_knowledge(answer.text, acted=acted)
+        cleaned, stripped = strip_filler_opening(cleaned)
+        if dropped or stripped:
+            answer.text = cleaned
+            if self._history and self._history[-1].role == "assistant":
+                self._history[-1] = ChatMessage(role="assistant", content=cleaned)
+            for step in reversed(answer.steps):
+                if step.role == "narrate":
+                    step.thought = (step.thought or "nihai cevap") + (" · genel bilgi cevabı yayımlanmadı" if dropped else "") + (" · dolgu kırpıldı" if stripped else "")
                     break
         answer.usage = dict(self._usage)
         answer.context = self._last_context.summary() if self._last_context is not None else ""
@@ -639,6 +690,7 @@ class AnalyticsAgent:
         rejected: list[str] = []             # D02: cevaptan çıkarılan, doğrulanamayan iddialar (dışa aktarılmaz)
         action_claim_nudged = False          # araçsız işlem iddiası / okunmamış dosya bir kez geri gönderilir
         join_nudged = False                  # K03: birleştirme turunda araçsız eşleşme anlatısı bir kez geri gönderilir
+        general_nudged = False               # ADR-0078: genel bilgiden cevap bir kez geri gönderilir
 
         for i in range(1, self.max_steps + 1):
             if self.time_budget_s and time.perf_counter() - ask_started > self.time_budget_s:
@@ -722,6 +774,14 @@ class AnalyticsAgent:
                         NO_TOOL_NUMBERS_NOTE.format(nums=", ".join(loose_numbers[:10])) if len(loose_numbers) >= 1
                         and not (_ACTION_CLAIM.search(response.content or "") or _FILE_REF.search(question))
                         else ACTION_CLAIM_NOTE)))
+                    continue
+
+                if not general_nudged and _GENERAL_KNOWLEDGE.search(self._strip_reasoning(response.content or "")):
+                    general_nudged = True
+                    steps.append(AgentStep(index=i, role="validate", ok=False, thought="genel bilgiden cevap — geri gönderildi",
+                                           duration_ms=(time.perf_counter() - started) * 1000))
+                    messages.append(ChatMessage(role="assistant", content=response.content))
+                    messages.append(ChatMessage(role="user", content=GENERAL_KNOWLEDGE_NOTE))
                     continue
 
                 if (not join_nudged and _JOIN_ASK.search(question) and len(self.workspace.sources()) >= 2

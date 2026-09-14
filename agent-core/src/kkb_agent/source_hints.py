@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_PATH = Path(__file__).resolve().parent / "config_data" / "source_hints.json"
-EMPTY: dict[str, Any] = {"source_words": {}, "credential_env_by_host": {}, "institutions": []}
+EMPTY: dict[str, Any] = {"source_words": {}, "credential_env_by_host": {}, "institutions": (), "source_names": {},
+                         "derived_sources": (), "official_hosts": (), "url_patterns": ()}
 
 
 @lru_cache(maxsize=4)
@@ -30,6 +31,10 @@ def _load(path: str) -> dict[str, Any]:
         "source_words": {str(k): tuple(map(str, v)) for k, v in (data.get("source_words") or {}).items()},
         "credential_env_by_host": {str(k).lower(): str(v) for k, v in (data.get("credential_env_by_host") or {}).items()},
         "institutions": tuple(map(str, data.get("institutions") or ())),
+        "source_names": {str(k): str(v) for k, v in (data.get("source_names") or {}).items()},
+        "derived_sources": tuple(map(str, data.get("derived_sources") or ())),
+        "official_hosts": tuple(str(x).lower() for x in data.get("official_hosts") or ()),
+        "url_patterns": tuple(map(str, data.get("url_patterns") or ())),
     }
 
 

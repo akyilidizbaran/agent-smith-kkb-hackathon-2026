@@ -41,8 +41,25 @@ bunu açıkça söyle ve kullanıcıya sor; başka bir kaynağa kendiliğinden g
 Taradığın ama kullanmadığın sayfaları cevapta anlatma; kanıt paneline yazılır."""
 
 WEB_SEARCH_PROMPT_RULES = """
-Kullanıcı bir adres vermediyse ve veri havuzunda yoksa web_search ile ara; arama sonucu veri değildir, \
-uygun sayfayı web_url ile aç ve sayıyı tablodan al."""
+Kullanıcı bir adres vermediyse ve veri havuzunda yoksa ya da kullanıcı "internetten araştır/bul/getir" dediyse KENDİN \
+ARAŞTIR: web_search ile ara; resmi kaynağın adres kalıbını biliyorsan (aşağıda) doğrudan web_url ile aç. Kullanıcıdan adres \
+isteme, izin bekleme. Arama sonucu veri değildir: uygun sayfayı web_url ile aç ve sayıyı tablodan al."""
+
+TEXT_WINDOW = 8000
+"""Belge/sayfa metninden bir çağrıda gösterilen karakter (önce 1500'dü; tek sayfalık özgeçmiş yarıda kesiliyordu)."""
+
+
+def official_source_rules() -> str:
+    """Resmi kamu veri adresleri ve bilinen adres kalıpları (kaynak adı kodda değil, `source_hints.json`'da; ADR-0078)."""
+    from ..source_hints import load_source_hints
+
+    hints = load_source_hints()
+    hosts, patterns = hints.get("official_hosts", ()), hints.get("url_patterns", ())
+    if not hosts and not patterns:
+        return ""
+    lines = ["", "RESMİ KAMU KAYNAKLARI: şu alan adlarındaki adresleri kullanıcı yazmasa da web_url ile açabilirsin: " + ", ".join(hosts) + "."]
+    lines += [f"- {p}" for p in patterns]
+    return "\n".join(lines)
 
 WEB_SEARCH_UNAVAILABLE_RULES = """
 Web araması bu ortamda KAPALI (arama anahtarı yok). Kullanıcı internette aramanı isterse bunu söyle ve \
@@ -95,6 +112,7 @@ class WebUrlParams(BaseModel):
     max_pages: int = Field(default=1, ge=1, le=5, description="Tarama bütçesi: en çok kaç sayfa (aynı alan adı)")
     pages: str | None = Field(default=None, description="PDF için hangi sayfalar: '3', '2-4', '1,5' (varsayılan ilk 5); belge uzunsa kart söyler")
     max_depth: int = Field(default=0, ge=0, le=1, description="Bağlantı derinliği: 0 yalnız verilen sayfa, 1 bir adım")
+    text_from: int = Field(default=0, ge=0, description="Metin uzunsa kaldığın karakterden devam: kart 'text_from=N ile yeniden çağır' der")
 
 
 class WebUrlTool(Tool):
@@ -134,6 +152,16 @@ class WebUrlTool(Tool):
         user_text = (getattr(reg, "user_text", None) or getattr(reg, "active_question", "") or "")
         sanctioned = getattr(reg, "sanctioned_locators", set()) or set()
         if not locator_from_user(params.url, user_text, sanctioned):
+            # Resmi kamu veri kaynağı (TCMB, BDDK, TÜİK …): adres kalıbını model kurabilir. Okuma yalnız bu alan adlarına gider,
+            # sızdırma kanalı açmaz (kullanıcı geri bildirimi: "internetten araştır" dendiğinde TCMB kur sayfası açılamıyordu).
+            from urllib.parse import urlparse
+
+            from ..source_hints import load_source_hints
+
+            parsed = urlparse(params.url)
+            host = (parsed.hostname or "").lower()
+            if parsed.scheme == "https" and any(host == h or host.endswith("." + h) for h in load_source_hints().get("official_hosts", ())):
+                return None
             return ToolError(
                 error_code="INTENT_REQUIRED", layer="policy", retryable=False,
                 message=(f"'{params.url}' kullanıcının mesajında ya da arama sonuçlarında yok; bir "
@@ -260,9 +288,15 @@ class WebUrlTool(Tool):
         for p in pages_with_tables:
             for n in p.page.notes:  # type: ignore[union-attr]
                 lines.append(f"NOT: {n}")
-        excerpt = (first.page.text or "")[:1500]  # type: ignore[union-attr]
+        full_text = first.page.text or ""  # type: ignore[union-attr]
+        start = min(params.text_from, len(full_text))
+        excerpt = full_text[start:start + TEXT_WINDOW]
         if excerpt:
-            lines.append("METİN (ilk 1500 karakter):\n" + excerpt)
+            end = start + len(excerpt)
+            lines.append(f"METİN (karakter {start}–{end} / {len(full_text)}):\n" + excerpt)
+            if end < len(full_text):
+                lines.append(f"METİN DEVAM EDİYOR: {len(full_text) - end} karakter kaldı. Tamamı gerekiyorsa aynı adresi text_from={end} ile "
+                             "yeniden oku; okumadığın bölümü özetleme ve 'yarıda kesildi' deme.")
         if len(result.pages) > 1:
             lines.append("DİĞER SAYFALAR: " + "; ".join(f"{p.url} ({p.page.title if p.page else ''})" for p in result.pages[1:]))
         if result.blocked:
@@ -336,4 +370,5 @@ class WebSearchTool(Tool):
                                                                         "results": [{"url": h.url, "title": h.title} for h in hits]}})
 
 
-__all__ = ["WEB_PROMPT_RULES", "WEB_SEARCH_PROMPT_RULES", "WEB_SEARCH_UNAVAILABLE_RULES", "WebSearchTool", "WebUrlTool"]
+__all__ = ["TEXT_WINDOW", "WEB_PROMPT_RULES", "WEB_SEARCH_PROMPT_RULES", "WEB_SEARCH_UNAVAILABLE_RULES", "WebSearchTool", "WebUrlTool",
+           "official_source_rules"]

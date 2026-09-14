@@ -49,7 +49,7 @@ from .adapters.mia_embedder import EmbeddingCache, MiaEmbedder
 from .core.retriever import RetrievalPolicy
 from .tools.analytics import ANALYTICS_PROMPT_RULES, AnomalyDetectTool, ChangePointsTool, LeadLagTool
 from .tools.web import (
-    WEB_PROMPT_RULES, WEB_SEARCH_PROMPT_RULES, WEB_SEARCH_UNAVAILABLE_RULES, WebSearchTool, WebUrlTool,
+    WEB_PROMPT_RULES, WEB_SEARCH_PROMPT_RULES, WEB_SEARCH_UNAVAILABLE_RULES, WebSearchTool, WebUrlTool, official_source_rules,
 )
 from .web.search import TavilySearch
 
@@ -201,7 +201,7 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
     # Dış kaynak (ADR-0034): web_url her zaman; web_search yalnız arama anahtarı varsa.
     settings.ingest_allowed_root.mkdir(parents=True, exist_ok=True)
     registry.register(WebUrlTool(workspace, allowed_local_root=settings.ingest_allowed_root, registry=registry, ocr=ocr))
-    system_prompt += WEB_PROMPT_RULES
+    system_prompt += WEB_PROMPT_RULES + official_source_rules()
     search = TavilySearch()
     if search.available:
         registry.register(WebSearchTool(search, registry=registry))
