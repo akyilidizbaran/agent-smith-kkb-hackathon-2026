@@ -55,6 +55,9 @@ ErrorCode = Literal[
     "GOLD_STALE",
     # Düşük kaliteli OCR (K02-T06, A12): tablo yapısı çözülemedi ya da satır toplamları tutmuyor; doğrulanmamış sayı verilmez.
     "LOW_QUALITY_SOURCE",
+    # Netleştirme kapısı (Büşra, tools/clarify.py, V3 §3.9): soru yalnız uygunluk kapısı "kısmen" dediğinde ve tur başına bir kez;
+    # aksi hâlde model eldeki veriyle cevap verir (turu bitirmez: terminal=False).
+    "CLARIFY_NOT_ALLOWED",
     # veri katmanı — sorgu çalıştı, sonuç ne söylüyor
     "OUT_OF_COVERAGE",
     "EMPTY_RESULT",
