@@ -347,6 +347,11 @@ class IngestFromUrlTool(Tool):
         if out.warnings:
             card.append(f"parser uyarısı: {out.warnings} (quality_flag='source_warning')")
         card.append(render_for_model(outcome, decision).splitlines()[0])
+        # D03 (ADR-0068): eklenen taslak, kapsamı kartta gösterilmiş bekleyen terfi işlemi olur.
+        from ..core.approvals import PendingOp, book_of
+        book_of(self._registry).register(PendingOp(
+            series_id=series_id, operation="promote", shown_turn=int(getattr(self._registry, "turn", 0) or 0),
+            summary=f"{series_id} ({params.name}) taslağı kataloğa aktif seri olarak alınacak"))
         return ToolResult(content="\n".join(card), artifacts={"ingest": out, "proposal": mapping})
 
 

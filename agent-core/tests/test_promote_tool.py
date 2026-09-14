@@ -55,27 +55,27 @@ def env(tmp_path: Path):
     runner = PromoteRunner()
     cli = LakehouseCLI(core_dir=tmp_path / "lakehouse-core", database=tmp_path / "lh.duckdb", data_root=tmp_path, runner=runner)
     lake = Lake()
-    reg = SimpleNamespace(active_question="", user_text="", sanctioned_locators=set())
+    reg = SimpleNamespace(active_question="", user_text="", current_message="", turn=1, sanctioned_locators=set())
     return PromoteDraftTool(lake, cli, registry=reg), lake, runner, reg
 
 
 def test_onay_yoksa_kapi_kapali(env) -> None:
     tool, lake, runner, reg = env
-    reg.user_text = "sicaklik taslağı nasıl görünüyor?"
+    reg.user_text = reg.current_message = "sicaklik taslağı nasıl görünüyor?"
     r = tool.validate_and_run({"series_id": "adhoc:sicaklik", "purpose": "x"})
     assert not r.ok and r.error.error_code == "INTENT_REQUIRED" and runner.calls == [] and lake.events == []
 
 
 def test_onay_var_ama_hangi_taslak_belirsiz(env) -> None:
     tool, _, runner, reg = env
-    reg.user_text = "onaylıyorum, kataloğa al"
+    reg.user_text = reg.current_message = "onaylıyorum, kataloğa al"
     r = tool.validate_and_run({"series_id": "adhoc:sicaklik", "purpose": "x"})
-    assert not r.ok and "hangi taslağı" in r.content and runner.calls == []
+    assert not r.ok and "hangi işlemi onayladığını söylemedi" in r.content and runner.calls == []
 
 
 def test_onayla_kapat_terfi_et_yeniden_ac(env) -> None:
     tool, lake, runner, reg = env
-    reg.user_text = "sicaklik taslağını onaylıyorum, kataloğa al"
+    reg.user_text = reg.current_message = "sicaklik taslağını onaylıyorum, kataloğa al"
     r = tool.validate_and_run({"series_id": "adhoc:sicaklik", "purpose": "sıcaklık serisini onayla"})
     assert r.ok, r.content
     assert lake.events == ["close", "reload"] and lake.open
@@ -86,14 +86,14 @@ def test_onayla_kapat_terfi_et_yeniden_ac(env) -> None:
 
 def test_kuratorlu_seri_terfi_edilmez(env) -> None:
     tool, _, runner, reg = env
-    reg.user_text = "konut serisini onaylıyorum kataloğa al"
+    reg.user_text = reg.current_message = "konut serisini onaylıyorum kataloğa al"
     r = tool.validate_and_run({"series_id": "bddk_monthly:konut", "purpose": "x"})
     assert not r.ok and r.error.error_code == "DATASET_NOT_FOUND" and "taslak değil" in r.content and runner.calls == []
 
 
 def test_cli_reddi_kullaniciya_doner(env) -> None:
     tool, lake, runner, reg = env
-    reg.user_text = "sicaklik taslağını onaylıyorum"
+    reg.user_text = reg.current_message = "sicaklik taslağını onaylıyorum"
     runner.code, runner.stdout = 2, "status: failed\nerror: 'adhoc:sicaklik' has status 'active'; only 'draft' can be promoted"
     r = tool.validate_and_run({"series_id": "adhoc:sicaklik", "purpose": "x"})
     assert not r.ok and r.error.error_code == "TOOL_FAILED" and "only 'draft'" in r.content and lake.open
@@ -103,6 +103,8 @@ def test_onay_ve_riza_ifadeleri() -> None:
     assert confirm_intent("Bu taslağı onaylıyorum, kataloğa al") and confirm_intent("yayınla")
     assert not confirm_intent("taslağı göster")
     assert unverified_consent("doğrulanmamış olsa da kullan") and unverified_consent("riski kabul ediyorum")
+    assert not unverified_consent("sicaklik taslağını onaylıyorum") and not confirm_intent("doğrulanmamış olsa da kullan"), \
+        "D03-T06: yayın onayı hesap rızası değildir, hesap rızası yayın onayı değildir"
     assert not unverified_consent("aylık ortalamayı göster")
 
 

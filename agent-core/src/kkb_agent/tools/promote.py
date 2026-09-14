@@ -17,12 +17,14 @@ from ..adapters.duckdb_lakehouse import release_connections
 from ..adapters.lakehouse_cli import parse_kv
 from ..builder.ingest import LakehouseCLI
 from ..contracts.lakehouse import LakehouseClient, LakehouseError
+from ..core.approvals import PendingOp, book_of, decide
 from ..core.errors import ToolError
 from ..core.tool import Tool, ToolResult
 
+# Kalıcı yayın onayı; Gold'un "doğrulanmamış olsa da kullan" hesap rızasıyla karışmaz (D03-T06: "kabul ediyorum" çıkarıldı).
 _CONFIRM = re.compile(
     r"\b(onayl[ıi]yorum|onayla|onaylayalım|kataloğa al|kataloga al|terfi ettir|yayınla|yayinla|"
-    r"silver'?a al|aktif et|kabul ediyorum)\b", re.I,
+    r"silver'?a al|aktif et)\b", re.I,
 )
 
 
@@ -50,10 +52,6 @@ class PromoteDraftTool(Tool):
         self.cli = cli
         self._registry = registry
 
-    def _user_text(self) -> str:
-        reg = self._registry
-        return getattr(reg, "user_text", None) or getattr(reg, "active_question", "") or ""
-
     def validate_refs(self, params: PromoteParams) -> ToolError | None:
         try:
             spec = self.lakehouse.get_dataset(params.series_id)
@@ -67,20 +65,29 @@ class PromoteDraftTool(Tool):
             )
         return None
 
+    def _current(self) -> tuple[str, int]:
+        reg = self._registry
+        message = getattr(reg, "current_message", None)
+        if message is None:                       # eski kayıt defteri: yalnız etkin soru (geçmiş değil)
+            message = getattr(reg, "active_question", "") or ""
+        return message, int(getattr(reg, "turn", 0) or 0)
+
     def check_policy(self, params: PromoteParams) -> ToolError | None:
-        text = self._user_text()
-        key = params.series_id.split(":", 1)[-1]
-        if not confirm_intent(text):
+        message, turn = self._current()
+        book = book_of(self._registry)
+        targets = [p.series_id for p in book.of("promote")]
+        decision = decide(book, operation="promote", series_id=params.series_id, message=message, turn=turn,
+                          known_targets=targets)
+        if not decision.ok:
+            if "reddediyor" not in decision.reason:
+                # Onaysız deneme: işlem bekleyene yazılır; kullanıcı kapsamı gördükten sonra kısa "evet" diyebilir.
+                book.register(PendingOp(series_id=params.series_id, operation="promote", shown_turn=turn,
+                                        summary=f"{params.series_id} taslağı kataloğa aktif seri olarak alınacak ve Silver'a kopyalanacak"))
             return ToolError(
                 error_code="INTENT_REQUIRED", layer="policy", retryable=False,
-                message="Kullanıcı taslağı açıkça onaylamadı ('onaylıyorum', 'kataloğa al' gibi bir ifade yok).",
-                hint="Kullanıcıya taslağın eşleme ve anlamını özetleyip onay iste; onaylarsa bu aracı yeniden çağır.",
-            )
-        if key.lower() not in text.lower() and params.series_id.lower() not in text.lower():
-            return ToolError(
-                error_code="INTENT_REQUIRED", layer="policy", retryable=False,
-                message=f"Kullanıcı hangi taslağı onayladığını söylemedi ('{key}' mesajlarda geçmiyor).",
-                hint="Kullanıcıya hangi taslağı onayladığını sor.",
+                message=decision.reason,
+                hint=("Kullanıcıya taslağın kimliğini, eşlemesini ve anlamını özetleyip bu işlem için onay iste "
+                      f"('{params.series_id}' kataloğa alınsın mı?); onaylarsa bu aracı yeniden çağır. Reddettiyse yapma."),
             )
         if not self.cli.available:
             return ToolError(error_code="TOOL_FAILED", layer="policy", retryable=False,
@@ -88,6 +95,8 @@ class PromoteDraftTool(Tool):
         return None
 
     def run(self, params: PromoteParams) -> ToolResult:
+        # Onay denemede tüketilir: başarısız işlem yeniden onay ister, başarılı işlem başka bir işleme onay sayılmaz.
+        book_of(self._registry).discard("promote", params.series_id)
         cmd = [*self.cli.launcher.split(), "-m", "lakehouse", "promote-draft",
                "--database", str(self.cli.database), "--data-root", str(self.cli.data_root),
                "--series", params.series_id]

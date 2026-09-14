@@ -591,6 +591,9 @@ class AnalyticsAgent:
 
     def _ask(self, question: str) -> AgentAnswer:
         self.registry.active_question = question
+        if hasattr(self.registry, "current_message"):
+            self.registry.current_message = question
+            self.registry.turn = getattr(self.registry, "turn", 0) + 1
         if hasattr(self.registry, "user_text"):
             self.registry.user_text = (self.registry.user_text + "\n" + question).strip()
         # Araç kapısı (ADR-0043): soruya göre araç alt kümesi; kapalı olan aile şemaya girmez.

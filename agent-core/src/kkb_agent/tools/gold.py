@@ -78,9 +78,9 @@ sebebini kullanıcıya sade Türkçeyle söyle; sayı üretme, SQL ile aynı iş
 Hazır Gold tabloları (kimliği gold. ile başlar) lakehouse_search'te görünür; onlar zaten \
 hesaplanmıştır, lakehouse_query ile doğrudan sorgulanır."""
 
+# Hesapta kullanma rızası; kalıcı yayın onayı ("onaylıyorum", "kataloğa al") bu rızayı VERMEZ (D03-T06, ADR-0068).
 _CONSENT = re.compile(
-    r"(doğrulanmamış\s+olsa\s+da|dogrulanmamis\s+olsa\s+da|yine\s+de\s+kullan|onaylıyorum|onayliyorum|"
-    r"kabul\s+ediyorum|riski\s+kabul)", re.I,
+    r"(doğrulanmamış\s+olsa\s+da|dogrulanmamis\s+olsa\s+da|yine\s+de\s+kullan|riski\s+kabul)", re.I,
 )
 
 

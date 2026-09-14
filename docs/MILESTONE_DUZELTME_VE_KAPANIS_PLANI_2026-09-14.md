@@ -82,14 +82,14 @@ Numaralar katı seri geliştirme sırası değildir. Aynı dosyada D01/D07 ve D0
 
 **İlgili kod:** [promote.py](../agent-core/src/kkb_agent/tools/promote.py), [registry.py](../agent-core/src/kkb_agent/core/registry.py), [agent.py](../agent-core/src/kkb_agent/core/agent.py), [web_app.py](../agent-core/src/kkb_agent/web_app.py).
 
-- [ ] **D03-T01:** Bekleyen işlem için hedef seri/katalog, işlem türü ve gösterilmiş kapsamı taşıyan durum tanımla. İşlem kimliği veya kapsam özeti yaklaşımı seçilebilir.
-- [ ] **D03-T02:** Güncel kullanıcı mesajını geçmiş açıklama bağlamından ayır. Eski onay + yeni seri adı birleştirilerek yetki üretilmesin.
-- [ ] **D03-T03:** Güncel ret, iptal ve hedef değişikliğini işle; kapsam değiştiğinde önceki onay geçersizleşsin.
-- [ ] **D03-T04:** Belirli bir işlem için verilmiş kısa “evet/onaylıyorum” yanıtını destekle; her tur seri adını tekrar ettirmek zorunlu olmasın. Birden fazla bekleyen hedef varsa sor.
-- [ ] **D03-T05:** Onayın tüketilmesi, aynı isteğin tekrarı ve başarısız işlemin yeniden denenmesi için açık davranış belirle. İdempotent sonuç başka bir işleme onay sayılmasın.
-- [ ] **D03-T06:** Derived veriyi hesapta kullanma rızası ile kalıcı yayın/silme yetkisini ayır; birini diğerinin yerine kullanma.
-- [ ] **D03-T07:** Oturum/profil değişiminde bekleyen onayı temizle. Dış dosya/web talimatı onay durumunu değiştiremesin.
-- [ ] **D03-T08:** Sadece politika fonksiyonunu değil gerçek registry yolunu da sınayan test ekle; reddedilen durumda CLI çağrısı ve veri değişikliği olmamalı.
+- [x] **D03-T01** (PendingOp: seri, işlem, kapsam özeti, gösterildiği tur (core/approvals.py, ADR-0068)): Bekleyen işlem için hedef seri/katalog, işlem türü ve gösterilmiş kapsamı taşıyan durum tanımla. İşlem kimliği veya kapsam özeti yaklaşımı seçilebilir.
+- [x] **D03-T02** (registry.current_message ve tur sayacı; onay yalnız güncel mesajdan): Güncel kullanıcı mesajını geçmiş açıklama bağlamından ayır. Eski onay + yeni seri adı birleştirilerek yetki üretilmesin.
+- [x] **D03-T03** (güncel ret/iptal kazanır ve bekleyeni kapatır; başka hedef adı ret/netleştirme; test): Güncel ret, iptal ve hedef değişikliğini işle; kapsam değiştiğinde önceki onay geçersizleşsin.
+- [x] **D03-T04** (kısa evet yalnız önceki turda gösterilmiş tek bekleyende; çok bekleyende sorulur; test): Belirli bir işlem için verilmiş kısa “evet/onaylıyorum” yanıtını destekle; her tur seri adını tekrar ettirmek zorunlu olmasın. Birden fazla bekleyen hedef varsa sor.
+- [x] **D03-T05** (onay denemede tüketilir; başarısız işlem yeniden onay; tekrar çağrı ikinci işlem üretmez; test): Onayın tüketilmesi, aynı isteğin tekrarı ve başarısız işlemin yeniden denenmesi için açık davranış belirle. İdempotent sonuç başka bir işleme onay sayılmasın.
+- [x] **D03-T06** (Gold hesap rızası ile yayın onayı sözcükleri ayrıldı; test): Derived veriyi hesapta kullanma rızası ile kalıcı yayın/silme yetkisini ayır; birini diğerinin yerine kullanma.
+- [x] **D03-T07** (reset/profil ajanı ve kayıt defterini yeniden kurar, bekleyen düşer; dış içerik mesaj değildir; test): Oturum/profil değişiminde bekleyen onayı temizle. Dış dosya/web talimatı onay durumunu değiştiremesin.
+- [x] **D03-T08** (tests/test_d03_onay.py gerçek ToolRegistry yolu, retlerde CLI çağrısı 0; Analyst'te UNKNOWN_TOOL): Sadece politika fonksiyonunu değil gerçek registry yolunu da sınayan test ekle; reddedilen durumda CLI çağrısı ve veri değişikliği olmamalı.
 
 **Kabul matrisi:** eski onay + güncel ret → ret; A serisine onay + B hedefi → ret/netleştirme; açık güncel doğru hedef → yalnız o işlem; reset/profil değişimi → eski onay geçersiz; tekrar çağrı → ikinci farklı işlem yok. Analyst'te kapalı araç hâlâ çalıştırılamaz.
 
@@ -237,3 +237,4 @@ D01–D07 ve zorunlu K01/K02 kabulü tamamlanmadan bu incelemenin açıkları ka
 
 - **2026-09-14:** Kullanıcı isteğiyle bağımsız kontrolün yedi bulgusu, düzeltme görevleri ve demo kapanış kapsamına dönüştürüldü. Bu tur uygulama kodu ve veri değiştirilmedi.
 - **2026-09-14 (uygulama):** D01, D07 ve D02 uygulandı ve testlendi (ADR-0065, ADR-0066); ajan testleri 432 geçti.
+- **2026-09-14 (uygulama):** D03 uygulandı ve testlendi (ADR-0068); ajan testleri 440 geçti.
