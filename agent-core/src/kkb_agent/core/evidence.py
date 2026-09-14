@@ -98,11 +98,19 @@ def _direction_word_near(answer: str, token: str, window: int = 40) -> bool:
     K03 canlı tekrar bulgusu (14 Eyl): pencere metindeki İLK geçişe bakıyordu. Cevap aynı büyüklüğü önce tabloda işaretli
     ("−0,51 puan"), sonra yorumda işaretsiz ("faiz düşüşü küçük (0,06–0,51 puan)") yazınca ilk geçişin çevresinde yön
     sözcüğü yoktu; doğru cevap "işaret uyarısı" aldı. Artık işaretli geçişler atlanır, işaretsiz geçişlerden biri yeter."""
+    return _word_near_unsigned(answer, token, _DIRECTION, window)
+
+
+_REMAINDER = re.compile(r"kalan|diğer|gösterilmeyen|listelenmeyen|yazılmayan|daha fazla|\bdaha\b", re.I)
+
+
+def _word_near_unsigned(answer: str, token: str, pattern: re.Pattern, window: int = 40) -> bool:
+    """`token`ın işaretsiz her geçişinin ±`window` çevresinde `pattern` var mı; işaretli ve başka sayının parçası olan geçiş sayılmaz."""
     text = _ascii_minus(answer or "")
     for m in re.finditer(r"(?<![\d.,])" + re.escape(token) + r"(?![\d,]|\.\d)", text):
         if m.start() > 0 and text[m.start() - 1] in "-+":
             continue
-        if _DIRECTION.search(text[max(0, m.start() - window): m.end() + window]):
+        if pattern.search(text[max(0, m.start() - window): m.end() + window]):
             return True
     return False
 
@@ -302,6 +310,17 @@ class EvidenceBuilder:
                             ev.row_key, ev.sign_warning = "tabloda ters işaret", True
                         break
             out.append(ev)
+        # K03 hedefli canlı tekrar bulgusu (14 Eyl; gece koşularında da): "Kalan 50 ay aktif analiz tablosunda" — model 60 satırın
+        # 10'unu listeleyip kalanını saydı; sayı hücrede değil, tablodan türetilmiş satır sayısı. Yalnız tabloyla tutarlıysa
+        # (satır sayısı − cevapta gösterilen farklı satır) ve yanında "kalan/diğer" gibi bir sözcük varsa doğrulanmış sayılır.
+        shown = {n.row_index for n in out if n.matched and n.row_index is not None}
+        if shown:
+            remaining = len(table) - len(shown)
+            for ev in out:
+                if (not ev.matched and float(ev.number).is_integer() and int(ev.number) == remaining and remaining > 0
+                        and _word_near_unsigned(answer, ev.text, _REMAINDER)):
+                    ev.matched, ev.column = True, "(kalan satır sayısı)"
+                    ev.row_key = f"{len(table)} satır − cevapta gösterilen {len(shown)} satır"
         return out
 
     def _columns(self, workspace: AnalysisWorkspace, table: pd.DataFrame) -> list[ColumnEvidence]:
