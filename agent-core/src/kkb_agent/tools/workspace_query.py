@@ -85,7 +85,8 @@ class WorkspaceQueryTool(Tool):
         if out.empty:
             return ToolResult(content="Sorgu çalıştı ama hiç satır dönmedi; filtre değerini kontrol et.", ok=True)
 
-        preview = min(20, len(out))
+        from ..core.preview import preview_table   # ≤24 satır tamamı, üstü baş+son (PART 41)
+
         if not params.as_active_table:
             # Bakış modu (ölçüldü: filtre/özet sorguları aktif tabloyu ezince model sonraki turda
             # yalnız 5 satırlık alt kümeyle ya da tek satırlık özetle kaldı ve yanlış dönem için
@@ -93,10 +94,8 @@ class WorkspaceQueryTool(Tool):
             content = (
                 f"Sorgu başarılı: {len(out)} satır, {len(out.columns)} sütun — AKTİF TABLO DEĞİŞMEDİ (bakış modu; "
                 f"tabloyu buna çevirmek için as_active_table=true).\n"
-                f"Sütunlar: {', '.join(map(str, out.columns))}\nİlk {preview} satır:\n{out.head(preview).to_string(index=False)}"
+                f"Sütunlar: {', '.join(map(str, out.columns))}\n" + preview_table(out, where="bu sorgunun sonucunda")
             )
-            if len(out) > preview:
-                content += f"\n... ({len(out) - preview} satır daha)"
             self.workspace.note_peek(text, out)
             return ToolResult(content=content, data=out)
 
@@ -115,10 +114,8 @@ class WorkspaceQueryTool(Tool):
         self.workspace.title = params.purpose
         content = (
             f"Sorgu başarılı: {len(out)} satır, {len(out.columns)} sütun — artık AKTİF TABLO bu (veri havuzuna yazılmadı).\n"
-            f"Sütunlar: {', '.join(map(str, out.columns))}\nİlk {preview} satır:\n{out.head(preview).to_string(index=False)}"
+            f"Sütunlar: {', '.join(map(str, out.columns))}\n" + preview_table(out)
         )
-        if len(out) > preview:
-            content += f"\n... ({len(out) - preview} satır daha; tamamı analiz tablosunda)"
         return ToolResult(content=content, data=out, provenance=prov)
 
 
