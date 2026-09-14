@@ -1,0 +1,136 @@
+{
+  "meta": {
+    "commit": "51ccc17",
+    "kaynak_agac_temiz": true,
+    "work": "/private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80b/scratchpad/k01ui_son",
+    "at": "2026-09-14T15:40:05",
+    "model": "betikli (LLM çağrısı yok)",
+    "demo_db_sha256_once": "c2cf0aece473423158bf42113632c88ee7691058e51ed19f09f7f252c405f59d",
+    "tarayici": "chromium 151.0.7922.34",
+    "demo_db_sha256_sonra": "c2cf0aece473423158bf42113632c88ee7691058e51ed19f09f7f252c405f59d"
+  },
+  "passed": 15,
+  "total": 15,
+  "steps": [
+    {
+      "id": "acilis",
+      "beklenen": "arayüz geçici DB ile açılır; Analyst; başlangıç kataloğu (1907 etkin seri, katalog dosyalarından)",
+      "ok": true,
+      "gozlenen": "{'profil': 'analyst', 'katalog': 1907, 'rozet': 'Profil: Analyst (salt-okunur) ▾'}",
+      "at": "2026-09-14T15:40:09",
+      "ekran": "01_acilis.png"
+    },
+    {
+      "id": "a09-yukleme",
+      "beklenen": "iki dosya arayüzden yüklenir, ek çipleri görünür",
+      "ok": true,
+      "gozlenen": "['📎 nufus_il.csv · tablo · 0 KB×', '📎 hastane_il.csv · tablo · 0 KB×']",
+      "at": "2026-09-14T15:40:09",
+      "ekran": "02_a09-yukleme.png"
+    },
+    {
+      "id": "a09-kural-sorusu",
+      "beklenen": "birebir eşitlik sonucu değiştirir: birleşim yapılmaz, soru ekranda; kural adayları adımda",
+      "ok": true,
+      "gozlenen": "{'adım': {'index': 4, 'role': 'execute', 'thought': '', 'tool': 'workspace_join', 'args': {'left': 'k1', 'right': 'k3', 'left_key': 'il_adi', 'right_key': 'il', 'purpose': 'nüfus ve hastane'}, 'ok': False, 'error_code': 'INVALID_ARGS', 'summary': \"HATA[INVALID_ARGS]: Anahtar kuralı sonucu değiştiriyor: birebir eşitlikle 1 sol satır eşleşiyor, key_policy='metin_normal' (baş/son boşluk ve büyük/küçük harf farkı yok sayıldı (Türkçe İ/ı dahil)) ile 3 (ör. 'ankara' ↔ 'Ankara'). Eşdeğerlik varsayılmadı.\\nADAYLAR: metin_normal\\nYAPACAĞIN: Kullanıcıya \", 'duration_ms': 0, 'candidates': ['metin_normal']}, 'ekran': 'İki dosyada il adları farklı yazılmış (büyük/küçük harf). Bunlar aynı il sayılsın mı?y",
+      "at": "2026-09-14T15:40:10",
+      "ekran": "03_a09-kural-sorusu.png"
+    },
+    {
+      "id": "a09-tablo-ekranda",
+      "beklenen": "ekrandaki tablo 4 satır ve hesap kolonunu gösterir",
+      "ok": true,
+      "gozlenen": "{'kolonlar': ['il_adi', 'nufus_bin', 'hastane_sayisi', 'yatak_sayisi', 'milyon_kisi_basina_hastane'], 'satır': 4}",
+      "at": "2026-09-14T15:40:10",
+      "ekran": "04_a09-tablo-ekranda.png"
+    },
+    {
+      "id": "a09-indirme",
+      "beklenen": "arayüzden indirilen CSV/XLSX tam tablo; değerler modelden bağımsız beklenenle aynı (Trabzon boş)",
+      "ok": true,
+      "gozlenen": "{'csv': {'ankara': 16.3711, 'ADANA': 18.0299, 'İzmir': 16.3604, 'Trabzon': None}, 'xlsx_satır': 4}",
+      "at": "2026-09-14T15:40:10",
+      "ekran": null
+    },
+    {
+      "id": "a09-ortak-katalog",
+      "beklenen": "Analyst akışı ortak kataloğu değiştirmez (DB parmak izi)",
+      "ok": true,
+      "gozlenen": "{'önce': (2216, '8311f817170bcf8977005d199f659a8d'), 'sonra': (2216, '8311f817170bcf8977005d199f659a8d'), 'cevap': 1}",
+      "at": "2026-09-14T15:40:10",
+      "ekran": null
+    },
+    {
+      "id": "a21-profil",
+      "beklenen": "anahtarla Architect; oturum temizlenir; sıfırlama düğmesi görünür",
+      "ok": true,
+      "gozlenen": "{'profil': 'architect', 'cevap': 0, 'sıfırla_görünür': True}",
+      "at": "2026-09-14T15:40:10",
+      "ekran": "07_a21-profil.png"
+    },
+    {
+      "id": "a21-taslak",
+      "beklenen": "arayüzden gelen istekle gerçek CLI taslak yazar (status draft)",
+      "ok": true,
+      "gozlenen": "{'db': [('adhoc:acil_basvuru', 'draft')], 'adım_ok': [True]}",
+      "at": "2026-09-14T15:40:11",
+      "ekran": "08_a21-taslak.png"
+    },
+    {
+      "id": "a21-gecersiz-onay",
+      "beklenen": "onaysız ve 'yayınlama' turlarında terfi reddedilir; DB satırı, Silver sayısı ve dosya özeti değişmez",
+      "ok": true,
+      "gozlenen": "{'retler': ['INTENT_REQUIRED', 'INTENT_REQUIRED'], 'parmak_izi_aynı': True}",
+      "at": "2026-09-14T15:40:12",
+      "ekran": "09_a21-gecersiz-onay.png"
+    },
+    {
+      "id": "a21-yayin",
+      "beklenen": "güncel açık onayla aktif seri ve Silver'da 12 satır",
+      "ok": true,
+      "gozlenen": "{'durum': [('active',)], 'silver': 12}",
+      "at": "2026-09-14T15:40:13",
+      "ekran": "10_a21-yayin.png"
+    },
+    {
+      "id": "a21-onizleme",
+      "beklenen": "pencere hedefleri (veritabanı, grafikler), korunanı, boş katalog seçimini ve onay kodunu gösterir",
+      "ok": true,
+      "gozlenen": "{'kod_var': True, 'boş_katalog': True, 'metin': 'Silinecekveritabanı — /private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80b/scratchpad/k01ui_son/data/lakehouse.duckdbRAW — /private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80'}",
+      "at": "2026-09-14T15:40:13",
+      "ekran": "11_a21-onizleme.png"
+    },
+    {
+      "id": "a21-sifirlama",
+      "beklenen": "arayüzde 'tamamlandı'; DB'de seri 0 ve katalog kipi none; eski grafik ve yüklemeler yok; ekran temiz",
+      "ok": true,
+      "gozlenen": "{'sonuç': 'DurumtamamlandıHedeflersilindi — veritabanı /private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80b/scratchpad/k01ui_son/data/lakehouse.duckdbsilindi — RAW /private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80b/scratchpad/k01ui_son/data/ra', 'seri': 0, 'ayar': [('series_catalog', 'none', '2026-09-14 15:40:13.935508')]}",
+      "at": "2026-09-14T15:40:14",
+      "ekran": "12_a21-sifirlama.png"
+    },
+    {
+      "id": "a21-korunan",
+      "beklenen": "veri kökü dışındaki kontrol dosyası ve asıl demo DB değişmedi",
+      "ok": true,
+      "gozlenen": "{'kontrol': True, 'demo_db_aynı': True}",
+      "at": "2026-09-14T15:40:14",
+      "ekran": null
+    },
+    {
+      "id": "a21-yeni-alan",
+      "beklenen": "boş katalogdan yeni alan arayüzden: yalnız adhoc:web_ziyaret aktif, durum sayacı buna göre",
+      "ok": true,
+      "gozlenen": "{'katalog': [('adhoc:web_ziyaret', 'active')], 'durum_katalog': 1, 'durum_yüklü': 1, 'ekran_katalog': '0'}",
+      "at": "2026-09-14T15:40:14",
+      "ekran": "14_a21-yeni-alan.png"
+    },
+    {
+      "id": "sayfa-yenileme",
+      "beklenen": "sayfa yenilenince oturumdaki cevaplar sunucudan yeniden kurulur; profil korunur",
+      "ok": true,
+      "gozlenen": "{'önce': 2, 'sonra': 2, 'api': 2}",
+      "at": "2026-09-14T15:40:15",
+      "ekran": "15_sayfa-yenileme.png"
+    }
+  ]
+}
