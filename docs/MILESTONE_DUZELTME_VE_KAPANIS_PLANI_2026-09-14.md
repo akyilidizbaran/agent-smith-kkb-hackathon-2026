@@ -103,9 +103,9 @@ Numaralar katı seri geliştirme sırası değildir. Aynı dosyada D01/D07 ve D0
 - [x] **D04-T02** (arayüz sıfırlaması varsayılan `--catalog none`; başlangıç kataloğu ayrı açık seçim (ResetRequest.catalog); doğrulama seri 0 + kip none): Tam veri sıfırlaması sonrasında şema mevcut, kullanıcı/veri kataloğu boş durumda başlat. Finans kataloğu yüklemek ayrı açık seçim olsun.
 - [x] **D04-T03** (silver, gold, promote, ingest bileşimi ve yeniden bootstrap kayıtlı kipe uyar; toplu finans ingest betiği boş kipte durur; test): Ingest, promotion, Silver/Gold build, yeniden açılış ve diğer bootstrap çağrılarını incele; sonraki işlem finans kataloğunu kendiliğinden geri getirmesin.
 - [x] **D04-T04** (kip DB'de kalıcı; bayraksız sonraki bootstrap kipi korur; test 'restart' vakası): Seçilen katalog çalışma biçimini yeniden başlatmada koru. Tek seferlik reset bayrağı sonraki süreçte kaybolmasın.
-- [~] **D04-T05** (sıfırlama sonrası ajan yeniden kurulur ve rapora yazılır (test_d05); gerçek boş DB ile profil/retrieval/cache sızıntısı K01'de): Boş adaptörle agent kurulabilsin; “veri yok” durumu kontrollü olsun. Profil, retrieval, alias, eski SQL bağlamı ve cache önceki finans alanını taşımamalı.
-- [ ] **D04-T06:** Finans dışı yeni seri için taslak → beyan → açık onay → Silver → uygun Gold hesabı akışını gerçek CLI ile göster.
-- [ ] **D04-T07:** Aynı ortamda iki genel tabloyu oturumda analiz et; bunlar istemeden ortak zaman serisi kataloğuna yayımlanmasın.
+- [x] **D04-T05** (K01 T05/T06: sıfırlama sonrası ajan boş DB ile kuruldu; yeniden başlatmada profil 'adhoc kaynaklı veriler', arama finans serisi döndürmedi, önbellek yok; bootstrap boş Silver ilişkisi kurar (K01 bulgusu)): Boş adaptörle agent kurulabilsin; “veri yok” durumu kontrollü olsun. Profil, retrieval, alias, eski SQL bağlamı ve cache önceki finans alanını taşımamalı.
+- [x] **D04-T06** (K01 T04/T05: gerçek CLI ile finans dışı taslak → beyan → onay → Silver → Gold çeyreklik toplam beklenenle aynı (flow_periodic; count tipinde Gold reddi tasarlanmış)): Finans dışı yeni seri için taslak → beyan → açık onay → Silver → uygun Gold hesabı akışını gerçek CLI ile göster.
+- [x] **D04-T07** (K01 T02/T03: iki genel tablo oturumda birleştirildi ve hesaplandı; ortak katalog sayı+içerik parmak izi değişmedi): Aynı ortamda iki genel tabloyu oturumda analiz et; bunlar istemeden ortak zaman serisi kataloğuna yayımlanmasın.
 
 **Kabul:** ayrı geçici kökte reset sonrası `meta.series` veri kaydı sayısı sıfır; şema sağlam; yeni finans dışı veri yüklenip yayımlandıktan ve süreç yeniden açıldıktan sonra eski finans seri kimlikleri geri gelmez. Yeni alanın hesabı modelden bağımsız beklenen sonuçla eşleşir. Kod, kurulum ve asıl demo veri kökü korunur.
 
@@ -161,12 +161,12 @@ Numaralar katı seri geliştirme sırası değildir. Aynı dosyada D01/D07 ve D0
 
 **Neden:** Tek fonksiyon veya sahte bootstrap testinin geçmesi gerçek demo akışını kanıtlamaz. Düzeltmeler özellikle A09 ve A21c ile birleşmelidir.
 
-- [ ] **K01-T01:** Teste özel kök/DB ve dışarıda korunacak kontrol dosyaları oluştur; kapsamın asıl demo dizininden bağımsızlığını kontrol et.
-- [ ] **K01-T02:** Analyst ile iki ayrı yeni dosya yükle; ayrı kaynak kimliklerini koru; belirtilen anahtarla birleştir, takip hesabı yap ve tam tablo/raporu indir.
-- [ ] **K01-T03:** Sonucu beklenen satır/değerlerle karşılaştır; her kolonun kaynağını ve yükleme öncesi/sonrası ortak DB/katalog fingerprint'inin aynı olduğunu doğrula.
-- [ ] **K01-T04:** Architect'te gerçek taslak/yayın ve geçersiz onay senaryolarını CLI üzerinden çalıştır. Ret durumunda dosya/DB değişikliği olmadığını göster.
-- [ ] **K01-T05:** Önizleme → kapsamlı onay → fiziksel reset → şema-only kurulum → farklı alan verisi → analiz akışını gerçek bileşenlerle çalıştır.
-- [ ] **K01-T06:** Yeniden başlat ve alan profilini kontrol et; eski katalog/cache/izin/çıktı geri gelmesin. Ardından Analyst'te kalıcı yazmanın hâlâ kapalı olduğunu sınayarak profillerin görevlerini doğrula.
+- [x] **K01-T01** (geçici kök ve DB; kök dışı kontrol dosyası; asıl demo DB sha256 önce/sonra aynı): Teste özel kök/DB ve dışarıda korunacak kontrol dosyaları oluştur; kapsamın asıl demo dizininden bağımsızlığını kontrol et.
+- [x] **K01-T02** (Analyst iki dosya yükleme, ayrı kaynak kimlikleri, kural sorusu, açık kuralla birleştirme, takip hesabı, CSV/XLSX/HTML indirme): Analyst ile iki ayrı yeni dosya yükle; ayrı kaynak kimliklerini koru; belirtilen anahtarla birleştir, takip hesabı yap ve tam tablo/raporu indir.
+- [x] **K01-T03** (beklenen değerler (16,371…/18,029…/16,360…/Trabzon boş), kolon kaynakları ve anahtar kuralı provenance'ta, ortak katalog parmak izi aynı): Sonucu beklenen satır/değerlerle karşılaştır; her kolonun kaynağını ve yükleme öncesi/sonrası ortak DB/katalog fingerprint'inin aynı olduğunu doğrula.
+- [x] **K01-T04** (Architect gerçek CLI: taslak; onaysız ve 'yayınlama' turlarında ret, DB (durum, Silver sayısı, dosya özeti) aynı; güncel onayla yayın): Architect'te gerçek taslak/yayın ve geçersiz onay senaryolarını CLI üzerinden çalıştır. Ret durumunda dosya/DB değişikliği olmadığını göster.
+- [x] **K01-T05** (önizleme → kod → fiziksel sıfırlama (tamamlandı, seri 0, kip none) → yeni alan taslak/yayın → kırılma analizi 2025-01-31): Önizleme → kapsamlı onay → fiziksel reset → şema-only kurulum → farklı alan verisi → analiz akışını gerçek bileşenlerle çalıştır.
+- [x] **K01-T06** (yeniden başlatma: bayraksız bootstrap boş kipi korudu, profil/arama sızıntısız, Analyst'te yazma araçları yok): Yeniden başlat ve alan profilini kontrol et; eski katalog/cache/izin/çıktı geri gelmesin. Ardından Analyst'te kalıcı yazmanın hâlâ kapalı olduğunu sınayarak profillerin görevlerini doğrula.
 - [ ] **K01-T07:** UI üzerinden her iki akışı göster; otomatik Playwright adımları model sonucu yanında dosya, tablo ve durum değişimini de kontrol etsin.
 
 **Kabul:** gerçek CLI ve son uygulama sürümüyle A09/A21a–c sonuçları tam; test dışı dosyalar korunmuş; raporda model/commit/veri manifesti ve tekrar bilgileri mevcut. Kaydedilmiş sonucu canlı çıktı gibi sunma.
@@ -239,3 +239,4 @@ D01–D07 ve zorunlu K01/K02 kabulü tamamlanmadan bu incelemenin açıkları ka
 - **2026-09-14 (uygulama):** D01, D07 ve D02 uygulandı ve testlendi (ADR-0065, ADR-0066); ajan testleri 432 geçti.
 - **2026-09-14 (uygulama):** D03 uygulandı ve testlendi (ADR-0068); ajan testleri 440 geçti.
 - **2026-09-14 (uygulama):** D04 (lakehouse kip + sıfırlama bağlantısı), D05 ve D06 uygulandı ve testlendi (ADR-0069, ADR-0070); ajan 448, lakehouse tam suite 1.111 geçti. D04-T05…T07 gerçek CLI akışı K01'de.
+- **2026-09-14 (K01):** `scripts/k01_kabul.py` gerçek bileşenlerle 22/22; bulgu: bootstrap sonrası Silver ilişkisi yoktu → düzeltildi (ADR-0069 eki). K01-T07 arayüz provası ayrı.

@@ -258,6 +258,10 @@ def run_bootstrap(database: str | Path, *, catalog_mode: str | None = None) -> B
 
     connection = bootstrap_database(database, catalog_mode=catalog_mode)
     try:
+        # D04-T05 (ADR-0069, K01 bulgusu): yalnız bootstrap edilmiş DB'de Silver tablosu yoktu; ajan açılamıyor ve sıfırlama
+        # sonrası yeniden kurulum başarısız oluyordu. Boş Silver ilişkisi sözleşme kolonlarıyla kurulur; `silver` build onu değiştirir.
+        from .catalog.promotion import ensure_silver_relation
+        ensure_silver_relation(connection)
         count = connection.execute("SELECT count(*) FROM meta.series").fetchone()[0]
         mode = read_catalog_mode(connection) or "default"
         return BootstrapSummary(database=Path(database), catalog_series_count=int(count), catalog_mode=mode)

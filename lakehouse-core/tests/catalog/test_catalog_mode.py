@@ -24,6 +24,8 @@ def test_schema_only_mode_is_stored_and_honoured_by_every_later_command(tmp_path
     db.parent.mkdir(parents=True)
     summary = run_bootstrap(db, catalog_mode="none")
     assert summary.catalog_mode == "none" and summary.catalog_series_count == 0
+    with duckdb.connect(str(db), read_only=True) as con:   # ajanın açabilmesi için boş Silver ilişkisi var (K01 bulgusu)
+        assert con.execute("SELECT count(*) FROM silver.fact_observation").fetchone()[0] == 0
     # every command that bootstraps first must keep the catalog empty
     run_silver_build(database=db, data_root=tmp_path / "data")
     assert _series_count(db) == 0
