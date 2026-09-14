@@ -106,7 +106,7 @@ make ci                       # CI ile aynı deterministik testler
 
 Tek soru, izli: `cd agent-core && uv run python -m kkb_agent.cli --trace "2025'te konut kredisi nasıl değişti?"`
 
-Ayrıntı: [docs/AGENT.md](docs/AGENT.md) · demo günü: [docs/OPERASYON_TARIFI.md](docs/OPERASYON_TARIFI.md)
+Ayrıntı: [docs/AGENT.md](docs/AGENT.md) · demo günü ve kabul betikleri: [docs/OPERASYON_TARIFI.md](docs/OPERASYON_TARIFI.md) · `.env` kabukta `source` edilmez, uygulama okur
 
 ## Veri kaynakları
 

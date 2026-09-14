@@ -167,7 +167,7 @@ Numaralar katı seri geliştirme sırası değildir. Aynı dosyada D01/D07 ve D0
 - [x] **K01-T04** (Architect gerçek CLI: taslak; onaysız ve 'yayınlama' turlarında ret, DB (durum, Silver sayısı, dosya özeti) aynı; güncel onayla yayın): Architect'te gerçek taslak/yayın ve geçersiz onay senaryolarını CLI üzerinden çalıştır. Ret durumunda dosya/DB değişikliği olmadığını göster.
 - [x] **K01-T05** (önizleme → kod → fiziksel sıfırlama (tamamlandı, seri 0, kip none) → yeni alan taslak/yayın → kırılma analizi 2025-01-31): Önizleme → kapsamlı onay → fiziksel reset → şema-only kurulum → farklı alan verisi → analiz akışını gerçek bileşenlerle çalıştır.
 - [x] **K01-T06** (yeniden başlatma: bayraksız bootstrap boş kipi korudu, profil/arama sızıntısız, Analyst'te yazma araçları yok): Yeniden başlat ve alan profilini kontrol et; eski katalog/cache/izin/çıktı geri gelmesin. Ardından Analyst'te kalıcı yazmanın hâlâ kapalı olduğunu sınayarak profillerin görevlerini doğrula.
-- [ ] **K01-T07:** UI üzerinden her iki akışı göster; otomatik Playwright adımları model sonucu yanında dosya, tablo ve durum değişimini de kontrol etsin.
+- [x] **K01-T07:** UI üzerinden her iki akışı göster; otomatik Playwright adımları model sonucu yanında dosya, tablo ve durum değişimini de kontrol etsin. — **14 Eyl:** `scripts/k01_ui_kabul.py` 15/15, commit 9eaf60e (`docs/experiments/k01_ui_kabul_2026-09-14_1319/rapor.json` + ekran görüntüleri): gerçek tarayıcı (Chromium) ve süreç içi HTTP sunucusu, model betikli; iki dosya arayüzden yüklendi, kural sorusu ekranda, birleşim ve hesap tablosu ekranda 4 satır, arayüzden indirilen CSV/XLSX beklenen değerlerle aynı, ortak katalog parmak izi aynı; profil penceresinden Architect, taslak, iki geçersiz onay reddi (DB özeti aynı), geçerli yayın (Silver 12), sıfırlama penceresinde onay kodu → 'tamamlandı', DB'de seri 0 ve kip none, kök dışı dosya ve demo DB aynı, yeni alan yalnız adhoc:web_ziyaret ve durum sayaçları 1, sayfa yenilemede cevaplar geri geldi. Bulunan ve düzeltilen: onaylanan adhoc seri katalog sayacında görünmüyordu (ADR-0076).
 
 **Kabul:** gerçek CLI ve son uygulama sürümüyle A09/A21a–c sonuçları tam; test dışı dosyalar korunmuş; raporda model/commit/veri manifesti ve tekrar bilgileri mevcut. Kaydedilmiş sonucu canlı çıktı gibi sunma.
 
@@ -177,11 +177,11 @@ Dayanak: [M16 kabul raporu](M16_KABUL_RAPORU.md). Aşağıdakiler her biri yeni 
 
 | Görev | Vaka/kapsam | Yapılacak doğrulama ve kapanış |
 |---|---|---|
-| K02-T01 | A01 / M16-T02 | Temiz ortamdan kurulum → gerekli veri → API/UI zincirini aynı sürümle göster |
-| K02-T02 | A02/A03 | 60 aylık istek ve faiz ekleme/hizalamayı tek oturumda, tam dönem/satır beklentisiyle doğrula |
-| K02-T03 | A05 | KFE eklenmesinde birim, baz ve dönem denetimi; kaynak sütunlar korunur |
-| K02-T04 | A06 | Faiz düşerken kredi artmayan dönemleri araçla hesapla; dış bağlamı ayrıca kaynaklandır, nedensellik diye sunma |
-| K02-T05 | A07/A26 | Grafik ve eski cevap raporundaki dönem/birim/kaynak/uyarı ve sürüm tutarlılığı; önceki ek testler tam kapsamı karşılıyorsa statüyü kanıtla düzelt |
+| K02-T01 | A01 / M16-T02 | **Kapandı 14 Eyl (ADR-0076):** commit 9eaf60e, `docs/experiments/k02_t01_kurulum_2026-09-14_1321/`: yerel depodan temiz klon → `make setup` → belgelenen `.env` → verisiz ön kontrol HAZIR DEĞİL (veri kökü, DB, izinli kök) → `build_demo_data.py --only` ile geçici kökte canlı BDDK+EVDS (11 s, 2 seri, Silver 675, Gold 2) → model anahtarı boşken ön kontrol model ✗ → `.env` ile hazır → `make serve` durum 200, sayfa 200 → canlı soru 7,7 s, 12 satır, kanıt 13/13 ve üç rozet yeşil, ekran görüntüsü. Bulunan ve düzeltilen: anahtar boşken ön kontrol 'hazır' deyip sunucu çöküyordu. Sınır: aynı makinede uv önbelleğiyle (kurulum 1 s); başka ekip üyesi provası K03-T06 |
+| K02-T02 | A02/A03 | **Kapandı 14 Eyl (ADR-0075):** `scripts/k02_finans_kabul.py` tek oturumda, commit 15f8593, 22/22 (`docs/experiments/k02_finans_kabul_2026-09-14_1310.json`): 60 satır 2021-01-31 → 2025-12-31 ardışık ve Silver'la birebir, cevaptaki bakiyeler eşleşir; faiz eklenince 60 satır ve önceki kolonlar birebir, her ay değeri haftalık Silver gözlemlerinin takvim ayı ortalamasıyla aynı (60/60), kart dönem eşleşmesini yazar, kanıt kolonu hizalı Gold tablosuna (weekly → monthly, avg) bağlı. Bulunan ve düzeltilen: üç ondalıklı Gold faizi grounding'de binlik okunuyordu |
+| K02-T03 | A05 | **Kapandı 14 Eyl (ADR-0075):** KFE (`semantic_confidence=derived`) reel dönüşümde rızasız `UNVERIFIED_SEMANTICS`, aday doğrulanmış TÜFE; rızayla bile kapsam dışı baz 2015-06 `OUT_OF_COVERAGE` (kapsam 2016-01 → 2026-06); sütun eklemede önceki dört kolon birebir, KFE 60/60 Silver'la aynı, kart birim/ölçüm tipi/frekans/dönem eşleşmesi ve 'baz yılı DOĞRULANMAMIŞ' yazar, uyarı kanıt kolonu, XLSX ve raporda; `tests/test_k02_kfe_denetimi.py`, `docs/experiments/k02_finans_kabul_2026-09-14_1310.json` |
+| K02-T04 | A06 | **Kapandı 14 Eyl (ADR-0075):** dönemler `workspace_query` bakış moduyla hesaplandı (tablo değişmedi), bağımsız pandas hesabıyla aynı 4 ay: 2021-02, 2021-05, 2023-12, 2024-01; 'neden oldu' cümlesi geri gönderildi, giden cevap eşzamanlılık der; web araması sonucu kanıtta ve raporda `context_sources` 'bağlam, veri değil' olarak veri kaynaklarından ayrı (sahte arama oturumu, ağ yok); `tests/test_k02_baglam_kaynagi.py`, `docs/experiments/k02_finans_kabul_2026-09-14_1310.json` |
+| K02-T05 | A07/A26 | **Kapandı 14 Eyl (ADR-0075):** grafik PNG indirilir; arayüz/rapor başlığı PNG ile aynı (konu · endeks, ilk dönem = 100 · 2021-01-31 → 2025-12-31), denetçi geçti, farklı birim notu kartta; sonraki sekiz cevaptan sonra 1. cevabın raporu ve CSV'si hâlâ 60 satır 2 kolon, sürüm commit'i ve kaynak yazılı; KFE ve grafik cevaplarının raporları kendi tablosu, uyarısı ve grafiğiyle; `docs/experiments/k02_finans_kabul_2026-09-14_1310.json`. Bulunan ve düzeltilen: arayüz ve rapor grafik başlığında birim ve dönem yoktu |
 | K02-T06 | A12 | **Kapandı 14 Eyl (ADR-0072):** düşük/belirsiz kaliteli OCR tablosu `LOW_QUALITY_SOURCE` ile yüklenmez, açık kabulle bütün DİKKAT notlarıyla yüklenir; OCR kaynaklı sayılar panelde doğrulanmış sayılmaz; `tests/test_k02_ocr.py` |
 | K02-T07 | A18 | **Kapandı 14 Eyl (ADR-0074):** serbest kaynakta erişim hatası turu bitirmez (`ToolError.terminal=False`), başka kaynaktan veri kullanılır ve cevap kaynağı anmıyorsa deterministik 'Kaynak notu' eklenir; sabit kaynakta tur biter ve sorulur; `tests/test_agent_loop.py`, `tests/test_access_policy.py` |
 | K02-T08 | A22 | **Kapandı 14 Eyl:** `lakehouse-core/tests/scripts/test_run_catalog_ingestion.py::test_a22_warned_artifact_ingested_twice_is_idempotent_and_keeps_each_runs_warning` — tek artifact, iki koşu bağı, koşu başına uyarı satırı, Bronze dosyası ve özeti değişmez |
@@ -211,11 +211,33 @@ Dayanak: [M16 kabul raporu](M16_KABUL_RAPORU.md). Aşağıdakiler her biri yeni 
 
 ## 13. K04 — Durum ve kanıt kaydını düzelt
 
-- [ ] **K04-T01:** Ana planda M04-T09 ve M13-T09'u ilgili yeni regresyonlar geçene kadar yeniden açık/kısmi göster; geçmişteki başarılı kanıtı silme.
-- [ ] **K04-T02:** D01/D07 için M03/M11, D02 için M13, D04/D05 için M04/M16 kapanışlarını yeniden değerlendir. Milestone haritası ile alt görev durumları aynı anlamı taşısın.
-- [ ] **K04-T03:** Her düzeltmeye ilgili R/D/M/A kimliklerini bağla. Aynı kabul senaryosu birden fazla görevi kapatıyorsa kanıtı tekrar üretmeden bağlantı ver.
-- [ ] **K04-T04:** Değişen sözleşmeleri ADR/README/operasyon tarifinde güncelle; `PROJECT_MEMORY.md` karar ve ölçüm kaydını append-only tut.
-- [ ] **K04-T05:** Bu dosyada ancak uygulama ve kabul kanıtı sonrası görev kutusunu işaretle. Yeni commit sonrası eski test raporunu güncel rapor gibi gösterme.
+- [x] **K04-T01:** Ana planda M04-T09 ve M13-T09'u ilgili yeni regresyonlar geçene kadar yeniden açık/kısmi göster; geçmişteki başarılı kanıtı silme. — **14 Eyl:** ana planda iki görev 'yeniden açıldı → D03/K01/K01-T07 ve D06 ile kapandı' notuyla, eski kanıt korunarak güncellendi.
+- [x] **K04-T02:** D01/D07 için M03/M11, D02 için M13, D04/D05 için M04/M16 kapanışlarını yeniden değerlendir. Milestone haritası ile alt görev durumları aynı anlamı taşısın. — **14 Eyl:** ana plan haritasında M03, M04, M11, M13, M16 satırlarına yeniden değerlendirme notu; M13-T04/T07 ve M16-T02/T04 kanıtla kapandı, M13-T11/T12, M16-T07/T10/T11 açık kaldı.
+- [x] **K04-T03:** Her düzeltmeye ilgili R/D/M/A kimliklerini bağla. Aynı kabul senaryosu birden fazla görevi kapatıyorsa kanıtı tekrar üretmeden bağlantı ver. — **14 Eyl:** aşağıdaki eşleme tablosu.
+- [x] **K04-T04:** Değişen sözleşmeleri ADR/README/operasyon tarifinde güncelle; `PROJECT_MEMORY.md` karar ve ölçüm kaydını append-only tut. — **14 Eyl:** ADR-0065…0076 ve dizin; `OPERASYON_TARIFI.md` (`.env` okuma, Architect kaynaktan çekme, sıfırlamada katalog seçimi, §6 kabul betikleri, sorun giderme); README bağlantısı; PROJECT_MEMORY §14 ekleri; M16 raporu §3a.
+- [x] **K04-T05:** Bu dosyada ancak uygulama ve kabul kanıtı sonrası görev kutusunu işaretle. Yeni commit sonrası eski test raporunu güncel rapor gibi gösterme. — **14 Eyl:** kutular yalnız commit'li kanıt dosyasıyla işaretlendi; kirli ağaçta alınan ara koşu raporları silindi, kanıt koşuları temiz commit'te tekrarlandı (15f8593, 9eaf60e); M16 gece matrisi değiştirilmedi, güncel durum §3a'da.
+
+### Eşleme (K04-T03)
+
+| Bulgu | Düzeltme | Ana plan | Kabul vakası | ADR | Kanıt |
+|---|---|---|---|---|---|
+| R01 | D01 | M03, M11 | A09 | 0065 | `tests/test_d01_d07_join.py`, K01 T02/T03, K01-T07 |
+| R02 | D02 | M13-T12 | A13 | 0066 | `tests/test_agent_loop.py` (999 diyen model) |
+| R03 | D03 | M04-T09 | A21 | 0068 | `tests/test_d03_onay.py`, K01 T04, K01-T07 |
+| R04 | D04 | M04, M16-T04 | A21, A28 | 0069 | `tests/catalog/test_catalog_mode.py`, K01 T05/T06, K01-T07 |
+| R05 | D05 | M04 | A21 | 0069 | `tests/test_d05_sifirlama.py`, K01 T05, K01-T07 |
+| R06 | D06 | M13-T09 | A23 | 0070 | `tests/test_d06_zincir.py` |
+| R07 | D07 | M03, M11 | A09 | 0065 | `tests/test_d01_d07_join.py` |
+| — | K02-T01 | M01, M16-T02 | A01 | 0076 | `k02_t01_kurulum_2026-09-14_1321/` |
+| — | K02-T02…T05 | M09, M11, M13, M14 | A02–A07, A26 | 0075 | `k02_finans_kabul_2026-09-14_1310.json` |
+| — | K02-T06 | M10 | A12 | 0072 | `tests/test_k02_ocr.py` |
+| — | K02-T07, K02-T14 | M06, M13-T04/T07 | A18 | 0074 | `tests/test_agent_loop.py`, `tests/test_k02_donem_bagi.py` |
+| — | K02-T08 | M07 | A22 | — | lakehouse `test_run_catalog_ingestion.py` |
+| — | K02-T09 | M09 | A24 | 0071 | `tests/test_k02_bayat_gold.py` |
+| — | K02-T10 | M06, M15 | A27 | — | `tests/test_web.py`, `tests/test_agent_loop.py` |
+| — | K02-T11 | M04, M16 | A28 | — | K01 T05/T06 |
+| — | K02-T12 | M07, M08 | A30 | 0073 | `tests/test_k02_kaynaktan_cek.py`, `k02_a30_canli_2026-09-14_1237.json` |
+| — | K02-T13 | M12 | A32, A33 | — | `tests/test_analytics_tools.py` |
 
 ### Her paket için kapanış kaydı
 
@@ -240,3 +262,5 @@ D01–D07 ve zorunlu K01/K02 kabulü tamamlanmadan bu incelemenin açıkları ka
 - **2026-09-14 (uygulama):** D03 uygulandı ve testlendi (ADR-0068); ajan testleri 440 geçti.
 - **2026-09-14 (uygulama):** D04 (lakehouse kip + sıfırlama bağlantısı), D05 ve D06 uygulandı ve testlendi (ADR-0069, ADR-0070); ajan 448, lakehouse tam suite 1.111 geçti. D04-T05…T07 gerçek CLI akışı K01'de.
 - **2026-09-14 (K01):** `scripts/k01_kabul.py` gerçek bileşenlerle 22/22; bulgu: bootstrap sonrası Silver ilişkisi yoktu → düzeltildi (ADR-0069 eki). K01-T07 arayüz provası ayrı.
+- **2026-09-14 (K02):** T06–T14 testlerle ve A30 canlı provasıyla kapandı (ADR-0071…0074). T02–T05 `scripts/k02_finans_kabul.py` 22/22, commit 15f8593; dört ürün kusuru bulunup kapatıldı (ADR-0075).
+- **2026-09-14 (K01-T07):** `scripts/k01_ui_kabul.py` arayüzden 15/15, commit 9eaf60e; onaylanan adhoc seri sayaç bulgusu kapatıldı. K02-T01 kurulum provasında ön kontrol boş model anahtarında 'hazır' dedi → düzeltildi (ADR-0076).

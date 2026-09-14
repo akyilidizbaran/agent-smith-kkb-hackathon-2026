@@ -10,9 +10,10 @@ sütunlardır; biri diğerinin yerine yazılmaz (M16 risk notu).
 
 | Katman | Sonuç | Kanıt |
 |---|---|---|
-| Ajan birim/sözleşme testleri | 418 geçti | `make test`, CI agent-core işi yeşil |
+| Ajan birim/sözleşme testleri | 418 geçti (gece) → 473 (14 Eyl öğleden sonra, 9eaf60e) | `make test`, CI agent-core işi yeşil |
 | Lakehouse testleri | 1.086 geçti (yerel 12 dk; GitHub cc793be'de başarılı) | GitHub'da tek düşen test düzeltildi (§6) |
-| Kabul matrisi A01–A33 test eşlemesi | 14 tam · 19 kısmi · 0 yok | §3 |
+| Kabul matrisi A01–A33 test eşlemesi | gece 14 tam · 19 kısmi · 0 yok → 14 Eyl öğleden sonra 33 tam · 0 kısmi | §3 (gece, değiştirilmedi), §3a (güncel) |
+| Betikli kabul (model yok, gerçek harness/araç/CLI/arayüz) | K01 22/22 · K01-T07 arayüz 15/15 · K02 finans 22/22 · A30 canlı kaynak 5/5 · temiz kurulum provası | §3a |
 | Canlı çok turlu kabul (14 tur × 6 koşu) | 10 → 11 → 11 → 12 → 12 → 14 (son kod cc793be, senaryo 6/6) | `docs/experiments/acceptance_m16_*.json` |
 | Arayüz uçtan uca (Playwright) | 6/7 → 7/7 → 7/7 → 7/7 → 7/7 (son kod cc793be) | `docs/experiments/ui_e2e_m16_*/rapor.json` + ekran görüntüleri |
 
@@ -107,6 +108,44 @@ turlarından geliyor. Token dağılımı ayrı raporlanmadı. Sayısal eşik eki
 | A31 | tam | kümülatif ayrıştırma, yıl başı sıfırlama, stok reddi | — |
 | A32 | kısmi, canlı | IQR sıçrama, kartta ay | kartta yöntem/eşik metni denetlenmiyor |
 | A33 | kısmi, canlı | kırılma rejimleri, fikstürde 2025-01 düzey sıçraması | ceza/min segment kart metni denetlenmiyor |
+
+## 3a. Kabul matrisi — 14 Eylül öğleden sonra güncellemesi (düzeltme planı)
+
+§3 gece koşusunun kaydıdır ve değiştirilmedi. Bu tablo `MILESTONE_DUZELTME_VE_KAPANIS_PLANI_2026-09-14.md` uygulamasından
+sonraki durumu gösterir. `tam` burada davranışın deterministik testle ya da betikli kabulle doğrudan doğrulandığı anlamına
+gelir; canlı modelin aynı davranışı her koşuda seçme oranı değildir (K03-T03/T04'te ayrı ölçülür).
+
+| Vaka | Düzey | Yeni kanıt | ADR |
+|---|---|---|---|
+| A01 | tam | temiz klon → setup → `.env` → canlı veri → ön kontrol (boş anahtarda ✗) → serve → canlı soru (`k02_t01_kurulum_2026-09-14_1321/`), `tests/test_k02_kurulum_sayac.py` | 0076 |
+| A02 | tam, canlı | `k02_finans_kabul_2026-09-14_1310.json` A02: 60 ardışık ay, Silver'la birebir, cevap sayıları eşleşir | 0075 |
+| A03 | tam, canlı | aynı rapor A03: faiz takvim ayı ortalamasıyla 60/60, önceki kolonlar birebir, kart ve kanıt hizalamayı gösterir | 0075 |
+| A04 | tam, canlı | önceki kanıt + aynı rapor A04 (bağımsız reel hesap) | 0058 |
+| A05 | tam, canlı | aynı rapor A05: KFE rızasız reel ret, kapsam dışı baz reddi, kart birim/dönem/baz güveni, uyarı XLSX ve raporda; `tests/test_k02_kfe_denetimi.py` | 0075 |
+| A06 | tam, canlı | aynı rapor A06: araçla dönem hesabı bağımsız hesapla aynı, nedensellik geri gönderildi, bağlam kaynağı ayrı; `tests/test_k02_baglam_kaynagi.py` | 0075 |
+| A07 | tam, canlı | aynı rapor A07: PNG indirme, arayüz/rapor başlığında birim ve dönem | 0075 |
+| A08 | tam | önceki kanıt | — |
+| A09 | tam, canlı | D01/D07 testleri, K01 T02/T03, K01-T07 arayüz: kural sorusu, indirilen dosyalar, ortak katalog parmak izi | 0065 |
+| A10, A11 | tam | önceki kanıt | — |
+| A12 | tam | `tests/test_k02_ocr.py`: düşük kalite ret, OCR sayıları doğrulanmış sayılmaz | 0072 |
+| A13–A17 | tam | önceki kanıt (A13 canlı) | — |
+| A18 | tam | `tests/test_agent_loop.py`, `tests/test_access_policy.py`: serbest kaynakta alternatif, cevapta kaynak notu | 0074 |
+| A19, A20 | tam | önceki kanıt (A20 canlı) | — |
+| A21 | tam | D03/D04/D05 testleri, K01 T04–T06, K01-T07 arayüz: eski onay + güncel ret, DB düzeyinde değişmezlik, doğrulanan sıfırlama | 0068, 0069 |
+| A22 | tam | `test_a22_warned_artifact_ingested_twice_is_idempotent_and_keeps_each_runs_warning` | — |
+| A23 | tam | `tests/test_d06_zincir.py`: canlı dosya durumu, halka durumları | 0070 |
+| A24 | tam | `tests/test_k02_bayat_gold.py`: bayat Gold reddi | 0071 |
+| A25 | tam | önceki kanıt | — |
+| A26 | tam | `k02_finans_kabul` A26: sonraki cevaplardan sonra eski cevabın raporu ve CSV'si kendi tablosu, sürüm ve kaynakla | 0075 |
+| A27 | tam | `tests/test_web.py` Tavily 503/429/kopma, süre bütçesi notu; canlı ağ kesintisi provası M16-T07'de açık | — |
+| A28 | tam | K01 T05/T06: yeniden başlatmada alan profili, arama, önbellek temiz | — |
+| A29 | tam | önceki kanıt | — |
+| A30 | tam, canlı | `tests/test_k02_kaynaktan_cek.py`, `k02_a30_canli_2026-09-14_1237.json` 5/5 | 0073 |
+| A31 | tam | önceki kanıt | — |
+| A32, A33 | tam, canlı | `tests/test_analytics_tools.py`: kart yöntem/eşik, ceza değeri, min segment, SINIRLAMA | — |
+
+Açık kalanlar kabul matrisinin dışında: canlı modelin tekrar oranı ve eşikleri (K03-T01/T03), canlı ağ kesintisi provası
+(M16-T07), demo bilgisayarında ekran kontrolü (M14-T11/K03-T05), başka ekip üyesinin kurulum provası (M16-T11/K03-T06).
 
 ## 4. Arayüz uçtan uca (M16-T08/T09)
 
