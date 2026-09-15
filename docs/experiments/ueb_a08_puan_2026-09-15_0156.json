@@ -1,0 +1,120 @@
+[
+ {
+  "id": "A08_yuzde_puan",
+  "category": "E30 pct vs pp",
+  "persona": "financial",
+  "expected": "warn",
+  "severity": 3,
+  "db": "seed",
+  "queries": [
+   "2025 yılında konut kredisi bakiyesi kaç puan arttı?"
+  ],
+  "answer": "\"Konut kredisi bakiyesi\" bir tutar (milyon TL) olduğu için \"puan\" (yüzde puanı) olarak ifade edilemez; puan yalnızca oran/yüzde serileri için anlamlıdır. Bakiyede gerçekleşen değişimi tutar farkı ve yüzde değişimi olarak veriyorum.\n\n**2025 yılında konut kredisi bakiyesi:**\n- 2024 sonu: 512.259 milyon TL\n- 2025 sonu: 678.970 milyon TL\n- **Tutar farkı: +166.711 milyon TL**\n- **Yüzde değişimi: +%32,54**\n\nKaynak: BDDK Aylık Bülten — \"Tüketici Kredileri - Konut\" kalemi, sektör toplamı, ay sonu bakiyesi (stok). Değişim, 2024-12 ve 2025-12 dönemleri arasındaki farktır.",
+  "answers": [
+   "\"Konut kredisi bakiyesi\" bir tutar (milyon TL) olduğu için \"puan\" (yüzde puanı) olarak ifade edilemez; puan yalnızca oran/yüzde serileri için anlamlıdır. Bakiyede gerçekleşen değişimi tutar farkı ve yüzde değişimi olarak veriyorum.\n\n**2025 yılında konut kredisi bakiyesi:**\n- 2024 sonu: 512.259 milyon TL\n- 2025 sonu: 678.970 milyon TL\n- **Tutar farkı: +166.711 milyon TL**\n- **Yüzde değişimi: +%32,54**\n\nKaynak: BDDK Aylık Bülten — \"Tüketici Kredileri - Konut\" kalemi, sektör toplamı, ay sonu bakiyesi (stok). Değişim, 2024-12 ve 2025-12 dönemleri arasındaki farktır."
+  ],
+  "duration_s": 8.8,
+  "tools": [
+   "lakehouse_query"
+  ],
+  "error_codes": [],
+  "trace": [
+   "✓ lakehouse_query({\"sql\": \"WITH konut AS (\\n  SELECT donem, toplam\\n  FROM bddk_aylik_krediler\\n  WHERE kale) → Sorgu başarılı: 1 satır, 4 sütun.\nSütunlar: son_2025, son_2024, fark, yuzde_degisim\nSatırlar (1, tamamı):\n son_2025  son",
+   "✓ narrate({}) → \"Konut kredisi bakiyesi\" bir tutar (milyon TL) olduğu için \"puan\" (yüzde puanı) olarak ifade edilemez; puan yalnızca ora"
+  ],
+  "grounding": "OK",
+  "usage": {
+   "prompt": 17170,
+   "completion": 591,
+   "calls": 2
+  },
+  "table": {
+   "rows": 1,
+   "cols": [
+    "son_2025",
+    "son_2024",
+    "fark",
+    "yuzde_degisim"
+   ],
+   "head": " son_2025  son_2024     fark  yuzde_degisim\n 678970.0  512259.0 166711.0      32.544279"
+  },
+  "verdict": "SAFE",
+  "detected": [
+   "yüzde",
+   "puan",
+   "%"
+  ],
+  "wrong": [],
+  "correct": [],
+  "asked": false,
+  "has_table": true,
+  "numbers": [
+   "512.259",
+   "678.970",
+   "+166.711",
+   "32,54"
+  ],
+  "note": "bakiye için 'puan' anlamsız; yüzde değişim verilip terim düzeltilmeli",
+  "rep": 1
+ },
+ {
+  "id": "A08_yuzde_puan",
+  "category": "E30 pct vs pp",
+  "persona": "financial",
+  "expected": "warn",
+  "severity": 3,
+  "db": "seed",
+  "queries": [
+   "2025 yılında konut kredisi bakiyesi kaç puan arttı?"
+  ],
+  "answer": "\"puan\" (yüzde puanı) yalnızca oran/yüzde serileri için tanımlıdır; konut kredisi bakiyesi bir tutar (milyon TL) olduğu için değişimi \"puan\" olarak ifade edilemez — bunun yerine yüzde değişim ve tutar farkı verilir.\n\n2025 yılında konut kredisi bakiyesi (Tüketici Kredileri – Konut, sektör toplamı):\n\n- Yıl başı (Aralık 2024): 512.259 milyon TL\n- Yıl sonu (Aralık 2025): 678.970 milyon TL\n- Tutar farkı: +166.711 milyon TL\n- Yüzde değişim: +%32,54\n\nKaynak: BDDK Aylık Bülten (Krediler / Tüketici Kredileri tabloları), ay sonu stok bakiyeleri, 2024-12 → 2025-12.",
+  "answers": [
+   "\"puan\" (yüzde puanı) yalnızca oran/yüzde serileri için tanımlıdır; konut kredisi bakiyesi bir tutar (milyon TL) olduğu için değişimi \"puan\" olarak ifade edilemez — bunun yerine yüzde değişim ve tutar farkı verilir.\n\n2025 yılında konut kredisi bakiyesi (Tüketici Kredileri – Konut, sektör toplamı):\n\n- Yıl başı (Aralık 2024): 512.259 milyon TL\n- Yıl sonu (Aralık 2025): 678.970 milyon TL\n- Tutar farkı: +166.711 milyon TL\n- Yüzde değişim: +%32,54\n\nKaynak: BDDK Aylık Bülten (Krediler / Tüketici Kredileri tabloları), ay sonu stok bakiyeleri, 2024-12 → 2025-12."
+  ],
+  "duration_s": 11.2,
+  "tools": [
+   "lakehouse_query",
+   "lakehouse_query"
+  ],
+  "error_codes": [],
+  "trace": [
+   "✓ lakehouse_query({\"purpose\": \"2025 başı ve sonu konut kredisi bakiyesini, dönemsel fark ve yüzde değişimiyl) → Sorgu başarılı: 13 satır, 4 sütun.\nSütunlar: donem, toplam, fark, yuzde_degisim\nSatırlar (13, tamamı):\n     donem   topl",
+   "✓ lakehouse_query({\"as_active_table\": true, \"purpose\": \"2025 yılı başından sonuna konut kredisi bakiyesindek) → Sorgu başarılı: 1 satır, 4 sütun.\nSütunlar: baslangic, bitis, fark, yuzde_degisim\nSatırlar (1, tamamı):\n baslangic    bi",
+   "✓ narrate({}) → \"puan\" (yüzde puanı) yalnızca oran/yüzde serileri için tanımlıdır; konut kredisi bakiyesi bir tutar (milyon TL) olduğu i"
+  ],
+  "grounding": "OK",
+  "usage": {
+   "prompt": 27371,
+   "completion": 837,
+   "calls": 3
+  },
+  "table": {
+   "rows": 1,
+   "cols": [
+    "baslangic",
+    "bitis",
+    "fark",
+    "yuzde_degisim"
+   ],
+   "head": " baslangic    bitis     fark  yuzde_degisim\n  512259.0 678970.0 166711.0      32.544279"
+  },
+  "verdict": "SAFE",
+  "detected": [
+   "yüzde",
+   "puan",
+   "%"
+  ],
+  "wrong": [],
+  "correct": [],
+  "asked": false,
+  "has_table": true,
+  "numbers": [
+   "512.259",
+   "678.970",
+   "+166.711",
+   "32,54"
+  ],
+  "note": "bakiye için 'puan' anlamsız; yüzde değişim verilip terim düzeltilmeli",
+  "rep": 2
+ }
+]

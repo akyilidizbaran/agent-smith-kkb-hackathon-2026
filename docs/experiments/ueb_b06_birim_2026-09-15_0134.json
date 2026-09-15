@@ -1,0 +1,122 @@
+[
+ {
+  "id": "B06_birim_bin_tl",
+  "category": "E27/E28 unit unknown (bin TL)",
+  "persona": "business",
+  "expected": "warn",
+  "severity": 5,
+  "db": "seed",
+  "queries": [
+   "Şu dosyadaki 2024 Aralık konut kredisi bakiyesi milyon TL olarak kaç? ../incoming/ueb/konut_kredisi_bin_tl.csv"
+  ],
+  "answer": "(Veri: konut_kredisi_bin_tl — 2024–2024, monthly, 12 satır | UYARI: birim uyuşmazlığı: soru 'milyon' istiyor, veri adı/başlığı 'bin' beyan ediyor; ham sayı bin birimindedir — çeviriyorsan katsayıyı ve iki değeri açıkça yaz, dosyanın birimini TL sanma)\n\n**Uyarı:** Dosyanın adı \"bin TL\" birimini beyan ediyor; soru \"milyon TL\" istiyor. Ham değer bin TL cinsindendir.\n\n**2024 Aralık konut kredisi bakiyesi: 512.259 milyon TL**\n\n- Ham değer (dosyada, bin TL): 512.259.000\n- Çevrilen değer (milyon TL): 512.259\n- Kaynak: `../incoming/ueb/konut_kredisi_bin_tl.csv`, dönem 2024-12-31",
+  "answers": [
+   "(Veri: konut_kredisi_bin_tl — 2024–2024, monthly, 12 satır | UYARI: birim uyuşmazlığı: soru 'milyon' istiyor, veri adı/başlığı 'bin' beyan ediyor; ham sayı bin birimindedir — çeviriyorsan katsayıyı ve iki değeri açıkça yaz, dosyanın birimini TL sanma)\n\n**Uyarı:** Dosyanın adı \"bin TL\" birimini beyan ediyor; soru \"milyon TL\" istiyor. Ham değer bin TL cinsindendir.\n\n**2024 Aralık konut kredisi bakiyesi: 512.259 milyon TL**\n\n- Ham değer (dosyada, bin TL): 512.259.000\n- Çevrilen değer (milyon TL): 512.259\n- Kaynak: `../incoming/ueb/konut_kredisi_bin_tl.csv`, dönem 2024-12-31"
+  ],
+  "duration_s": 8.6,
+  "tools": [
+   "web_url",
+   "web_url",
+   "workspace_query"
+  ],
+  "error_codes": [],
+  "trace": [
+   "✓ web_url({\"url\": \"../incoming/ueb/konut_kredisi_bin_tl.csv\", \"purpose\": \"2024 Aralık konut kredisi ) → SAYFA: ..\\incoming\\ueb\\konut_kredisi_bin_tl.csv — ../incoming/ueb/konut_kredisi_bin_tl.csv\nHTTP 200 | 278 bayt | sha256 ",
+   "✓ web_url({\"url\": \"../incoming/ueb/konut_kredisi_bin_tl.csv\", \"purpose\": \"2024 Aralık konut kredisi ) → TABLO YÜKLENDİ: #0 (12 satır, 2 sütun) — ../incoming/ueb/konut_kredisi_bin_tl.csv\nSütunlar: donem, bakiye\nSatırlar (12, ",
+   "✓ workspace_query({\"sql\": \"SELECT donem, bakiye, bakiye / 1000.0 AS bakiye_milyon_tl FROM t WHERE donem = '2) → Sorgu başarılı: 1 satır, 3 sütun — artık AKTİF TABLO bu (veri havuzuna yazılmadı).\nSütunlar: donem, bakiye, bakiye_milyo",
+   "✗ validate({}) → ",
+   "✓ narrate({}) → **Uyarı:** Dosyanın adı \"bin TL\" birimini beyan ediyor; soru \"milyon TL\" istiyor. Ham değer bin TL cinsindendir.\n\n**2024"
+  ],
+  "grounding": "OK",
+  "usage": {
+   "prompt": 48975,
+   "completion": 614,
+   "calls": 5
+  },
+  "table": {
+   "rows": 1,
+   "cols": [
+    "donem",
+    "bakiye",
+    "bakiye_milyon_tl"
+   ],
+   "head": "     donem      bakiye  bakiye_milyon_tl\n2024-12-31 512259000.0          512259.0"
+  },
+  "verdict": "SAFE",
+  "detected": [
+   "birim",
+   "bin tl"
+  ],
+  "wrong": [],
+  "correct": [],
+  "asked": false,
+  "has_table": true,
+  "numbers": [
+   "512.259",
+   "512.259.000",
+   "512.259"
+  ],
+  "note": "dosyada birim yok (değerler bin TL); 'milyon' diye sunmak ×1000 hata",
+  "rep": 1
+ },
+ {
+  "id": "B06_birim_bin_tl",
+  "category": "E27/E28 unit unknown (bin TL)",
+  "persona": "business",
+  "expected": "warn",
+  "severity": 5,
+  "db": "seed",
+  "queries": [
+   "Şu dosyadaki 2024 Aralık konut kredisi bakiyesi milyon TL olarak kaç? ../incoming/ueb/konut_kredisi_bin_tl.csv"
+  ],
+  "answer": "(Veri: konut_kredisi_bin_tl — 2024–2024, monthly, 12 satır | UYARI: birim uyuşmazlığı: soru 'milyon' istiyor, veri adı/başlığı 'bin' beyan ediyor; ham sayı bin birimindedir — çeviriyorsan katsayıyı ve iki değeri açıkça yaz, dosyanın birimini TL sanma)\n\n**Uyarı:** Dosyanın adı \"bin TL\" birimini beyan ediyor; soru \"milyon TL\" istiyor. Ham değer bin TL cinsindendir.\n\n**2024 Aralık konut kredisi bakiyesi: 512.259 milyon TL**\n\n- Ham değer (dosyada, bin TL): 512.259.000\n- Çevrilen değer (milyon TL): 512.259\n- Kaynak: `../incoming/ueb/konut_kredisi_bin_tl.csv`, dönem 2024-12-31",
+  "answers": [
+   "(Veri: konut_kredisi_bin_tl — 2024–2024, monthly, 12 satır | UYARI: birim uyuşmazlığı: soru 'milyon' istiyor, veri adı/başlığı 'bin' beyan ediyor; ham sayı bin birimindedir — çeviriyorsan katsayıyı ve iki değeri açıkça yaz, dosyanın birimini TL sanma)\n\n**Uyarı:** Dosyanın adı \"bin TL\" birimini beyan ediyor; soru \"milyon TL\" istiyor. Ham değer bin TL cinsindendir.\n\n**2024 Aralık konut kredisi bakiyesi: 512.259 milyon TL**\n\n- Ham değer (dosyada, bin TL): 512.259.000\n- Çevrilen değer (milyon TL): 512.259\n- Kaynak: `../incoming/ueb/konut_kredisi_bin_tl.csv`, dönem 2024-12-31"
+  ],
+  "duration_s": 11.9,
+  "tools": [
+   "web_url",
+   "web_url",
+   "workspace_query"
+  ],
+  "error_codes": [],
+  "trace": [
+   "✓ web_url({\"url\": \"../incoming/ueb/konut_kredisi_bin_tl.csv\", \"purpose\": \"2024 Aralık konut kredisi ) → SAYFA: ..\\incoming\\ueb\\konut_kredisi_bin_tl.csv — ../incoming/ueb/konut_kredisi_bin_tl.csv\nHTTP 200 | 278 bayt | sha256 ",
+   "✓ web_url({\"url\": \"../incoming/ueb/konut_kredisi_bin_tl.csv\", \"purpose\": \"2024 Aralık konut kredisi ) → TABLO YÜKLENDİ: #0 (12 satır, 2 sütun) — ../incoming/ueb/konut_kredisi_bin_tl.csv\nSütunlar: donem, bakiye\nSatırlar (12, ",
+   "✓ workspace_query({\"sql\": \"SELECT donem, bakiye, bakiye / 1000.0 AS bakiye_milyon_tl FROM t WHERE donem = '2) → Sorgu başarılı: 1 satır, 3 sütun — artık AKTİF TABLO bu (veri havuzuna yazılmadı).\nSütunlar: donem, bakiye, bakiye_milyo",
+   "✗ validate({}) → ",
+   "✓ narrate({}) → **Uyarı:** Dosyanın adı \"bin TL\" birimini beyan ediyor; soru \"milyon TL\" istiyor. Ham değer bin TL cinsindendir.\n\n**2024"
+  ],
+  "grounding": "OK",
+  "usage": {
+   "prompt": 48975,
+   "completion": 614,
+   "calls": 5
+  },
+  "table": {
+   "rows": 1,
+   "cols": [
+    "donem",
+    "bakiye",
+    "bakiye_milyon_tl"
+   ],
+   "head": "     donem      bakiye  bakiye_milyon_tl\n2024-12-31 512259000.0          512259.0"
+  },
+  "verdict": "SAFE",
+  "detected": [
+   "birim",
+   "bin tl"
+  ],
+  "wrong": [],
+  "correct": [],
+  "asked": false,
+  "has_table": true,
+  "numbers": [
+   "512.259",
+   "512.259.000",
+   "512.259"
+  ],
+  "note": "dosyada birim yok (değerler bin TL); 'milyon' diye sunmak ×1000 hata",
+  "rep": 2
+ }
+]

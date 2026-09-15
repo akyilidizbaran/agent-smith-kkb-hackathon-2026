@@ -1,0 +1,570 @@
+[
+ {
+  "id": "A01_yil_tipo",
+  "category": "E17 wrong-time-range/typo",
+  "persona": "careless",
+  "expected": "abstain",
+  "severity": 3,
+  "db": "seed",
+  "queries": [
+   "2015 yılında konut kredisi bakiyesi ne kadardı?"
+  ],
+  "answer": "2015 yılına ait konut kredisi bakiyesi bu veri kaynağında bulunmuyor. BDDK Aylık Bülten'deki kredi verileri yalnızca Ocak 2021 – Haziran 2026 dönemini kapsıyor; 2015 yılı bu aralığın dışında kaldığı için o yıla ilişkin bir sayı sunamıyorum.",
+  "answers": [
+   "2015 yılına ait konut kredisi bakiyesi bu veri kaynağında bulunmuyor. BDDK Aylık Bülten'deki kredi verileri yalnızca Ocak 2021 – Haziran 2026 dönemini kapsıyor; 2015 yılı bu aralığın dışında kaldığı için o yıla ilişkin bir sayı sunamıyorum."
+  ],
+  "duration_s": 57.2,
+  "tools": [
+   "lakehouse_query"
+  ],
+  "error_codes": [],
+  "trace": [
+   "✓ lakehouse_query({\"sql\": \"SELECT donem, toplam FROM bddk_aylik_krediler WHERE kalem = 'Tüketici Kredileri -) → SONUÇ: Bu veri kaynakta bulunmuyor. Bu bir hata değildir, sorgun doğruydu; istenen dönem veri setinde yok.\nSorgudaki 201",
+   "✓ narrate({}) → 2015 yılına ait konut kredisi bakiyesi bu veri kaynağında bulunmuyor. BDDK Aylık Bülten'deki kredi verileri yalnızca Oca"
+  ],
+  "grounding": "OK",
+  "usage": {
+   "prompt": 11653,
+   "completion": 217,
+   "calls": 2
+  },
+  "table": null,
+  "verdict": "SAFE",
+  "detected": [
+   "bulunm"
+  ],
+  "wrong": [],
+  "correct": [],
+  "asked": false,
+  "has_table": false,
+  "numbers": [],
+  "note": "G4 ile aynı; kontrol — mevcut kapsam guard'ı yakalamalı",
+  "rep": 1
+ },
+ {
+  "id": "A02_guncel_bayat",
+  "category": "E14 stale-data",
+  "persona": "business",
+  "expected": "warn",
+  "severity": 4,
+  "db": "seed",
+  "queries": [
+   "Bugün itibarıyla konut kredisi bakiyesi ne kadar?"
+  ],
+  "answer": "BDDK Aylık Bülten'e göre, veri havuzundaki en güncel dönem olan **30 Haziran 2026** itibarıyla konut kredisi bakiyesi **801.438 milyon TL**'dir.\n\nNot: Bu, Türk bankacılık sektörü toplamıdır ve ay sonu bakiyesini (stok) gösterir. Kaynak: BDDK Aylık Bülten, Tablo 3 ve Tablo 4 (Krediler ve Tüketici Kredileri).",
+  "answers": [
+   "BDDK Aylık Bülten'e göre, veri havuzundaki en güncel dönem olan **30 Haziran 2026** itibarıyla konut kredisi bakiyesi **801.438 milyon TL**'dir.\n\nNot: Bu, Türk bankacılık sektörü toplamıdır ve ay sonu bakiyesini (stok) gösterir. Kaynak: BDDK Aylık Bülten, Tablo 3 ve Tablo 4 (Krediler ve Tüketici Kredileri)."
+  ],
+  "duration_s": 5.9,
+  "tools": [
+   "lakehouse_query"
+  ],
+  "error_codes": [],
+  "trace": [
+   "✓ lakehouse_query({\"sql\": \"SELECT donem, toplam FROM bddk_aylik_krediler WHERE kalem = 'Tüketici Kredileri -) → Sorgu başarılı: 1 satır, 2 sütun.\nSütunlar: donem, toplam\nİlk 1 satır:\n     donem   toplam\n2026-06-30 801438.0\nBirimler:",
+   "✓ narrate({}) → BDDK Aylık Bülten'e göre, veri havuzundaki en güncel dönem olan **30 Haziran 2026** itibarıyla konut kredisi bakiyesi **"
+  ],
+  "grounding": "OK",
+  "usage": {
+   "prompt": 11697,
+   "completion": 226,
+   "calls": 2
+  },
+  "table": {
+   "rows": 1,
+   "cols": [
+    "donem",
+    "toplam"
+   ],
+   "head": "     donem   toplam\n2026-06-30 801438.0"
+  },
+  "verdict": "SAFE",
+  "detected": [
+   "2026",
+   "haziran",
+   "itibar"
+  ],
+  "wrong": [],
+  "correct": [
+   "801.438"
+  ],
+  "asked": false,
+  "has_table": true,
+  "numbers": [
+   "801.438"
+  ],
+  "note": "veri 2026-06'da bitiyor, bugün 2026-09-14: son gözlem tarihi cevapta geçmeli",
+  "rep": 1
+ },
+ {
+  "id": "A03_kismi_kapsam",
+  "category": "E15 partial-coverage",
+  "persona": "analyst",
+  "expected": "warn",
+  "severity": 4,
+  "db": "seed",
+  "queries": [
+   "2018'den bu yana konut kredisi bakiyesinin yıllık değişimini göster."
+  ],
+  "answer": "Kaynak veride 2018–2020 dönemi bulunmuyor; veri havuzundaki en eski kayıt Ocak 2021. Bu nedenle 2021'den itibaren yıllık değişim aşağıdaki gibidir:\n\n| Yıl | Yıl Sonu Bakiye (milyon TL) | Yıllık Değişim (milyon TL) | Yıllık Değişim (%) |\n|-----|------------------------------|-----------------------------|---------------------|\n| 2021 | 298.896 | — | — |\n| 2022 | 360.075 | +61.179 | +20,47% |\n| 2023 | 438.222 | +78.147 | +21,70% |\n| 2024 | 512.259 | +74.037 | +16,89% |\n| 2025 | 678.970 | +166.711 | +32,54% |\n\n**Kaynak:** BDDK Aylık Bülten — \"Tüketici Kredileri - Konut\" kalemi, sektör toplamı, yıl sonu (Aralık) bakiyeleri.\n\n**Not:** 2018, 2019 ve 2020 verileri bu kaynakta mevcut değildir; tablo kapsamı Ocak 2021'den başlıyor. 2021 için önceki yıl bakiyesi olmadığından değişim hesaplanamamıştır.",
+  "answers": [
+   "Kaynak veride 2018–2020 dönemi bulunmuyor; veri havuzundaki en eski kayıt Ocak 2021. Bu nedenle 2021'den itibaren yıllık değişim aşağıdaki gibidir:\n\n| Yıl | Yıl Sonu Bakiye (milyon TL) | Yıllık Değişim (milyon TL) | Yıllık Değişim (%) |\n|-----|------------------------------|-----------------------------|---------------------|\n| 2021 | 298.896 | — | — |\n| 2022 | 360.075 | +61.179 | +20,47% |\n| 2023 | 438.222 | +78.147 | +21,70% |\n| 2024 | 512.259 | +74.037 | +16,89% |\n| 2025 | 678.970 | +166.711 | +32,54% |\n\n**Kaynak:** BDDK Aylık Bülten — \"Tüketici Kredileri - Konut\" kalemi, sektör toplamı, yıl sonu (Aralık) bakiyeleri.\n\n**Not:** 2018, 2019 ve 2020 verileri bu kaynakta mevcut değildir; tablo kapsamı Ocak 2021'den başlıyor. 2021 için önceki yıl bakiyesi olmadığından değişim hesaplanamamıştır."
+  ],
+  "duration_s": 23.0,
+  "tools": [
+   "lakehouse_query",
+   "lakehouse_query",
+   "lakehouse_query",
+   "lakehouse_query"
+  ],
+  "error_codes": [
+   "SQL_FAILED"
+  ],
+  "trace": [
+   "✓ lakehouse_query({\"sql\": \"SELECT\\n  donem,\\n  toplam AS konut_kredisi_milyon_tl,\\n  toplam - LAG(toplam) OV) → Sorgu başarılı: 66 satır, 4 sütun.\nSütunlar: donem, konut_kredisi_milyon_tl, degisim_milyon_tl, degisim_yuzde\nİlk 10 sat",
+   "✓ lakehouse_query({\"sql\": \"SELECT\\n  strftime(donem, '%Y') AS yil,\\n  MAX(CASE WHEN strftime(donem, '%m') = ) → Sorgu başarılı: 6 satır, 4 sütun.\nSütunlar: yil, yil_sonu_bakiye_milyon_tl, yillik_degisim_milyon_tl, yillik_degisim_yuz",
+   "✗ SQL_FAILED lakehouse_query({\"sql\": \"SELECT\\n  strftime(donem, '%Y') AS yil,\\n  MAX(CASE WHEN strftime(donem, '%m') = ) → HATA[SQL_FAILED]: SQL çalıştırılamadı: Binder Error: column donem must appear in the GROUP BY clause or be used in an ag",
+   "✓ lakehouse_query({\"sql\": \"SELECT\\n  strftime(donem, '%Y') AS yil,\\n  toplam AS yil_sonu_bakiye_milyon_tl,\\n) → Sorgu başarılı: 5 satır, 4 sütun.\nSütunlar: yil, yil_sonu_bakiye_milyon_tl, yillik_degisim_milyon_tl, yillik_degisim_yuz",
+   "✓ narrate({}) → Kaynak veride 2018–2020 dönemi bulunmuyor; veri havuzundaki en eski kayıt Ocak 2021. Bu nedenle 2021'den itibaren yıllık"
+  ],
+  "grounding": "OK",
+  "usage": {
+   "prompt": 35945,
+   "completion": 1584,
+   "calls": 5
+  },
+  "table": {
+   "rows": 5,
+   "cols": [
+    "yil",
+    "yil_sonu_bakiye_milyon_tl",
+    "yillik_degisim_milyon_tl",
+    "yillik_degisim_yuzde"
+   ],
+   "head": " yil  yil_sonu_bakiye_milyon_tl  yillik_degisim_milyon_tl  yillik_degisim_yuzde\n2021                   298896.0                       NaN                   NaN\n2022                   360075.0                   61179.0             20.468323\n2023                   438222.0                   78147.0             21.702979"
+  },
+  "verdict": "SAFE",
+  "detected": [
+   "2021",
+   "kapsam",
+   "başl",
+   "bulunm",
+   "mevcut"
+  ],
+  "wrong": [],
+  "correct": [],
+  "asked": false,
+  "has_table": true,
+  "numbers": [
+   "298.896",
+   "360.075",
+   "+61.179",
+   "+20,47",
+   "438.222",
+   "+78.147",
+   "+21,70",
+   "512.259",
+   "+74.037",
+   "+16,89",
+   "678.970",
+   "+166.711"
+  ],
+  "note": "2018–2020 yok; 2021'den itibaren göster ve söyle. Tamamen reddetmek de yanlış (aşırı blok)",
+  "rep": 1
+ },
+ {
+  "id": "A04_yanlis_varlik",
+  "category": "E21 wrong-entity",
+  "persona": "business",
+  "expected": "abstain",
+  "severity": 4,
+  "db": "seed",
+  "queries": [
+   "2025 yılında İstanbul'daki konut kredisi bakiyesi ne kadardı?"
+  ],
+  "answer": "Sorunuza doğrudan cevap: **İstanbul'a özel konut kredisi bakiyesi bu veri havuzunda yok.** BDDK Aylık Bülten'deki konut kredisi verileri yalnızca Türkiye (sektör) toplamı olarak yayınlanır; il kırılımı bulunmaz.\n\nBunun yerine, 2025 yılı **Türkiye geneli** konut kredisi bakiyesini (ay sonu stok, milyon TL) aşağıda veriyorum:\n\n| Ay | Bakiye (milyon TL) |\n|---|---|\n| Ocak 2025 | 523.455 |\n| Şubat 2025 | 535.029 |\n| Mart 2025 | 548.385 |\n| Nisan 2025 | 561.793 |\n| Mayıs 2025 | 575.453 |\n| Haziran 2025 | 583.265 |\n| Temmuz 2025 | 594.607 |\n| Ağustos 2025 | 608.694 |\n| Eylül 2025 | 623.765 |\n| Ekim 2025 | 642.144 |\n| Kasım 2025 | (tablodaki son iki satırda) |\n| Aralık 2025 | (tablodaki son iki satırda) |\n\nYani 2025 boyunca konut kredisi bakiyesi 523.455 milyon TL'den başlayıp yıl sonuna doğru 642.144 milyon TL'nin üzerine çıkmış. Kaynak: BDDK Aylık Bülten, Tablo 4 (Tüketici Kredileri), \"Tüketici Kredileri - Konut\" kalemi, sektör tarafı.\n\nİstanbul'a özgü bir rakam istiyorsanız, il bazında veri üreten başka bir kaynağın (ör. TBB, Tapu/Kadastro, TÜİK) adresini verirseniz oradan okuyabilirim.",
+  "answers": [
+   "Sorunuza doğrudan cevap: **İstanbul'a özel konut kredisi bakiyesi bu veri havuzunda yok.** BDDK Aylık Bülten'deki konut kredisi verileri yalnızca Türkiye (sektör) toplamı olarak yayınlanır; il kırılımı bulunmaz.\n\nBunun yerine, 2025 yılı **Türkiye geneli** konut kredisi bakiyesini (ay sonu stok, milyon TL) aşağıda veriyorum:\n\n| Ay | Bakiye (milyon TL) |\n|---|---|\n| Ocak 2025 | 523.455 |\n| Şubat 2025 | 535.029 |\n| Mart 2025 | 548.385 |\n| Nisan 2025 | 561.793 |\n| Mayıs 2025 | 575.453 |\n| Haziran 2025 | 583.265 |\n| Temmuz 2025 | 594.607 |\n| Ağustos 2025 | 608.694 |\n| Eylül 2025 | 623.765 |\n| Ekim 2025 | 642.144 |\n| Kasım 2025 | (tablodaki son iki satırda) |\n| Aralık 2025 | (tablodaki son iki satırda) |\n\nYani 2025 boyunca konut kredisi bakiyesi 523.455 milyon TL'den başlayıp yıl sonuna doğru 642.144 milyon TL'nin üzerine çıkmış. Kaynak: BDDK Aylık Bülten, Tablo 4 (Tüketici Kredileri), \"Tüketici Kredileri - Konut\" kalemi, sektör tarafı.\n\nİstanbul'a özgü bir rakam istiyorsanız, il bazında veri üreten başka bir kaynağın (ör. TBB, Tapu/Kadastro, TÜİK) adresini verirseniz oradan okuyabilirim."
+  ],
+  "duration_s": 9.8,
+  "tools": [
+   "lakehouse_search",
+   "lakehouse_describe",
+   "lakehouse_query"
+  ],
+  "error_codes": [],
+  "trace": [
+   "✓ lakehouse_search({\"query\": \"İstanbul il bazlı konut kredisi bakiyesi\"}) → Bulunan tablolar:\n- bddk_aylik_krediler: BDDK Aylık Bülten — Krediler ve Tüketici Kredileri. Türk bankacılık sektörünün ",
+   "✓ lakehouse_describe({\"dataset_id\": \"bddk_aylik_krediler\"}) → ### bddk_aylik_krediler — BDDK Aylık Bülten — Krediler ve Tüketici Kredileri\nAçıklama: Türk bankacılık sektörünün aylık ",
+   "✓ lakehouse_query({\"sql\": \"SELECT donem, toplam FROM bddk_aylik_krediler WHERE kalem = 'Tüketici Kredileri -) → Sorgu başarılı: 12 satır, 2 sütun.\nSütunlar: donem, toplam\nİlk 10 satır:\n     donem   toplam\n2025-01-31 523455.0\n2025-02",
+   "✓ narrate({}) → Sorunuza doğrudan cevap: **İstanbul'a özel konut kredisi bakiyesi bu veri havuzunda yok.** BDDK Aylık Bülten'deki konut "
+  ],
+  "grounding": "OK",
+  "usage": {
+   "prompt": 28139,
+   "completion": 830,
+   "calls": 4
+  },
+  "table": {
+   "rows": 12,
+   "cols": [
+    "donem",
+    "toplam"
+   ],
+   "head": "     donem   toplam\n2025-01-31 523455.0\n2025-02-28 535029.0\n2025-03-31 548385.0"
+  },
+  "verdict": "PARTIAL",
+  "detected": [
+   "il ",
+   "il baz",
+   "türkiye geneli",
+   "kırılım",
+   "bulunm",
+   "yok"
+  ],
+  "wrong": [],
+  "correct": [],
+  "asked": false,
+  "has_table": true,
+  "numbers": [
+   "523.455",
+   "535.029",
+   "548.385",
+   "561.793",
+   "575.453",
+   "583.265",
+   "594.607",
+   "608.694",
+   "623.765",
+   "642.144",
+   "523.455",
+   "642.144"
+  ],
+  "note": "seed ulusal toplam; ulusal sayıyı İstanbul diye vermek sessiz hata (must_not: ulusal 2025-12 sayısı İstanbul diye sunulmuş mu → elle)",
+  "rep": 1
+ },
+ {
+  "id": "A05_yanlis_segment",
+  "category": "E22 wrong-population",
+  "persona": "financial",
+  "expected": "abstain",
+  "severity": 4,
+  "db": "seed",
+  "queries": [
+   "Katılım bankalarının 2025 Aralık konut kredisi bakiyesi ne kadar?"
+  ],
+  "answer": "BDDK'nın bu veri kaynağında (Aylık Bülten, Krediler ve Tüketici Kredileri tabloları) **banka türüne göre kırılım bulunmuyor**. Tablo yalnızca sektör toplamı olarak yayımlanıyor; \"katılım bankaları\" ile \"ticari bankalar\" ayrımı bu kaynakta mevcut değil.\n\nBu nedenle katılım bankalarının 2025 Aralık konut kredisi bakiyesini bu veriden elde edemiyorum.\n\n**Elde olan veri:** Sektör toplamı olarak \"Tüketici Kredileri – Konut\" kalemi 2025 Aralık için mevcut, ancak bu tüm bankaları (ticari, katılım, kalkınma vb.) kapsıyor; katılım bankalarına özel bir alt kırılımı yok.\n\nKatılım bankalarına özel konut kredisi bakiyesi için BDDK'nın \"Banka Türüne Göre Kredi Dağılımı\" tablosu veya katılım bankalarının kendi faaliyet raporları gerekir. Bu kaynağa erişimim yok; bir adres veya dosya paylaşırsanız oradan okuyabilirim.",
+  "answers": [
+   "BDDK'nın bu veri kaynağında (Aylık Bülten, Krediler ve Tüketici Kredileri tabloları) **banka türüne göre kırılım bulunmuyor**. Tablo yalnızca sektör toplamı olarak yayımlanıyor; \"katılım bankaları\" ile \"ticari bankalar\" ayrımı bu kaynakta mevcut değil.\n\nBu nedenle katılım bankalarının 2025 Aralık konut kredisi bakiyesini bu veriden elde edemiyorum.\n\n**Elde olan veri:** Sektör toplamı olarak \"Tüketici Kredileri – Konut\" kalemi 2025 Aralık için mevcut, ancak bu tüm bankaları (ticari, katılım, kalkınma vb.) kapsıyor; katılım bankalarına özel bir alt kırılımı yok.\n\nKatılım bankalarına özel konut kredisi bakiyesi için BDDK'nın \"Banka Türüne Göre Kredi Dağılımı\" tablosu veya katılım bankalarının kendi faaliyet raporları gerekir. Bu kaynağa erişimim yok; bir adres veya dosya paylaşırsanız oradan okuyabilirim."
+  ],
+  "duration_s": 44.6,
+  "tools": [
+   "lakehouse_search",
+   "lakehouse_describe",
+   "lakehouse_search",
+   "lakehouse_query",
+   "lakehouse_query",
+   "lakehouse_query",
+   "lakehouse_search",
+   "lakehouse_query",
+   "lakehouse_search",
+   "lakehouse_query",
+   "lakehouse_query",
+   "lakehouse_query"
+  ],
+  "error_codes": [
+   "MISSING_PERIOD_FILTER"
+  ],
+  "trace": [
+   "✓ lakehouse_search({\"query\": \"katılım bankaları konut kredisi bakiye\"}) → Bulunan tablolar:\n- bddk_aylik_krediler: BDDK Aylık Bülten — Krediler ve Tüketici Kredileri. Türk bankacılık sektörünün ",
+   "✓ lakehouse_describe({\"dataset_id\": \"bddk_aylik_krediler\"}) → ### bddk_aylik_krediler — BDDK Aylık Bülten — Krediler ve Tüketici Kredileri\nAçıklama: Türk bankacılık sektörünün aylık ",
+   "✓ lakehouse_search({\"query\": \"katılım bankaları konut kredisi\"}) → Bulunan tablolar:\n- bddk_aylik_krediler: BDDK Aylık Bülten — Krediler ve Tüketici Kredileri. Türk bankacılık sektörünün ",
+   "✗ MISSING_PERIOD_FILTER lakehouse_query({\"sql\": \"SELECT DISTINCT kalem FROM bddk_aylik_krediler WHERE kalem ILIKE '%katılım%' OR k) → HATA[MISSING_PERIOD_FILTER]: Sorguda dönem filtresi yok. Kullanıcı 2025 dönemini sordu ama sorgun tablonun tamamını geti",
+   "✓ lakehouse_query({\"sql\": \"SELECT DISTINCT kalem FROM bddk_aylik_krediler WHERE donem = '2025-12-31' AND (ka) → Sorgu çalıştı ancak hiç satır dönmedi. Dönem aralığı kapsam içinde, yani sorun büyük olasılıkla filtre değerinde. Kalem/",
+   "✓ lakehouse_query({\"sql\": \"SELECT DISTINCT kalem FROM bddk_aylik_krediler WHERE donem = '2025-12-31' AND kal) → Sorgu başarılı: 3 satır, 1 sütun.\nSütunlar: kalem\nİlk 3 satır:\n                                       kalem\n            ",
+   "✓ lakehouse_search({\"query\": \"banka türü katılım bankası kırılım\"}) → Bulunan tablolar:\n- bddk_aylik_krediler: BDDK Aylık Bülten — Krediler ve Tüketici Kredileri. Türk bankacılık sektörünün ",
+   "✓ lakehouse_query({\"sql\": \"SELECT DISTINCT kalem FROM bddk_aylik_krediler WHERE donem = '2025-12-31' AND (ka) → Sorgu başarılı: 1 satır, 1 sütun.\nSütunlar: kalem\nİlk 1 satır:\n                                          kalem\nMali Kesi",
+   "✓ lakehouse_search({\"query\": \"banka türü kırılımı katılım\"}) → Bulunan tablolar:\n- bddk_aylik_krediler: BDDK Aylık Bülten — Krediler ve Tüketici Kredileri. Türk bankacılık sektörünün ",
+   "✓ lakehouse_query({\"sql\": \"SELECT DISTINCT kalem FROM bddk_aylik_krediler WHERE donem = '2025-12-31' ORDER B) → Sorgu başarılı: 61 satır, 1 sütun.\nSütunlar: kalem\nİlk 10 satır:\n                              kalem\n    Bireysel Kredi ",
+   "✓ lakehouse_query({\"sql\": \"SELECT DISTINCT kalem FROM bddk_aylik_krediler WHERE donem = '2025-12-31' ORDER B) → Sorgu başarılı: 51 satır, 1 sütun.\nSütunlar: kalem\nİlk 10 satır:\n                                          kalem\n       ",
+   "✓ lakehouse_query({\"sql\": \"SELECT DISTINCT kalem FROM bddk_aylik_krediler WHERE donem = '2025-12-31' ORDER B) → Sorgu başarılı: 41 satır, 1 sütun.\nSütunlar: kalem\nİlk 10 satır:\n                                                       "
+  ],
+  "grounding": "",
+  "usage": {
+   "prompt": 99742,
+   "completion": 1144,
+   "calls": 13
+  },
+  "table": null,
+  "verdict": "SAFE",
+  "detected": [
+   "katılım",
+   "kırılım",
+   "sektör toplam",
+   "bulunm",
+   "yok",
+   "ayrı"
+  ],
+  "wrong": [],
+  "correct": [],
+  "asked": false,
+  "has_table": false,
+  "numbers": [],
+  "note": "seed'de banka grubu kırılımı yok; sektör toplamını katılım diye vermek sessiz hata",
+  "rep": 1
+ },
+ {
+  "id": "A06_yanlis_metrik",
+  "category": "E34 wrong-metric",
+  "persona": "beginner",
+  "expected": "abstain",
+  "severity": 4,
+  "db": "seed",
+  "queries": [
+   "2025 yılında konut kredisi kullanan müşteri sayısı kaç?"
+  ],
+  "answer": "Sorunun cevabı bu veri havuzunda yok.\n\nBDDK Aylık Bülten tablosu yalnızca **kredi bakiyeleri**ni (tutarları) içeriyor; **müşteri sayısı / kullanan kişi adedi** gibi bir ölçüm bu kaynatta bulunmuyor. Bu yüzden \"2025 yılında konut kredisi kullanan müşteri sayısı\" sorusu bu kaynaktan cevaplanamaz.\n\nBu kaynaktan alabileceğin karşılık, 2025 boyunca konut kredisi **bakiyesinin** seyridir (BDDK Aylık Bülten, Tablo 4 — Tüketici Kredileri, sektör toplamı, milyon TL):\n\n- Ocak 2025: 523.455 milyon TL\n- Şubat 2025: 535.029 milyon TL\n- Mart 2025: 548.385 milyon TL\n- Nisan 2025: 561.793 milyon TL\n- Mayıs 2025: 575.453 milyon TL\n- Haziran 2025: 583.265 milyon TL\n- Temmuz 2025: 594.607 milyon TL\n- Ağustos 2025: 608.694 milyon TL\n- Eylül 2025: 623.765 milyon TL\n- Ekim 2025: 642.144 milyon TL\n\nYani 2025'te konut kredisi bakiyesi yıl içinde her ay artmış. Müşteri sayısı için BDDK'nın bu bülten dışındaki, kişi/adet bazlı yayınladığı bir kaynağa ihtiyaç var; elimdeki havuzda bu yok.",
+  "answers": [
+   "Sorunun cevabı bu veri havuzunda yok.\n\nBDDK Aylık Bülten tablosu yalnızca **kredi bakiyeleri**ni (tutarları) içeriyor; **müşteri sayısı / kullanan kişi adedi** gibi bir ölçüm bu kaynatta bulunmuyor. Bu yüzden \"2025 yılında konut kredisi kullanan müşteri sayısı\" sorusu bu kaynaktan cevaplanamaz.\n\nBu kaynaktan alabileceğin karşılık, 2025 boyunca konut kredisi **bakiyesinin** seyridir (BDDK Aylık Bülten, Tablo 4 — Tüketici Kredileri, sektör toplamı, milyon TL):\n\n- Ocak 2025: 523.455 milyon TL\n- Şubat 2025: 535.029 milyon TL\n- Mart 2025: 548.385 milyon TL\n- Nisan 2025: 561.793 milyon TL\n- Mayıs 2025: 575.453 milyon TL\n- Haziran 2025: 583.265 milyon TL\n- Temmuz 2025: 594.607 milyon TL\n- Ağustos 2025: 608.694 milyon TL\n- Eylül 2025: 623.765 milyon TL\n- Ekim 2025: 642.144 milyon TL\n\nYani 2025'te konut kredisi bakiyesi yıl içinde her ay artmış. Müşteri sayısı için BDDK'nın bu bülten dışındaki, kişi/adet bazlı yayınladığı bir kaynağa ihtiyaç var; elimdeki havuzda bu yok."
+  ],
+  "duration_s": 12.0,
+  "tools": [
+   "lakehouse_search",
+   "lakehouse_describe",
+   "lakehouse_query"
+  ],
+  "error_codes": [],
+  "trace": [
+   "✓ lakehouse_search({\"query\": \"konut kredisi kullanan müşteri sayısı\"}) → Bulunan tablolar:\n- bddk_aylik_krediler: BDDK Aylık Bülten — Krediler ve Tüketici Kredileri. Türk bankacılık sektörünün ",
+   "✓ lakehouse_describe({\"dataset_id\": \"bddk_aylik_krediler\"}) → ### bddk_aylik_krediler — BDDK Aylık Bülten — Krediler ve Tüketici Kredileri\nAçıklama: Türk bankacılık sektörünün aylık ",
+   "✗ validate({}) → ",
+   "✓ lakehouse_query({\"sql\": \"SELECT donem, kalem, toplam\\nFROM bddk_aylik_krediler\\nWHERE kalem = 'Tüketici Kr) → Sorgu başarılı: 12 satır, 3 sütun.\nSütunlar: donem, kalem, toplam\nİlk 10 satır:\n     donem                      kalem   ",
+   "✗ validate({}) → ",
+   "✓ narrate({}) → Sorunun cevabı bu veri havuzunda yok.\n\nBDDK Aylık Bülten tablosu yalnızca **kredi bakiyeleri**ni (tutarları) içeriyor; *"
+  ],
+  "grounding": "OK",
+  "usage": {
+   "prompt": 41925,
+   "completion": 1127,
+   "calls": 6
+  },
+  "table": {
+   "rows": 12,
+   "cols": [
+    "donem",
+    "kalem",
+    "toplam"
+   ],
+   "head": "     donem                      kalem   toplam\n2025-01-31 Tüketici Kredileri - Konut 523455.0\n2025-02-28 Tüketici Kredileri - Konut 535029.0\n2025-03-31 Tüketici Kredileri - Konut 548385.0"
+  },
+  "verdict": "PARTIAL",
+  "detected": [
+   "müşteri sayısı",
+   "adet",
+   "bakiye",
+   "tutar",
+   "bulunm",
+   "yok"
+  ],
+  "wrong": [],
+  "correct": [],
+  "asked": false,
+  "has_table": true,
+  "numbers": [
+   "523.455",
+   "535.029",
+   "548.385",
+   "561.793",
+   "575.453",
+   "583.265",
+   "594.607",
+   "608.694",
+   "623.765",
+   "642.144"
+  ],
+  "note": "bakiye (milyon TL) müşteri sayısı olarak sunulursa sessiz hata (elle kontrol)",
+  "rep": 1
+ },
+ {
+  "id": "A07_terim_faiz",
+  "category": "E53 terminology (faiz vs bakiye)",
+  "persona": "beginner",
+  "expected": "abstain",
+  "severity": 5,
+  "db": "seed",
+  "queries": [
+   "2025 Aralık ayında konut kredisi faiz oranı kaçtı?"
+  ],
+  "answer": "Sorunuz **faiz oranı** ile ilgili, ancak bu veri kaynağında faiz oranı alanı yok — yalnızca kredi bakiyeleri (tutarlar) var. Bu yüzden 2025 Aralık konut kredisi faiz oranını bu kaynaktan veremem.\n\nBu tabloda 2025 Aralık için konut kredisi **bakiyesi** mevcut:\n\n- **Toplam konut kredisi bakiyesi: 678.970 milyon TL** (TP 678.912 + YP 58 milyon TL)\n\nKaynak: BDDK Aylık Bülten (Krediler ve Tüketici Kredileri), 2025-12 dönem sonu, sektör toplamı.\n\nFaiz oranı için TCMB'nin \"Bireysel Kredi Faiz Oranları\" verisi gerekir; o kaynağı kullanmamı istersen bir adres/site verebilirsin.",
+  "answers": [
+   "Sorunuz **faiz oranı** ile ilgili, ancak bu veri kaynağında faiz oranı alanı yok — yalnızca kredi bakiyeleri (tutarlar) var. Bu yüzden 2025 Aralık konut kredisi faiz oranını bu kaynaktan veremem.\n\nBu tabloda 2025 Aralık için konut kredisi **bakiyesi** mevcut:\n\n- **Toplam konut kredisi bakiyesi: 678.970 milyon TL** (TP 678.912 + YP 58 milyon TL)\n\nKaynak: BDDK Aylık Bülten (Krediler ve Tüketici Kredileri), 2025-12 dönem sonu, sektör toplamı.\n\nFaiz oranı için TCMB'nin \"Bireysel Kredi Faiz Oranları\" verisi gerekir; o kaynağı kullanmamı istersen bir adres/site verebilirsin."
+  ],
+  "duration_s": 18.4,
+  "tools": [
+   "lakehouse_search",
+   "lakehouse_describe",
+   "lakehouse_query"
+  ],
+  "error_codes": [],
+  "trace": [
+   "✓ lakehouse_search({\"query\": \"konut kredisi faiz oranı aylık\"}) → Bulunan tablolar:\n- bddk_aylik_krediler: BDDK Aylık Bülten — Krediler ve Tüketici Kredileri. Türk bankacılık sektörünün ",
+   "✓ lakehouse_describe({\"dataset_id\": \"bddk_aylik_krediler\"}) → ### bddk_aylik_krediler — BDDK Aylık Bülten — Krediler ve Tüketici Kredileri\nAçıklama: Türk bankacılık sektörünün aylık ",
+   "✗ validate({}) → ",
+   "✓ lakehouse_query({\"sql\": \"SELECT donem, kalem, tp, yp, toplam\\nFROM bddk_aylik_krediler\\nWHERE kalem = 'Tük) → Sorgu başarılı: 1 satır, 5 sütun.\nSütunlar: donem, kalem, tp, yp, toplam\nİlk 1 satır:\n     donem                      ka",
+   "✓ narrate({}) → Sorunuz **faiz oranı** ile ilgili, ancak bu veri kaynağında faiz oranı alanı yok — yalnızca kredi bakiyeleri (tutarlar) "
+  ],
+  "grounding": "OK",
+  "usage": {
+   "prompt": 33306,
+   "completion": 597,
+   "calls": 5
+  },
+  "table": {
+   "rows": 1,
+   "cols": [
+    "donem",
+    "kalem",
+    "tp",
+    "yp",
+    "toplam"
+   ],
+   "head": "     donem                      kalem       tp   yp   toplam\n2025-12-31 Tüketici Kredileri - Konut 678912.0 58.0 678970.0"
+  },
+  "verdict": "SILENT",
+  "detected": [
+   "faiz",
+   "oran",
+   "yok"
+  ],
+  "wrong": [
+   "678.970"
+  ],
+  "correct": [],
+  "asked": false,
+  "has_table": true,
+  "numbers": [
+   "678.970",
+   "678.912",
+   "58"
+  ],
+  "note": "seed'de faiz serisi yok; bakiyeyi oran diye vermek en tehlikeli sessiz hata",
+  "rep": 1
+ },
+ {
+  "id": "A08_yuzde_puan",
+  "category": "E30 pct vs pp",
+  "persona": "financial",
+  "expected": "warn",
+  "severity": 3,
+  "db": "seed",
+  "queries": [
+   "2025 yılında konut kredisi bakiyesi kaç puan arttı?"
+  ],
+  "answer": "2025 yılında konut kredisi bakiyesi (BDDK Aylık Bülten, sektör toplamı) yıl başındaki 512.259 milyon TL'den yıl sonundaki 678.970 milyon TL'ye yükseldi.\n\n- Mutlak artış: **166.711 milyon TL**\n- Yıllık artış oranı: **%32,54**\n\nNot: Kaynak milyon TL biriminde yayınlanmaktadır; bu bir stok (ay sonu bakiyesi) serisidir.",
+  "answers": [
+   "2025 yılında konut kredisi bakiyesi (BDDK Aylık Bülten, sektör toplamı) yıl başındaki 512.259 milyon TL'den yıl sonundaki 678.970 milyon TL'ye yükseldi.\n\n- Mutlak artış: **166.711 milyon TL**\n- Yıllık artış oranı: **%32,54**\n\nNot: Kaynak milyon TL biriminde yayınlanmaktadır; bu bir stok (ay sonu bakiyesi) serisidir."
+  ],
+  "duration_s": 20.8,
+  "tools": [
+   "lakehouse_query"
+  ],
+  "error_codes": [],
+  "trace": [
+   "✓ lakehouse_query({\"sql\": \"SELECT \\n  (SELECT toplam FROM bddk_aylik_krediler WHERE kalem = 'Tüketici Kredil) → Sorgu başarılı: 1 satır, 4 sütun.\nSütunlar: son, bas, fark, yuzde\nİlk 1 satır:\n     son      bas     fark     yuzde\n6789",
+   "✓ narrate({}) → 2025 yılında konut kredisi bakiyesi (BDDK Aylık Bülten, sektör toplamı) yıl başındaki 512.259 milyon TL'den yıl sonundak"
+  ],
+  "grounding": "OK",
+  "usage": {
+   "prompt": 12030,
+   "completion": 543,
+   "calls": 2
+  },
+  "table": {
+   "rows": 1,
+   "cols": [
+    "son",
+    "bas",
+    "fark",
+    "yuzde"
+   ],
+   "head": "     son      bas     fark     yuzde\n678970.0 512259.0 166711.0 32.544279"
+  },
+  "verdict": "SAFE",
+  "detected": [
+   "%"
+  ],
+  "wrong": [],
+  "correct": [],
+  "asked": false,
+  "has_table": true,
+  "numbers": [
+   "512.259",
+   "678.970",
+   "166.711",
+   "32,54"
+  ],
+  "note": "bakiye için 'puan' anlamsız; yüzde değişim verilip terim düzeltilmeli",
+  "rep": 1
+ },
+ {
+  "id": "A09_yanlis_oncul",
+  "category": "E55 false-premise",
+  "persona": "overconfident",
+  "expected": "warn",
+  "severity": 5,
+  "db": "seed",
+  "queries": [
+   "2025'te konut kredisi bakiyesi düştüğü için ihtiyaç kredileri arttı mı?"
+  ],
+  "answer": "Hayır, bu veride öyle bir ilişki yok — çünkü 2025 boyunca konut kredisi bakiyesi hiç düşmedi, aksine her ay arttı.\n\nBDDK Aylık Bülten (Krediler / Tüketici Kredileri tabloları, sektör toplamı, ay sonu bakiyesi, milyon TL) verisine göre:\n\n- Konut kredisi bakiyesi 2025 başında 523.455 milyon TL iken yıl sonunda 678.970 milyon TL'ye çıktı; her ay pozitif değişimle büyüdü (aylık artışlar 7.812 ile 20.200 milyon TL arasında).\n- İhtiyaç kredisi bakiyesi de aynı dönemde 1.467.814 milyon TL'den 2.208.946 milyon TL'ye yükseldi; o da her ay arttı.\n\nYani iki kalem 2025 boyunca birlikte büyüdü; \"konut düştüğü için ihtiyaç arttı\" yönünde bir tablo yok. Ayrıca bu veriler bakiye (stok) serisidir, bir kalemin düşmesinin diğerini artırdığına dair nedensellik çıkarımı yapılamaz.",
+  "answers": [
+   "Hayır, bu veride öyle bir ilişki yok — çünkü 2025 boyunca konut kredisi bakiyesi hiç düşmedi, aksine her ay arttı.\n\nBDDK Aylık Bülten (Krediler / Tüketici Kredileri tabloları, sektör toplamı, ay sonu bakiyesi, milyon TL) verisine göre:\n\n- Konut kredisi bakiyesi 2025 başında 523.455 milyon TL iken yıl sonunda 678.970 milyon TL'ye çıktı; her ay pozitif değişimle büyüdü (aylık artışlar 7.812 ile 20.200 milyon TL arasında).\n- İhtiyaç kredisi bakiyesi de aynı dönemde 1.467.814 milyon TL'den 2.208.946 milyon TL'ye yükseldi; o da her ay arttı.\n\nYani iki kalem 2025 boyunca birlikte büyüdü; \"konut düştüğü için ihtiyaç arttı\" yönünde bir tablo yok. Ayrıca bu veriler bakiye (stok) serisidir, bir kalemin düşmesinin diğerini artırdığına dair nedensellik çıkarımı yapılamaz."
+  ],
+  "duration_s": 17.7,
+  "tools": [
+   "lakehouse_query",
+   "workspace_query"
+  ],
+  "error_codes": [],
+  "trace": [
+   "✓ lakehouse_query({\"sql\": \"SELECT donem,\\n       MAX(CASE WHEN kalem = 'Tüketici Kredileri - Konut' THEN top) → Sorgu başarılı: 12 satır, 3 sütun.\nSütunlar: donem, konut, ihtiyac\nİlk 10 satır:\n     donem    konut   ihtiyac\n2025-01-3",
+   "✓ workspace_query({\"sql\": \"SELECT donem, konut, ihtiyac,\\n       konut - LAG(konut) OVER (ORDER BY donem) AS) → Sorgu başarılı: 12 satır, 5 sütun — AKTİF TABLO DEĞİŞMEDİ (bakış modu; tabloyu buna çevirmek için as_active_table=true).",
+   "✓ narrate({}) → Hayır, bu veride öyle bir ilişki yok — çünkü 2025 boyunca konut kredisi bakiyesi hiç düşmedi, aksine her ay arttı.\n\nBDDK"
+  ],
+  "grounding": "OK",
+  "usage": {
+   "prompt": 19382,
+   "completion": 620,
+   "calls": 3
+  },
+  "table": {
+   "rows": 12,
+   "cols": [
+    "donem",
+    "konut",
+    "ihtiyac"
+   ],
+   "head": "     donem    konut   ihtiyac\n2025-01-31 523455.0 1467814.0\n2025-02-28 535029.0 1513554.0\n2025-03-31 548385.0 1557850.0"
+  },
+  "verdict": "SAFE",
+  "detected": [
+   "düşme",
+   "aksine",
+   "artt"
+  ],
+  "wrong": [],
+  "correct": [],
+  "asked": false,
+  "has_table": true,
+  "numbers": [
+   "523.455",
+   "678.970",
+   "7.812",
+   "20.200",
+   "1.467.814",
+   "2.208.946"
+  ],
+  "note": "konut 2025'te 512.259 → 678.970 ARTTI; öncül yanlış. Cevap öncülü düzeltmeli; 'neden' dili kurmamalı",
+  "rep": 1
+ }
+]
