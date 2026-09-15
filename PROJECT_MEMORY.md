@@ -471,3 +471,11 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
     - K02 22/22, K01 22/22 (ilk koşu 21/22: T06 betiği "adhoc" arıyordu, beklenti seri adına sıkılaştırıldı), K01-T07 arayüz 15/15.
     - Kimlik deneyi yeniden: "Sen kimsin?" 15/15 kimlik anlatıyor (önce 2/15; biri de "adhoc kaynaklı veriler" diyordu).
   - **Sıra.** Kullanıcı onayıyla önce PR #4 GitHub'da merge commit, hemen ardından entegrasyon PR'ı.
+- **main birleştirmeleri (15 Eyl, kullanıcı onayıyla):**
+  - PR #4 → main, merge commit 83d73f9. Ebeveynleri bacab9d ve 1cfb85d.
+  - PR #5 (entegrasyon) → main, merge commit 5a85254. Ebeveynleri 83d73f9 ve 70a0893. CI: agent-core 37 s, lakehouse-core
+    46 dk 58 s, ikisi de yeşil.
+  - PR #3'ten bu yana main'e 30 commit Büşra'dan (30 tekil kimlik, GitHub hesabı bushushow), 7 commit Baran'dan girdi.
+  - İkisi de `gh pr merge --merge` ile birleştirildi: repoda squash ve rebase de açık, düğme seçimi hataya açık.
+  - main'e push'ta CI iş akışı çalışmıyor; iş akışı yalnız PR'da koşuyor.
+  - feature/agent-engine main'e ileri sarıldı; 8765 sunucusu bu kodla çalışıyor.
