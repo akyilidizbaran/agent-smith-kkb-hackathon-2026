@@ -179,8 +179,9 @@ def usage_reply(question: str, tools: set[str]) -> str | None:
         extra = (" Architect profilinde ayrıca 'Tam veri sıfırlama…' düğmesi var: veri kökündeki veritabanını, RAW/Bronze/Silver'ı, "
                  "yüklemeleri ve önbelleği önizleme ve onay koduyla siler (kod ve .env korunur)." if architect
                  else " Veri havuzunu sıfırlamak yalnız Architect profilinde yapılır.")
-        return ("Sol paneldeki 'Oturumu sıfırla' düğmesi sohbeti, tabloları ve bu oturumda yüklenen dosyaları temizler; veri havuzuna "
-                "dokunmaz." + extra)
+        return ("Sol paneldeki 'Oturumu sıfırla' düğmesi açık sohbeti, tablolarını ve bu sohbette yüklenen dosyaları onayla siler; diğer "
+                "sohbetlere ve veri havuzuna dokunmaz. Yeni bir konuya geçmek için üstteki 'Yeni sohbet' düğmesi yeter; önceki sohbet sol "
+                "üstteki menüde kalır." + extra)
     if _EXPORT.search(text):
         return ("Tablo içeren her cevabın altındaki 'tam tablo CSV' ve 'XLSX' bağlantıları tam tabloyu indirir (ekranda ilk 200 satır "
                 "gösterilse de); 'HTML rapor' cevabı tablo, grafik ve kanıt zinciriyle birlikte açar. Grafiklerin altında 'PNG indir' "
