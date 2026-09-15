@@ -431,3 +431,16 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
   - Ajan testleri 504. K01-T07 arayüz kabulü yeni akış ucu ve yazım animasyonuyla 15/15 (`docs/experiments/k01_ui_kabul_2026-09-15_1533/`).
   - Canlı sunucuda başsız Chromium: yazım ortasında 358 harfin 295'i saydam kuyruktaydı, tamamı DOM'daydı; yazım 1,8 s sürdü.
   - Görünmeyen sekmede kare çizilmediği için animasyon atlanır, metin hemen tam gelir.
+- **Kimlik deneyi: yalnız DB değişince "Sen kimsin?" (15 Eyl):**
+  - Betik: `scripts/kimlik_alan_deneyi.py`. Rapor: `docs/experiments/kimlik_alan_deneyi_2026-09-15_1546.json`.
+  - Aynı kod, istem ve gerçek model; beş DB: finans kopyası, boş, sağlık serisi, web ziyareti serisi, finans + sağlık. Asıl demo DB değişmedi.
+  - Alan tanımı DB'ye göre değişiyor ama ürün cevabı sorunlu çıktı.
+  - **Sebep 1:** aktif tablo yokken ajan "veri çekilmeden cevap denendi" diye kimlik cevabını geri gönderiyor.
+    - İlk taslak doğruydu ("BDDK ve TCMB verileri üzerinde çalışan…").
+    - Yeniden yazılan cevap "önceki mesajın 'Sen kimsin?' idi" diye bozuluyor.
+    - Sağlık ve web DB'lerinde model tablo döküyor.
+    - Kullanıcının arayüzde gördüğü iyi cevap aktif tablo olduğu içindi (kural susuyor); canlı tekrarla doğrulandı.
+    - Kural `core/agent.py`'de, PR #4'ün değiştirdiği dosya.
+  - **Sebep 2:** yalnız kullanıcı serisi olan katalogda alan tanımı "adhoc kaynaklı veriler" (iç kimlik).
+  - **Sebep 3:** "Hangi veri setlerine sahipsin?" cevabı eksik cümle ("Kullanıcının eklediği 1 seri de var.") ve seri adını söylemiyor.
+  - Boş katalogda model örnek olarak enflasyon/döviz/BDDK yazdı (istemdeki finans örnekleri).

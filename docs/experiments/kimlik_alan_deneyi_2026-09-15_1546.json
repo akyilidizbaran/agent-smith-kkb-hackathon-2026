@@ -1,0 +1,345 @@
+{
+  "meta": {
+    "commit": "abee76a",
+    "at": "2026-09-15T15:43:10",
+    "demo_db_sha256_once": "c2cf0aece473423158bf42113632c88ee7691058e51ed19f09f7f252c405f59d",
+    "demo_db_sha256_sonra": "c2cf0aece473423158bf42113632c88ee7691058e51ed19f09f7f252c405f59d",
+    "demo_db_degismedi": true
+  },
+  "senaryolar": [
+    {
+      "ad": "A_finans",
+      "taban": "demo",
+      "eklenen_seriler": [],
+      "kurulum": [],
+      "katalog_kaynaklari": {
+        "bddk_finturk": 648,
+        "bddk_monthly": 20,
+        "bddk_weekly": 1,
+        "evds": 12,
+        "gold": 6
+      },
+      "alan_tanimi": "BDDK FinTürk (il bazında), BDDK Aylık Bülten, BDDK Haftalık Bülten ve TCMB EVDS kaynaklı veriler",
+      "cevaplar": [
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 1,
+          "cevap": "Şu an elimde cevaplanacak bir veri sorusu yok — önceki mesajınız \"Sen kimsin?\" idi ve bu bir kimlik sorusu, veri sorgusu gerektirmiyor.\n\nHangi veri ya da soru üzerinde çalışmamı istediğinizi yazın; örneğin:\n- \"İstanbul'un son 12 aylık kredi bakiyesi\"\n- \"2024'te enflasyonun aylık seyri\"\n- \"Türkiye genelinde takipteki kredilerin son çeyrek değişimi\"\n\nSorunuzu yazdığınızda doğru kaynaktan sayıları çekip kanıtıyla birlikte sunacağım.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 5.9
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 2,
+          "cevap": "Şu an elimde cevaplanacak bir soru yok — önceki mesajın yalnızca \"Sen kimsin?\" idi ve bu bir veri sorusu değil, bir tanıtım sorusuydu.\n\nHangi veriyi incelememi istersin? Örneğin:\n- Bir ilin kredi veya mevduat bakiyesi\n- Faiz oranlarının son dönemdeki değişimi\n- İller arası karşılaştırma\n\nSorusunu yaz, veriyi sorgulayıp sayılarıyla cevaplayayım.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 9.7
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 3,
+          "cevap": "Henüz bir soru sormadınız — sadece \"Sen kimsin?\" diye sordunuz. Bu sorunun cevabı yukarıda: BDDK ve TCMB kaynaklı veriler üzerinde çalışan bir veri analisti ajansım.\n\nHangi veriyi sorgulamamı istersiniz? Örneğin:\n- Bir ilin kredi/mevduat bakiyesi\n- Faiz oranlarındaki değişim\n- Tüketici kredisi büyümesi\n- Döviz kuru karşılaştırması\n\nSorunuzu yazın, veriyi çekip cevaplayayım.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 6.8
+        },
+        {
+          "soru": "Neler yapabilirsin?",
+          "tekrar": 1,
+          "cevap": "Şu an elimde cevaplanacak bir veri sorusu yok — önceki mesajın \"Neler yapabilirsin?\" sorusuydu ve bu bir yetenek sorusu, veri gerektirmiyor.\n\nHangi veriyi sormak istersin? Örneğin:\n- \"2024'te toplam kredi bakiyesi ne kadar, geçen yıla göre yüzde kaç arttı?\"\n- \"Son 12 ayda mevduat faiz oranlarının seyrini göster\"\n- \"İstanbul ve Ankara'daki banka şube sayılarını karşılaştır\"\n\nSorunu yaz, veriyi sorgulayıp sayılarıyla cevaplayayım.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 10.0
+        },
+        {
+          "soru": "Hangi veri setlerine sahipsin?",
+          "tekrar": 1,
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var: BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); TCMB EVDS: 12 seri (2016-01 → 2026-07); BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06).",
+          "araclar": [],
+          "llm": false,
+          "sure_s": 0.0
+        }
+      ]
+    },
+    {
+      "ad": "B_bos",
+      "taban": "none",
+      "eklenen_seriler": [],
+      "kurulum": [],
+      "katalog_kaynaklari": {},
+      "alan_tanimi": "yapılandırılmış veri",
+      "cevaplar": [
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 1,
+          "cevap": "Henüz cevaplanacak bir veri sorusu sormadın. \"Sen kimsin?\" sorusuna kimliğimi anlatarak cevap verdim; bu soru bir veri sorgusu gerektirmiyor.\n\nHangi veriyi, hangi dönem için istediğini söyle (ör. \"2024'te aylık enflasyon\", \"son çeyrek ihracat\", \"faiz oranlarındaki değişim\") — doğru kaynağı bulup sayıları sorgulayarak cevaplayayım.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 6.9
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 2,
+          "cevap": "Şu an elimde cevaplanacak bir soru yok — önceki mesajınız \"Sen kimsin?\" idi ve bu bir veri sorusu değil, bir tanıtım sorusuydu.\n\nHangi veriyi, hangi dönem için analiz etmemi istersiniz? Örneğin:\n- Bir kalemin aylık/çeyreklik seyrini\n- İki seri arasındaki karşılaştırmayı\n- Bir dönemin toplamını veya değişim oranını\n\nSorunuzu yazın, veriyi sorgulayıp sayılarıyla cevaplayayım.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 8.1
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 3,
+          "cevap": "Henüz benden bir veri sorusu gelmedi — sadece \"Sen kimsin?\" diye sordunuz ve ben kendimi tanıttım.\n\nHangi veri üzerinde ne hesaplamamı istersiniz? Örneğin:\n- \"2024'te enflasyon ne oldu?\"\n- \"Son 12 ayda döviz kuru değişimi\"\n- \"BDDK verilerinde kredi büyümesi\"\n\nSorunuzu yazın, doğru kaynağı bulup hesabı yapayım.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 11.3
+        },
+        {
+          "soru": "Neler yapabilirsin?",
+          "tekrar": 1,
+          "cevap": "Şu an elimde cevaplanması gereken bir soru yok — önceki mesajınız \"Neler yapabilirsin?\" idi ve bu bir yetenek sorusu olduğu için veri sorgusu gerektirmez.\n\nHangi veriyi, hangi dönem için incelememi istersiniz?",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 12.2
+        },
+        {
+          "soru": "Hangi veri setlerine sahipsin?",
+          "tekrar": 1,
+          "cevap": "Veri havuzunda şu an yüklü seri yok.",
+          "araclar": [],
+          "llm": false,
+          "sure_s": 0.0
+        }
+      ]
+    },
+    {
+      "ad": "C_saglik",
+      "taban": "none",
+      "eklenen_seriler": [
+        "acil"
+      ],
+      "kurulum": [
+        {
+          "arac": "ingest_from_url",
+          "seri": "acil_basvuru",
+          "ok": true,
+          "ozet": "EKLENDİ: adhoc:acil_basvuru — Acil servis başvuruları (aylık)\nkatalog adı: acil_basvuru — acil_basvuru_aylik.csv (taslak)\nkaynak: /private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80b/scratchpad/kimlik/C_sagl"
+        },
+        {
+          "arac": "promote_draft",
+          "seri": "acil_basvuru",
+          "ok": true,
+          "ozet": "ONAYLANDI: adhoc:acil_basvuru — kullanıcı onayı\ndurum: taslak → aktif (kullanıcı onayı, semantik kaynağı 'manual')\nSilver'a kopyalanan gözlem: 12; provenance (artifact, run, vintage) korundu\nsemantik güveni: derived — doğrulanmadı; Gold hes"
+        }
+      ],
+      "katalog_kaynaklari": {
+        "adhoc": 1
+      },
+      "alan_tanimi": "adhoc kaynaklı veriler",
+      "cevaplar": [
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 1,
+          "cevap": "Ben, adhoc kaynaklı veriler üzerinde çalışan bir veri analisti ajansım. Doğal dildeki sorularınızı anlar, doğru veri kaynağını bulur, analizi adım adım yürütür ve sonucu kanıtıyla birlikte sunarım.\n\nŞu an elimde **acil başvuru** serisi var (Ocak–Aralık 2025, aylık, kişi cinsinden). Bu veri üzerinde istediğiniz analizi yapabilirim — örneğin dönemsel değişim, kırılım, karşılaştırma gibi. Ne sormak istersiniz?",
+          "araclar": [
+            "lakehouse_query"
+          ],
+          "llm": true,
+          "sure_s": 8.6
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 2,
+          "cevap": "Acil başvuru serisinin 2025 yılı aylık değerleri (kişi):\n\n| Ay | Başvuru |\n|---|---|\n| Ocak | 182.340 |\n| Şubat | 171.220 |\n| Mart | 190.875 |\n| Nisan | 186.410 |\n| Mayıs | 201.330 |\n| Haziran | 215.120 |\n| Temmuz | 232.980 |\n| Ağustos | 228.760 |\n| Eylül | 199.400 |\n| Ekim | 191.220 |\n| Kasım | 187.660 |\n| Aralık | 410.050 |\n\nKaynak: acil_basvuru_aylik.csv (taslak). Serinin semantiği doğrulanmamış; Aralık ayındaki 410.050 diğer aylara göre belirgin şekilde yüksek, bu değeri yorumlamadan önce kaynağı teyit etmen iyi olur.",
+          "araclar": [
+            "lakehouse_query",
+            "workspace_show"
+          ],
+          "llm": true,
+          "sure_s": 9.2
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 3,
+          "cevap": "**Acil başvuru** serisi (aylık, kişi cinsinden) 2025 yılının tamamını kapsıyor:\n\n| Ay | Başvuru (kişi) |\n|---|---|\n| Ocak | 182.340 |\n| Şubat | 171.220 |\n| Mart | 190.875 |\n| Nisan | 186.410 |\n| Mayıs | 201.330 |\n| Haziran | 215.120 |\n| Temmuz | 232.980 |\n| Ağustos | 228.760 |\n| Eylül | 199.400 |\n| Ekim | 191.220 |\n| Kasım | 187.660 |\n| Aralık | 410.050 |\n\nKaynak: `acil_basvuru_aylik.csv` (taslak). Seri semantiği doğrulanmamış; frekans dönüşümü veya birim çevirisi isterseniz önce bunu birlikte netleştirmemiz gerekir.",
+          "araclar": [
+            "lakehouse_query",
+            "workspace_show"
+          ],
+          "llm": true,
+          "sure_s": 6.5
+        },
+        {
+          "soru": "Neler yapabilirsin?",
+          "tekrar": 1,
+          "cevap": "Elimdeki **acil başvuru (aylık, kişi)** serisinin 2025 yılı değerleri:\n\n| Ay | Başvuru (kişi) |\n|---|---|\n| Ocak | 182.340 |\n| Şubat | 171.220 |\n| Mart | 190.875 |\n| Nisan | 186.410 |\n| Mayıs | 201.330 |\n| Haziran | 215.120 |\n| Temmuz | 232.980 |\n| Ağustos | 228.760 |\n| Eylül | 199.400 |\n| Ekim | 191.220 |\n| Kasım | 187.660 |\n| Aralık | 410.050 |\n\nKaynak: acil_basvuru_aylik.csv (taslak), 2025 Ocak–Aralık.\n\nNot: Bu serinin semantiği doğrulanmamış; Aralık ayındaki 410.050 kişilik değer diğer aylara göre belirgin şekilde yüksek, kaynağın doğrulanması önerilir.\n\nNe üzerinde çalışmamı istersin — değişim analizi, kırılım, grafik ya da başka bir hesap?",
+          "araclar": [
+            "lakehouse_query",
+            "workspace_show"
+          ],
+          "llm": true,
+          "sure_s": 11.1
+        },
+        {
+          "soru": "Hangi veri setlerine sahipsin?",
+          "tekrar": 1,
+          "cevap": "Kullanıcının eklediği 1 seri de var.",
+          "araclar": [],
+          "llm": false,
+          "sure_s": 0.0
+        }
+      ]
+    },
+    {
+      "ad": "D_web",
+      "taban": "none",
+      "eklenen_seriler": [
+        "web"
+      ],
+      "kurulum": [
+        {
+          "arac": "ingest_from_url",
+          "seri": "web_ziyaret",
+          "ok": true,
+          "ozet": "EKLENDİ: adhoc:web_ziyaret — Günlük web ziyareti (aylık)\nkatalog adı: web_ziyaret — web_ziyaret_kirilma.csv (taslak)\nkaynak: /private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80b/scratchpad/kimlik/D_web/data/"
+        },
+        {
+          "arac": "promote_draft",
+          "seri": "web_ziyaret",
+          "ok": true,
+          "ozet": "ONAYLANDI: adhoc:web_ziyaret — kullanıcı onayı\ndurum: taslak → aktif (kullanıcı onayı, semantik kaynağı 'manual')\nSilver'a kopyalanan gözlem: 24; provenance (artifact, run, vintage) korundu\nsemantik güveni: derived — doğrulanmadı; Gold hesa"
+        }
+      ],
+      "katalog_kaynaklari": {
+        "adhoc": 1
+      },
+      "alan_tanimi": "adhoc kaynaklı veriler",
+      "cevaplar": [
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 1,
+          "cevap": "Elimdeki veri: **web_ziyaret** serisi — aylık frekansta, \"ziyaret\" ölçülü, **Ocak 2024'ten itibaren 24 aylık** bir seri. Ocak 2024'te 1.000 ziyaretten başlayıp her ay 10 artışla ilerliyor.\n\nBu serinin semantiği doğrulanmamış (taslak), yani frekans dönüşümü veya birim çevirisi yapmadım; değerleri olduğu gibi aktarıyorum.\n\nÜzerinde ne yapmak istersiniz — toplam, dönemsel değişim, karşılaştırma ya da grafik mi?",
+          "araclar": [
+            "lakehouse_query"
+          ],
+          "llm": true,
+          "sure_s": 6.5
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 2,
+          "cevap": "Web ziyaret serisinin (web_ziyaret_kirilma.csv, aylık, 2024 Ocak – 2025 Aralık, 24 ay) değerleri ve aylık değişimleri:\n\n| Dönem | Ziyaret | Aylık değişim |\n|---|---|---|\n| 2024-01 | 1.000 | — |\n| 2024-02 | 1.010 | +10 |\n| 2024-03 | 1.020 | +10 |\n| 2024-04 | 1.030 | +10 |\n| 2024-05 | 1.040 | +10 |\n| 2024-06 | 1.050 | +10 |\n| 2024-07 | 1.060 | +10 |\n| 2024-08 | 1.070 | +10 |\n| 2024-09 | 1.080 | +10 |\n| 2024-10 | 1.090 | +10 |\n| 2024-11 | 1.100 | +10 |\n| 2024-12 | 1.110 | +10 |\n| **2025-01** | **1.744** | **+634** |\n| 2025-02 | 1.756 | +12 |\n| 2025-03 | 1.768 | +12 |\n| 2025-04 | 1.780 | +12 |\n| 2025-05 | 1.792 | +12 |\n| 2025-06 | 1.804 | +12 |\n| 2025-07 | 1.816 | +12 |\n| 2025-08 | 1.828 | +12 |\n| 2025-09 | 1.840 | +12 |\n| 2025-10 | 1.852 | +12 |\n| 2025-11 | 1.864 | +12 |\n| 2025-12 | 1.876 | +12 |\n\nÖne çıkan nokta: Seri 2024 boyunca her ay sabit +10 artarken, **Ocak 2025'te 634 ziyaretlik keskin bir sıçrama** var (1.110 → 1.744). Bu, dosya adındaki \"kırılma\" ile uyumlu görünüyor; Ocak 2025 sonrası artış hızı da +10'dan +12'ye geçmiş.\n\nKaynak: web_ziyaret_kirilma.csv (kullanıcının getirdiği dosya, aylık, 2024-01 → 2025-12). Not: Bu serinin anlamı kataloğunda henüz doğrulanmamış; birim \"ziyaret\" olarak kayıtlı.",
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_describe",
+            "lakehouse_query",
+            "workspace_query",
+            "workspace_query"
+          ],
+          "llm": true,
+          "sure_s": 18.4
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 3,
+          "cevap": "Kullanıcı \"Sen kimsin?\" diye sordu; bu bir veri sorusu değil, kimlik sorusu. Veri sorgusu gerektirmiyor.\n\nBen, veri havuzundaki kaynaklar üzerinde çalışan bir veri analisti asistanıyım. Doğal dildeki sorularınızı anlıyorum; doğru veri kaynağını bulup sorgular, hesapları (değişim, oran, büyüme, reel değer, frekans dönüşümü gibi) veritabanı üzerinde yapıyorum ve sonucu kaynağıyla birlikte sunuyorum.\n\nElimde şu an bir ziyaret verisi var (aylık, 1900-01 dönemi). Üzerinde bir analiz isterseniz söylemeniz yeterli.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 6.5
+        },
+        {
+          "soru": "Neler yapabilirsin?",
+          "tekrar": 1,
+          "cevap": "Elinde şu an tek bir veri kaynağı var: **web ziyaret serisi** (web_ziyaret_kirilma.csv, taslak).\n\n- **Kapsam:** Ocak 2024 – Aralık 2027, aylık, 24 gözlem\n- **Ölçüm:** ziyaret sayısı (count)\n- **Örnek değerler:** Ocak 2024'te 1.000, Şubat 2024'te 1.010, Mart 2024'te 1.020 — yani aydan aya artan bir seri\n\nBu seri üzerinde yapabileceklerim:\n\n- **Aylık değişim / büyüme oranı** hesabı (hangi ayda ne kadar artmış)\n- **Aykırı dönem tespiti** — seride olağandışı sıçrama ya da düşüş var mı\n- **Kırılma noktası analizi** — artış hızı ne zaman değişmiş\n- **Grafik** — seriyi çizdirme\n- **Reel değer** — bir fiyat endeksiyle enflasyondan arındırma (havuzda endeks serisi olmadığı için bu, dış kaynaktan endeks çekerek yapılabilir)\n\nBu serinin semantiği doğrulanmamış (taslak) olduğu için frekans dönüşümü ve birim çevirisi gibi işlemleri yapmadan önce neyi ölçtüğünü onaylaman gerekir.\n\nHangisini yapmamı istersin?",
+          "araclar": [
+            "workspace_show",
+            "lakehouse_query"
+          ],
+          "llm": true,
+          "sure_s": 25.4
+        },
+        {
+          "soru": "Hangi veri setlerine sahipsin?",
+          "tekrar": 1,
+          "cevap": "Kullanıcının eklediği 1 seri de var.",
+          "araclar": [],
+          "llm": false,
+          "sure_s": 0.0
+        }
+      ]
+    },
+    {
+      "ad": "E_finans_saglik",
+      "taban": "demo",
+      "eklenen_seriler": [
+        "acil"
+      ],
+      "kurulum": [
+        {
+          "arac": "ingest_from_url",
+          "seri": "acil_basvuru",
+          "ok": true,
+          "ozet": "EKLENDİ: adhoc:acil_basvuru — Acil servis başvuruları (aylık)\nkatalog adı: acil_basvuru — acil_basvuru_aylik.csv (taslak)\nkaynak: /private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80b/scratchpad/kimlik/E_fina"
+        },
+        {
+          "arac": "promote_draft",
+          "seri": "acil_basvuru",
+          "ok": true,
+          "ozet": "ONAYLANDI: adhoc:acil_basvuru — kullanıcı onayı\ndurum: taslak → aktif (kullanıcı onayı, semantik kaynağı 'manual')\nSilver'a kopyalanan gözlem: 12; provenance (artifact, run, vintage) korundu\nsemantik güveni: derived — doğrulanmadı; Gold hes"
+        }
+      ],
+      "katalog_kaynaklari": {
+        "adhoc": 1,
+        "bddk_finturk": 648,
+        "bddk_monthly": 20,
+        "bddk_weekly": 1,
+        "evds": 12,
+        "gold": 6
+      },
+      "alan_tanimi": "BDDK FinTürk (il bazında), BDDK Aylık Bülten, BDDK Haftalık Bülten ve TCMB EVDS kaynaklı veriler",
+      "cevaplar": [
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 1,
+          "cevap": "Şu an elimde cevaplanacak bir soru yok — önceki mesajınız \"Sen kimsin?\" idi ve bu bir veri sorusu değil, bir tanıtım sorusuydu.\n\nHangi veriyi, hangi dönem için istediğinizi söylerseniz (ör. \"2024'te il bazında kredi büyümesi en yüksek 5 il\", \"son 12 ayın politika faizi\", \"2023'te mevduatın aylık değişimi\") sorguyu çalıştırıp sonucu sayılarıyla sunayım.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 5.4
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 2,
+          "cevap": "Şu an elimde cevaplanacak bir soru yok — önceki mesajın yalnızca \"Sen kimsin?\" idi ve ben kendimi tanıttım. Veri sorgusu gerektiren bir soru sormadın.\n\nHangi veriyi, hangi dönem için istediğini sorarsan (ör. \"2024'te il bazında kredi büyümesi\", \"son 12 ayda takipteki alacak seyrini\") sorguyu çalıştırıp sonucu kaynağıyla birlikte vereyim.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 5.1
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 3,
+          "cevap": "Şu an elimde cevaplanacak bir soru yok — önceki mesajın yalnızca \"Sen kimsin?\" idi ve ben kimliğimi açıkladım. Sayısal bir veri sorusu sormadın.\n\nHangi veriyi, hangi dönem için istediğini sorarsan sorguyu çalıştırıp sonucu kaynağıyla birlikte vereyim.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 4.5
+        },
+        {
+          "soru": "Neler yapabilirsin?",
+          "tekrar": 1,
+          "cevap": "Bir sonraki sorunda sayıları doğrudan sorgulayarak getireceğim.\n\nHangi veriyi incelememi istersin?",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 8.0
+        },
+        {
+          "soru": "Hangi veri setlerine sahipsin?",
+          "tekrar": 1,
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var: BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); TCMB EVDS: 12 seri (2016-01 → 2026-07); BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06). Kullanıcının eklediği 1 seri de var.",
+          "araclar": [],
+          "llm": false,
+          "sure_s": 0.0
+        }
+      ]
+    }
+  ]
+}
