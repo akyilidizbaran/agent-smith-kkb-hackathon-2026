@@ -53,10 +53,18 @@ class ApprovalBook:
         return [p for p in self.pending.values() if p.operation == operation]
 
 
+# Arayüz yüklemesi dosyaya 8 onaltılık karakterlik ön ek koyar (web_app.save_upload: "cb6d79f3_hastane.csv"); model seri
+# anahtarı vermeyince kimlik bu adla oluşur ("adhoc:cb6d79f3_hastane"). Kullanıcı ön eki görmez, "hastane taslağını
+# onaylıyorum" der (canlı ölçüm, 15 Eyl: onay iki denemede de reddedildi). Ön eksiz ad da aynı hedeftir; onay sözü ve hedef
+# yine aynı güncel mesajda olmalı.
+_UPLOAD_PREFIX = re.compile(r"^[0-9a-f]{8}_(?=\w)")
+
+
 def _mentions(text: str, series_id: str) -> bool:
     low = (text or "").casefold()
     key = series_id.split(":", 1)[-1].casefold()
-    return series_id.casefold() in low or bool(re.search(rf"(?<![\w]){re.escape(key)}(?![\w])", low))
+    keys = {key, _UPLOAD_PREFIX.sub("", key)}
+    return series_id.casefold() in low or any(re.search(rf"(?<![\w]){re.escape(k)}(?![\w])", low) for k in keys if k)
 
 
 @dataclass(frozen=True)
