@@ -105,9 +105,11 @@ __all__ = ["is_small_talk", "small_talk_reply", "trim_unsolicited_offers"]
 _CAP_WEB = re.compile(r"(?<![\w])(internet\w*|web(?:'?(?:de|den|te|ten))?|çevrimiçi|cevrimici|online|google)(?![\w])"
                       r".{0,40}?(?<![\w])(araştır|arastir|arama|ara(?:r|yabil)|bakabil|bulabil|eriş|eris)\w*", re.I)
 _CAP_ASK = re.compile(r"m[ıiuü]s[ıiuü]n|yapabil|edebil|olur mu|mümkün mü|mumkun mu|\?", re.I)
+# "nasıl / ne tür / ne çeşit" ve "hangi verilerle çalışıyorsun" (15 Eyl arayüz denemesi): "Elinde nasıl veriler var" kalıba uymadı,
+# modele gitti; model 5 aramadan sonra "Hazır Gold tabloları" başlığı ve doğrulanmamış "687+ seri" yazdı (ADR-0082).
 _CAP_DATA = re.compile(
-    r"(?<![\w])(hangi|ne|neler)\s+(tür\s+|tur\s+)?(veri\w*(\s*set\w*|\s*kaynak\w*)?|kaynak\w*|seri\w*)\b.{0,30}?"
-    r"(var|sahip|elinde|mevcut|kullan|bulun|yükl|yukl)|veri\s*set\w*\s+(ne|neler|hangi)", re.I)
+    r"(?<![\w])(hangi|ne|neler|nasıl)\s+(tür\s+|tur\s+|çeşit\s+|cesit\s+)?(veri\w*(\s*set\w*|\s*kaynak\w*)?|kaynak\w*|seri\w*)\b.{0,30}?"
+    r"(var|sahip|elinde|mevcut|kullan|bulun|yükl|yukl|çalış|calis)|veri\s*set\w*\s+(ne|neler|hangi)", re.I)
 # Analiz sözcüğü taşıyan mesaj yetenek sorusu değildir ("Hangi seride kırılma var?", "web_ziyaret serisinde davranış ne zaman değişti?").
 _ANALYTIC = re.compile(r"kırılma|kirilma|aykırı|aykiri|anomali|artış|artis|arttı|artti|düşüş|dusus|düştü|dustu|azal|yüksel|yuksel|değiş|degis|"
                        r"trend|eğilim|egilim|fark|oran|toplam|ortalama|karşılaştır|karsilastir|grafik|tablo|davranış|davranis|rejim|öncü|oncu", re.I)

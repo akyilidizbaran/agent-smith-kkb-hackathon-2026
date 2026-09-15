@@ -504,3 +504,26 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
     - Tek satırlık tablodan sonra "önceki aya göre fark" planlaması: bir tekrarda `workspace_add_column` önceki ayı aynı tarihe
       ekledi, cevap "0 değişim" oldu.
     - Araçlı turların `grounding_check`'i de göreli %0,5 tolerans kullanıyor.
+- **Kullanıcı metninde iç ad yok (15 Eyl akşam, ADR-0082; kullanıcı kararı, PR yok):**
+  - **Bulgu.** Arayüzde "Elinde nasıl veriler var" deterministik yola düşmedi (kalıp yalnız hangi/ne/neler), modele gitti.
+    - Model "Hazır Gold tabloları" başlığı ve doğrulanmamış "687+ seri" yazdı (doğrusu 681).
+    - Grafik altyazısı ve rapor kaynakları "bddk_monthly — / gold —" diye yazılıyordu.
+  - **Kullanıcı kararı:**
+    - Cevap metninde iç kimlik ve mimari adı olmayacak.
+    - Kanıt zinciri katman adlarını taşımaya devam edecek.
+    - Sol panel sayaçları kullanıcı diliyle yazılacak.
+  - **Düzeltmeler:**
+    - "nasıl / ne tür / ne çeşit veriler" deterministik.
+    - Sistem istemi ve Gold istemi iç adı yasaklıyor; kural alan bağımsız, finans terimi yok.
+    - Arama kartı tablonun kaynağını yazıyor ("hesaplanmış tablo (TCMB EVDS ve BDDK Aylık Bülten verisinden)").
+    - `labels.readable_source` grafik altyazısı ve rapor için okunur ad veriyor.
+    - `labels.humanize_internal` son güvence: kimlik → katalog adı, "Gold tablosunda" → "hesaplanmış tabloda".
+    - Tablosuz ve veri çekilmemiş turda sayılar araç çıktısıyla doğrulanıyor.
+    - Sol panel "gözlem / hesaplanmış tablo".
+  - **Ölçüm:**
+    - Ajan testleri 638; K01 22/22, K02 22/22, arayüz 15/15.
+    - Canlı 7 senaryo × 3 kayıtlı 57/60. Üç kırmızı da denetim kalıbımın hatası: okunur "TCMB EVDS:" ifadesini `evds:` kimliği
+      saydı. Kalıp düzeltildi, 60 cevabın hiçbirinde iç ad yok.
+  - **Açık soru (kullanıcıya soruldu).** Veri seti cevabı içeriği canlı katalogdan okuyor, ama yalnız kaynak, sayı ve dönem veriyor.
+    Konu başlıkları eklenmesi ya da cevabı modelin katalog bilgisiyle yazması seçenekleri kullanıcıda. Okunur adı olmayan yeni
+    kaynak ham kimlikle görünür.

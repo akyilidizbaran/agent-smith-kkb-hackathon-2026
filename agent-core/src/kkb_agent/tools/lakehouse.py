@@ -79,11 +79,13 @@ class LakehouseSearchTool(Tool):
             return ToolResult(content="\n".join(lines), ok=True)
         self._empty_streak = 0
         terms = getattr(self.lakehouse, "last_search_terms", {}) or {}
+        from ..labels import spec_origin
         lines = ["Bulunan tablolar:"]
         for s in specs:
+            # ADR-0082: kimlik SQL içindir; kullanıcıya kaynak adıyla anlatılır ("hesaplanmış tablo (… verisinden)").
             lines.append(
                 f"- {s.dataset_id}: {s.name}. {s.description[:180]} "
-                f"[frekans: {s.frequency.value}, kapsam: {s.coverage.start}→{s.coverage.end}]"
+                f"[frekans: {s.frequency.value}, kapsam: {s.coverage.start}→{s.coverage.end}, kaynak: {spec_origin(s)}]"
             )
             matched, unmatched = terms.get(s.dataset_id, ([], []))
             if unmatched:

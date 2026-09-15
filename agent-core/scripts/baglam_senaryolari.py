@@ -51,6 +51,19 @@ def amounts_only(p: dict, allowed: set[str]) -> bool:
     return all(a in allowed for a in _AMOUNT.findall(p.get("text", "")))
 
 
+# ADR-0082: kullanıcıya dönük metinde iç kimlik ve mimari katman adı yok (kanıt zinciri hariç).
+# Kimlikte iki noktadan hemen sonra kod gelir ("evds:TP.KTF12"); okunur "TCMB EVDS: 12 seri" kimlik değildir (ilk koşuda
+# büyük/küçük harf duyarsız kalıp bunu iç ad sayıp S6'da 3 yanlış kırmızı verdi, 15 Eyl).
+_INTERNAL = re.compile(r"(?<![\w.])(gold|silver|bronze)(?![\w])|gold\.[a-z0-9_]+|(?<![\w.])(bddk_monthly|bddk_weekly|bddk_finturk|evds|adhoc):(?=\S)",
+                       re.I)
+
+
+def no_internal(p: dict) -> bool:
+    """Cevap metni, grafik başlıkları ve rapor 'Kaynaklar' listesi iç ad taşımıyor."""
+    texts = [p.get("text", ""), *[str(c.get("title") or "") for c in p.get("charts") or []], p.get("_rapor_kaynaklar", "")]
+    return not any(_INTERNAL.search(t) for t in texts)
+
+
 DATASET_LISTING = ("BDDK FinTürk (il bazında):", "Veri havuzunda şu kaynaklardan yüklü seriler var")
 
 
@@ -97,6 +110,20 @@ SCENARIOS: list[tuple[str, list[tuple[str, str, object]]]] = [
          lambda p: "'Oturumu sıfırla' düğmesi" in p["text"] and not_dataset_listing(p) and not nudged(p) and not tools(p)),
         ("Dosyayı nasıl yüklerim?", "yükleme cevabı (türler, 25 MB)", lambda p: "25 MB" in p["text"] and not tools(p)),
     ]),
+    ("S6_ic_adlar_hesaplanmis_tablo", [
+        ("Elinde nasıl veriler var", "veri setleri katalogdan (model çağrılmaz); iç ad yok",
+         lambda p: not llm_called(p) and "BDDK" in p["text"] and no_internal(p)),
+        ("Konut kredisi faiz oranını 2025 için aylık ortalama olarak göster.", "tablo araçla; cevap ve rapor kaynaklarında iç ad yok",
+         lambda p: bool(tools(p)) and no_internal(p)),
+        ("Bunu çizgi grafik olarak çiz.", "grafik; cevap, grafik başlığı ve rapor kaynaklarında iç ad yok",
+         lambda p: "chart" in tools(p) and no_internal(p)),
+    ]),
+    ("S7_ic_adlar_yan_yana", [
+        ("2024 ve 2025 için aylık dolar kuru ile politika faizini aynı dönemde yan yana göster.",
+         "iki seri yan yana araçla; cevap ve rapor kaynaklarında iç ad yok", lambda p: bool(tools(p)) and no_internal(p)),
+        ("Bu tablo nereden geliyor?", "kaynak kurum adıyla anlatılır; iç ad yok",
+         lambda p: no_internal(p) and ("EVDS" in p["text"] or "TCMB" in p["text"])),
+    ]),
 ]
 
 
@@ -141,6 +168,10 @@ def main() -> int:
                 started = time.perf_counter()
                 r = client.post("/api/ask", json={"question": question})
                 p = r.json() if r.status_code == 200 else {"text": f"HTTP {r.status_code}: {r.text[:200]}", "steps": []}
+                if r.status_code == 200:   # rapor "Kaynaklar" listesi (ADR-0082 denetimi için)
+                    html = client.get(f"/api/answers/{p['index']}/report.html").text
+                    m = re.search(r"<h2>Kaynaklar</h2><ul>(.*?)</ul>", html, re.S)
+                    p["_rapor_kaynaklar"] = re.sub(r"<[^>]+>", " ", m.group(1)) if m else ""
                 try:
                     ok = bool(r.status_code == 200 and check(p))
                 except Exception as exc:  # noqa: BLE001 — denetim hatası da kırmızıdır

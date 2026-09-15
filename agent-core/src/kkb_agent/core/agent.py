@@ -32,6 +32,7 @@ from .claim_check import claim_cell, range_claim   # G5/G6 (Büşra, V3 §3.9): 
 from .question_preflight import _PREMISE as _PREMISE_ASK
 from .small_talk import capability_reply, strip_filler_opening
 from .small_talk import is_identity_question, is_small_talk, is_usage_question, small_talk_reply, trim_unsolicited_offers
+from ..labels import humanize_internal
 from . import tool_gate
 
 # Kullanıcının grafik isteği (Türkçe çekimli: grafiği, grafiğini, çiz, çizer misin, görselleştir).
@@ -123,6 +124,9 @@ tablo bozulur.
 - Muhatabın bir {audience}, geliştirici DEĞİL. Nihai cevapta SQL, kolon adı, araç adı, \
 hata mesajı veya "sorgunuzu kontrol edin" türü teknik yönlendirme YAZMA. Veri yoksa bunu \
 sade bir cümleyle söyle ve elde hangi dönemin bulunduğunu belirt.
+- Nihai cevapta tablo ya da seri kimliği (gold. ile başlayan ya da kaynak:kod biçimindeki kimlikler) ve veri mimarisi \
+katman adları (Gold, Silver, Bronze, RAW, lakehouse) YAZMA. Hesaplanmış bir tabloyu hangi kaynağın verisinden ve hangi \
+kuralla hesaplandığıyla anlat; kaynağı kurumun adıyla an.
 
 Bir araç hata döndürürse hatayı oku, çağrını düzelt ve tekrar dene. \
 Yeterli bilgiye ulaştığında araç çağırmayı bırak ve nihai cevabını yaz."""
@@ -610,6 +614,20 @@ class AnalyticsAgent:
                 if step.role == "narrate":
                     step.thought = (step.thought or "nihai cevap") + (" · genel bilgi cevabı yayımlanmadı" if dropped else "") + (" · dolgu kırpıldı" if stripped else "")
                     break
+        # ADR-0082: kullanıcıya giden metinde tablo/seri kimliği ve mimari katman adı yok (kanıt zinciri onları taşır).
+        try:
+            specs = self._catalog_specs()
+        except Exception:  # noqa: BLE001 — katalog okunamazsa kimlikler genel adla çevrilir
+            specs = []
+        humane, internal = humanize_internal(answer.text, specs)
+        if internal:
+            answer.text = humane
+            if self._history and self._history[-1].role == "assistant":
+                self._history[-1] = ChatMessage(role="assistant", content=humane)
+            for step in reversed(answer.steps):
+                if step.role == "narrate":
+                    step.thought = (step.thought or "nihai cevap") + " · iç adlar kullanıcı diline çevrildi"
+                    break
         answer.usage = dict(self._usage)
         answer.context = self._last_context.summary() if self._last_context is not None else ""
         if self.evidence_builder is not None:
@@ -901,6 +919,11 @@ class AnalyticsAgent:
                     pool = self._frames_pool()
                     if unverified_numbers(answer_text, self.workspace.table, pool):
                         answer_text, rejected = self._final_exit(question, answer_text, None, steps, i)
+                elif not self.workspace.has_table and tool_texts:
+                    # ADR-0082: veri çekilmeden (yalnız katalog araması) yazılan tablosuz cevaptaki sayılar da araç çıktısında
+                    # olmalı. "Elinde nasıl veriler var" cevabı doğrulanmamış "687+ seri" yazdı (doğrusu 681).
+                    if grounding_check(question, answer_text, tool_texts).startswith("MISS"):
+                        answer_text, rejected = self._final_exit(question, answer_text, tool_texts, steps, i)
 
                 steps.append(
                     AgentStep(
