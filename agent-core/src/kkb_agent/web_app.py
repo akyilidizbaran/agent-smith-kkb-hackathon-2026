@@ -191,6 +191,12 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict
         "evidence": evidence_to_dict(getattr(answer, "evidence", None)),
         "usage": dict(getattr(answer, "usage", {}) or {}),
         "context": getattr(answer, "context", "") or "",
+        "availability_status": getattr(answer, "availability_status", "UNKNOWN"),
+        "execution_recovery": next(
+            (art for art in (getattr(answer, "artifacts", []) or [])
+             if isinstance(art, dict) and art.get("kind") == "execution_recovery"),
+            None,
+        ),
         "grounding": getattr(answer, "grounding", "") or "",
         "follow_up": follow_up.as_dict() if follow_up is not None else None,
         "hit_step_limit": bool(getattr(answer, "hit_step_limit", False)),

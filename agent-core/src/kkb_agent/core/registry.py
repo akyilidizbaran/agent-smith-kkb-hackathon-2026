@@ -78,6 +78,11 @@ class ToolRegistry:
             )
         return self.validator.validate_and_run(tool, args)
 
+    def begin_turn(self, turn_id: int) -> None:
+        """Notify registered tools that a fresh user turn has started."""
+        for tool in self._tools.values():
+            tool.begin_turn(turn_id)
+
     def __iter__(self) -> Iterator[Tool]:
         return iter(self._tools.values())
 

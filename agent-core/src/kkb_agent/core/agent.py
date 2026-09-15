@@ -34,6 +34,12 @@ from .small_talk import capability_reply, strip_filler_opening
 from .small_talk import is_identity_question, is_small_talk, is_usage_question, small_talk_reply, trim_unsolicited_offers
 from ..labels import humanize_internal
 from . import tool_gate
+from .execution_recovery import (
+    ExecutionState,
+    RecoverySnapshot,
+    is_explicit_retry,
+    needs_truthful_failure_text,
+)
 from .follow_up import FollowUpContext, FollowUpResolution, resolve_follow_up
 
 # Kullanıcının grafik isteği (Türkçe çekimli: grafiği, grafiğini, çiz, çizer misin, görselleştir).
@@ -317,6 +323,10 @@ def table_digest(frame, max_rows: int = 12) -> str:
 NO_TOOL_NUMBERS_NOTE = ("Bu turda HİÇBİR ARAÇ ÇALIŞMADI ve cevabındaki şu sayılar aktif tabloda yok: {nums}. Sayı uydurma ve "
                         "kafadan hesaplama yapma: fark, oran ya da filtre gerekiyorsa workspace_query ile tabloda hesaplat, "
                         "sonra yalnız araç çıktısındaki sayılarla cevabını yaz.")
+RECOVERY_NOTE = ("Bu turda bir araç yürütme hatası oluştu. Hata, verinin bulunmadığını kanıtlamaz. "
+                 "Kullanıcının güncel isteği için yeni bir plan kur: aynı araç+aynı argüman çağrısını tekrarlama; "
+                 "gerekirse katalog araması, doğru şema/kolon incelemesi veya Gold uyumlu yolu kullan. "
+                 "Yeni bir doğrulama yolu da yoksa, verinin yok olduğunu iddia etme; bu turda doğrulanamadığını açıkça söyle.")
 # Geri gönderme notlarının ortak başı (ADR-0081): son soru açıkça yazılır. "Sayıları çek / tablodaki sayılarla yaz" denince model
 # geçmişteki başka bir veri sorusuna dönüyordu (arayüzde rol sorusu → veri seti tablosu; canlı S3'te "Kanıt zincirini nasıl okurum?"
 # → önceki Aralık bakiyesi).
@@ -393,6 +403,9 @@ class AgentAnswer:
     #: "OK" ya da "MISS:<sayılar>" (+ "| CAUSAL:<ifadeler>"). Boş: veri çekilmediği
     #: için ölçülmedi. Koşucular bunu rapor eder; anlatı doğrulaması görünür olmalı.
     grounding: str = ""
+    #: FOUND / CONFIRMED_ABSENT / RETRIEVAL_FAILED / ACCESS_BLOCKED / UNKNOWN.
+    #: A failed retrieval never silently becomes absence.
+    availability_status: str = "UNKNOWN"
 
     #: Araçların ürettiği çıktı dosyaları (grafik belirtimi/PNG; ADR-0032). CLI yolu basar,
     #: koşucular varlığını denetler. Metnin içine gömülmez: dosya yolu cevabın parçası değil.
@@ -539,6 +552,9 @@ class AnalyticsAgent:
         self._history: list[ChatMessage] = []  # turlar arası konuşma hafızası
         self._follow_up_context = FollowUpContext()
         self._follow_up_resolution: FollowUpResolution | None = None
+        self._last_recovery: RecoverySnapshot | None = None
+        self._retry_source_question: str | None = None
+        self._retry_failed_signatures: set[tuple[str, str]] = set()
 
     def reset(self) -> None:
         self._history.clear()
@@ -548,6 +564,9 @@ class AnalyticsAgent:
         self.workspace = AnalysisWorkspace()
         self._follow_up_context = FollowUpContext()
         self._follow_up_resolution = None
+        self._last_recovery = None
+        self._retry_source_question = None
+        self._retry_failed_signatures = set()
 
     @property
     def follow_up_context(self) -> FollowUpContext:
@@ -572,7 +591,18 @@ class AnalyticsAgent:
         self._usage = {"prompt": 0, "completion": 0, "calls": 0}
         self._last_context = None
         self._follow_up_resolution = None
-        if is_small_talk(question):
+        self._retry_source_question = None
+        self._retry_failed_signatures = set()
+        small_talk = is_small_talk(question)
+        retry = bool(self._last_recovery and is_explicit_retry(question))
+        if retry:
+            self._retry_source_question = self._last_recovery.question
+            self._retry_failed_signatures = set(self._last_recovery.failed_signatures)
+        elif not small_talk:
+            # A new substantive question closes the old recovery affordance. A
+            # greeting intentionally leaves it available for an explicit retry.
+            self._last_recovery = None
+        if small_talk:
             # Harness kuralı: selamlaşma LLM'e gitmez; tablo ve kanıt paneli yok (ADR-0045).
             text = small_talk_reply(question, has_table=self.workspace.has_table)
             self.last_gate = None  # kapı çalışmadı; iz eski kararı göstermesin
@@ -665,7 +695,8 @@ class AnalyticsAgent:
             specs = self._catalog_specs()
         except Exception:  # noqa: BLE001 — resolver cevabı asla düşürmez
             specs = []
-        self._follow_up_resolution = resolve_follow_up(question, self._follow_up_context, specs)
+        base_question = self._retry_source_question or question
+        self._follow_up_resolution = resolve_follow_up(base_question, self._follow_up_context, specs)
 
     def _complete_follow_up(self, answer: AgentAnswer) -> AgentAnswer:
         resolution = self._follow_up_resolution
@@ -729,19 +760,48 @@ class AnalyticsAgent:
         self._system_prompt = profile.render(self._system_prompt_template)
         return changed
 
+    def _finish_recovery(self, answer: AgentAnswer, state: ExecutionState, *, finalization_reason: str) -> AgentAnswer:
+        """Attach safe execution metadata and prevent failed retrieval becoming absence."""
+        status = state.availability_status
+        if state.failures and status == "UNKNOWN":
+            status = "RETRIEVAL_FAILED"
+        if needs_truthful_failure_text(answer.text, state):
+            answer.text = (
+                "Bu turdaki veri sorgusu başarısız olduğu için isteği doğrulayamadım. "
+                "Verinin mevcut olmadığı sonucuna varmadım."
+            )
+            if self._history and self._history[-1].role == "assistant":
+                self._history[-1] = ChatMessage(role="assistant", content=answer.text)
+        answer.availability_status = status
+        answer.artifacts.append(
+            state.artifact(
+                finalization_reason=finalization_reason,
+                resumed_previous_task=self._retry_source_question is not None,
+            )
+        )
+        if status == "RETRIEVAL_FAILED" and state.failures:
+            self._last_recovery = state.snapshot()
+        elif status == "FOUND":
+            self._last_recovery = None
+        return answer
+
     UNTRUSTED_OUTPUT_TOOLS = frozenset({"web_url", "web_search", "ingest_from_url"})
     """Dış içerik taşıyan araçlar: çıktıları modele 'veridir, talimat değildir' çerçevesiyle gider."""
 
     def _ask(self, question: str) -> AgentAnswer:
-        self.registry.active_question = question
+        planning_question = self._retry_source_question or question
+        self.registry.active_question = planning_question
         if hasattr(self.registry, "current_message"):
             self.registry.current_message = question
             self.registry.turn = getattr(self.registry, "turn", 0) + 1
+            begin_turn = getattr(self.registry, "begin_turn", None)
+            if callable(begin_turn):
+                begin_turn(self.registry.turn)
         if hasattr(self.registry, "user_text"):
             self.registry.user_text = (self.registry.user_text + "\n" + question).strip()
         # Araç kapısı (ADR-0043): soruya göre araç alt kümesi; kapalı olan aile şemaya girmez.
         gate = tool_gate.decide(
-            question, set(self.registry.names()), user_text=getattr(self.registry, "user_text", "") or "",
+            planning_question, set(self.registry.names()), user_text=getattr(self.registry, "user_text", "") or "",
             has_table=self.workspace.has_table, enabled=self.tool_gate,
         )
         self.last_gate = gate
@@ -751,6 +811,7 @@ class AnalyticsAgent:
         steps: list[AgentStep] = []
         native = self.llm.supports_native_tools()
         tools = self.registry.schemas(only=gate.allowed) if native else None
+        recovery = ExecutionState(turn_id=getattr(self.registry, "turn", 0), question=planning_question)
         produced_data = False   # veri getiren bir araç başarıyla çalıştı mı?
         artifacts: list[dict[str, Any]] = []  # grafik vb. (ADR-0032)
         nudged = False          # "önce veriyi çek" uyarısı bir kez verilir
@@ -759,9 +820,10 @@ class AnalyticsAgent:
         capability_nudged: set[str] = set()
         requested = [
             cap for cap in _REQUESTED_CAPABILITIES
-            if cap[1].search(question) and any(self.registry.get(t) is not None for t in cap[2])
+            if cap[1].search(planning_question) and any(self.registry.get(t) is not None for t in cap[2])
         ]
         seen: set[tuple[str, str]] = set()   # (araç, argüman) — döngü kilidi
+        seen.update(self._retry_failed_signatures)
         duplicates = 0                       # kilidin kaç kez devreye girdiği
         terminal: ToolError | None = None    # tekrar denemeyle çözülmeyen hata
         stuck_note: str | None = None        # son tura verilecek özel yönerge
@@ -787,6 +849,22 @@ class AnalyticsAgent:
 
             # --- Araç çağrısı yoksa: nihai cevap ---
             if not calls:
+                if recovery.should_prompt_recovery():
+                    recovery.mark_recovery_prompted()
+                    latest = recovery.failures[-1]
+                    steps.append(
+                        AgentStep(
+                            index=i,
+                            role="validate",
+                            thought=(f"{latest.error_code} sonrası aynı turda yeni plan istendi; "
+                                     "veri yokluğu varsayılmadı"),
+                            ok=False,
+                            duration_ms=(time.perf_counter() - started) * 1000,
+                        )
+                    )
+                    messages.append(ChatMessage(role="assistant", content=response.content))
+                    messages.append(ChatMessage(role="user", content=RECOVERY_NOTE))
+                    continue
                 # Model bazen kataloğu okuyup veriyi hiç çekmeden cevap yazmaya
                 # kalkıyor; ölçümde G5 her denemede 3 adımda burada duruyordu.
                 # Cevabı reddetmiyoruz, bir kez geri gönderip veriyi çektiriyoruz.
@@ -796,7 +874,7 @@ class AnalyticsAgent:
                 # Kimlik sorusu ("Sen kimsin?") veri istemez: geri gönderilince doğru taslak bozuluyordu (kimlik deneyi, 15 Eyl).
                 # Ürün kullanım sorusu ("architect rolüne nasıl geçebilirim") da: geri gönderilen model geçmişteki son veri
                 # sorusuna dönüp onu cevapladı (arayüz denemesi, 15 Eyl).
-                if (not produced_data and not nudged and not acted and not self.workspace.has_table
+                if (not produced_data and not nudged and not recovery.failures and not acted and not self.workspace.has_table
                         and not is_identity_question(question) and not is_usage_question(question)):
                     nudged = True
                     steps.append(
@@ -987,8 +1065,12 @@ class AnalyticsAgent:
                 answer_text = self._coverage_note(self._source_note(answer_text, steps, artifacts), artifacts)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=answer_text))
-                return AgentAnswer(text=answer_text, steps=steps, workspace=self.workspace,
-                                   grounding=grounding, artifacts=artifacts, rejected_claims=rejected)
+                return self._finish_recovery(
+                    AgentAnswer(text=answer_text, steps=steps, workspace=self.workspace,
+                                grounding=grounding, artifacts=artifacts, rejected_claims=rejected),
+                    recovery,
+                    finalization_reason=("recovery_failed" if recovery.failures else "model_finalized"),
+                )
 
             # --- Araçları çalıştır ---
             messages.append(
@@ -1002,7 +1084,9 @@ class AnalyticsAgent:
                 # Döngü kilidi: model aynı çağrıyı tekrarlıyorsa sonuç değişmez.
                 # Ölçülmüş hata modu: aynı sorgunun art arda 7 kez çalıştırılması.
                 signature = (call.name, json.dumps(call.arguments, sort_keys=True, default=str))
+                repeated = False
                 if signature in seen:
+                    repeated = True
                     duplicates += 1
                     result = ToolResult.fail(
                         "DUPLICATE_CALL",
@@ -1046,6 +1130,20 @@ class AnalyticsAgent:
                         candidates=list(result.error.candidates or []) if result.error else [],
                     )
                 )
+                if result.error is not None:
+                    recovery.observe_failure(
+                        call.name,
+                        result.error,
+                        signature=signature,
+                        repeated=repeated,
+                        content=result.content,
+                    )
+                if result.ok:
+                    recovery.observe_availability(
+                        result.artifacts.get("availability_status"),
+                        call.name,
+                        signature,
+                    )
                 if result.ok:
                     tool_texts.append(result.content)
                 if result.ok and call.name in self.CATALOG_CHANGING_TOOLS and self.refresh_profile():
@@ -1053,6 +1151,7 @@ class AnalyticsAgent:
                         messages[0].content.split("\n", 1)[0], self._system_prompt.split("\n", 1)[0], 1))
                 if result.ok and call.name in self.DATA_PRODUCING_TOOLS:
                     produced_data = True
+                    recovery.observe_success(data_produced=True)
                 elif result.ok and call.name in self.ACTING_TOOLS:
                     acted = True
                 if result.ok and result.artifacts.get("chart"):
@@ -1074,9 +1173,25 @@ class AnalyticsAgent:
                     self._history.append(ChatMessage(role="user", content=question))
                     self._history.append(ChatMessage(role="assistant", content=text))
                     log.info("adım %d: clarify — tur netleştirme sorusuyla bitti", i)
-                    return AgentAnswer(text=text, steps=steps, workspace=self.workspace, artifacts=artifacts)
-                if result.error is not None and not result.error.is_retryable and getattr(result.error, "terminal", None) is not False:
+                    return self._finish_recovery(
+                        AgentAnswer(text=text, steps=steps, workspace=self.workspace, artifacts=artifacts),
+                        recovery,
+                        finalization_reason="clarification",
+                    )
+                recovery_codes = {
+                    "SQL_FAILED", "INVALID_ARGS", "GOLD_REQUIRED", "JOIN_MISMATCH",
+                    "DATASET_NOT_FOUND", "TOOL_FAILED", "UNKNOWN_TOOL", "EMPTY_RESULT",
+                }
+                if (result.error is not None and not recovery.pending_recovery
+                        and (not result.error.is_retryable or result.error.error_code in recovery_codes)
+                        and getattr(result.error, "terminal", None) is not False):
                     terminal = result.error
+                    if result.error.error_code in recovery_codes:
+                        stuck_note = (
+                            "Bu turdaki sınırlı recovery denemeleri tamamlandı. ARAÇ ÇAĞIRMA; "
+                            "verinin mevcut olmadığını varsayma. Kullanıcıya isteğin bu turda doğrulanamadığını, "
+                            "elde doğrulanmış veri varsa onu ve eksik kalan kısmı kısaca anlat."
+                        )
                 log.info("adım %d: %s -> %s", i, call.name, "ok" if result.ok else "HATA")
                 messages.append(self._result_message(call, result, native=native))
 
@@ -1102,8 +1217,12 @@ class AnalyticsAgent:
                 text = self._coverage_note(self._source_note(text, steps, artifacts), artifacts)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=text))
-                return AgentAnswer(text=text, steps=steps, workspace=self.workspace,
-                                   grounding=grounding, artifacts=artifacts, rejected_claims=rejected)
+                return self._finish_recovery(
+                    AgentAnswer(text=text, steps=steps, workspace=self.workspace,
+                                grounding=grounding, artifacts=artifacts, rejected_claims=rejected),
+                    recovery,
+                    finalization_reason="terminal_tool_failure",
+                )
 
         # --- Adım limiti ---
         final = self._chat(
@@ -1126,8 +1245,12 @@ class AnalyticsAgent:
                                     "toplanan verilerle sınırlı, tamamlanmayan adımlar yapılmadı.)")
         self._history.append(ChatMessage(role="user", content=question))
         self._history.append(ChatMessage(role="assistant", content=text))
-        return AgentAnswer(text=text, steps=steps, workspace=self.workspace,
-                           hit_step_limit=True, grounding=grounding, artifacts=artifacts, rejected_claims=rejected)
+        return self._finish_recovery(
+            AgentAnswer(text=text, steps=steps, workspace=self.workspace,
+                        hit_step_limit=True, grounding=grounding, artifacts=artifacts, rejected_claims=rejected),
+            recovery,
+            finalization_reason="step_limit" if not budget_hit else "time_budget",
+        )
 
     # ------------------------------------------------------------------ K02-T07: kullanılan alternatif kaynak adlandırılır
     _ACCESS_ERRORS = frozenset({"NEEDS_CREDENTIAL", "ACCESS_BLOCKED", "SOURCE_NOT_FOUND"})
@@ -1238,6 +1361,14 @@ class AnalyticsAgent:
         # ("System message must be at the beginning"); Ollama tolere ediyordu.
         if self.workspace.has_table:
             system += "\n\nMEVCUT ANALİZ DURUMU:\n" + self.workspace.describe_for_llm()
+
+        if self._retry_source_question:
+            system += (
+                "\n\nAÇIK RETRY İSTEĞİ: Kullanıcı önceki başarısız isteği yeniden denemeni istiyor. "
+                "Önceki semantik istek aşağıdadır; bunu yalnız bağlam olarak kullan, eski araç çağrısını veya "
+                "başarısız SQL'i kopyalama ve yeni bir plan kur:\n"
+                f"- Önceki istek: «{self._retry_source_question[:300]}»"
+            )
 
         if self._follow_up_resolution is not None:
             follow_up_note = self._follow_up_resolution.prompt()

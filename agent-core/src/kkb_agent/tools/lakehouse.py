@@ -53,6 +53,12 @@ class LakehouseSearchTool(Tool):
         self._empty_streak = 0
         self._pending_streak = 0
 
+    def begin_turn(self, turn_id: int) -> None:
+        """Search limits apply inside one turn, never to a later user intent."""
+        del turn_id
+        self._empty_streak = 0
+        self._pending_streak = 0
+
     def run(self, params: SearchParams) -> ToolResult:
         specs = self.lakehouse.search_datasets(params.query)
         if not specs:
@@ -362,6 +368,7 @@ class LakehouseQueryTool(Tool):
                     ),
                     ok=True,
                     provenance=result.provenance,
+                    artifacts={"availability_status": "CONFIRMED_ABSENT"},
                 )
             return ToolResult(
                 content="Sorgu çalıştı ancak hiç satır dönmedi. Dönem aralığı kapsam içinde, "
@@ -369,6 +376,7 @@ class LakehouseQueryTool(Tool):
                 "lakehouse_distinct_values ile doğrula.",
                 ok=True,
                 provenance=result.provenance,
+                artifacts={"availability_status": "RETRIEVAL_FAILED"},
             )
 
         if params.as_active_table:
