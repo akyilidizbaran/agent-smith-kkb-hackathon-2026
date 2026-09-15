@@ -1,0 +1,25 @@
+Bağlam senaryoları — commit fe4432d (kaynak ağacı kirli) · model kkbhackathon2026/Qwen3.8-27B
+  ✓ S3_modele_giden_kullanim_sonra_takip #1 · 2025 Aralık ayında konut kredisi bakiyesi ne kadar? — sayı araçla (7.1 s, araç ['lakehouse_search', 'lakehouse_query'])
+  ✓ S3_modele_giden_kullanim_sonra_takip #1 · Kanıt zincirini nasıl okurum? — kanıt zinciri anlatılır; bakiye tekrar sorgulanmaz (7.0 s, araç [])
+  ✓ S3_modele_giden_kullanim_sonra_takip #1 · Bir önceki aya göre farkı ne? — bağlam korunur; tutarlar gerçek (Kasım 658.770, fark 20.200), uydurma sayı yok (9.8 s, araç ['workspace_show', 'lakehouse_query'])
+  ✓ S3_modele_giden_kullanim_sonra_takip #2 · 2025 Aralık ayında konut kredisi bakiyesi ne kadar? — sayı araçla (5.6 s, araç ['lakehouse_search', 'lakehouse_query'])
+  ✓ S3_modele_giden_kullanim_sonra_takip #2 · Kanıt zincirini nasıl okurum? — kanıt zinciri anlatılır; bakiye tekrar sorgulanmaz (6.7 s, araç [])
+  ✗ S3_modele_giden_kullanim_sonra_takip #2 · Bir önceki aya göre farkı ne? — bağlam korunur; tutarlar gerçek (Kasım 658.770, fark 20.200), uydurma sayı yok (6.2 s, araç ['lakehouse_query'])
+      cevap: '2025 Kasım sonu konut kredisi bakiyesini çekip Aralık ile farkını hesaplamaya çalıştım ancak sorgu motoru bu iki kaynağı (aylık ve haftalık bülteni) aynı sorguda yan yana getiremedi; bu yüzden aylık farkı şu an hesaplayamıyorum. Elinde olan tek değer 2025 Aralık sonu bakiyesi: **678.970 milyon TL** '
+  ✓ S3_modele_giden_kullanim_sonra_takip #3 · 2025 Aralık ayında konut kredisi bakiyesi ne kadar? — sayı araçla (7.9 s, araç ['lakehouse_search', 'lakehouse_query'])
+  ✓ S3_modele_giden_kullanim_sonra_takip #3 · Kanıt zincirini nasıl okurum? — kanıt zinciri anlatılır; bakiye tekrar sorgulanmaz (4.5 s, araç [])
+  ✓ S3_modele_giden_kullanim_sonra_takip #3 · Bir önceki aya göre farkı ne? — bağlam korunur; tutarlar gerçek (Kasım 658.770, fark 20.200), uydurma sayı yok (12.4 s, araç ['workspace_query', 'lakehouse_query', 'lakehouse_query'])
+  ✓ S3_modele_giden_kullanim_sonra_takip #4 · 2025 Aralık ayında konut kredisi bakiyesi ne kadar? — sayı araçla (7.3 s, araç ['lakehouse_search', 'lakehouse_query'])
+  ✓ S3_modele_giden_kullanim_sonra_takip #4 · Kanıt zincirini nasıl okurum? — kanıt zinciri anlatılır; bakiye tekrar sorgulanmaz (12.8 s, araç [])
+  ✓ S3_modele_giden_kullanim_sonra_takip #4 · Bir önceki aya göre farkı ne? — bağlam korunur; tutarlar gerçek (Kasım 658.770, fark 20.200), uydurma sayı yok (5.6 s, araç ['lakehouse_query'])
+  ✓ S3_modele_giden_kullanim_sonra_takip #5 · 2025 Aralık ayında konut kredisi bakiyesi ne kadar? — sayı araçla (7.3 s, araç ['lakehouse_search', 'lakehouse_query'])
+  ✓ S3_modele_giden_kullanim_sonra_takip #5 · Kanıt zincirini nasıl okurum? — kanıt zinciri anlatılır; bakiye tekrar sorgulanmaz (4.7 s, araç [])
+  ✗ S3_modele_giden_kullanim_sonra_takip #5 · Bir önceki aya göre farkı ne? — bağlam korunur; tutarlar gerçek (Kasım 658.770, fark 20.200), uydurma sayı yok (17.6 s, araç ['workspace_query', 'workspace_query', 'workspace_add_column', 'workspace_query', 'workspace_show', 'workspace_query', 'workspace_show', 'workspace_query'])
+      cevap: '2025 Aralık sonu konut kredisi bakiyesi, bir önceki aya (2025 Kasım sonu) göre **0 milyon TL** değişim gösterdi: 678.970 → 678.970 milyon TL.\n\nKaynak: BDDK Aylık Bülten, Tüketici Kredileri tablosu, "Konut" kalemi (Toplam, Sektör), 2025-11 ve 2025-12 dönem sonu bakiyeleri.'
+
+SONUÇ: 13/15 · rapor /Users/baran/Desktop/KKB/docs/experiments/baglam_senaryolari_2026-09-15_1756.json · demo DB değişmedi: True
+
+[exited with code 0]
+
+# Not (15 Eyl): bu koşunun JSON raporu aynı dakikada biten tüm senaryolar ×3 koşusunca ezildi (aynı dosya adı);
+# konsol çıktısı kanıt olarak saklandı. Betik artık saniye ve senaryo etiketini dosya adına yazıyor.

@@ -223,6 +223,7 @@ class ChartTool(Tool):
         # quality_flag ≠ ok gibi, anomaly_detect'in <sütun>_anomali kolonu da halka ile işaretlenir (ADR-0040).
         quality = next((c for c in table.columns if str(c).endswith("quality_flag")), None) \
             or next((c for c in table.columns if str(c).endswith("_anomali")), None)
+        from ..labels import readable_source   # ADR-0082: altyazıda iç kaynak kimliği ("bddk_monthly —", "gold —") yok
         intent = ChartIntent(
             kind=params.chart_type, x=x, y=tuple(params.y_columns), title=params.title,
             unit_labels=units, labels=labels,
@@ -231,7 +232,7 @@ class ChartTool(Tool):
             dual_axis=params.dual_axis, log_scale=params.log_scale,
             province_column=params.province_column,
             geo=load_geo_asset(self.geo_dir) if params.chart_type == "map" else None,
-            source_note=("Kaynak: " + "; ".join(sources[:2])) if sources else "",
+            source_note=("Kaynak: " + "; ".join(readable_source(s) for s in sources[:2])) if sources else "",
         )
         try:
             spec = build_spec(table, intent)

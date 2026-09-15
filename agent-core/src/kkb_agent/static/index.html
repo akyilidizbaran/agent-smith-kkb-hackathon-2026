@@ -164,8 +164,8 @@
       <div class="stats">
         <div class="stat"><div class="v" id="st-catalog">–</div><div class="k">katalog serisi</div></div>
         <div class="stat"><div class="v" id="st-loaded">–</div><div class="k">yüklü seri</div></div>
-        <div class="stat"><div class="v" id="st-silver">–</div><div class="k">Silver gözlemi</div></div>
-        <div class="stat"><div class="v" id="st-gold">–</div><div class="k">Gold tablosu</div></div>
+        <div class="stat"><div class="v" id="st-silver">–</div><div class="k">gözlem</div></div>
+        <div class="stat"><div class="v" id="st-gold">–</div><div class="k">hesaplanmış tablo</div></div>
       </div>
       <div class="status" id="st-line"></div>
     </div>
@@ -261,8 +261,8 @@ function showModal(title, html, extraClass) {   // tek pencere kabuğu: X, arka 
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") { if (typing) typing.finish(); const g = $("gmodal"); if (g) g.hidden = true; closeJourney(); } });
 async function openStatus() {       // veri havuzu kartları ve üst rozetler → sistem durumu (/api/status)
   const r = await fetch("/api/status"); const s = await r.json(); lastStatus = s;
-  const rows = [["Model", s.model], ["Veri havuzu", `${fmtInt(s.catalog_series)} katalog serisi · ${fmtInt(s.loaded_series)} yüklü · ${fmtInt(s.silver_rows)} Silver gözlemi · ${fmtInt(s.gold_tables)} Gold tablosu`],
-    ["Hazır oluş", s.readiness && s.readiness.catalog_total ? `katalog ${fmtInt(s.readiness.catalog_total)} · anlamı doğrulanmış ${fmtInt(s.readiness.semantics_verified)} · birim+ölçüm tipi tanımlı ${fmtInt(s.readiness.semantics_defined)} · yüklü ${fmtInt(s.readiness.loaded_series)} · Gold'a hazır ${fmtInt(s.readiness.gold_ready_series)}` : "–"],
+  const rows = [["Model", s.model], ["Veri havuzu", `${fmtInt(s.catalog_series)} katalog serisi · ${fmtInt(s.loaded_series)} yüklü · ${fmtInt(s.silver_rows)} gözlem · ${fmtInt(s.gold_tables)} hesaplanmış tablo`],
+    ["Hazır oluş", s.readiness && s.readiness.catalog_total ? `katalog ${fmtInt(s.readiness.catalog_total)} · anlamı doğrulanmış ${fmtInt(s.readiness.semantics_verified)} · birim+ölçüm tipi tanımlı ${fmtInt(s.readiness.semantics_defined)} · yüklü ${fmtInt(s.readiness.loaded_series)} · hesaplamaya hazır ${fmtInt(s.readiness.gold_ready_series)}` : "–"],
     ["Retrieval kademesi", s.retrieval_mode], ["Araç kapısı", s.tool_gate ? "açık (soruya göre alt küme)" : "kapalı"], ["Araçlar (" + s.tools.length + ")", s.tools.join(", ")],
     ["Arama bütçesi", s.search_budget_remaining === null ? "web_search kapalı" : `${s.search_budget_remaining} arama kaldı (süreç başına)`], ["Bu oturum", `${s.history.length} soru`],
     ["Oturum", "bellekte tutulur; sunucu yeniden başlarsa sohbet, tablolar ve yüklenen dosyalar silinir (tek bilgisayar demosu)"],

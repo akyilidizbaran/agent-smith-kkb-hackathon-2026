@@ -471,3 +471,79 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
     - K02 22/22, K01 22/22 (ilk koşu 21/22: T06 betiği "adhoc" arıyordu, beklenti seri adına sıkılaştırıldı), K01-T07 arayüz 15/15.
     - Kimlik deneyi yeniden: "Sen kimsin?" 15/15 kimlik anlatıyor (önce 2/15; biri de "adhoc kaynaklı veriler" diyordu).
   - **Sıra.** Kullanıcı onayıyla önce PR #4 GitHub'da merge commit, hemen ardından entegrasyon PR'ı.
+- **main birleştirmeleri (15 Eyl, kullanıcı onayıyla):**
+  - PR #4 → main, merge commit 83d73f9. Ebeveynleri bacab9d ve 1cfb85d.
+  - PR #5 (entegrasyon) → main, merge commit 5a85254. Ebeveynleri 83d73f9 ve 70a0893. CI: agent-core 37 s, lakehouse-core
+    46 dk 58 s, ikisi de yeşil.
+  - PR #3'ten bu yana main'e 30 commit Büşra'dan (30 tekil kimlik, GitHub hesabı bushushow), 7 commit Baran'dan girdi.
+  - İkisi de `gh pr merge --merge` ile birleştirildi: repoda squash ve rebase de açık, düğme seçimi hataya açık.
+  - main'e push'ta CI iş akışı çalışmıyor; iş akışı yalnız PR'da koşuyor.
+  - feature/agent-engine main'e ileri sarıldı; 8765 sunucusu bu kodla çalışıyor.
+- **Bağlam kayması ve kullanım soruları (15 Eyl akşam, ADR-0081; kullanıcı kararı: önce çoklu senaryo testi, PR yok):**
+  - **Bulgu (arayüz).** "naber" → "elimizde hangi veriler var" → "architect rolüne nasıl geçebilirim" akışında üçüncü soru veri
+    seti tablosuyla cevaplandı.
+    - Kayıtlı adımlar: "veri çekilmeden cevap denendi — geri gönderildi" → katalog araması → iki sorgu.
+    - Bağlam penceresi değil, geri gönderme notunun "sayıları çek" zorlaması modeli geçmişteki son veri sorusuna döndürdü.
+  - **Düzeltmeler:**
+    - Rol, dosya yükleme, indirme ve oturum sıfırlama soruları arayüzün ve profilin gerçek durumundan deterministik cevaplanıyor.
+    - Kullanım soruları "veri çekilmedi" diye geri gönderilmiyor.
+    - Üç geri gönderme notu (veri çekilmedi, işlem iddiası, tabloda olmayan sayı) "Kullanıcının SON sorusu: «…». Önceki sorulara
+      dönme" ile başlıyor.
+  - **Canlı senaryolar ek iki gerçek hata buldu:**
+    - Araçsız turda uydurma fark ("Kasım 677.970, +1.000") yayımlandı. `unverified_numbers`'ın göreli %0,5 toleransı ve "1.000"ın
+      ondalık okumasının satır sayısına eşleşmesi sebepti. Tolerans gösterim hassasiyetinin yarım birimine indirildi.
+    - "Oturumu nasıl sıfırlarım?" sorusuna model "yazmanız yeterli" diye uydurdu; artık düğmeleri anıyor.
+  - **Kendi hatam.** İlk koşuda senaryo denetimi yalnız "kasım/fark" sözcüğüne bakıyordu ve uydurma cevabı geçirdi; elle okumada
+    bulundu, denetim tutar karşılaştırmasına çevrildi. Aynı dakikada biten iki koşu aynı rapor dosyasına yazdı; S3 ×5 konsol
+    çıktısı saklandı, betik adı düzeltildi.
+  - **Ölçüm:**
+    - Ajan testleri 632; K01 22/22, K02 22/22.
+    - Son tüm senaryolar koşusu sıkı denetimle 45/45, son S3 ×5 13/15.
+    - Fark cevaplarında uydurma tutar: düzeltmeden önce 11 cevapta 2, sonra 8 cevapta 0.
+  - **Açık:**
+    - Tek satırlık tablodan sonra "önceki aya göre fark" planlaması: bir tekrarda `workspace_add_column` önceki ayı aynı tarihe
+      ekledi, cevap "0 değişim" oldu.
+    - Araçlı turların `grounding_check`'i de göreli %0,5 tolerans kullanıyor.
+- **Kullanıcı metninde iç ad yok (15 Eyl akşam, ADR-0082; kullanıcı kararı, PR yok):**
+  - **Bulgu.** Arayüzde "Elinde nasıl veriler var" deterministik yola düşmedi (kalıp yalnız hangi/ne/neler), modele gitti.
+    - Model "Hazır Gold tabloları" başlığı ve doğrulanmamış "687+ seri" yazdı (doğrusu 681).
+    - Grafik altyazısı ve rapor kaynakları "bddk_monthly — / gold —" diye yazılıyordu.
+  - **Kullanıcı kararı:**
+    - Cevap metninde iç kimlik ve mimari adı olmayacak.
+    - Kanıt zinciri katman adlarını taşımaya devam edecek.
+    - Sol panel sayaçları kullanıcı diliyle yazılacak.
+  - **Düzeltmeler:**
+    - "nasıl / ne tür / ne çeşit veriler" deterministik.
+    - Sistem istemi ve Gold istemi iç adı yasaklıyor; kural alan bağımsız, finans terimi yok.
+    - Arama kartı tablonun kaynağını yazıyor ("hesaplanmış tablo (TCMB EVDS ve BDDK Aylık Bülten verisinden)").
+    - `labels.readable_source` grafik altyazısı ve rapor için okunur ad veriyor.
+    - `labels.humanize_internal` son güvence: kimlik → katalog adı, "Gold tablosunda" → "hesaplanmış tabloda".
+    - Tablosuz ve veri çekilmemiş turda sayılar araç çıktısıyla doğrulanıyor.
+    - Sol panel "gözlem / hesaplanmış tablo".
+  - **Ölçüm:**
+    - Ajan testleri 638; K01 22/22, K02 22/22, arayüz 15/15.
+    - Canlı 7 senaryo × 3 kayıtlı 57/60. Üç kırmızı da denetim kalıbımın hatası: okunur "TCMB EVDS:" ifadesini `evds:` kimliği
+      saydı. Kalıp düzeltildi, 60 cevabın hiçbirinde iç ad yok.
+  - **Açık soru (kullanıcıya soruldu).** Veri seti cevabı içeriği canlı katalogdan okuyor, ama yalnız kaynak, sayı ve dönem veriyor.
+    Konu başlıkları eklenmesi ya da cevabı modelin katalog bilgisiyle yazması seçenekleri kullanıcıda. Okunur adı olmayan yeni
+    kaynak ham kimlikle görünür.
+- **Veri seti cevabı konu başlıklı; tablosuz sayı denetimi düzeltildi (15 Eyl akşam, ADR-0082 ek 1-2):**
+  - **Kullanıcı kararı.** Deterministik veri seti cevabına konu başlıkları eklendi. İçerik her soruda canlı katalogdan okunuyor;
+    Architect ekleme ve onayı `reload()` ile kataloğu hemen yeniliyor.
+  - **Konu.** Ölçüm kolonunun ilk takma adından çıkarılıyor; il bazlı kaynakta il adı atılıyor ("81 il × 8 konu"), kısaltmalar
+    adındaki yazımla ("TÜFE"), en çok 6 konu.
+  - **Yeni kaynağın adı ayar dosyası olmadan:** source_names → adres/kimlikten kurum adı ("tuik" → "TÜİK") → alan adı → kimlik.
+    `meta.source` DB'de boş, kullanılmadı.
+  - **Kendi gerilemem.** Tablosuz sayı denetimi havuzu yalnız bu turun araç çıktısıydı. S8'de önceki deterministik cevaptan
+    tekrarlanan doğru "81 il" maddeleri 3/3 silindi, başlık boş kaldı; not da tablo yokken "tabloda" diyordu.
+  - **Düzeltme:**
+    - Havuz = araç çıktıları + ön-yükleme kartları + önceki cevaplar.
+    - Not metni düzeltildi.
+    - Denetim araçsız tura da uygulanıyor; model araçsız "166 seri" yazmıştı.
+  - **Kontrol dersi.** "Geri gönderilmez" denetimi yanlış şeyi ölçüyordu; S8 artık "boş başlık yok" arıyor. Kusurlar iki kez
+    otomatik denetimde değil elle okumada bulundu.
+  - **Ölçüm:**
+    - Ajan testleri 644; K01 22/22, K02 22/22, arayüz 15/15.
+    - 8 senaryo × 3 canlı 66/66: iç ad 0, boş başlık 0, silinen ifade 0, fark 3/3 doğru.
+    - Kimlik deneyinde silinen ifade 0.
+  - **Açık:** model cevabında iç kolon adı (`entity_id`) ve olmayan banka/kurum kırılımı iddiası görüldü.

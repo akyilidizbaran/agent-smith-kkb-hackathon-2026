@@ -32,6 +32,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from .labels import readable_source
 from .live_steps import args_detail, live_hooks, tool_label
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -280,7 +281,7 @@ def report_html(payload: dict[str, Any], frame: pd.DataFrame | None, *, model: s
         table_html = show.to_html(index=False, na_rep="", border=0, classes="data", float_format=lambda v: f"{v:,.4f}".rstrip("0").rstrip("."))
     srcs = []
     for c in ev.get("columns") or []:
-        srcs += [str(x) for x in (c.get("sources") or [])]
+        srcs += [readable_source(str(x)) for x in (c.get("sources") or [])]   # ADR-0082: rapor kullanıcı diliyle
     for w in ev.get("web_sources") or []:
         srcs.append(f"{w.get('url')} · sha256 {str(w.get('sha256') or '')[:16]}… · {w.get('fetched_at') or ''}")
     for w in ev.get("context_sources") or []:

@@ -105,9 +105,11 @@ __all__ = ["is_small_talk", "small_talk_reply", "trim_unsolicited_offers"]
 _CAP_WEB = re.compile(r"(?<![\w])(internet\w*|web(?:'?(?:de|den|te|ten))?|çevrimiçi|cevrimici|online|google)(?![\w])"
                       r".{0,40}?(?<![\w])(araştır|arastir|arama|ara(?:r|yabil)|bakabil|bulabil|eriş|eris)\w*", re.I)
 _CAP_ASK = re.compile(r"m[ıiuü]s[ıiuü]n|yapabil|edebil|olur mu|mümkün mü|mumkun mu|\?", re.I)
+# "nasıl / ne tür / ne çeşit" ve "hangi verilerle çalışıyorsun" (15 Eyl arayüz denemesi): "Elinde nasıl veriler var" kalıba uymadı,
+# modele gitti; model 5 aramadan sonra "Hazır Gold tabloları" başlığı ve doğrulanmamış "687+ seri" yazdı (ADR-0082).
 _CAP_DATA = re.compile(
-    r"(?<![\w])(hangi|ne|neler)\s+(tür\s+|tur\s+)?(veri\w*(\s*set\w*|\s*kaynak\w*)?|kaynak\w*|seri\w*)\b.{0,30}?"
-    r"(var|sahip|elinde|mevcut|kullan|bulun|yükl|yukl)|veri\s*set\w*\s+(ne|neler|hangi)", re.I)
+    r"(?<![\w])(hangi|ne|neler|nasıl)\s+(tür\s+|tur\s+|çeşit\s+|cesit\s+)?(veri\w*(\s*set\w*|\s*kaynak\w*)?|kaynak\w*|seri\w*)\b.{0,30}?"
+    r"(var|sahip|elinde|mevcut|kullan|bulun|yükl|yukl|çalış|calis)|veri\s*set\w*\s+(ne|neler|hangi)", re.I)
 # Analiz sözcüğü taşıyan mesaj yetenek sorusu değildir ("Hangi seride kırılma var?", "web_ziyaret serisinde davranış ne zaman değişti?").
 _ANALYTIC = re.compile(r"kırılma|kirilma|aykırı|aykiri|anomali|artış|artis|arttı|artti|düşüş|dusus|düştü|dustu|azal|yüksel|yuksel|değiş|degis|"
                        r"trend|eğilim|egilim|fark|oran|toplam|ortalama|karşılaştır|karsilastir|grafik|tablo|davranış|davranis|rejim|öncü|oncu", re.I)
@@ -130,10 +132,77 @@ def is_identity_question(question: str) -> bool:
     return bool(text) and not re.search(r"\d", text) and len(text.split()) <= 8 and bool(_IDENTITY.search(text))
 
 
+# ---- ürün kullanım soruları (15 Eyl, arayüz denemesi): "architect rolüne nasıl geçebilirim" veri istemez. Model veri çekmeden
+# cevap yazınca "veri çekilmedi" diye geri gönderildi; sayı çekmeye zorlanan model geçmişteki son veri sorusuna ("elimizde hangi
+# veriler var") dönüp onu cevapladı. Rol, dosya yükleme ve indirme ürünün gerçek durumundan deterministik cevaplanır; diğer
+# kullanım soruları modele gider ama geri gönderilmez.
+_HOW = re.compile(r"(?<![\w])(nasıl|nereden|nereye|hangi\s+düğme|ne\s+yapmam\s+gerek\w*)(?![\w])", re.I)
+_PRODUCT = re.compile(r"(?<![\w])(architect|analyst|analist|rol|rolü\w*|rolün\w*|profil\w*|dosya\w*|belge\w*|yükle\w*|indir\w*|"
+                      r"dışa\s+aktar\w*|rapor\w*|kanıt\s+zincir\w*|yolculu\w*|oturum\w*|sıfırla\w*|arayüz\w*|düğme\w*|ekran\w*|"
+                      r"araç\s+izi\w*)(?![\w])", re.I)
+_ROLE = re.compile(r"(?<![\w])(architect|analyst|analist|rol|rolü\w*|rolün\w*|profil\w*)(?![\w])", re.I)
+_UPLOAD = re.compile(r"(?<![\w])(dosya\w*|belge\w*|csv|excel|xlsx|pdf|görsel\w*|yükle\w*)(?![\w])", re.I)
+_EXPORT = re.compile(r"(?<![\w])(indir\w*|dışa\s+aktar\w*|rapor\w*|kaydet\w*)(?![\w])", re.I)
+_RESET = re.compile(r"(?<![\w])(sıfırla\w*|baştan\s+başla\w*)(?![\w])", re.I)
+# Veri isteyen fiil ya da ekli dosya/adres: kullanım sorusu değildir ("risk profilini göster", "Dosya: /…/a.csv").
+_DATA_VERB = re.compile(r"(?<![\w])(göster\w*|hesapla\w*|karşılaştır\w*|getir\w*|çiz\w*|listele\w*|kaç|ne\s+kadar)(?![\w])", re.I)
+_ATTACHED = re.compile(r"(?:^|\n)\s*Dosya:\s*\S|https?://", re.I)
+UPLOAD_HELP_KINDS = ("CSV", "TSV", "TXT", "XLSX", "XLSM", "JSON", "PDF", "PNG", "JPG", "JPEG", "WEBP")   # web_app.UPLOAD_KINDS ile aynı (test)
+UPLOAD_HELP_MB = 25
+
+
+def is_usage_question(question: str) -> bool:
+    """Ürünün kullanımına dair kısa soru mu (rol, dosya, indirme, rapor, oturum…)? Veri çekmesi gerekmez."""
+    text = (question or "").strip()
+    if not text or re.search(r"\d", text) or len(text.split()) > 14 or _ATTACHED.search(text) or _DATA_VERB.search(text):
+        return False
+    return bool(_HOW.search(text) and _PRODUCT.search(text))
+
+
+def usage_reply(question: str, tools: set[str]) -> str | None:
+    """Rol geçişi, dosya yükleme ve indirme: arayüzün ve profilin gerçek durumundan tek paragraf; başka konuda None."""
+    if not is_usage_question(question):
+        return None
+    text = question.strip()
+    architect = bool({"ingest_from_url", "promote_draft"} & set(tools))
+    if _ROLE.search(text):
+        if architect:
+            return ("Şu an Architect profilindesin: dosyayı ya da kaynağı taslak seri olarak ekleyebilir, açık onayınla kataloğa "
+                    "alabilir ve veriyi sıfırlayabilirsin. Analyst'e (salt-okunur) dönmek için arayüzün üstündeki Profil rozetine "
+                    "tıkla ve Analyst'i seç; geçiş oturumu (sohbet, tablolar, yüklemeler) temizler.")
+        return ("Şu an Analyst profilindesin (salt-okunur): veriyi sorgular, analiz eder ve dosyaları okursun ama kataloğa yazmazsın. "
+                "Architect'e geçmek için arayüzün üstündeki Profil rozetine tıkla, Architect'i seç ve operatör anahtarını gir; "
+                "geçiş oturumu (sohbet, tablolar, yüklemeler) temizler. Rozet geçişe izin vermiyorsa profil sunucu başlatılırken "
+                "seçilir (AGENT_PROFILE=architect).")
+    if _RESET.search(text):
+        # Canlı bağlam senaryosu S5 (15 Eyl): model üç tekrarda da "'oturumu sıfırla' yazmanız yeterli" dedi; doğrusu düğme.
+        extra = (" Architect profilinde ayrıca 'Tam veri sıfırlama…' düğmesi var: veri kökündeki veritabanını, RAW/Bronze/Silver'ı, "
+                 "yüklemeleri ve önbelleği önizleme ve onay koduyla siler (kod ve .env korunur)." if architect
+                 else " Veri havuzunu sıfırlamak yalnız Architect profilinde yapılır.")
+        return ("Sol paneldeki 'Oturumu sıfırla' düğmesi sohbeti, tabloları ve bu oturumda yüklenen dosyaları temizler; veri havuzuna "
+                "dokunmaz." + extra)
+    if _EXPORT.search(text):
+        return ("Tablo içeren her cevabın altındaki 'tam tablo CSV' ve 'XLSX' bağlantıları tam tabloyu indirir (ekranda ilk 200 satır "
+                "gösterilse de); 'HTML rapor' cevabı tablo, grafik ve kanıt zinciriyle birlikte açar. Grafiklerin altında 'PNG indir' "
+                "bağlantısı var.")
+    if _UPLOAD.search(text):
+        where = (" Architect profilinde 'taslak seri olarak ekle' dersen taslak olur; kataloğa almak için ayrıca açık onay gerekir."
+                 if architect else " Analyst profilinde dosya okunur ve analiz edilir, kataloğa yazılmaz.")
+        return (f"Soru kutusunun solundaki Dosya düğmesiyle ya da dosyayı sayfaya sürükleyerek yükleyebilirsin: "
+                f"{', '.join(UPLOAD_HELP_KINDS)}; en çok {UPLOAD_HELP_MB} MB. Dosya bu oturuma özel saklanır; ardından ne "
+                f"yapılacağını yaz (ör. 'bu dosyayı analiz et')." + where)
+    return None
+
+
 def capability_reply(question: str, *, tools: set[str], datasets) -> str | None:
     """Yetenek ya da veri seti sorusu ise tek paragraf cevap; değilse None. Rakam geçen ya da uzun mesaj veri sorusudur."""
     text = (question or "").strip()
-    if not text or re.search(r"\d", text) or len(text.split()) > 14 or _ANALYTIC.search(text):
+    if not text or re.search(r"\d", text) or len(text.split()) > 14:
+        return None
+    usage = usage_reply(text, tools)       # analiz sözcüğü korumasından önce: "profili nasıl değiştiririm", "tabloyu nasıl indiririm"
+    if usage is not None:
+        return usage
+    if _ANALYTIC.search(text):
         return None
     from ..source_hints import load_source_hints
 
@@ -166,20 +235,27 @@ def data_sets_reply(specs: list, hints: dict) -> str:
                 cov = getattr(spec, "coverage", None)
                 uploads.append(series_label(spec) + _span(getattr(cov, "start", None), getattr(cov, "end", None)))
             continue
-        g = groups.setdefault(src, {"n": 0, "start": None, "end": None})
+        g = groups.setdefault(src, {"n": 0, "start": None, "end": None, "specs": []})
         g["n"] += 1
+        g["specs"].append(spec)
         cov = getattr(spec, "coverage", None)
         for key, value, pick in (("start", getattr(cov, "start", None), min), ("end", getattr(cov, "end", None), max)):
             if value is not None:
                 g[key] = value if g[key] is None else pick(g[key], value)
     if not groups and not uploads:
         return "Veri havuzunda şu an yüklü seri yok."
-    parts = [f"{names.get(src, src)}: {g['n']} seri{_span(g['start'], g['end'])}"
-             for src, g in sorted(groups.items(), key=lambda kv: -kv[1]["n"])]
-    text = ("Veri havuzunda şu kaynaklardan yüklü seriler var: " + "; ".join(parts) + ".") if parts else ""
+    # 15 Eyl kullanıcı kararı: kaynak başına konu başlıkları da (katalogdaki takma adlardan) ve okunur adı tanımsız yeni kaynak için
+    # kurum adı / alan adı. İçerik her soruda canlı katalogdan; veri eklenince cevap kendiliğinden değişir.
+    from ..labels import source_display_name, topics_summary
+
+    lines = []
+    for src, g in sorted(groups.items(), key=lambda kv: -kv[1]["n"]):
+        topics = topics_summary(g["specs"])
+        lines.append(f"- {source_display_name(src, g['specs'])}: {g['n']} seri{_span(g['start'], g['end'])}" + (f"; {topics}" if topics else ""))
+    text = ("Veri havuzunda şu kaynaklardan yüklü seriler var:\n" + "\n".join(lines)) if lines else ""
     if uploads:
         listed = ", ".join(uploads[:5]) + (f" ve {len(uploads) - 5} seri daha" if len(uploads) > 5 else "")
-        text += (f" Kullanıcının eklediği seriler: {listed}." if parts else f"Veri havuzunda kullanıcının eklediği seriler var: {listed}.")
+        text += (f"\nKullanıcının eklediği seriler: {listed}." if lines else f"Veri havuzunda kullanıcının eklediği seriler var: {listed}.")
     return text.strip()
 
 

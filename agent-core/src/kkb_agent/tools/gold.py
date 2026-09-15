@@ -76,7 +76,9 @@ oranı toplamak yanlış sayı üretir. Bunun için:
 Kural (son değer / toplam / ortalama) katalogdan gelir, sen seçemezsin. Araç reddederse \
 sebebini kullanıcıya sade Türkçeyle söyle; sayı üretme, SQL ile aynı işi yapmaya kalkma.
 Hazır Gold tabloları (kimliği gold. ile başlar) lakehouse_search'te görünür; onlar zaten \
-hesaplanmıştır, lakehouse_query ile doğrudan sorgulanır."""
+hesaplanmıştır, lakehouse_query ile doğrudan sorgulanır.
+Kullanıcıya bu tabloları "Gold" diye anma ve kimliklerini yazma: "hesaplanmış tablo" de ve hangi kaynağın verisinden, \
+hangi kuralla (ör. haftalıktan aylık ortalama) hesaplandığını söyle."""
 
 # Hesapta kullanma rızası; kalıcı yayın onayı ("onaylıyorum", "kataloğa al") bu rızayı VERMEZ (D03-T06, ADR-0068).
 _CONSENT = re.compile(
