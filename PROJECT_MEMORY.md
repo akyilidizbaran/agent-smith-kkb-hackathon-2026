@@ -579,3 +579,8 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
 - **Durum:** commit edilmedi; kullanıcı kontrol ettikten sonra PR ile main'e gidecek.
 - **Son doğrulama ve PR (16 Eyl gece):** son kodla arayüz kabulü 15/15 (`docs/experiments/k01_ui_kabul_2026-09-16_0121`); kullanıcı
   onayıyla commit edildi, feature/agent-engine'den main'e PR açıldı. main'e birleştirme CI yeşil gelince ayrıca onayla yapılacak.
+- **PR #8 main'e birleşti (16 Eyl, kullanıcı onayıyla):** merge commit 4f65310, ebeveynler d187502 ve f135d4a; `gh pr merge --merge`.
+  - Kapsam: ADR-0083 (kanıt yolculuğu tek gösterim), ADR-0084 (sohbet kaydı, solda sohbet listesi), ADR-0085 (adım yolculuğu, tek
+    satır araç izi) ve son arayüz kabul raporu.
+  - CI bu commit'in kendi koşularında yeşil: agent-core 37-39 s, lakehouse-core 28 ve 47 dk.
+  - feature/agent-engine main'e ileri sarıldı.
