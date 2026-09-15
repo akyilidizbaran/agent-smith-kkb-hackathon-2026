@@ -34,6 +34,7 @@ from .small_talk import capability_reply, strip_filler_opening
 from .small_talk import is_identity_question, is_small_talk, is_usage_question, small_talk_reply, trim_unsolicited_offers
 from ..labels import humanize_internal
 from . import tool_gate
+from .follow_up import FollowUpContext, FollowUpResolution, resolve_follow_up
 
 # Kullanıcının grafik isteği (Türkçe çekimli: grafiği, grafiğini, çiz, çizer misin, görselleştir).
 _CHART_ASK = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
@@ -536,6 +537,8 @@ class AnalyticsAgent:
         self._system_prompt_template = system_prompt
         self._system_prompt = self.profile.render(system_prompt)
         self._history: list[ChatMessage] = []  # turlar arası konuşma hafızası
+        self._follow_up_context = FollowUpContext()
+        self._follow_up_resolution: FollowUpResolution | None = None
 
     def reset(self) -> None:
         self._history.clear()
@@ -543,6 +546,18 @@ class AnalyticsAgent:
             self.registry.user_text = ""
             self.registry.sanctioned_locators = set()
         self.workspace = AnalysisWorkspace()
+        self._follow_up_context = FollowUpContext()
+        self._follow_up_resolution = None
+
+    @property
+    def follow_up_context(self) -> FollowUpContext:
+        """Son başarılı veri turunun güvenli, session-scoped bağlamı."""
+        return self._follow_up_context
+
+    @property
+    def follow_up_resolution(self) -> FollowUpResolution | None:
+        """Son sorunun inherited/override/clear karar izi."""
+        return self._follow_up_resolution
 
     # ------------------------------------------------------------------
     def _catalog_specs(self) -> list:
@@ -556,6 +571,7 @@ class AnalyticsAgent:
         """Bir soruyu uçtan uca cevaplar; cevaba kanıt panelini iliştirir."""
         self._usage = {"prompt": 0, "completion": 0, "calls": 0}
         self._last_context = None
+        self._follow_up_resolution = None
         if is_small_talk(question):
             # Harness kuralı: selamlaşma LLM'e gitmez; tablo ve kanıt paneli yok (ADR-0045).
             text = small_talk_reply(question, has_table=self.workspace.has_table)
@@ -575,6 +591,7 @@ class AnalyticsAgent:
         clarify = self._vague_clarification(question)
         if clarify is not None:
             return clarify
+        self._prepare_follow_up(question)
         self._truncated = False
         try:
             answer = self._ask(question)
@@ -589,9 +606,13 @@ class AnalyticsAgent:
                     f"deneyin.{note} Sayı üretmedim.")
             self._history.append(ChatMessage(role="user", content=question))
             self._history.append(ChatMessage(role="assistant", content=text))
-            return AgentAnswer(text=text, steps=[AgentStep(index=1, role="narrate", thought="model servisi kesintisi",
-                                                           result_summary=str(exc)[:200], ok=False, error_code="LLM_UNAVAILABLE")],
-                               workspace=self.workspace, usage=dict(self._usage))
+            return self._complete_follow_up(AgentAnswer(
+                text=text,
+                steps=[AgentStep(index=1, role="narrate", thought="model servisi kesintisi",
+                                 result_summary=str(exc)[:200], ok=False, error_code="LLM_UNAVAILABLE")],
+                workspace=self.workspace,
+                usage=dict(self._usage),
+            ))
         if self._truncated:
             answer.text = answer.text.rstrip() + "\n\n(Not: model çıktısı uzunluk sınırında kesildi; tablo ve indirmeler tamdır.)"
         trimmed_text, trimmed = trim_unsolicited_offers(answer.text)
@@ -637,6 +658,27 @@ class AnalyticsAgent:
                 )
             except Exception as exc:  # noqa: BLE001 — panel cevabı asla düşürmez
                 log.warning("kanıt paneli kurulamadı: %s", exc)
+        return self._complete_follow_up(answer)
+
+    def _prepare_follow_up(self, question: str) -> None:
+        try:
+            specs = self._catalog_specs()
+        except Exception:  # noqa: BLE001 — resolver cevabı asla düşürmez
+            specs = []
+        self._follow_up_resolution = resolve_follow_up(question, self._follow_up_context, specs)
+
+    def _complete_follow_up(self, answer: AgentAnswer) -> AgentAnswer:
+        resolution = self._follow_up_resolution
+        if resolution is None:
+            return answer
+        committed = any(
+            step.ok and step.tool_name in self.DATA_PRODUCING_TOOLS
+            for step in answer.steps
+        ) and not resolution.clarification_required
+        if committed:
+            self._follow_up_context = resolution.context
+            self._follow_up_resolution = resolution.mark_committed()
+        answer.artifacts.append({"kind": "follow_up_resolution", **self._follow_up_resolution.as_dict()})
         return answer
 
     def _vague_clarification(self, question: str) -> AgentAnswer | None:
@@ -1196,6 +1238,11 @@ class AnalyticsAgent:
         # ("System message must be at the beginning"); Ollama tolere ediyordu.
         if self.workspace.has_table:
             system += "\n\nMEVCUT ANALİZ DURUMU:\n" + self.workspace.describe_for_llm()
+
+        if self._follow_up_resolution is not None:
+            follow_up_note = self._follow_up_resolution.prompt()
+            if follow_up_note:
+                system += "\n\n" + follow_up_note
 
         msgs = [ChatMessage(role="system", content=system)]
         msgs += self._history[-8:]  # son turlar — bağlamı korur, pencereyi şişirmez
