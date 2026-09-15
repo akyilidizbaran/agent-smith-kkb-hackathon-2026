@@ -1,0 +1,25 @@
+{
+  "_note": "Uygunluk kapısının (core/fitness.py) kavram sözlüğü. Çekirdek kod alan bilgisini burada tutar, kodda değil; başka bir alan için bu dosya değiştirilir ya da CONCEPTS_FILE ile başka dosya verilir. Boş dosyada kapı yalnız dönem/granülarite/makullük denetler ve kavram kararı 'kısmen' kalır (yanlış ret üretmez). Katalogdaki kolon alias'ları çalışma anında bu sözlüğe eklenir (Lexicon.with_catalog). Kökler 'relevance.stem' ile aynı kaba köktür: önek eşleşmesi, 2 harfli kök tam eşleşme ister. 'roots' dosya tarafı (ad+başlık; kısaltmalar dahil), 'triggers' soru tarafı (boş liste: kavram soruda aranmaz, yalnız dosyada tanınır), 'measure' analizin ÜZERİNDE çalıştığı ölçüm mü, 'supersedes' bu kavram istendiğinde gereksinimden düşen kavramlar ('takipteki konut' sorusunda 'kredi' niteleyicidir, ayrı kavram değil), 'max_abs_median' bu adla etiketli kolonun medyanı bu sınırı aşarsa etiket güvenilmez (oran adlı kolonda 459.904). Değerler 14 Eylül ablation'ında (docs/experiments/ueb_wrongfile_ablation_2026-09-14.json, H kolu) ölçülen kümedir; aynı sette ayarlandığı için iyimserdir.",
+  "concepts": {
+    "konut":         {"roots": ["konut", "hsg", "mortg", "housi", "house", "ev"], "triggers": ["konut", "mortg", "housi", "ev"], "measure": false},
+    "kredi":         {"roots": ["kredi", "krd", "ln", "loan", "mortg", "credi"], "triggers": ["kredi", "mortg", "loan"], "measure": false},
+    "bakiye":        {"roots": ["bakiy", "hacim", "hacmi", "tutar", "bal", "balan", "stok", "volum", "amoun"], "triggers": ["bakiy", "hacim", "hacmi", "balan", "tutar"], "measure": true},
+    "faiz":          {"roots": ["faiz", "rate", "int"], "triggers": ["faiz", "rate"], "measure": true, "max_abs_median": 1000},
+    "fiyat_endeksi": {"roots": ["kfe", "hpi", "endek", "fiyat", "price"], "triggers": ["fiyat", "endek", "kfe", "price"], "measure": true, "supersedes": ["bakiye"]},
+    "tufe":          {"roots": ["tüfe", "tufe", "enfla", "cpi", "infla"], "triggers": ["tüfe", "tufe", "enfla", "cpi"], "measure": true, "supersedes": ["bakiye"]},
+    "kredi_karti":   {"roots": ["kart", "card"], "triggers": ["kart", "card"], "measure": false, "supersedes": ["kredi"]},
+    "takip":         {"roots": ["takip", "npl", "sorun", "nonpe"], "triggers": ["takip", "npl"], "measure": true, "supersedes": ["bakiye", "kredi"]},
+    "satis":         {"roots": ["satış", "satis", "sale"], "triggers": ["satış", "satis", "sale"], "measure": true, "supersedes": ["bakiye", "kredi"]},
+    "basvuru":       {"roots": ["başvu", "basvu", "appli"], "triggers": ["başvu", "basvu", "appli"], "measure": true, "supersedes": ["bakiye", "kredi"]},
+    "ihtiyac":       {"roots": ["ihtiy"], "triggers": ["ihtiy"], "measure": false},
+    "tasit":         {"roots": ["taşıt", "tasit", "vehic", "auto"], "triggers": ["taşıt", "tasit"], "measure": false},
+    "mevduat":       {"roots": ["mevdu", "depos"], "triggers": [], "measure": false},
+    "gider":         {"roots": ["gider", "expen"], "triggers": [], "measure": false}
+  },
+  "_dimension_requests_note": "Soru ön-koşulu (core/question_preflight.py): 'triggers' soruda geçince kırılım istenmiş sayılır; katalogdaki kırılım kolonlarının adı/alias'ı/örnek değeri 'catalog_roots' köklerinden birini taşımıyorsa 'katalogda bu kırılım yok' satırı üretilir.",
+  "dimension_requests": {
+    "il":          {"triggers": ["istanbul", "ankara", "izmir", "ilinde", "ildeki", "ilind", "il baz", "iller", "şehir", "sehir"], "catalog_roots": ["il", "iller", "şehir", "sehir", "city", "provi", "istan", "ankar", "izmir"]},
+    "banka_grubu": {"triggers": ["katılım", "katilim", "kamu bank", "özel bank", "ozel bank", "yabancı bank", "banka grub"], "catalog_roots": ["banka", "grup", "bank"]},
+    "vade":        {"triggers": ["vadeli", "vadesi", "kısa vade", "uzun vade"], "catalog_roots": ["vade", "matur"]}
+  }
+}

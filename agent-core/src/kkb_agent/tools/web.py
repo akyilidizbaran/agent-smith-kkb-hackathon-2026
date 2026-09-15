@@ -21,6 +21,7 @@ from ..contracts.lakehouse import QueryProvenance
 from ..core.access_policy import decide, detect_source_constraint, render_for_model, to_tool_error
 from ..core.intent import locator_from_user
 from ..core.errors import ToolError
+from ..core.preview import preview_table
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
 from ..web.crawl import CrawlBudget, CrawlResult, crawl, keywords_of
@@ -113,6 +114,10 @@ class WebUrlParams(BaseModel):
     pages: str | None = Field(default=None, description="PDF için hangi sayfalar: '3', '2-4', '1,5' (varsayılan ilk 5); belge uzunsa kart söyler")
     max_depth: int = Field(default=0, ge=0, le=1, description="Bağlantı derinliği: 0 yalnız verilen sayfa, 1 bir adım")
     text_from: int = Field(default=0, ge=0, description="Metin uzunsa kaldığın karakterden devam: kart 'text_from=N ile yeniden çağır' der")
+    user_confirmed: bool = Field(
+        default=False,
+        description="Uygunluk kapısı tabloyu reddettiyse ve kullanıcı 'yine de yükle / doğru tablo bu' dediyse true; tek başına yetmez, kullanıcı metninde de geçmeli",
+    )
 
 
 class WebUrlTool(Tool):
@@ -143,6 +148,27 @@ class WebUrlTool(Tool):
 
     def _question(self) -> str:
         return getattr(self._registry, "active_question", "") or ""
+
+    def _fitness(self, question: str, table: Any, locator: str) -> tuple[Any, list[str]]:
+        """Uygunluk kapısı + tablo kalitesi (core/fitness, builder/quality; V3 §3.9). Sözlük: yapılandırma + katalog
+        alias'ları (kayıt defterindeki lakehouse'tan; yoksa yalnız yapılandırma). Kapı hiçbir zaman aracı düşürmez:
+        hesaplanamazsa (None, []) döner ve tablo eski davranışla yüklenir."""
+        try:
+            from ..builder.quality import table_quality
+            from ..core.fitness import Lexicon, assess, signature_of
+
+            lex = Lexicon.load()
+            getter = getattr(self._registry, "get", None)
+            lake = getattr(getter("lakehouse_query"), "lakehouse", None) if callable(getter) else None
+            if lake is not None and hasattr(lake, "list_datasets"):
+                lex = lex.with_catalog(s for s in lake.list_datasets() if getattr(s, "source", "") != "adhoc")
+            sig = signature_of(table, locator)
+            return assess(question, sig, lex), table_quality(table, sig, question)
+        except Exception as exc:  # noqa: BLE001 — kapı ölçer, düşürmez
+            import logging
+
+            logging.getLogger(__name__).warning("uygunluk kapısı hesaplanamadı: %s", exc)
+            return None, []
 
     def check_policy(self, params: WebUrlParams) -> ToolError | None:
         # Niyet kapısı (ADR-0037): adres kullanıcının mesajından ya da onun istediği aramanın
@@ -240,6 +266,21 @@ class WebUrlTool(Tool):
             local_index = next((i for (pp, i, tt) in tables if pp is page and tt is table), 0)
             labels = getattr(page.page, "table_labels", []) or []
             table_label = labels[local_index] if local_index < len(labels) else ""
+            # Uygunluk kapısı (V3 §3.9, 15 Eyl): soru ne istiyor × tablo ne sunuyor — tablo aktif olmadan ÖNCE.
+            # Ret → tablo YÜKLENMEZ, kart tabloda ne olduğunu söyler; kullanıcı "yine de yükle" derse aşılır.
+            # Ölçüldü (UEB 14 Eyl): yüklenip uyarı verilen yanlış tablo iki koşuda da tam analizle cevaplandı (B02/B07).
+            fit, quality = self._fitness(question, table, page.url)
+            if fit is not None and fit.decision == "reject":
+                from ..builder.relevance import user_confirmed
+                user_text = (getattr(self._registry, "user_text", None) or question or "")
+                if not (params.user_confirmed and user_confirmed(user_text)):
+                    return ToolResult.fail(
+                        "FILE_IRRELEVANT", fit.stop_message(),
+                        hint=("Tabloyu yükleme; kullanıcıya bu tabloda sorusu için gerekli alanın olmadığını, tabloda ne olduğunu "
+                              "söyle ve doğru kaynağı sor. Kullanıcı 'yine de yükle / doğru tablo bu' derse aynı çağrıyı "
+                              "user_confirmed=true ile yinele. Sayı uydurma."),
+                        layer="policy", retryable=False,
+                    )
             prov = QueryProvenance(
                 sql=f"web_url {page.url} tablo#{params.table_index}" + (f" ({table_label})" if table_label else ""),
                 dataset_ids=[],
@@ -258,16 +299,26 @@ class WebUrlTool(Tool):
                 f"TABLO YÜKLENDİ: #{params.table_index} ({len(table)} satır, {len(table.columns)} sütun) — {page.url}"
                 + (f" — {table_label}" if table_label else ""),
                 f"Sütunlar: {', '.join(map(str, table.columns))}",
-                _plain(table.head(10)),
+                preview_table(table, render=_plain),   # ≤24 satır tamamı, üstü baş+son (core/preview, PART 41)
                 f"Kaynak: {page.page.title or page.url} | sha256 {page.fetch.sha256[:12]}… | çekim {page.fetch.fetched_at:%Y-%m-%d %H:%M} UTC",
                 *[f"NOT: {n}" for n in page.page.notes],  # type: ignore[union-attr]
                 self._year_note(question, [page]),
+                *(fit.lines() if fit is not None else []),
+                *[f"UYARI: {q}" for q in quality],
                 ("YAPACAĞIN: sayıları bu tablodan ver; birimi belgenin yazdığı gibi aktar; kullanıcıya bunun "
                  "OCR ile görüntüden okunduğunu ve doğrulanmadığını söyle." if page.page.ocr else  # type: ignore[union-attr]
-                 "YAPACAĞIN: sayıları bu tablodan ver; birimi sayfanın yazdığı gibi aktar."),
+                 "YAPACAĞIN: sayıları bu tablodan ver; birimi sayfanın yazdığı gibi aktar.")
+                + (" Kartta UYARI ya da 'uygunluk: kısmen' varsa cevabın İLK cümlesi o uyarıdır." if quality or (fit is not None and fit.decision == "partial") else ""),
             ]
+            artifacts: dict[str, Any] = {"web": web_artifact}
+            if fit is not None:
+                artifacts["fitness"] = {"decision": fit.decision, "score": fit.score, "reasons": list(fit.reasons), "dims": dict(fit.dims),
+                                        "required": list(fit.required), "present": list(fit.present),
+                                        "signature": fit.signature.describe(), "coverage": fit.signature.coverage(),
+                                        "source": page.url, "quality": list(quality),
+                                        "confirmed": bool(params.user_confirmed)}
             return ToolResult(content="\n".join(l for l in content if l), data=table,
-                              provenance=prov, artifacts={"web": web_artifact})
+                              provenance=prov, artifacts=artifacts)
 
         # Liste modu: sayfa(lar), tablolar, metin özeti, erişim satırı.
         decision = decide(first.fetch.outcome, constraint)

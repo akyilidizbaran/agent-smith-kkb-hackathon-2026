@@ -1,0 +1,185 @@
+[
+ {
+  "id": "A24_cok_tur_niyet",
+  "category": "E67 intent-change multi-turn",
+  "persona": "power",
+  "expected": "answer",
+  "severity": 3,
+  "db": "seed",
+  "queries": [
+   "2025 yılında konut kredisi bakiyesini aylık göster.",
+   "Aynısını ihtiyaç kredisi için 2024'te yap."
+  ],
+  "answer": "2024 yılı aylık ihtiyaç kredisi bakiyeleri (BDDK Aylık Bülten, sektör toplamı, ay sonu stok, milyon TL):\n\n| Dönem | Bakiye (milyon TL) |\n|---|---|\n| Ocak 2024 | 1.006.160 |\n| Şubat 2024 | 1.049.444 |\n| Mart 2024 | 1.090.608 |\n| Nisan 2024 | 1.113.635 |\n| Mayıs 2024 | 1.147.661 |\n| Haziran 2024 | 1.193.998 |\n| Temmuz 2024 | 1.223.367 |\n| Ağustos 2024 | 1.262.668 |\n| Eylül 2024 | 1.295.555 |\n| Ekim 2024 | 1.333.210 |\n\nKaynak: BDDK Aylık Bülten — \"Tüketici Kredileri - İhtiyaç\" kalemi, sektör toplamı. Değerler ay sonu bakiyesidir (stok), ay içi kullandırım değildir. Kasım ve Aralık 2024 değerleri bu sorgu çıktısında yer almadığı için tabloda gösterilememiştir; bu iki ay için ayrıca sorgu çalıştırılabilir.",
+  "answers": [
+   "2025 yılı aylık konut kredisi bakiyeleri (BDDK Aylık Bülten, sektör toplamı, ay sonu stok, milyon TL):\n\n| Dönem | Bakiye (milyon TL) |\n|---|---|\n| Ocak 2025 | 523.455 |\n| Şubat 2025 | 535.029 |\n| Mart 2025 | 548.385 |\n| Nisan 2025 | 561.793 |\n| Mayıs 2025 | 575.453 |\n| Haziran 2025 | 583.265 |\n| Temmuz 2025 | 594.607 |\n| Ağustos 2025 | 608.694 |\n| Eylül 2025 | 623.765 |\n| Ekim 2025 | 642.144 |\n\nKaynak: BDDK Aylık Bülten — \"Tüketici Kredileri - Konut\" kalemi, sektör toplamı. Değerler ay sonu bakiyesidir (stok), ay içi kullandırım değildir. Kasım ve Aralık 2025 değerleri bu sorgu çıktısında yer almadığı için tabloda gösterilememiştir; bu iki ay için ayrıca sorgu çalıştırılabilir.",
+   "2024 yılı aylık ihtiyaç kredisi bakiyeleri (BDDK Aylık Bülten, sektör toplamı, ay sonu stok, milyon TL):\n\n| Dönem | Bakiye (milyon TL) |\n|---|---|\n| Ocak 2024 | 1.006.160 |\n| Şubat 2024 | 1.049.444 |\n| Mart 2024 | 1.090.608 |\n| Nisan 2024 | 1.113.635 |\n| Mayıs 2024 | 1.147.661 |\n| Haziran 2024 | 1.193.998 |\n| Temmuz 2024 | 1.223.367 |\n| Ağustos 2024 | 1.262.668 |\n| Eylül 2024 | 1.295.555 |\n| Ekim 2024 | 1.333.210 |\n\nKaynak: BDDK Aylık Bülten — \"Tüketici Kredileri - İhtiyaç\" kalemi, sektör toplamı. Değerler ay sonu bakiyesidir (stok), ay içi kullandırım değildir. Kasım ve Aralık 2024 değerleri bu sorgu çıktısında yer almadığı için tabloda gösterilememiştir; bu iki ay için ayrıca sorgu çalıştırılabilir."
+  ],
+  "duration_s": 15.2,
+  "tools": [
+   "lakehouse_query",
+   "lakehouse_query"
+  ],
+  "error_codes": [],
+  "trace": [
+   "✓ lakehouse_query({\"sql\": \"SELECT donem, toplam\\nFROM bddk_aylik_krediler\\nWHERE kalem = 'Tüketici Kredileri) → Sorgu başarılı: 12 satır, 2 sütun.\nSütunlar: donem, toplam\nİlk 10 satır:\n     donem   toplam\n2025-01-31 523455.0\n2025-02",
+   "✗ validate({}) → ",
+   "✓ narrate({}) → 2025 yılı aylık konut kredisi bakiyeleri (BDDK Aylık Bülten, sektör toplamı, ay sonu stok, milyon TL):\n\n| Dönem | Bakiye",
+   "✓ lakehouse_query({\"purpose\": \"2024 yılı aylık ihtiyaç kredisi bakiyelerini getir\", \"sql\": \"SELECT donem, to) → Sorgu başarılı: 12 satır, 2 sütun.\nSütunlar: donem, toplam\nİlk 10 satır:\n     donem    toplam\n2024-01-31 1006160.0\n2024-",
+   "✗ validate({}) → ",
+   "✓ narrate({}) → 2024 yılı aylık ihtiyaç kredisi bakiyeleri (BDDK Aylık Bülten, sektör toplamı, ay sonu stok, milyon TL):\n\n| Dönem | Baki"
+  ],
+  "grounding": "OK",
+  "usage": {
+   "prompt": 50722,
+   "completion": 1733,
+   "calls": 6
+  },
+  "table": {
+   "rows": 12,
+   "cols": [
+    "donem",
+    "toplam"
+   ],
+   "head": "     donem    toplam\n2024-01-31 1006160.0\n2024-02-29 1049444.0\n2024-03-31 1090608.0"
+  },
+  "verdict": "MISS",
+  "detected": [
+   "yer alm",
+   "değil"
+  ],
+  "wrong": [],
+  "correct": [],
+  "asked": false,
+  "has_table": true,
+  "numbers": [
+   "1.006.160",
+   "1.049.444",
+   "1.090.608",
+   "1.113.635",
+   "1.147.661",
+   "1.193.998",
+   "1.223.367",
+   "1.262.668",
+   "1.295.555",
+   "1.333.210"
+  ],
+  "note": "ikinci turda tablo 2024 ihtiyaç olmalı; 2025/konut kalıntısı sessiz hata",
+  "rep": 1
+ },
+ {
+  "id": "D01_ingilizce_alias",
+  "category": "control: English alias",
+  "persona": "power",
+  "expected": "answer",
+  "severity": 2,
+  "db": "seed",
+  "queries": [
+   "Mortgage balance in December 2025?"
+  ],
+  "answer": "Aralık 2025 sonu itibarıyla konut (mortgage) kredi bakiyesi **678.970 milyon TL** (BDDK Aylık Bülten, \"Tüketici Kredileri - Konut\" kalemi, sektör toplamı).\n\nBunu para cinsi kırılımıyla:\n- Türk parası (TL): 678.912 milyon TL\n- Yabancı para (YP): 58 milyon TL\n\nNot: Bu, ay sonu bakiyesidir (stok); ay içinde kullandırılan kredi tutarı değildir. Kaynak BDDK'nın milyon TL olarak yayımladığı değerleri aynen gösterir.",
+  "answers": [
+   "Aralık 2025 sonu itibarıyla konut (mortgage) kredi bakiyesi **678.970 milyon TL** (BDDK Aylık Bülten, \"Tüketici Kredileri - Konut\" kalemi, sektör toplamı).\n\nBunu para cinsi kırılımıyla:\n- Türk parası (TL): 678.912 milyon TL\n- Yabancı para (YP): 58 milyon TL\n\nNot: Bu, ay sonu bakiyesidir (stok); ay içinde kullandırılan kredi tutarı değildir. Kaynak BDDK'nın milyon TL olarak yayımladığı değerleri aynen gösterir."
+  ],
+  "duration_s": 4.2,
+  "tools": [
+   "lakehouse_query"
+  ],
+  "error_codes": [],
+  "trace": [
+   "✓ lakehouse_query({\"sql\": \"SELECT donem, kalem, tp, yp, toplam\\nFROM bddk_aylik_krediler\\nWHERE kalem = 'Tük) → Sorgu başarılı: 1 satır, 5 sütun.\nSütunlar: donem, kalem, tp, yp, toplam\nİlk 1 satır:\n     donem                      ka",
+   "✓ narrate({}) → Aralık 2025 sonu itibarıyla konut (mortgage) kredi bakiyesi **678.970 milyon TL** (BDDK Aylık Bülten, \"Tüketici Krediler"
+  ],
+  "grounding": "OK",
+  "usage": {
+   "prompt": 15610,
+   "completion": 282,
+   "calls": 2
+  },
+  "table": {
+   "rows": 1,
+   "cols": [
+    "donem",
+    "kalem",
+    "tp",
+    "yp",
+    "toplam"
+   ],
+   "head": "     donem                      kalem       tp   yp   toplam\n2025-12-31 Tüketici Kredileri - Konut 678912.0 58.0 678970.0"
+  },
+  "verdict": "PASS",
+  "detected": [
+   "değil"
+  ],
+  "wrong": [],
+  "correct": [
+   "678.970"
+  ],
+  "asked": false,
+  "has_table": true,
+  "numbers": [
+   "678.970",
+   "678.912",
+   "58"
+  ],
+  "note": "",
+  "rep": 1
+ },
+ {
+  "id": "D02_iso_buyuk_harf",
+  "category": "control: caps + ISO",
+  "persona": "power",
+  "expected": "answer",
+  "severity": 2,
+  "db": "seed",
+  "queries": [
+   "KONUT KREDİSİ BAKİYESİ 2025-12"
+  ],
+  "answer": "**Konut Kredisi Bakiyesi — Aralık 2025** (BDDK Aylık Bülten, sektör toplamı):\n\n| Gösterge | Tutar |\n|---|---|\n| Türk Parası (TP) | 678.912 milyon TL |\n| Yabancı Para (YP) | 58 milyon TL |\n| **Toplam** | **678.970 milyon TL** |\n\nNot: Bu, ay sonu bakiyesidir (stok); ay içi kullandırılan kredi tutarı değildir.",
+  "answers": [
+   "**Konut Kredisi Bakiyesi — Aralık 2025** (BDDK Aylık Bülten, sektör toplamı):\n\n| Gösterge | Tutar |\n|---|---|\n| Türk Parası (TP) | 678.912 milyon TL |\n| Yabancı Para (YP) | 58 milyon TL |\n| **Toplam** | **678.970 milyon TL** |\n\nNot: Bu, ay sonu bakiyesidir (stok); ay içi kullandırılan kredi tutarı değildir."
+  ],
+  "duration_s": 3.6,
+  "tools": [
+   "lakehouse_query"
+  ],
+  "error_codes": [],
+  "trace": [
+   "✓ lakehouse_query({\"sql\": \"SELECT donem, tp, yp, toplam\\nFROM bddk_aylik_krediler\\nWHERE kalem = 'Tüketici K) → Sorgu başarılı: 1 satır, 4 sütun.\nSütunlar: donem, tp, yp, toplam\nİlk 1 satır:\n     donem       tp   yp   toplam\n2025-12",
+   "✓ narrate({}) → **Konut Kredisi Bakiyesi — Aralık 2025** (BDDK Aylık Bülten, sektör toplamı):\n\n| Gösterge | Tutar |\n|---|---|\n| Türk Par"
+  ],
+  "grounding": "OK",
+  "usage": {
+   "prompt": 15616,
+   "completion": 260,
+   "calls": 2
+  },
+  "table": {
+   "rows": 1,
+   "cols": [
+    "donem",
+    "tp",
+    "yp",
+    "toplam"
+   ],
+   "head": "     donem       tp   yp   toplam\n2025-12-31 678912.0 58.0 678970.0"
+  },
+  "verdict": "PASS",
+  "detected": [
+   "değil"
+  ],
+  "wrong": [],
+  "correct": [
+   "678.970"
+  ],
+  "asked": false,
+  "has_table": true,
+  "numbers": [
+   "678.912",
+   "58",
+   "678.970"
+  ],
+  "note": "",
+  "rep": 1
+ }
+]

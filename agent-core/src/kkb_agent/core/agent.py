@@ -28,6 +28,8 @@ from ..domain import DomainProfile
 from ..llm.base import ChatMessage, LLMClient, ToolCall
 from .errors import ToolError
 from .grounding import causal_language, grounding_check, _NUM_RE, _ascii_minus, numbers_in
+from .claim_check import claim_cell, range_claim   # G5/G6 (Büşra, V3 §3.9): sayı doğru dönemle mi yazılmış
+from .question_preflight import _PREMISE as _PREMISE_ASK
 from .small_talk import capability_reply, strip_filler_opening
 from .small_talk import is_small_talk, small_talk_reply, trim_unsolicited_offers
 from . import tool_gate
@@ -44,6 +46,10 @@ _REQUESTED_CAPABILITIES: tuple[tuple[str, "re.Pattern[str]", frozenset[str], str
     ("analitik", _ANALYTICS_ASK, frozenset({"anomaly_detect", "change_points", "lead_lag"}),
      "Kullanıcı aykırılık / kırılma / öncülük sordu ama analitik aracı (anomaly_detect, change_points, "
      "lead_lag) çağırmadın. Veri hazır; iddiayı araçsız yazma, uygun aracı çağır ve sonra cevabını yaz."),
+    # Öncül (Büşra, tools/premise.py, V3 §3.9): soru bir yön varsayıyorsa yön araçla sınanmadan cevap yazılmaz (UEB A09/A10).
+    ("öncül", _PREMISE_ASK, frozenset({"check_premise"}),
+     "Soru bir yön varsayıyor ama check_premise ile doğrulamadın. Öncülü araçla sına (seri, kırılım değeri, yıl, "
+     "iddia edilen yön); kart ÇELİŞİYOR derse cevabın ilk cümlesi düzeltme olsun. Sonra cevabını yaz."),
 )
 from .registry import ToolRegistry
 from .tool import ToolResult
@@ -75,6 +81,11 @@ LAG({example_measure}) OVER (ORDER BY {example_time_column}) AS degisim FROM ...
 BİRİM KURALI:
 Sorgu sonucunda birimler ayrıca bildirilir. Cevabında sayıyı YAZDIĞIN birimle birlikte ver \
 ("523.455 milyon TL" gibi). Birimi kendin çevirme, dönüştürme yapma.
+
+UYARI SIRASI KURALI:
+Soruya eklenmiş bir "ÖN-KOŞUL" satırı ya da araç kartında "UYARI:" / "uygunluk: kısmen" satırı varsa \
+cevabın İLK cümlesi o uyarıdır (eksik ölçüm, kısmi yıl, eksik dönem, belirsiz birim, doğrulanmayan öncül); \
+sayılar ondan SONRA gelir. Uyarıyı cevabın sonuna not olarak bırakma. Tahmin aracı yokken projeksiyon üretme.
 
 DİĞER KURALLAR:
 - ASLA veri uydurma. Bir sayıyı ancak bir araçtan aldıysan söyleyebilirsin. \
@@ -461,6 +472,8 @@ class AnalyticsAgent:
             "lead_lag",
             # Ingest kartı da bir cevaptır: "bu dosyayı ekle" isteğinde sorgu gerekmez.
             "ingest_from_url",
+            # Öncül kartı da cevaptır (Büşra, V3 §3.9): ilk/son gözlem ve karar kartta; sayılar grounding havuzuna girer.
+            "check_premise",
         }
     )
 
@@ -492,6 +505,7 @@ class AnalyticsAgent:
         # turlar (anlatı, hesap kolonu) bu sıcaklıkla: cümleler değişir, sayılar değişmez (ADR-0046).
         self.narrate_temperature = max(0.0, float(narrate_temperature))
         self.last_gate = None
+        self.last_preflight = None   # son sorunun ön-koşul raporu (core/question_preflight); iz ve koşucular okur
         self.llm = llm
         self.registry = registry
         self.workspace = workspace or AnalysisWorkspace()
@@ -807,16 +821,22 @@ class AnalyticsAgent:
                     causal = causal_language(answer_text)
                     if causal:
                         grounding += " | CAUSAL:" + ",".join(causal)
+                    # G5/G6 (Büşra, core/claim_check, V3 §3.9): sayı tabloda var ama BAŞKA dönemin değeri (UEB A06: Ekim değeri
+                    # "Aralık" diye) ya da kapsam beyanı tablonun aralığıyla çelişiyor (B01). MISS gibi iki geri gönderme hakkı.
+                    frames = [f for f in [self.workspace.table, *self._frames_pool()] if f is not None]
+                    cells = claim_cell(answer_text, frames) + range_claim(answer_text, frames)
+                    if cells:
+                        grounding += " | CELL:" + "; ".join(cells)
                     # Nedensellik iddiası için ikinci bir geri gönderme hakkı: ölçüldü (G17), model
                     # kartın "neden deme" uyarısına rağmen ilk yeniden yazımda da nedensellik dili kullandı.
                     causal_retry = causal and causal_rounds < 2
                     # M16 beşinci koşu: tek geri göndermeden sonra da doğrulanamayan bakiye cevaba notla çıktı; MISS de iki hak alır.
-                    miss_retry = grounding.startswith("MISS") and miss_rounds < 2
+                    miss_retry = (grounding.startswith("MISS") or bool(cells)) and miss_rounds < 2
                     if miss_retry or causal_retry:
                         regenerated = True
                         if causal:
                             causal_rounds += 1
-                        if grounding.startswith("MISS"):
+                        if grounding.startswith("MISS") or cells:
                             miss_rounds += 1
                         steps.append(
                             AgentStep(
@@ -835,6 +855,10 @@ class AnalyticsAgent:
                             )
                         if causal:
                             problems.append("nedensellik iddiası var: " + ", ".join(causal))
+                        if cells:
+                            problems.append("dönem–sayı eşleşmesi tabloyla çelişiyor: " + "; ".join(cells)
+                                            + " (her sayıyı tablodaki KENDİ dönemiyle yaz; kart önizlemesi ilk satırlarla sınırlı "
+                                            "olabilir, tablonun tamamına göre yaz)")
                         messages.append(ChatMessage(role="assistant", content=response.content))
                         messages.append(
                             ChatMessage(
@@ -850,6 +874,9 @@ class AnalyticsAgent:
                         continue
                     if grounding.startswith("MISS"):
                         answer_text, rejected = self._final_exit(question, answer_text, tool_texts, steps, i)
+                    if cells:
+                        # Geri gönderme hakkı bitti, çelişki sürüyor: kullanıcıya deterministik not (sayı gizlenmez, etiketi sorgulanır).
+                        answer_text = answer_text.rstrip() + "\n\n(Not: cevaptaki dönem etiketi tabloyla uyuşmuyor — " + "; ".join(cells) + ".)"
                 elif not acted_this_turn and self.workspace.has_table:
                     # D02-T05: önceki turun tablosuyla araçsız verilen cevap da doğrulama kapısından geçer.
                     pool = self._frames_pool()
@@ -865,7 +892,7 @@ class AnalyticsAgent:
                         duration_ms=(time.perf_counter() - started) * 1000,
                     )
                 )
-                answer_text = self._source_note(answer_text, steps, artifacts)
+                answer_text = self._coverage_note(self._source_note(answer_text, steps, artifacts), artifacts)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=answer_text))
                 return AgentAnswer(text=answer_text, steps=steps, workspace=self.workspace,
@@ -943,6 +970,19 @@ class AnalyticsAgent:
                     self.workspace.remember_web(result.artifacts["web"])  # sonraki turların zinciri için
                 if result.ok and result.artifacts.get("web_search"):   # K02-T04: bağlam kaynağı, veri değil (ADR-0075)
                     artifacts.append({"kind": "web_search", **result.artifacts["web_search"]})
+                if result.ok and result.artifacts.get("fitness"):      # uygunluk kararı + kapsam (V3 §3.9): kanıt paneli ve kapsam beyanı
+                    artifacts.append({"kind": "fitness", **result.artifacts["fitness"]})
+                    # Netleştirme kapısı (tools/clarify.py) bu turun kararını okur: yalnız "kısmen" ise soru sorulabilir.
+                    self.registry.last_fitness = {**result.artifacts["fitness"], "turn": getattr(self.registry, "turn", 0)}
+                if result.ok and call.name == "clarify":
+                    # Netleştirme (Büşra, V3 §3.9): araç turu bitirir — soru kullanıcıya gider, sayı üretilmez, model yeniden
+                    # çağrılmaz. Kullanıcının cevabı bekleyen soru mekanizmasıyla (pending_question) sonraki tura bağlanır.
+                    artifacts.append({"kind": "clarify", **(result.artifacts.get("clarify") or {})})
+                    text = self._coverage_note(result.content, artifacts)
+                    self._history.append(ChatMessage(role="user", content=question))
+                    self._history.append(ChatMessage(role="assistant", content=text))
+                    log.info("adım %d: clarify — tur netleştirme sorusuyla bitti", i)
+                    return AgentAnswer(text=text, steps=steps, workspace=self.workspace, artifacts=artifacts)
                 if result.error is not None and not result.error.is_retryable and getattr(result.error, "terminal", None) is not False:
                     terminal = result.error
                 log.info("adım %d: %s -> %s", i, call.name, "ok" if result.ok else "HATA")
@@ -967,7 +1007,7 @@ class AnalyticsAgent:
                 )
                 text = self._strip_reasoning(final.content)
                 text, rejected = self._checked_final(question, text, tool_texts, steps, i)
-                text = self._source_note(text, steps, artifacts)
+                text = self._coverage_note(self._source_note(text, steps, artifacts), artifacts)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=text))
                 return AgentAnswer(text=text, steps=steps, workspace=self.workspace,
@@ -987,7 +1027,7 @@ class AnalyticsAgent:
         )
         text = self._strip_reasoning(final.content)
         text, rejected = self._checked_final(question, text, tool_texts, steps, self.max_steps + 1)
-        text = self._source_note(text, steps, artifacts)
+        text = self._coverage_note(self._source_note(text, steps, artifacts), artifacts)
         if budget_hit:
             # K02-T10 (A27): sınır kullanıcıya deterministik söylenir; modelin bunu yazmasına bırakılmaz.
             text = text.rstrip() + (f"\n\n(Not: soru başına süre bütçesi ({self.time_budget_s:.0f} s) doldu; cevap o ana kadar "
@@ -1115,8 +1155,42 @@ class AnalyticsAgent:
         pending = pending_question(self._history, question)
         if pending:
             question = question + CLARIFY_NOTE.format(q=pending)
+        # Soru ön-koşulu (core/question_preflight, V3 §3.9): katalogda olmayan ölçüm/kırılım, ince frekans, tahmin
+        # yetkisi, öncül — deterministik, araç çağrılmadan; model ilk cümlede söyler. Hesaplanamazsa soru olduğu gibi gider.
+        note = self._preflight_note(question)
+        if note:
+            question = question + "\n\n" + note
         msgs.append(ChatMessage(role="user", content=question))
         return msgs
+
+    def _preflight_note(self, question: str) -> str:
+        try:
+            from .question_preflight import CatalogFacts, preflight
+
+            specs = self._catalog_specs()
+            report = preflight(question, CatalogFacts.from_specs(specs) if specs else None,
+                               tools=set(self.registry.names()), has_table=self.workspace.has_table)
+        except Exception as exc:  # noqa: BLE001 — ön-koşul cevabı asla düşürmez
+            log.warning("soru ön-koşulu hesaplanamadı: %s", exc)
+            return ""
+        self.last_preflight = report
+        return report.note()
+
+    def _coverage_note(self, text: str, artifacts: list) -> str:
+        """Kapsam beyanı (V3 §3.9, 15 Eyl): dış kaynaktan (web_url / ingest) yüklenen tablonun adı, dönemi, satırı ve
+        kalite/uygunluk uyarıları cevabın İLK satırında, deterministik. Modelin hatırlamasına bırakılmaz: ölçüldü (UEB B02),
+        uyarı cevabın sonuna not olarak düştü, kullanıcı sayıları önce okudu."""
+        fits = [a for a in artifacts if a.get("kind") == "fitness"]
+        if not fits:
+            return text
+        f = fits[-1]
+        warn = list(f.get("quality") or [])
+        if f.get("decision") == "partial":
+            warn.insert(0, "uygunluk kısmen — " + "; ".join(f.get("reasons") or []))
+        if f.get("confirmed"):
+            warn.insert(0, "kullanıcı onayıyla yüklendi; kapı bu tabloyu uygun bulmamıştı")
+        line = f"Veri: {f.get('coverage', '')}" + (" | UYARI: " + " | ".join(warn) if warn else "")
+        return f"({line})\n\n{text}"
 
     def _asked_before(self, question: str) -> bool:
         key = _norm_question(question)

@@ -190,7 +190,9 @@ def fetch_url(
     parsed = urlparse(url)
     now = datetime.now(timezone.utc)
 
-    if parsed.scheme in ("", "file"):
+    # Windows sürücü harfi ('C:\...') urlparse'ta şema sanılır; tek harfli şema yerel yoldur (ölçüldü: golden fikstürleri ve
+    # test_web yerel dosya testleri Windows'ta ACCESS_BLOCKED alıyordu; Büşra, 16 Eyl).
+    if parsed.scheme in ("", "file") or (len(parsed.scheme) == 1 and parsed.scheme.isalpha()):
         path = Path(parsed.path if parsed.scheme == "file" else url)
         if not _under(path, allowed_local_roots):
             raise FetchRefused(f"'{path}' izinli kökün altında değil")

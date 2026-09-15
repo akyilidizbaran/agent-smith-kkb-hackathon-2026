@@ -1,0 +1,23 @@
+{
+  "base_url": "https://mia.csp.kloudeks.com/v1",
+  "model": "kkbhackathon2026/Qwen3.8-27B",
+  "probe_sha256": "6a8a04feba9e4416b92971ec5325dcf961ebda8af2904793b5c2ee6f33d05b11",
+  "scope": "Synthetic smoke tests; not guarantees or population estimates.",
+  "records": [
+    {
+      "test": "models",
+      "at_utc": "2026-09-10T18:29:43.751349+00:00",
+      "endpoint": "/models",
+      "error_class": "ConnectError",
+      "seconds": 2.0528
+    },
+    {
+      "test": "basic_chat",
+      "at_utc": "2026-09-10T18:29:45.803165+00:00",
+      "endpoint": "/chat/completions",
+      "request_sha256": "04ef241255022a740e6394cc22092ae27955bb07270b86cc3c05aafb8cd70fb7",
+      "error_class": "ConnectError",
+      "seconds": 2.0212
+    }
+  ]
+}
