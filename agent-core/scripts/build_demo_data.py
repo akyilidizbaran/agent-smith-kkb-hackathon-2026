@@ -27,15 +27,19 @@ from scripts.demo_acceptance import DEMO_SERIES, _run, _stage_incoming, build_co
 
 
 def required_series(core: Path, launcher: str) -> tuple[str, ...]:
-    """M08 zorunlu set, katalogdan (kod listesi değil): BDDK aylık + haftalık, FinTürk'ün tamamı (81 il × 8
-    ölçüm) ve birimi + ölçüm türü tanımlı EVDS serileri. Anlamı belirsiz keşif serileri (unit yok) dışarıda."""
+    """M08 zorunlu set, katalogdan (kod listesi değil): incelemesi tamamlanmış 681 seri.
+
+    ``unit`` ve ``measure_type`` alanlarının dolu olması keşif için yeterli değildir:
+    katalogda bu koşulu sağlayan 1.907 kayıt vardır. Demo veri kapsamı yalnızca
+    ``semantic_confidence=verified`` olan BDDK, FinTürk ve EVDS kayıtlarıdır.
+    """
     snippet = (
         "from pathlib import Path\n"
         "from src.lakehouse.catalog.series import load_catalog_files\n"
         "for r in load_catalog_files(Path('catalog/series')):\n"
-        "    unit = getattr(r, 'unit', None); mt = getattr(r, 'measure_type', None)\n"
-        "    mt = getattr(mt, 'value', mt)\n"
-        "    if r.source_id in ('bddk_monthly', 'bddk_weekly', 'bddk_finturk') or (unit and mt not in (None, 'unknown')):\n"
+        "    confidence = getattr(r, 'semantic_confidence', None)\n"
+        "    confidence = getattr(confidence, 'value', confidence)\n"
+        "    if confidence == 'verified':\n"
         "        print(r.series_id)\n"
     )
     code, out = _run([*launcher.split(), "-c", snippet], core, timeout=180)

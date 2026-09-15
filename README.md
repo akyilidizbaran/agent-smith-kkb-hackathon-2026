@@ -185,8 +185,8 @@ Endpoint ayrıntıları ve doğrulanmış tablo haritası:
 
 ## Çalışma düzeni
 
-- `main` — korumalı. Doğrudan geliştirme yapılmaz; ana dala birleştirme ekip kararıyla ve PR üzerinden yapılır.
-- `feature/agent-engine` — bütünleşik geliştirme dalı: agent motoru, `lakehouse-core`, arayüz ve belgeler birlikte.
+- `main` — güncel bütünleşik teslim ağacı: agent motoru, `lakehouse-core`, arayüz ve belgeler birlikte.
+- `feature/agent-engine` — geçmiş geliştirme dalı; yeni kurulumlarda bu dala geçiş gerekmez.
 - Diğer `feature/*` dalları ekip üyelerinin çalışma ve araştırma dallarıdır; silinmez.
 - Her push'ta GitHub Actions iki paketin deterministik testlerini koşar (`.github/workflows/tests.yml`).
 

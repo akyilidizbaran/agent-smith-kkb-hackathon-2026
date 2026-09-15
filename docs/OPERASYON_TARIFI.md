@@ -5,14 +5,18 @@
 ## 1. Kurulum (temiz makinede)
 
 ```bash
-git clone <repo> && cd <repo> && git checkout feature/agent-engine
+git clone <repo> && cd <repo>
 make setup                    # iki ortam, kilit dosyalarından
 cp .env.example .env          # anahtarları doldur (yalnız .env'de; repoya girmez)
 make preflight                # veri yoksa: HAZIR DEĞİL — veritabanı
-make demo-data                # ~30 dk: 681 seri 2016+ canlı (BDDK, FinTürk 81 il, EVDS)
+make demo-data                # ~30 dk: 681 doğrulanmış seri 2016+ canlı (BDDK, FinTürk 81 il, EVDS)
 make preflight                # hazır
 make serve                    # http://127.0.0.1:8765
 ```
+
+> Güncel teslim ağacında çalışılacak dal `main`'dir; klondan sonra eski
+> `feature/agent-engine` dalına geçiş yapılmaz. Bu dal adı yalnızca geçmiş
+> geliştirme kayıtlarında ve tarihçe belgelerinde görülebilir.
 
 `.env` zorunlu değişkenleri (değerleri yazmayın): `MIA_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, `EVDS_API_KEY`,
 `TAVILY_API_KEY` (web araması için), `ARCHITECT_TOKEN` (jüri profil geçişi için; boşsa geçiş kapalı).
@@ -22,6 +26,9 @@ make serve                    # http://127.0.0.1:8765
 `.env` dosyasını uygulama okur (python-dotenv: `LLM_API_KEY=${MIA_API_KEY}` referansı ve boşluklu değer desteklenir); kabukta
 `source .env` yapmayın, bu iki satır kaybolur. Uzak model için `LLM_API_KEY` boşsa ön kontrolün model satırı ✗ verir ve arayüz
 başlamaz (ADR-0076).
+
+Tam veri kurulumunun beklenen sonucu yaklaşık **681 yüklü seri ve 43.830 Silver gözlemidir**. Kurulum yarıda kalırsa
+aynı `make demo-data` komutu yeniden çalıştırılabilir; `data/` Git'e girmez ve mevcut ham kanıtları yeniden kullanır.
 
 ## 2. Demo akışı (önerilen sıra)
 
@@ -84,4 +91,3 @@ lakehouse CLI, web uygulaması ve arayüz gerçektir. Asıl `data/` yalnız okun
 | `uv run python scripts/acceptance_m16.py` | canlı model çok turlu kabul | demo DB | `docs/experiments/acceptance_m16_*.json` |
 
 Betikli kabul canlı model başarısı değildir; canlı oranlar `acceptance_m16.py` koşularında ayrı raporlanır.
-

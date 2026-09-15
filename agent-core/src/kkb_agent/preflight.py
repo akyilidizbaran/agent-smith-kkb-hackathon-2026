@@ -65,7 +65,15 @@ def _db_checks(settings: Settings) -> list[Check]:
                 "count(*) FILTER (WHERE unit IS NOT NULL AND measure_type <> 'unknown'), "
                 "count(*) FILTER (WHERE l.series_id IS NOT NULL AND semantic_confidence='verified' AND measure_type <> 'unknown') "
                 "FROM meta.series s LEFT JOIN l USING (series_id) WHERE status <> 'deprecated'").fetchone()
-            out.append(Check("hazır oluş", True, f"anlamı doğrulanmış {ver:,} · birim+ölçüm tipi tanımlı {defined:,} · yüklü {loaded:,} · Gold'a hazır {ready:,} (ayrı sayılar, birbirinin yerine geçmez)".replace(",", "."), required=False))
+            full_verified_coverage = ver == ready if ver else n_obs == 0
+            out.append(Check(
+                "hazır oluş",
+                full_verified_coverage,
+                f"anlamı doğrulanmış {ver:,} · birim+ölçüm tipi tanımlı {defined:,} · "
+                f"yüklü {loaded:,} · doğrulanmış hazır {ready:,}/{ver:,} · Gold'a hazır {ready:,} "
+                "(ayrı sayılar, birbirinin yerine geçmez)".replace(",", "."),
+                required=settings.lakehouse_mode == "demo",
+            ))
         except Exception:  # noqa: BLE001
             pass
         gold = sorted(r for r in rels if r.startswith("gold."))
