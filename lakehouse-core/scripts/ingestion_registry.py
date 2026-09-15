@@ -16,8 +16,10 @@ is expected to mean is the guardrail, not a placeholder for automation.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 from typing import Callable
 
 from src.lakehouse.connectors.base import BaseConnector
@@ -129,13 +131,30 @@ def _bddk_monthly_spec(row: SeriesRow, start: date, end: date) -> FetchSpec:
 
 _WEEKLY_SUTUN_COLUMN = {"3": "Toplam"}  # only "3" (Toplam) verified live; see docs/sources/bddk_weekly.md
 
-_WEEKLY_VERIFIED_POSITIONS: dict[str, dict[str, str]] = {
-    # series_id -> {chart id, measure label} as observed live on 2026-09-09.
-    # Re-verify against https://www.bddk.org.tr/BultenHaftalik/tr/Gelismis if
-    # BDDK visibly reorders the bulletin (docs/sources/bddk_weekly.md, "Chart-id
-    # drift guard").
-    "bddk_weekly:5690_3": {"id": "1.0.4", "expected_measure_label": "a) Konut"},
-}
+_WEEKLY_POSITIONS_PATH = Path(__file__).resolve().parent / "bddk_weekly_chart_positions.json"
+
+
+def _load_weekly_positions() -> dict[str, dict[str, str]]:
+    """series_id -> {chart id, measure label}, produced by sweeping the live bulletin.
+
+    This used to be a hand-written dict with one entry, because each series' positional
+    address had to be observed by a person before it could be fetched. It no longer has to
+    be: ``scripts/discover_bddk_weekly_items.py`` enumerates the address space, reads each
+    address' own label out of the response, and pairs it with the stable item id from the
+    bulletin's item tree; ``scripts/generate_bddk_weekly_catalog.py`` writes the result
+    here. The guard is unchanged and still the thing that matters — ``expected_measure_label``
+    is checked against the label the source returns at fetch time, so a reordered bulletin
+    fails loudly instead of silently returning another line's numbers.
+
+    Re-run the two scripts if BDDK reorders the bulletin.
+    """
+
+    if not _WEEKLY_POSITIONS_PATH.exists():
+        return {}
+    return json.loads(_WEEKLY_POSITIONS_PATH.read_text(encoding="utf-8"))
+
+
+_WEEKLY_VERIFIED_POSITIONS: dict[str, dict[str, str]] = _load_weekly_positions()
 
 
 def _bddk_weekly_spec(row: SeriesRow, start: date, end: date) -> FetchSpec:

@@ -41,3 +41,1119 @@ series:
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenHaftalik/
     status: active
+  # --- üretilmiş: BDDK Haftalık Bülten, Krediler ve Takipteki Alacaklar tabloları ---
+
+  - series_id: bddk_weekly:5687_3
+    native_code: "5687"
+    dataset_id: bddk_weekly_toplam_krediler_2_10_5687
+    name_tr: "Toplam Krediler (2+10) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "Toplam Krediler (2+10)" kalemi, Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5687 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.1) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık toplam krediler
+      - toplam krediler haftalık
+      - BDDK haftalık toplam krediler
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5688_3
+    native_code: "5688"
+    dataset_id: bddk_weekly_tuketici_kredileri_ve_bireysel_kredi_kartlari_3_7_5688
+    name_tr: "Tüketici Kredileri ve Bireysel Kredi Kartları (3+7) (Toplam Krediler (2+10)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "Tüketici Kredileri ve Bireysel Kredi Kartları (3+7)" kalemi (Toplam Krediler (2+10) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5688 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.2) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık tüketici kredileri ve bireysel kredi kartları
+      - tüketici kredileri ve bireysel kredi kartları haftalık
+      - BDDK haftalık tüketici kredileri ve bireysel kredi kartları
+      - haftalık toplam krediler tüketici kredileri ve bireysel kredi kartları
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5689_3
+    native_code: "5689"
+    dataset_id: bddk_weekly_tuketici_kredileri_4_5_6_5689
+    name_tr: "Tüketici Kredileri (4+5+6) (Tüketici Kredileri ve Bireysel Kredi Kartları (3+7)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "Tüketici Kredileri (4+5+6)" kalemi (Tüketici Kredileri ve Bireysel Kredi Kartları (3+7) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5689 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.3) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık tüketici kredileri
+      - tüketici kredileri haftalık
+      - BDDK haftalık tüketici kredileri
+      - haftalık tüketici kredileri ve bireysel kredi kartları tüketici kredileri
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5691_3
+    native_code: "5691"
+    dataset_id: bddk_weekly_b_tasit_5691
+    name_tr: "b) Taşıt (Tüketici Kredileri (4+5+6)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "b) Taşıt" kalemi (Tüketici Kredileri (4+5+6) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5691 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.5) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık taşıt
+      - taşıt haftalık
+      - BDDK haftalık taşıt
+      - haftalık tüketici kredileri taşıt
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5692_3
+    native_code: "5692"
+    dataset_id: bddk_weekly_c_ihtiyac_5692
+    name_tr: "c) İhtiyaç (Tüketici Kredileri (4+5+6)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "c) İhtiyaç" kalemi (Tüketici Kredileri (4+5+6) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5692 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.6) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık i̇htiyaç
+      - i̇htiyaç haftalık
+      - BDDK haftalık i̇htiyaç
+      - haftalık tüketici kredileri i̇htiyaç
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5693_3
+    native_code: "5693"
+    dataset_id: bddk_weekly_d_diger_5693
+    name_tr: "d) Diğer (Tüketici Kredileri (4+5+6)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "d) Diğer" kalemi (Tüketici Kredileri (4+5+6) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5693 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.7) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık diğer
+      - diğer haftalık
+      - BDDK haftalık diğer
+      - haftalık tüketici kredileri diğer
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: deprecated
+
+  - series_id: bddk_weekly:5694_3
+    native_code: "5694"
+    dataset_id: bddk_weekly_bireysel_kredi_kartlari_8_9_5694
+    name_tr: "Bireysel Kredi Kartları (8+9) (Tüketici Kredileri (4+5+6)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "Bireysel Kredi Kartları (8+9)" kalemi (Tüketici Kredileri (4+5+6) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5694 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.8) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık bireysel kredi kartları
+      - bireysel kredi kartları haftalık
+      - BDDK haftalık bireysel kredi kartları
+      - haftalık tüketici kredileri bireysel kredi kartları
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5695_3
+    native_code: "5695"
+    dataset_id: bddk_weekly_a_taksitli_5695
+    name_tr: "a) Taksitli (Bireysel Kredi Kartları (8+9)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "a) Taksitli" kalemi (Bireysel Kredi Kartları (8+9) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5695 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.9) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık taksitli
+      - taksitli haftalık
+      - BDDK haftalık taksitli
+      - haftalık bireysel kredi kartları taksitli
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5696_3
+    native_code: "5696"
+    dataset_id: bddk_weekly_b_taksitsiz_5696
+    name_tr: "b) Taksitsiz (Bireysel Kredi Kartları (8+9)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "b) Taksitsiz" kalemi (Bireysel Kredi Kartları (8+9) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5696 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.10) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık taksitsiz
+      - taksitsiz haftalık
+      - BDDK haftalık taksitsiz
+      - haftalık bireysel kredi kartları taksitsiz
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5697_3
+    native_code: "5697"
+    dataset_id: bddk_weekly_kobi_kredileri_bilgi_5697
+    name_tr: "KOBİ Kredileri (Bilgi) (Bireysel Kredi Kartları (8+9)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "KOBİ Kredileri (Bilgi)" kalemi (Bireysel Kredi Kartları (8+9) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5697 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.11) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık kobi̇ kredileri
+      - kobi̇ kredileri haftalık
+      - BDDK haftalık kobi̇ kredileri
+      - haftalık bireysel kredi kartları kobi̇ kredileri
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5698_3
+    native_code: "5698"
+    dataset_id: bddk_weekly_ticari_ve_diger_krediler_5698
+    name_tr: "Ticari ve Diğer Krediler (KOBİ Kredileri (Bilgi)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "Ticari ve Diğer Krediler" kalemi (KOBİ Kredileri (Bilgi) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5698 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.12) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık ticari ve diğer krediler
+      - ticari ve diğer krediler haftalık
+      - BDDK haftalık ticari ve diğer krediler
+      - haftalık kobi̇ kredileri ticari ve diğer krediler
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5699_3
+    native_code: "5699"
+    dataset_id: bddk_weekly_taksitli_tic_krd_ve_kurumsal_kredi_kartlari_12_16_bilgi_5699
+    name_tr: "Taksitli Tic. Krd. ve Kurumsal Kredi Kartları (12+16) (Bilgi) (Ticari ve Diğer Krediler) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "Taksitli Tic. Krd. ve Kurumsal Kredi Kartları (12+16) (Bilgi)" kalemi (Ticari ve Diğer Krediler altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5699 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.13) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık taksitli tic. krd. ve kurumsal kredi kartları
+      - taksitli tic. krd. ve kurumsal kredi kartları haftalık
+      - BDDK haftalık taksitli tic. krd. ve kurumsal kredi kartları
+      - haftalık ticari ve diğer krediler taksitli tic. krd. ve kurumsal kredi kartları
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5700_3
+    native_code: "5700"
+    dataset_id: bddk_weekly_taksitli_ticari_krediler_13_14_15_bilgi_5700
+    name_tr: "Taksitli Ticari Krediler (13+14+15) (Bilgi) (Taksitli Tic. Krd. ve Kurumsal Kredi Kartları (12+16) (Bilgi)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "Taksitli Ticari Krediler (13+14+15) (Bilgi)" kalemi (Taksitli Tic. Krd. ve Kurumsal Kredi Kartları (12+16) (Bilgi) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5700 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.14) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık taksitli ticari krediler
+      - taksitli ticari krediler haftalık
+      - BDDK haftalık taksitli ticari krediler
+      - haftalık taksitli tic. krd. ve kurumsal kredi kartları taksitli ticari krediler
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5701_3
+    native_code: "5701"
+    dataset_id: bddk_weekly_a_isyeri_5701
+    name_tr: "a) İşyeri (Taksitli Ticari Krediler (13+14+15) (Bilgi)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "a) İşyeri" kalemi (Taksitli Ticari Krediler (13+14+15) (Bilgi) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5701 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.15) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık i̇şyeri
+      - i̇şyeri haftalık
+      - BDDK haftalık i̇şyeri
+      - haftalık taksitli ticari krediler i̇şyeri
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5702_3
+    native_code: "5702"
+    dataset_id: bddk_weekly_b_tasit_5702
+    name_tr: "b) Taşıt (Taksitli Ticari Krediler (13+14+15) (Bilgi)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "b) Taşıt" kalemi (Taksitli Ticari Krediler (13+14+15) (Bilgi) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5702 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.16) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık taşıt
+      - taşıt haftalık
+      - BDDK haftalık taşıt
+      - haftalık taksitli ticari krediler taşıt
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5703_3
+    native_code: "5703"
+    dataset_id: bddk_weekly_c_ihtiyac_5703
+    name_tr: "c) İhtiyaç (Taksitli Ticari Krediler (13+14+15) (Bilgi)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "c) İhtiyaç" kalemi (Taksitli Ticari Krediler (13+14+15) (Bilgi) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5703 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.17) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık i̇htiyaç
+      - i̇htiyaç haftalık
+      - BDDK haftalık i̇htiyaç
+      - haftalık taksitli ticari krediler i̇htiyaç
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5704_3
+    native_code: "5704"
+    dataset_id: bddk_weekly_d_diger_5704
+    name_tr: "d) Diğer (Taksitli Ticari Krediler (13+14+15) (Bilgi)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "d) Diğer" kalemi (Taksitli Ticari Krediler (13+14+15) (Bilgi) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5704 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.18) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık diğer
+      - diğer haftalık
+      - BDDK haftalık diğer
+      - haftalık taksitli ticari krediler diğer
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: deprecated
+
+  - series_id: bddk_weekly:5705_3
+    native_code: "5705"
+    dataset_id: bddk_weekly_kurumsal_kredi_kartlari_17_18_bilgi_5705
+    name_tr: "Kurumsal Kredi Kartları (17+18) (Bilgi) (Taksitli Ticari Krediler (13+14+15) (Bilgi)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "Kurumsal Kredi Kartları (17+18) (Bilgi)" kalemi (Taksitli Ticari Krediler (13+14+15) (Bilgi) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5705 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.19) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık kurumsal kredi kartları
+      - kurumsal kredi kartları haftalık
+      - BDDK haftalık kurumsal kredi kartları
+      - haftalık taksitli ticari krediler kurumsal kredi kartları
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5706_3
+    native_code: "5706"
+    dataset_id: bddk_weekly_a_taksitli_5706
+    name_tr: "a) Taksitli (Kurumsal Kredi Kartları (17+18) (Bilgi)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "a) Taksitli" kalemi (Kurumsal Kredi Kartları (17+18) (Bilgi) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5706 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.20) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık taksitli
+      - taksitli haftalık
+      - BDDK haftalık taksitli
+      - haftalık kurumsal kredi kartları taksitli
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5707_3
+    native_code: "5707"
+    dataset_id: bddk_weekly_b_taksitsiz_5707
+    name_tr: "b) Taksitsiz (Kurumsal Kredi Kartları (17+18) (Bilgi)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "b) Taksitsiz" kalemi (Kurumsal Kredi Kartları (17+18) (Bilgi) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5707 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.21) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık taksitsiz
+      - taksitsiz haftalık
+      - BDDK haftalık taksitsiz
+      - haftalık kurumsal kredi kartları taksitsiz
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5708_3
+    native_code: "5708"
+    dataset_id: bddk_weekly_dov_endeksli_krediler_bilgi_5708
+    name_tr: "Döv. Endeksli Krediler (Bilgi) (Kurumsal Kredi Kartları (17+18) (Bilgi)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "Döv. Endeksli Krediler (Bilgi)" kalemi (Kurumsal Kredi Kartları (17+18) (Bilgi) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5708 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.22) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık döv. endeksli krediler
+      - döv. endeksli krediler haftalık
+      - BDDK haftalık döv. endeksli krediler
+      - haftalık kurumsal kredi kartları döv. endeksli krediler
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5882_3
+    native_code: "5882"
+    dataset_id: bddk_weekly_kredili_mevduat_hesaplari_tuketici_kredileri_bilgi_5882
+    name_tr: "Kredili Mevduat Hesapları-Tüketici Kredileri (Bilgi) (Döv. Endeksli Krediler (Bilgi)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "Kredili Mevduat Hesapları-Tüketici Kredileri (Bilgi)" kalemi (Döv. Endeksli Krediler (Bilgi) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5882 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.23) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık kredili mevduat hesapları-tüketici kredileri
+      - kredili mevduat hesapları-tüketici kredileri haftalık
+      - BDDK haftalık kredili mevduat hesapları-tüketici kredileri
+      - haftalık döv. endeksli krediler kredili mevduat hesapları-tüketici kredileri
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5883_3
+    native_code: "5883"
+    dataset_id: bddk_weekly_kredili_mevduat_hesaplari_taksitli_ticari_krediler_bilgi_5883
+    name_tr: "Kredili Mevduat Hesapları-Taksitli Ticari Krediler(Bilgi) (Kredili Mevduat Hesapları-Tüketici Kredileri (Bilgi)) - Krediler, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Krediler tablosu, "Kredili Mevduat Hesapları-Taksitli Ticari Krediler(Bilgi)" kalemi (Kredili Mevduat Hesapları-Tüketici Kredileri (Bilgi) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — bültenin kendi tablo başlığı 'Krediler / Sektör … Birim: Milyon TL' diyor (docs/sources/bddk_weekly.md).
+      KİMLİK: 5883 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (1.0.24) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık kredili mevduat hesapları-taksitli ticari krediler
+      - kredili mevduat hesapları-taksitli ticari krediler haftalık
+      - BDDK haftalık kredili mevduat hesapları-taksitli ticari krediler
+      - haftalık kredili mevduat hesapları-tüketici kredileri kredili mevduat hesapları-taksitli ticari krediler
+    tags: [kredi, bankacilik, bddk, stok, haftalik]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5709_3
+    native_code: "5709"
+    dataset_id: bddk_weekly_takipteki_alacaklar_2_8_5709
+    name_tr: "Takipteki Alacaklar (2+8) - Takipteki Alacaklar, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Takipteki Alacaklar tablosu, "Takipteki Alacaklar (2+8)" kalemi, Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — 2026-09-15 çapraz doğrulaması: haftalık 'Takipteki Alacaklar' 2026-01-02'de 595.211, aylık bültenin doğrulanmış 2025-12 değeri 593.647; aynı büyüklük.
+      KİMLİK: 5709 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (2.0.1) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık takipteki takipteki alacaklar
+      - takipteki takipteki alacaklar haftalık
+      - BDDK haftalık takipteki takipteki alacaklar
+    tags: [kredi, bankacilik, bddk, stok, haftalik, takip, npl]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5710_3
+    native_code: "5710"
+    dataset_id: bddk_weekly_tuketici_kredileri_4_5_6_5710
+    name_tr: "Tüketici Kredileri (4+5+6) (Takipteki Alacaklar (2+8)) - Takipteki Alacaklar, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Takipteki Alacaklar tablosu, "Tüketici Kredileri (4+5+6)" kalemi (Takipteki Alacaklar (2+8) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — 2026-09-15 çapraz doğrulaması: haftalık 'Takipteki Alacaklar' 2026-01-02'de 595.211, aylık bültenin doğrulanmış 2025-12 değeri 593.647; aynı büyüklük.
+      KİMLİK: 5710 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (2.0.2) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık takipteki tüketici kredileri
+      - takipteki tüketici kredileri haftalık
+      - BDDK haftalık takipteki tüketici kredileri
+      - haftalık takipteki alacaklar tüketici kredileri
+    tags: [kredi, bankacilik, bddk, stok, haftalik, takip, npl]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5711_3
+    native_code: "5711"
+    dataset_id: bddk_weekly_bireysel_kredi_kartlari_5711
+    name_tr: "Bireysel Kredi Kartları (Tüketici Kredileri (4+5+6)) - Takipteki Alacaklar, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Takipteki Alacaklar tablosu, "Bireysel Kredi Kartları" kalemi (Tüketici Kredileri (4+5+6) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — 2026-09-15 çapraz doğrulaması: haftalık 'Takipteki Alacaklar' 2026-01-02'de 595.211, aylık bültenin doğrulanmış 2025-12 değeri 593.647; aynı büyüklük.
+      KİMLİK: 5711 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (2.0.3) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık takipteki bireysel kredi kartları
+      - takipteki bireysel kredi kartları haftalık
+      - BDDK haftalık takipteki bireysel kredi kartları
+      - haftalık tüketici kredileri bireysel kredi kartları
+    tags: [kredi, bankacilik, bddk, stok, haftalik, takip, npl]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5712_3
+    native_code: "5712"
+    dataset_id: bddk_weekly_kobi_kredileri_bilgi_5712
+    name_tr: "KOBİ Kredileri (Bilgi) (Bireysel Kredi Kartları) - Takipteki Alacaklar, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Takipteki Alacaklar tablosu, "KOBİ Kredileri (Bilgi)" kalemi (Bireysel Kredi Kartları altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — 2026-09-15 çapraz doğrulaması: haftalık 'Takipteki Alacaklar' 2026-01-02'de 595.211, aylık bültenin doğrulanmış 2025-12 değeri 593.647; aynı büyüklük.
+      KİMLİK: 5712 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (2.0.4) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık takipteki kobi̇ kredileri
+      - takipteki kobi̇ kredileri haftalık
+      - BDDK haftalık takipteki kobi̇ kredileri
+      - haftalık bireysel kredi kartları kobi̇ kredileri
+    tags: [kredi, bankacilik, bddk, stok, haftalik, takip, npl]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5713_3
+    native_code: "5713"
+    dataset_id: bddk_weekly_ticari_ve_diger_krediler_5713
+    name_tr: "Ticari ve Diğer Krediler (KOBİ Kredileri (Bilgi)) - Takipteki Alacaklar, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Takipteki Alacaklar tablosu, "Ticari ve Diğer Krediler" kalemi (KOBİ Kredileri (Bilgi) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — 2026-09-15 çapraz doğrulaması: haftalık 'Takipteki Alacaklar' 2026-01-02'de 595.211, aylık bültenin doğrulanmış 2025-12 değeri 593.647; aynı büyüklük.
+      KİMLİK: 5713 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (2.0.5) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık takipteki ticari ve diğer krediler
+      - takipteki ticari ve diğer krediler haftalık
+      - BDDK haftalık takipteki ticari ve diğer krediler
+      - haftalık kobi̇ kredileri ticari ve diğer krediler
+    tags: [kredi, bankacilik, bddk, stok, haftalik, takip, npl]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5714_3
+    native_code: "5714"
+    dataset_id: bddk_weekly_takipteki_alacaklar_ozel_karsiligi_5714
+    name_tr: "Takipteki Alacaklar Özel Karşılığı (-) (Ticari ve Diğer Krediler) - Takipteki Alacaklar, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Takipteki Alacaklar tablosu, "Takipteki Alacaklar Özel Karşılığı (-)" kalemi (Ticari ve Diğer Krediler altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — 2026-09-15 çapraz doğrulaması: haftalık 'Takipteki Alacaklar' 2026-01-02'de 595.211, aylık bültenin doğrulanmış 2025-12 değeri 593.647; aynı büyüklük.
+      KİMLİK: 5714 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (2.0.6) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık takipteki takipteki alacaklar özel karşılığı
+      - takipteki takipteki alacaklar özel karşılığı haftalık
+      - BDDK haftalık takipteki takipteki alacaklar özel karşılığı
+      - haftalık ticari ve diğer krediler takipteki alacaklar özel karşılığı
+    tags: [kredi, bankacilik, bddk, stok, haftalik, takip, npl]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5715_3
+    native_code: "5715"
+    dataset_id: bddk_weekly_taksitli_ticari_krd_bilgi_5715
+    name_tr: "Taksitli Ticari Krd. (Bilgi) (Takipteki Alacaklar Özel Karşılığı (-)) - Takipteki Alacaklar, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Takipteki Alacaklar tablosu, "Taksitli Ticari Krd. (Bilgi)" kalemi (Takipteki Alacaklar Özel Karşılığı (-) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — 2026-09-15 çapraz doğrulaması: haftalık 'Takipteki Alacaklar' 2026-01-02'de 595.211, aylık bültenin doğrulanmış 2025-12 değeri 593.647; aynı büyüklük.
+      KİMLİK: 5715 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (2.0.7) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık takipteki taksitli ticari krd.
+      - takipteki taksitli ticari krd. haftalık
+      - BDDK haftalık takipteki taksitli ticari krd.
+      - haftalık takipteki alacaklar özel karşılığı taksitli ticari krd.
+    tags: [kredi, bankacilik, bddk, stok, haftalik, takip, npl]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5716_3
+    native_code: "5716"
+    dataset_id: bddk_weekly_kurumsal_kredi_kartlari_bilgi_5716
+    name_tr: "Kurumsal Kredi Kartları (Bilgi) (Taksitli Ticari Krd. (Bilgi)) - Takipteki Alacaklar, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Takipteki Alacaklar tablosu, "Kurumsal Kredi Kartları (Bilgi)" kalemi (Taksitli Ticari Krd. (Bilgi) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — 2026-09-15 çapraz doğrulaması: haftalık 'Takipteki Alacaklar' 2026-01-02'de 595.211, aylık bültenin doğrulanmış 2025-12 değeri 593.647; aynı büyüklük.
+      KİMLİK: 5716 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (2.0.8) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık takipteki kurumsal kredi kartları
+      - takipteki kurumsal kredi kartları haftalık
+      - BDDK haftalık takipteki kurumsal kredi kartları
+      - haftalık taksitli ticari krd. kurumsal kredi kartları
+    tags: [kredi, bankacilik, bddk, stok, haftalik, takip, npl]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5866_3
+    native_code: "5866"
+    dataset_id: bddk_weekly_tuketici_kredileri_ve_bireysel_kredi_kartlari_3_7_5866
+    name_tr: "Tüketici Kredileri ve Bireysel Kredi Kartları (3+7) (Kurumsal Kredi Kartları (Bilgi)) - Takipteki Alacaklar, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Takipteki Alacaklar tablosu, "Tüketici Kredileri ve Bireysel Kredi Kartları (3+7)" kalemi (Kurumsal Kredi Kartları (Bilgi) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — 2026-09-15 çapraz doğrulaması: haftalık 'Takipteki Alacaklar' 2026-01-02'de 595.211, aylık bültenin doğrulanmış 2025-12 değeri 593.647; aynı büyüklük.
+      KİMLİK: 5866 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (2.0.9) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık takipteki tüketici kredileri ve bireysel kredi kartları
+      - takipteki tüketici kredileri ve bireysel kredi kartları haftalık
+      - BDDK haftalık takipteki tüketici kredileri ve bireysel kredi kartları
+      - haftalık kurumsal kredi kartları tüketici kredileri ve bireysel kredi kartları
+    tags: [kredi, bankacilik, bddk, stok, haftalik, takip, npl]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5867_3
+    native_code: "5867"
+    dataset_id: bddk_weekly_a_konut_5867
+    name_tr: "a) Konut (Tüketici Kredileri ve Bireysel Kredi Kartları (3+7)) - Takipteki Alacaklar, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Takipteki Alacaklar tablosu, "a) Konut" kalemi (Tüketici Kredileri ve Bireysel Kredi Kartları (3+7) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — 2026-09-15 çapraz doğrulaması: haftalık 'Takipteki Alacaklar' 2026-01-02'de 595.211, aylık bültenin doğrulanmış 2025-12 değeri 593.647; aynı büyüklük.
+      KİMLİK: 5867 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (2.0.10) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık takipteki konut
+      - takipteki konut haftalık
+      - BDDK haftalık takipteki konut
+      - haftalık tüketici kredileri ve bireysel kredi kartları konut
+    tags: [kredi, bankacilik, bddk, stok, haftalik, takip, npl]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5868_3
+    native_code: "5868"
+    dataset_id: bddk_weekly_b_tasit_5868
+    name_tr: "b) Taşıt (Tüketici Kredileri ve Bireysel Kredi Kartları (3+7)) - Takipteki Alacaklar, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Takipteki Alacaklar tablosu, "b) Taşıt" kalemi (Tüketici Kredileri ve Bireysel Kredi Kartları (3+7) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — 2026-09-15 çapraz doğrulaması: haftalık 'Takipteki Alacaklar' 2026-01-02'de 595.211, aylık bültenin doğrulanmış 2025-12 değeri 593.647; aynı büyüklük.
+      KİMLİK: 5868 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (2.0.11) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık takipteki taşıt
+      - takipteki taşıt haftalık
+      - BDDK haftalık takipteki taşıt
+      - haftalık tüketici kredileri ve bireysel kredi kartları taşıt
+    tags: [kredi, bankacilik, bddk, stok, haftalik, takip, npl]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5869_3
+    native_code: "5869"
+    dataset_id: bddk_weekly_c_ihtiyac_5869
+    name_tr: "c) İhtiyaç (Tüketici Kredileri ve Bireysel Kredi Kartları (3+7)) - Takipteki Alacaklar, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Takipteki Alacaklar tablosu, "c) İhtiyaç" kalemi (Tüketici Kredileri ve Bireysel Kredi Kartları (3+7) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — 2026-09-15 çapraz doğrulaması: haftalık 'Takipteki Alacaklar' 2026-01-02'de 595.211, aylık bültenin doğrulanmış 2025-12 değeri 593.647; aynı büyüklük.
+      KİMLİK: 5869 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (2.0.12) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık takipteki i̇htiyaç
+      - takipteki i̇htiyaç haftalık
+      - BDDK haftalık takipteki i̇htiyaç
+      - haftalık tüketici kredileri ve bireysel kredi kartları i̇htiyaç
+    tags: [kredi, bankacilik, bddk, stok, haftalik, takip, npl]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: active
+
+  - series_id: bddk_weekly:5871_3
+    native_code: "5871"
+    dataset_id: bddk_weekly_d_diger_5871
+    name_tr: "d) Diğer (Tüketici Kredileri ve Bireysel Kredi Kartları (3+7)) - Takipteki Alacaklar, Haftalık (Sektör)"
+    description: >-
+      BDDK Haftalık Bülten, Takipteki Alacaklar tablosu, "d) Diğer" kalemi (Tüketici Kredileri ve Bireysel Kredi Kartları (3+7) altında), Toplam sütunu,
+      Sektör tarafı. Haftalık bakiyedir (stok): dönemler toplanmaz, daha düşük frekansa
+      indirilirken dönemin son değeri alınır.
+      BİRİM: Milyon TL — 2026-09-15 çapraz doğrulaması: haftalık 'Takipteki Alacaklar' 2026-01-02'de 595.211, aylık bültenin doğrulanmış 2025-12 değeri 593.647; aynı büyüklük.
+      KİMLİK: 5871 kaynağın sabit kalem kimliğidir ve seri kimliğinin dayanağıdır;
+      3 Toplam sütunudur. Uçtaki pozisyonel adres (2.0.13) kimlik değildir ve
+      scripts/bddk_weekly_chart_positions.json içinde, kaynağın kendi etiketiyle birlikte
+      tutulur; çekim sırasında etiket uyuşmazsa istek reddedilir.
+      Bu giriş scripts/generate_bddk_weekly_catalog.py ile üretildi; kalem tek tek insan
+      tarafından incelenmediği için semantic_confidence 'derived'.
+    aliases:
+      - haftalık takipteki diğer
+      - takipteki diğer haftalık
+      - BDDK haftalık takipteki diğer
+      - haftalık tüketici kredileri ve bireysel kredi kartları diğer
+    tags: [kredi, bankacilik, bddk, stok, haftalik, takip, npl]
+    frequency: weekly
+    week_anchor: friday
+    unit: TRY_mn
+    measure_type: stock
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_docs
+    metadata_url: https://www.bddk.org.tr/BultenHaftalik/
+    status: deprecated
+

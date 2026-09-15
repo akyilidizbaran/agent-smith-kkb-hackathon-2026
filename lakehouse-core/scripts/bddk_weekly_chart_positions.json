@@ -1,0 +1,150 @@
+{
+  "bddk_weekly:5687_3": {
+    "expected_measure_label": "Toplam Krediler (2+10)",
+    "id": "1.0.1"
+  },
+  "bddk_weekly:5688_3": {
+    "expected_measure_label": "Tüketici Kredileri ve Bireysel Kredi Kartları (3+7)",
+    "id": "1.0.2"
+  },
+  "bddk_weekly:5689_3": {
+    "expected_measure_label": "Tüketici Kredileri (4+5+6)",
+    "id": "1.0.3"
+  },
+  "bddk_weekly:5690_3": {
+    "expected_measure_label": "a) Konut",
+    "id": "1.0.4"
+  },
+  "bddk_weekly:5691_3": {
+    "expected_measure_label": "b) Taşıt",
+    "id": "1.0.5"
+  },
+  "bddk_weekly:5692_3": {
+    "expected_measure_label": "c) İhtiyaç",
+    "id": "1.0.6"
+  },
+  "bddk_weekly:5693_3": {
+    "expected_measure_label": "d) Diğer",
+    "id": "1.0.7"
+  },
+  "bddk_weekly:5694_3": {
+    "expected_measure_label": "Bireysel Kredi Kartları (8+9)",
+    "id": "1.0.8"
+  },
+  "bddk_weekly:5695_3": {
+    "expected_measure_label": "a) Taksitli",
+    "id": "1.0.9"
+  },
+  "bddk_weekly:5696_3": {
+    "expected_measure_label": "b) Taksitsiz",
+    "id": "1.0.10"
+  },
+  "bddk_weekly:5697_3": {
+    "expected_measure_label": "KOBİ Kredileri (Bilgi)",
+    "id": "1.0.11"
+  },
+  "bddk_weekly:5698_3": {
+    "expected_measure_label": "Ticari ve Diğer Krediler",
+    "id": "1.0.12"
+  },
+  "bddk_weekly:5699_3": {
+    "expected_measure_label": "Taksitli Tic. Krd. ve Kurumsal Kredi Kartları (12+16) (Bilgi)",
+    "id": "1.0.13"
+  },
+  "bddk_weekly:5700_3": {
+    "expected_measure_label": "Taksitli Ticari Krediler (13+14+15) (Bilgi)",
+    "id": "1.0.14"
+  },
+  "bddk_weekly:5701_3": {
+    "expected_measure_label": "a) İşyeri",
+    "id": "1.0.15"
+  },
+  "bddk_weekly:5702_3": {
+    "expected_measure_label": "b) Taşıt",
+    "id": "1.0.16"
+  },
+  "bddk_weekly:5703_3": {
+    "expected_measure_label": "c) İhtiyaç",
+    "id": "1.0.17"
+  },
+  "bddk_weekly:5704_3": {
+    "expected_measure_label": "d) Diğer",
+    "id": "1.0.18"
+  },
+  "bddk_weekly:5705_3": {
+    "expected_measure_label": "Kurumsal Kredi Kartları (17+18) (Bilgi)",
+    "id": "1.0.19"
+  },
+  "bddk_weekly:5706_3": {
+    "expected_measure_label": "a) Taksitli",
+    "id": "1.0.20"
+  },
+  "bddk_weekly:5707_3": {
+    "expected_measure_label": "b) Taksitsiz",
+    "id": "1.0.21"
+  },
+  "bddk_weekly:5708_3": {
+    "expected_measure_label": "Döv. Endeksli Krediler (Bilgi)",
+    "id": "1.0.22"
+  },
+  "bddk_weekly:5709_3": {
+    "expected_measure_label": "Takipteki Alacaklar (2+8)",
+    "id": "2.0.1"
+  },
+  "bddk_weekly:5710_3": {
+    "expected_measure_label": "Tüketici Kredileri (4+5+6)",
+    "id": "2.0.2"
+  },
+  "bddk_weekly:5711_3": {
+    "expected_measure_label": "Bireysel Kredi Kartları",
+    "id": "2.0.3"
+  },
+  "bddk_weekly:5712_3": {
+    "expected_measure_label": "KOBİ Kredileri (Bilgi)",
+    "id": "2.0.4"
+  },
+  "bddk_weekly:5713_3": {
+    "expected_measure_label": "Ticari ve Diğer Krediler",
+    "id": "2.0.5"
+  },
+  "bddk_weekly:5714_3": {
+    "expected_measure_label": "Takipteki Alacaklar Özel Karşılığı (-)",
+    "id": "2.0.6"
+  },
+  "bddk_weekly:5715_3": {
+    "expected_measure_label": "Taksitli Ticari Krd. (Bilgi)",
+    "id": "2.0.7"
+  },
+  "bddk_weekly:5716_3": {
+    "expected_measure_label": "Kurumsal Kredi Kartları (Bilgi)",
+    "id": "2.0.8"
+  },
+  "bddk_weekly:5866_3": {
+    "expected_measure_label": "Tüketici Kredileri ve Bireysel Kredi Kartları (3+7)",
+    "id": "2.0.9"
+  },
+  "bddk_weekly:5867_3": {
+    "expected_measure_label": "a) Konut",
+    "id": "2.0.10"
+  },
+  "bddk_weekly:5868_3": {
+    "expected_measure_label": "b) Taşıt",
+    "id": "2.0.11"
+  },
+  "bddk_weekly:5869_3": {
+    "expected_measure_label": "c) İhtiyaç",
+    "id": "2.0.12"
+  },
+  "bddk_weekly:5871_3": {
+    "expected_measure_label": "d) Diğer",
+    "id": "2.0.13"
+  },
+  "bddk_weekly:5882_3": {
+    "expected_measure_label": "Kredili Mevduat Hesapları-Tüketici Kredileri (Bilgi)",
+    "id": "1.0.23"
+  },
+  "bddk_weekly:5883_3": {
+    "expected_measure_label": "Kredili Mevduat Hesapları-Taksitli Ticari Krediler(Bilgi)",
+    "id": "1.0.24"
+  }
+}
