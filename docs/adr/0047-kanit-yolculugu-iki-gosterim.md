@@ -1,6 +1,6 @@
 # ADR-0047: Kanıt yolculuğu — aynı zincir, iki gösterim (2,5B SVG+CSS ve 3B three.js)
 
-**Durum:** Deneme (karar bekliyor) · **Tarih:** 2026-09-13 · **Sıradaki:** kullanıcı iki görünümü inceleyip birini seçer; seçilmeyen kaldırılır
+**Durum:** Yerine geçti → [ADR-0083](0083-kanit-yolculugu-tek-gosterim.md) (15 Eylül: 3B ve yürüyen karakter kaldırıldı, tek gösterim) · **Tarih:** 2026-09-13
 
 ## Bağlam
 Kanıt zinciri (cevaptaki sayı → tablo/SQL → Silver gözlemi → Bronze artifact → RAW kaynak)

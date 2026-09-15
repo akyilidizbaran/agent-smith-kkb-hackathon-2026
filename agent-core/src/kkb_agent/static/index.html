@@ -48,6 +48,7 @@
   .trace { padding: 12px 40px; border-top: 1px solid var(--line); background: var(--card); display: flex; flex-direction: column; gap: 10px; }
   .chips { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #4a463f; flex-wrap: wrap; }
   .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 4px; background: #fff; border: 1px solid #d9d3c7; cursor: default; }
+  #trace { flex-wrap: nowrap; min-height: 26px; } #trace .tsum { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }   /* tek satır iz (ADR-0085) */
   .chip .role { font-family: "IBM Plex Mono", monospace; color: var(--muted2); }
   .chip.err { border-color: #e5b4b4; background: var(--red-bg); }
   .chip.validate { border-color: var(--amber-line); background: var(--amber-bg); }
@@ -136,21 +137,152 @@
   .modal .panel { width: min(1040px, 94vw); background: var(--paper); border-radius: 12px; border: 1px solid var(--line); box-shadow: 0 20px 60px rgba(0,0,0,.25); display: flex; flex-direction: column; overflow: hidden; }
   .modal .mhead { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--card); }
   .modal .mhead .t { font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600; font-size: 16px; }
-  .tabs { display: flex; gap: 4px; margin-left: 12px; } .tab { padding: 4px 10px; border: 1px solid #d9d3c7; background: #fff; border-radius: 6px; font-size: 12px; cursor: pointer; } .tab.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   .modal .close { margin-left: auto; border: 0; background: transparent; font-size: 20px; cursor: pointer; color: var(--muted); }
-  .stage { position: relative; height: 440px; background: #fff; overflow: hidden; }
-  .stage svg, .stage canvas { display: block; width: 100%; height: 100%; }
-  .stage .lbl { position: absolute; transform: translate(-50%, 0); font-size: 12px; font-weight: 500; background: rgba(255,255,255,.85); padding: 2px 6px; border-radius: 4px; pointer-events: none; white-space: nowrap; }
-  .bubble { padding: 12px 16px; border-top: 1px solid var(--line); background: var(--card); display: grid; grid-template-columns: 150px minmax(0,1fr) auto; gap: 12px; align-items: center; }
-  .bubble .who { font-size: 12px; color: var(--muted); } .bubble .what { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; line-height: 1.45; word-break: break-all; }
-  .bubble .ctl { display: flex; gap: 6px; } .bubble .ctl button { height: 28px; padding: 0 10px; border: 1px solid #d9d3c7; background: #fff; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer; }
+  /* Kanıt yolculuğu (ADR-0083): durak = kanıtta olan halka; figür + durum; bağlantılar sırayla dolar, kopuk halkada durur */
+  .badge.bad { background: var(--red-bg); color: var(--red); }
+  .plt { fill: #efece5; transition: fill .2s ease; } .ple { fill: #ddd7cb; transition: fill .2s ease; }
+  .jr .panel { max-height: 96vh; }
+  .jr .mhead .jq { flex: 1; min-width: 0; font-size: 12px; color: var(--muted2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .jr .mhead .close { margin-left: 0; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 6px; }
+  .jr .jstage { position: relative; background: #fff; padding: 26px 24px 0; display: flex; align-items: flex-start; overflow-x: auto; }
+  .jr .jstop { appearance: none; border: 0; background: transparent; padding: 0; margin: 0; width: 104px; height: 206px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; font: inherit; color: inherit; position: relative; border-radius: 8px; }
+  .jr.dense .jstop { width: 96px; }
+  .jr .jfig { position: relative; display: block; width: 88px; height: 88px; opacity: .32; transform: translateY(6px); transition: opacity .34s ease .34s, transform .34s ease .34s, filter .3s ease; }
+  .jr .jfig svg { display: block; overflow: visible; }
+  .jr .jstop.lit .jfig { opacity: 1; transform: none; }
+  .jr .jstop.unreach .jfig { opacity: .42; transform: none; filter: grayscale(1); }
+  .jr .jstop.on .plt { fill: #dcece9; } .jr .jstop.on .ple { fill: #b3d4ce; }
+  .jr .jbdg { position: absolute; right: 8px; top: 44px; line-height: 0; opacity: 0; transform: scale(.3); transition: opacity .25s ease .5s, transform .38s cubic-bezier(.3, 1.7, .5, 1) .5s; }
+  .jr .jbdg.b { right: 6px; top: 43px; }
+  .jr .jstop.lit.warn .jbdg.w, .jr .jstop.lit.broken .jbdg.b { opacity: 1; transform: none; }
+  .jr .jname { font-size: 13px; line-height: 1.3; margin-top: 2px; font-weight: 500; color: var(--muted2); }
+  .jr .jstop.lit .jname { color: var(--ink); } .jr .jstop.on .jname { font-weight: 600; }
+  .jr .jsub { font-size: 11px; line-height: 1.3; color: var(--muted2); text-align: center; text-wrap: balance; }
+  .jr .jst { display: flex; align-items: baseline; justify-content: center; gap: 5px; max-width: 100%; padding: 0 2px; margin-top: 3px; font-size: 11.5px; line-height: 1.35; text-align: center; color: var(--muted2); }
+  .jr .jstt { overflow-wrap: anywhere; min-width: 0; }
+  .jr .jdot { width: 6px; height: 6px; border-radius: 50%; flex: none; transform: translateY(-1px); background: #d9d3c7; }
+  .jr .lit.ok .jst { color: var(--teal-ink); } .jr .lit.ok .jdot { background: var(--teal); }
+  .jr .lit.warn .jst { color: var(--amber-ink); } .jr .lit.warn .jdot { background: var(--amber); }
+  .jr .lit.broken .jst { color: var(--red); } .jr .lit.broken .jdot { background: #c53030; }
+  .jr .unreach .jdot { background: #cfc9bd; }
+  .jr .jptr { position: absolute; bottom: 0; left: calc(50% - 8px); width: 0; height: 0; border: 8px solid transparent; border-top: 0; }
+  .jr .jstop.on .jptr { border-bottom-color: var(--line); }
+  .jr .jlink { flex: 1; min-width: 18px; padding-top: 31px; }
+  .jr .jlink i { display: block; position: relative; height: 12px; }
+  .jr .jlink b { position: absolute; display: block; }
+  .jr .jlink .base { left: 0; right: 4px; top: 5px; height: 2px; border-radius: 1px; background: var(--teal-line); }
+  .jr .jlink .fill { left: 0; top: 5px; width: 0; height: 2px; border-radius: 1px; background: var(--teal); transition: width .4s linear; }
+  .jr .jlink .ring { left: calc(50% - 6px); top: 0; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px solid var(--teal-line); box-sizing: border-box; transition: border-color .2s ease .2s; }
+  .jr .jlink svg { position: absolute; right: -1px; top: 0; } .jr .jlink path { stroke: var(--teal-line); transition: stroke .2s ease .2s; }
+  .jr .jlink.full .fill { width: calc(100% - 10px); } .jr .jlink.full .ring { border-color: var(--teal); } .jr .jlink.full path { stroke: var(--teal); }
+  .jr .jlink.tobroken .fill { background: #c53030; } .jr .jlink.full.tobroken .ring { border-color: #c53030; } .jr .jlink.full.tobroken path { stroke: #c53030; }
+  .jr .jlink.dash .base { background: repeating-linear-gradient(90deg, #cfc9bd 0 5px, transparent 5px 10px); } .jr .jlink.dash .ring { border-color: #cfc9bd; } .jr .jlink.dash path { stroke: #cfc9bd; }
+  .jr .jdetail { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 28px; padding: 18px 24px; border-top: 1px solid var(--line); background: var(--card); height: min(330px, 40vh); overflow: auto; }
+  .jr .jdl { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+  .jr .jdl .t { font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600; font-size: 20px; line-height: 1.2; }
+  .jr .jdl .s { font-size: 13px; color: var(--muted); } .jr .jdl .badge { margin-top: 6px; }
+  .jr .jdr { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .jr .jalert { padding: 9px 12px; border-radius: 6px; font-size: 13px; line-height: 1.45; }
+  .jr .jalert.warn { background: var(--amber-bg); border: 1px solid var(--amber-line); color: var(--amber-ink); }
+  .jr .jalert.bad { background: var(--red-bg); border: 1px solid #e5b4b4; color: var(--red); }
+  .jr .jalert.muted { background: #f1eee7; border: 1px solid var(--line); color: var(--muted); }
+  .jr .jfields { display: flex; flex-direction: column; gap: 7px; }
+  .jr .jf { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 14px; align-items: baseline; }
+  .jr .jf .k { font-size: 12px; color: var(--muted); }
+  .jr .jf .v { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-width: 0; }
+  .jr .jf .v > span, .jr .jf .v > a { overflow-wrap: anywhere; min-width: 0; font-size: 13px; line-height: 1.45; }
+  .jr .jf .v > .mono { font-size: 12px; } .jr .jf .warn { color: var(--amber-ink); } .jr .jf .bad { color: var(--red); }
+  .jr .jcopy { height: 22px; padding: 0 8px; border: 1px solid var(--teal-line); background: var(--teal-bg); color: var(--teal-ink); border-radius: 6px; font: inherit; font-size: 11.5px; cursor: pointer; flex: none; }
+  .jr pre.sql { margin: 0; max-height: 150px; overflow: auto; padding: 8px 10px; background: #f7f5f0; border: 1px solid var(--line2); border-radius: 6px; font: 11.5px/1.5 "IBM Plex Mono", monospace; color: #3a3731; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .jr .jctl { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); background: var(--card); }
+  .jr .jctl .step { font-size: 12px; color: var(--muted); margin-right: auto; }
+  .jr .jctl button { height: 28px; padding: 0 10px; border: 1px solid #d9d3c7; background: #fff; border-radius: 6px; font: inherit; font-size: 12px; color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .jr .jctl button:disabled { opacity: .45; cursor: default; }
+  /* Adım yolculuğu (ADR-0085): çağrı kartları; çok duraklı zincirde figürler küçülür */
+  .jr.denser .jstop { width: 84px; } .jr.denser .jlink { min-width: 12px; } .jr.denser .jfig { width: 72px; height: 72px; } .jr.denser .jfig > svg { width: 72px; height: 72px; }
+  .jr.denser .jlink { padding-top: 25px; } .jr.denser .jbdg { right: 5px; top: 35px; } .jr.denser .jbdg svg { width: 19px; height: 19px; }
+  .jr .jcalls { display: flex; flex-direction: column; gap: 8px; }
+  .jr .jcall { display: flex; flex-direction: column; gap: 4px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .jr .jcall.bad { border-color: #e5b4b4; background: var(--red-bg); } .jr .jcall.back { border-color: var(--amber-line); background: var(--amber-bg); }
+  .jr .jcall .ch { display: flex; align-items: baseline; gap: 10px; font-size: 12px; color: var(--muted); }
+  .jr .jcall .ch b { font-weight: 600; color: var(--ink); } .jr .jcall.bad .ch span:not(.ms) { color: var(--red); } .jr .jcall.back .ch span:not(.ms) { color: var(--amber-ink); }
+  .jr .jcall .ms { margin-left: auto; font: 11.5px "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
+  .jr .jcall .cd { font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+  .jr .jcall .cr { font: 11.5px/1.45 "IBM Plex Mono", monospace; color: #3a3731; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .jr .jcall.bad .cr { color: var(--red); }
+  .jr button:focus-visible, .jmini:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  .jr.still *, .jr.still *::before { transition: none !important; }
+  .jmini { display: flex; align-items: flex-start; width: 100%; padding: 2px 0; border: 0; background: transparent; cursor: pointer; font: inherit; color: inherit; border-radius: 6px; }
+  .jmini[hidden] { display: none; }
+  .jmini .ms { position: relative; width: 38px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .jmini .ms svg { display: block; overflow: visible; }
+  .jmini .ms.unreach { opacity: .42; filter: grayscale(1); }
+  .jmini .mlab { font-size: 10.5px; color: var(--muted); } .jmini .ms.broken .mlab { color: var(--red); font-weight: 600; }
+  .jmini .mb { position: absolute; right: -2px; top: 12px; line-height: 0; }
+  .jmini .ml { flex: 1; min-width: 4px; height: 2px; margin-top: 18px; border-radius: 1px; background: var(--teal); }
+  .jmini .ml.tobroken { background: #c53030; } .jmini .ml.dash { background: repeating-linear-gradient(90deg, #cfc9bd 0 4px, transparent 4px 8px); }
+  .jmini:hover .ms:not(.unreach) .plt { fill: #dcece9; }
+  @media (prefers-reduced-motion: reduce) { .jr *, .jmini * { transition: none !important; } }
+  @media (max-width: 720px) {
+    .jr .panel { width: 100vw; height: 100vh; max-height: none; border-radius: 0; }
+    .jr .jstage { flex: 1; min-height: 0; flex-direction: column; align-items: stretch; padding: 12px; overflow: auto; }
+    .jr .jstop, .jr.dense .jstop { width: 100%; height: auto; min-height: 76px; display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 12px; align-content: center; justify-items: start; text-align: left; padding: 6px 10px 6px 6px; border: 1px solid transparent; }
+    .jr .jstop.on { background: #fff; border-color: var(--line); }
+    .jr .jfig { grid-row: 1 / span 3; width: 64px; height: 64px; } .jr .jfig > svg { width: 64px; height: 64px; }
+    .jr .jbdg { right: 4px; top: 31px; } .jr .jbdg.b { right: 2px; top: 30px; } .jr .jbdg svg { width: 18px; height: 18px; }
+    .jr .jname, .jr .jsub, .jr .jst { grid-column: 2; text-align: left; justify-content: flex-start; } .jr .jname { font-size: 14px; } .jr .jsub { font-size: 12px; } .jr .jst { font-size: 12.5px; }
+    .jr .jptr { display: none; }
+    .jr .jlink { flex: none; width: 12px; height: 26px; padding: 0; margin-left: 32px; } .jr .jlink i { height: 100%; }
+    .jr .jlink .base { left: 5px; right: auto; top: 0; bottom: 4px; width: 2px; height: auto; }
+    .jr .jlink .fill { left: 5px; top: 0; width: 2px; height: 0; transition: height .4s linear; }
+    .jr .jlink.full .fill { width: 2px; height: calc(100% - 6px); }
+    .jr .jlink .ring { left: 0; top: calc(50% - 8px); }
+    .jr .jlink svg { right: auto; left: 2.5px; top: auto; bottom: -3px; transform: rotate(90deg); }
+    .jr .jlink.dash .base { background: repeating-linear-gradient(180deg, #cfc9bd 0 5px, transparent 5px 10px); }
+    .jr .jdetail { grid-template-columns: minmax(0, 1fr); gap: 10px; height: auto; overflow: visible; margin: 6px 0 4px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+    .jr .jdl .t { font-size: 17px; } .jr .jf { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+    .jr .jcopy { height: 44px; padding: 0 14px; font-size: 13px; }
+    .jr .jctl button { height: 44px; } .jr .jctl .step { display: none; }
+  }
+  /* Sohbetler (ADR-0084): sol panelde liste, en son kullanılan en üstte; her sohbet kendi konuşmasıyla kayıtlı */
+  .nbtn { height: 30px; padding: 0 10px 0 8px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #d9d3c7; border-radius: 8px; background: #fff; font: inherit; font-size: 12.5px; color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .nbtn:hover { border-color: var(--teal); } .nbtn:disabled { opacity: .5; cursor: default; border-color: #d9d3c7; }
+  header .nbtn { display: none; margin-left: 10px; }            /* dar ekranda sol panel gizli: yeni sohbet başlıkta */
+  .convs { flex: 1 1 auto; min-height: 140px; display: flex; flex-direction: column; gap: 6px; }
+  .convs-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .convs .dl { flex: 1; min-height: 0; overflow: auto; margin: 0 -6px; padding: 0 2px; display: flex; flex-direction: column; gap: 2px; }
+  .convs .grp { padding: 10px 8px 3px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted2); }
+  .convs .empty { padding: 6px 8px; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+  .convs .foot { font-size: 11px; color: var(--muted2); line-height: 1.45; }
+  .conv { border: 1px solid transparent; border-radius: 8px; }
+  .conv.on { background: #fff; border-color: var(--line); }
+  .conv .row { display: flex; align-items: flex-start; }
+  .conv .open { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 7px 4px 7px 9px; border: 0; border-radius: 8px; background: transparent; font: inherit; color: var(--ink); text-align: left; cursor: pointer; }
+  .conv:not(.on) .open:hover { background: var(--line2); }
+  .conv .tt { font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; } .conv.on .tt { font-weight: 600; }
+  .conv .mt { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; font-size: 11px; color: var(--muted2); }
+  .conv .old { padding: 0 7px; border-radius: 999px; background: var(--amber-bg); color: var(--amber-ink); font-size: 10.5px; }
+  .conv .del { width: 28px; height: 28px; margin: 4px 4px 0 0; flex: none; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted2); cursor: pointer; opacity: 0; }
+  .conv:hover .del, .conv.on .del, .conv .del:focus-visible { opacity: 1; } .conv .del:hover { background: var(--red-bg); color: var(--red); }
+  .conv .ask { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 0 9px 9px; font-size: 12px; color: var(--red); }
+  .conv .ask button { height: 26px; padding: 0 10px; border: 1px solid #d9d3c7; border-radius: 6px; background: #fff; font: inherit; font-size: 12px; color: var(--ink); cursor: pointer; }
+  .conv .ask .yes { border-color: #e5b4b4; background: var(--red-bg); color: var(--red); }
+  .conv .qs { list-style: none; margin: 0; padding: 5px 6px 7px; border-top: 1px solid var(--line2); display: flex; flex-direction: column; gap: 1px; }
+  .conv .qs button { width: 100%; padding: 5px 7px; border: 0; border-radius: 6px; background: transparent; font: inherit; font-size: 12px; line-height: 1.35; color: #4a463f; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+  .conv .qs button:hover { background: var(--line2); } .conv .qs button.active { background: var(--teal-bg); color: var(--ink); }
+  .nbtn:focus-visible, .conv button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  .stale-note { align-self: stretch; max-width: 820px; padding: 9px 12px; border: 1px solid var(--amber-line); border-radius: 8px; background: var(--amber-bg); color: var(--amber-ink); font-size: 13px; line-height: 1.45; }
+  @media (max-width: 760px) { header .nbtn { display: inline-flex; } }
+  @media (max-width: 720px) { header .sub { display: none; } }
   .num { cursor: pointer; }
-  @media (max-width: 1100px) { .layout { grid-template-columns: minmax(0, 1fr); } aside.left, aside.right { display: none; } }
+  /* Orta genişlikte önce sağdaki kanıt paneli gizlenir; sohbet listesi solda kalır (ADR-0084). Çok dar ekranda sol panel de gizlenir. */
+  @media (max-width: 1100px) { .layout { grid-template-columns: 248px minmax(0, 1fr); } aside.right { display: none; } }
+  @media (max-width: 760px) { .layout { grid-template-columns: minmax(0, 1fr); } aside.left { display: none; } }
 </style>
 </head>
 <body>
 <header>
-  <div style="display:flex;align-items:center;gap:10px"><img src="/static/agent-smith.svg" alt="Agent Smith" width="32" height="32" style="display:block;border-radius:8px"><span class="brand">Agent Smith</span><span class="sub">Lakehouse Agent · KKB Hackathon 2026</span></div>
+  <div style="display:flex;align-items:center;gap:10px"><img src="/static/agent-smith.svg" alt="Agent Smith" width="32" height="32" style="display:block;border-radius:8px"><span class="brand">Agent Smith</span><span class="sub">Lakehouse Agent · KKB Hackathon 2026</span><button type="button" class="nbtn" id="btn-new" title="Yeni sohbet başlat; bu sohbet menüde kalır"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M7 2.5 V11.5 M2.5 7 H11.5"/></svg>Yeni sohbet</button></div>
   <div style="display:flex;align-items:center;gap:10px">
     <span class="pill" id="pill-profile" title="Profil: Analyst okur; Architect kataloğa yazar. Geçiş operatör anahtarıyla.">profil …</span>
     <span class="pill" id="pill-model">bağlanıyor…</span>
@@ -169,10 +301,11 @@
       </div>
       <div class="status" id="st-line"></div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:6px">
-      <div class="label">Bu oturum</div>
-      <div id="session" style="display:flex;flex-direction:column;gap:4px"></div>
-    </div>
+    <section class="convs" aria-label="Sohbetler">
+      <div class="convs-head"><div class="label">Sohbetler</div><button type="button" class="nbtn" id="btn-new2"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M7 2.5 V11.5 M2.5 7 H11.5"/></svg>Yeni sohbet</button></div>
+      <div class="dl" id="conv-list"></div>
+      <div class="foot" id="conv-foot"></div>
+    </section>
     <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px">
       <div class="label">Roller</div>
       <div style="font-size:12px;color:#4a463f;line-height:1.45">Analist okur, Architect yazar. Yazma yalnız taslak ve onayla.</div>
@@ -197,7 +330,8 @@
 
   <aside class="right">
     <div class="ev-head">
-      <div style="display:flex;align-items:center;justify-content:space-between"><div class="label">Kanıt zinciri</div><div style="display:flex;gap:8px;align-items:center"><button class="jbtn" id="btn-journey" disabled title="Zinciri adım adım izle">Yolculuğu izle</button><span class="badge none" id="ev-badge">—</span></div></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><div class="label">Kanıt zinciri</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><button class="jbtn" id="btn-journey" disabled title="Zinciri halka halka izle">Yolculuğu izle</button><button class="jbtn" id="btn-steps" disabled title="Ajanın araç adımlarını sırayla izle">Adımları izle</button><span class="badge none" id="ev-badge">—</span></div></div>
+      <button type="button" class="jmini" id="ev-mini" hidden></button>
       <div style="font-size:13px;color:#4a463f;line-height:1.45" id="ev-summary">Cevap gelince her sayı hücreye, sorguya, gözleme ve kaynağa bağlanır.</div>
     </div>
     <div class="ev-body" id="ev-body"></div>
@@ -258,15 +392,15 @@ function showModal(title, html, extraClass) {   // tek pencere kabuğu: X, arka 
   m.querySelector(".panel").className = "panel " + (extraClass || "");
   $("gm-title").textContent = title; $("gm-body").innerHTML = html; m.hidden = false;
 }
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") { if (typing) typing.finish(); const g = $("gmodal"); if (g) g.hidden = true; closeJourney(); } });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") { if (typing) typing.finish(); const g = $("gmodal"); if (g) g.hidden = true; closeJourney(); closeSteps(); } });
 async function openStatus() {       // veri havuzu kartları ve üst rozetler → sistem durumu (/api/status)
   const r = await fetch("/api/status"); const s = await r.json(); lastStatus = s;
   const rows = [["Model", s.model], ["Veri havuzu", `${fmtInt(s.catalog_series)} katalog serisi · ${fmtInt(s.loaded_series)} yüklü · ${fmtInt(s.silver_rows)} gözlem · ${fmtInt(s.gold_tables)} hesaplanmış tablo`],
     ["Hazır oluş", s.readiness && s.readiness.catalog_total ? `katalog ${fmtInt(s.readiness.catalog_total)} · anlamı doğrulanmış ${fmtInt(s.readiness.semantics_verified)} · birim+ölçüm tipi tanımlı ${fmtInt(s.readiness.semantics_defined)} · yüklü ${fmtInt(s.readiness.loaded_series)} · hesaplamaya hazır ${fmtInt(s.readiness.gold_ready_series)}` : "–"],
     ["Retrieval kademesi", s.retrieval_mode], ["Araç kapısı", s.tool_gate ? "açık (soruya göre alt küme)" : "kapalı"], ["Araçlar (" + s.tools.length + ")", s.tools.join(", ")],
-    ["Arama bütçesi", s.search_budget_remaining === null ? "web_search kapalı" : `${s.search_budget_remaining} arama kaldı (süreç başına)`], ["Bu oturum", `${s.history.length} soru`],
-    ["Oturum", "bellekte tutulur; sunucu yeniden başlarsa sohbet, tablolar ve yüklenen dosyalar silinir (tek bilgisayar demosu)"],
-    ["Uç noktalar", "GET /api/status · POST /api/ask · GET /api/answers · GET /api/answers/{i} · POST /api/reset · GET /static/…"]];
+    ["Arama bütçesi", s.search_budget_remaining === null ? "web_search kapalı" : `${s.search_budget_remaining} arama kaldı (süreç başına)`], ["Bu sohbet", `${s.history.length} soru`],
+    ["Sohbetler", s.conversation && s.conversation.persistent ? "bu bilgisayarda kayıtlı (veri kökü/conversations); uygulama yeniden açılınca son sohbet kaldığı yerden sürer" : "yalnız bellekte; sunucu yeniden başlarsa silinir"],
+    ["Uç noktalar", "GET /api/status · POST /api/ask · GET /api/answers · GET /api/answers/{i} · GET, POST /api/conversations · POST /api/conversations/{id}/open · DELETE /api/conversations/{id} · POST /api/reset · GET /static/…"]];
   showModal("Sistem durumu", `<div class="kv">${rows.map(([k, v]) => `<div class="k">${esc(k)}</div><div class="v">${esc(v ?? "–")}</div>`).join("")}</div>`);
 }
 ["st-catalog", "st-loaded", "st-silver", "st-gold", "pill-model", "pill-budget"].forEach((id) => { const el = $(id); (el.closest(".stat") || el).addEventListener("click", openStatus); });
@@ -274,12 +408,12 @@ async function openStatus() {       // veri havuzu kartları ve üst rozetler �
 $("pill-profile").addEventListener("click", () => {
   if (!lastStatus || !lastStatus.profile_switch) { showModal("Profil", `<div class="kv"><div class="k">Durum</div><div class="v">Profil başlatmada seçilir (AGENT_PROFILE). Oturumda geçiş için ARCHITECT_TOKEN tanımlı değil.</div></div>`); return; }
   const cur = lastStatus.profile || "analyst";
-  showModal("Profil değiştir", `<div class="kv"><div class="k">Şu an</div><div class="v">${esc(cur)}</div><div class="k">Hedef</div><div class="v"><select id="pf-sel"><option value="analyst" ${cur === "analyst" ? "selected" : ""}>Analyst — salt-okunur</option><option value="architect" ${cur === "architect" ? "selected" : ""}>Architect — kataloğa yazma, terfi, sıfırlama</option></select></div><div class="k">Operatör anahtarı</div><div class="v"><input id="pf-tok" type="password" placeholder="ARCHITECT_TOKEN" style="width:260px"></div><div class="k"></div><div class="v"><button id="pf-go" class="jbtn">Geç</button> <span id="pf-msg" class="status"></span></div><div class="k">Not</div><div class="v">Geçiş oturumu temizler (sohbet, tablolar, yüklemeler).</div></div>`);
+  showModal("Profil değiştir", `<div class="kv"><div class="k">Şu an</div><div class="v">${esc(cur)}</div><div class="k">Hedef</div><div class="v"><select id="pf-sel"><option value="analyst" ${cur === "analyst" ? "selected" : ""}>Analyst — salt-okunur</option><option value="architect" ${cur === "architect" ? "selected" : ""}>Architect — kataloğa yazma, terfi, sıfırlama</option></select></div><div class="k">Operatör anahtarı</div><div class="v"><input id="pf-tok" type="password" placeholder="ARCHITECT_TOKEN" style="width:260px"></div><div class="k"></div><div class="v"><button id="pf-go" class="jbtn">Geç</button> <span id="pf-msg" class="status"></span></div><div class="k">Not</div><div class="v">Geçiş yeni bir sohbet açar; önceki sohbet menüde kalır.</div></div>`);
   $("pf-go").addEventListener("click", async () => {
     const r = await fetch("/api/profile", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({profile: $("pf-sel").value, token: $("pf-tok").value})});
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { $("pf-msg").textContent = d.detail || r.status; return; }
-    $("gmodal").hidden = true; $("thread").innerHTML = ""; answers = []; activeIndex = -1; renderSession(); lastEvidence = null; $("btn-journey").disabled = true; $("ev-body").innerHTML = ""; loadStatus();
+    clearChatView(); loadStatus(); loadConversations();
   });
 });
 // ---- Architect tam sıfırlama (ADR-0056, ADR-0069): önizleme → kapsama bağlı onay kodu → silme, doğrulama, yeniden kurulum
@@ -308,18 +442,15 @@ async function wipePreview(catalog) {
     $("gm-body").innerHTML = `<div class="kv"><div class="k">Durum</div><div class="v" style="color:${d2.status === "tamamlandı" ? "var(--teal)" : "var(--red)"}">${esc(d2.status)}</div>`
       + `<div class="k">Hedefler</div><div class="v">${res || "—"}</div><div class="k">Bootstrap</div><div class="v">${ok(d2.bootstrap)}</div>`
       + `<div class="k">Doğrulama</div><div class="v">${ok(d2.verify)}</div><div class="k">Ajan</div><div class="v">${ok(d2.agent)}</div>`
-      + `<div class="k">Sonra</div><div class="v">Eski sohbet, tablo ve grafik bağlantıları temizlendi. Yeni veriyi dosya/URL ile yükle; alan profili yeni kataloğa göre kurulur.</div></div>`;
-    $("thread").innerHTML = ""; answers = []; activeIndex = -1; renderSession(); loadStatus();
+      + `<div class="k">Sonra</div><div class="v">Yeni boş sohbet açıldı. Önceki sohbetler menüde “sıfırlamadan önce” işaretiyle kalır; kanıt zincirleri ve grafik bağlantıları artık doğrulanamayabilir. Yeni veriyi dosya/URL ile yükle; alan profili yeni kataloğa göre kurulur.</div></div>`;
+    clearChatView({keepModal: true}); loadStatus(); loadConversations();
   });
 }
 $("btn-wipe").addEventListener("click", () => wipePreview("bos"));
 
 let answers = [];          // bu oturumun tam cevap yükleri (sunucudaki /api/answers ile aynı)
 let activeIndex = -1;
-function renderSession() {
-  $("session").innerHTML = answers.map((p) => `<div class="session-item ${p.index === activeIndex ? "active" : ""}" data-i="${p.index}" title="${esc(p.elapsed_s)} s · ${(p.steps || []).filter((s) => s.tool).length} adım">${esc(p.question).slice(0, 90)}</div>`).join("") || `<div class="status">boş</div>`;
-  $("session").querySelectorAll(".session-item").forEach((el) => el.addEventListener("click", () => focusAnswer(Number(el.dataset.i))));
-}
+function renderSession() { renderConversations(); }   // açık sohbetin soruları menüde, sohbetin altında (ADR-0084)
 function focusAnswer(i) {           // sol listeden tıklanan cevap: kaydır, izi ve kanıtı o cevaba çevir
   const p = answers.find((a) => a.index === i); if (!p) return;
   activeIndex = i; renderSession(); renderTrace(p); renderEvidence(p);
@@ -331,9 +462,95 @@ async function loadAnswers() {      // sayfa yenilenince sohbet sunucudan geri g
     answers = list; $("thread").innerHTML = "";
     list.forEach((p) => renderAnswer(p));
     if (list.length) { activeIndex = list[list.length - 1].index; renderTrace(list[list.length - 1]); renderEvidence(list[list.length - 1]); }
-    renderSession();
+    renderSession(); renderStaleNote();
   } catch (e) { /* sunucu yoksa sessiz */ }
 }
+
+// ---- Sohbetler (ADR-0084): her sohbet sunucuda ayrı kayıtlı; uygulama yeniden açılınca son sohbet sürer.
+// Sol panelde liste, en son kullanılan en üstte (açmak da kullanmaktır); sohbete basınca o sohbet açılır, açık sohbetin soruları altında listelenir.
+const ICON_TRASH = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4 H11.5 M5.5 4 V2.5 H8.5 V4 M3.5 4 L4.2 11.5 H9.8 L10.5 4 M6 6.5 V9.5 M8 6.5 V9.5"/></svg>`;
+let convs = {active: null, items: [], persistent: false, active_stale: false};
+const questionText = (q) => String(q || "").split("\n").filter((l) => !l.trim().startsWith("Dosya:")).join(" ").replace(/\s+/g, " ").trim() || "Dosya analizi";
+const dayStart = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+function dayGroup(iso) {
+  const d = new Date(iso); if (isNaN(d)) return "Daha eski";
+  const days = Math.round((dayStart(new Date()) - dayStart(d)) / 864e5);
+  return days <= 0 ? "Bugün" : days === 1 ? "Dün" : days < 7 ? "Son 7 gün" : d.toLocaleDateString("tr-TR", {month: "long", year: "numeric"});
+}
+const clock = (iso) => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleTimeString("tr-TR", {hour: "2-digit", minute: "2-digit"}); };
+async function loadConversations() {
+  try { const r = await fetch("/api/conversations"); if (r.ok) convs = await r.json(); } catch (_) { /* sunucu yoksa liste eski kalır */ }
+  renderConversations(); renderStaleNote();
+}
+function renderConversations() {
+  const items = convs.items || []; let html = ""; let group = "";
+  if (convs.active && !items.some((c) => c.id === convs.active)) {
+    html += `<div class="grp">Şimdi</div><div class="conv on"><div class="row"><span class="open"><span class="tt">Yeni sohbet</span><span class="mt">henüz soru yok</span></span></div></div>`;
+  }
+  items.forEach((c) => {
+    const used = c.used_at || c.updated_at;
+    const g = dayGroup(used); if (g !== group) { group = g; html += `<div class="grp">${esc(g)}</div>`; }
+    const on = c.id === convs.active;
+    const qs = on && answers.length ? `<ul class="qs">${answers.map((p) => `<li><button type="button" data-q="${p.index}" class="${p.index === activeIndex ? "active" : ""}">${esc(questionText(p.question))}</button></li>`).join("")}</ul>` : "";
+    html += `<div class="conv${on ? " on" : ""}" data-id="${esc(c.id)}"><div class="row"><button type="button" class="open" data-open="${esc(c.id)}"${on ? ' aria-current="true"' : ""}>`
+      + `<span class="tt">${esc(c.title || "Adsız sohbet")}</span><span class="mt"><span>${esc(clock(used))} · ${fmtInt(c.count)} soru</span>${c.stale ? '<span class="old">sıfırlamadan önce</span>' : ""}</span></button>`
+      + `<button type="button" class="del" data-del="${esc(c.id)}" aria-label="Sohbeti sil" title="Sohbeti sil">${ICON_TRASH}</button></div>${qs}</div>`;
+  });
+  $("conv-list").innerHTML = html || `<div class="empty">Henüz kayıtlı sohbet yok. İlk soruyu sorduğunda burada görünür.</div>`;
+  $("conv-foot").textContent = convs.persistent ? "Sohbetler bu bilgisayarda saklanır; uygulama yeniden açılınca kaldığın yerden devam eder." : "Sohbetler yalnız bellekte; sunucu yeniden başlarsa silinir.";
+}
+function renderStaleNote() {
+  const old = $("stale-note"); if (old) old.remove();
+  if (!convs.active_stale || !answers.length) return;
+  const n = document.createElement("div"); n.id = "stale-note"; n.className = "stale-note";
+  n.textContent = "Bu sohbetteki cevaplar tam veri sıfırlamasından önceki veriye ait; kanıt zincirleri ve grafik bağlantıları artık doğrulanamayabilir.";
+  $("thread").prepend(n);
+}
+function clearChatView(opts = {}) {     // sohbet değişince ekran boşalır; veri havuzu ve profil aynı kalır
+  if (typing) typing.finish();
+  if (!opts.keepModal) { const g = $("gmodal"); if (g) g.hidden = true; }
+  closeJourney();
+  $("thread").innerHTML = ""; $("ev-body").innerHTML = ""; $("ev-badge").className = "badge none"; $("ev-badge").textContent = "—";
+  $("ev-summary").textContent = "Cevap gelince her sayı hücreye, sorguya, gözleme ve kaynağa bağlanır."; $("ev-summary").title = "";
+  $("trace").innerHTML = `<span class="label" style="margin-right:4px">Araç izi</span><span class="status">henüz soru yok</span>`;
+  pending = []; $("attach").innerHTML = ""; $("attach").hidden = true;
+  answers = []; activeIndex = -1; lastEvidence = null; lastQuestion = ""; lastAnswer = null; $("btn-journey").disabled = true; $("btn-steps").disabled = true; renderMini(null); renderSession();
+}
+const chatBusy = () => $("btn-ask").disabled;   // cevap sürerken sohbet değişmez
+async function switchConversation(request) {
+  if (chatBusy()) return false;
+  const r = await request(); if (!r.ok) { await loadConversations(); return false; }
+  clearChatView(); await loadAnswers(); loadStatus(); await loadConversations(); return true;
+}
+async function newConversation() {
+  if (await switchConversation(() => fetch("/api/conversations", {method: "POST"}))) $("q").focus();
+}
+async function openConversation(id) {
+  if (id === convs.active) return;
+  await switchConversation(() => fetch(`/api/conversations/${encodeURIComponent(id)}/open`, {method: "POST"}));
+}
+async function deleteConversation(id) {
+  if (chatBusy()) return;
+  const r = await fetch(`/api/conversations/${encodeURIComponent(id)}`, {method: "DELETE"});
+  if (r.ok && id === convs.active) { clearChatView(); await loadAnswers(); loadStatus(); }
+  await loadConversations();
+}
+$("btn-new").addEventListener("click", newConversation); $("btn-new2").addEventListener("click", newConversation);
+$("conv-list").addEventListener("click", (e) => {
+  const q = e.target.closest("[data-q]"); if (q) { focusAnswer(Number(q.dataset.q)); return; }
+  const o = e.target.closest("[data-open]"); if (o) { openConversation(o.dataset.open); return; }
+  const del = e.target.closest("[data-del]");
+  if (del) {
+    const row = del.closest(".conv");
+    if (row && !row.querySelector(".ask")) {
+      row.insertAdjacentHTML("beforeend", `<div class="ask">Bu sohbet ve yüklediği dosyalar silinsin mi?<button type="button" class="yes" data-yes="${esc(del.dataset.del)}">Sil</button><button type="button" data-no="1">Vazgeç</button></div>`);
+      row.querySelector("[data-yes]").focus();
+    }
+    return;
+  }
+  const yes = e.target.closest("[data-yes]"); if (yes) { deleteConversation(yes.dataset.yes); return; }
+  if (e.target.closest("[data-no]")) renderConversations();
+});
 
 // ---- Canlı adımlar ve yazım animasyonu (ADR-0079)
 // Cevap metni sunucudan akıtılmaz: doğrulama kapısı taslağı geri gönderebilir, yayımlanmamış sayı ekrana düşmemeli.
@@ -484,17 +701,17 @@ function renderAnswer(p, opts = {}) {
   a.addEventListener("click", () => { if (typing) typing.finish(); if (activeIndex !== p.index) { activeIndex = p.index; renderSession(); renderTrace(p); renderEvidence(p); } });
 }
 
-function renderTrace(p) {
-  const chips = (p.steps || []).map((s) => {
-    const cls = s.tool ? (s.ok ? "" : "err") : "validate";
-    const body = s.tool ? `${esc(s.tool)}${s.error_code ? " · " + esc(s.error_code) : ""}${s.duration_ms ? " · " + (s.duration_ms / 1000).toFixed(1) + " s" : ""}` : esc(s.thought || "").slice(0, 60);
-    return `<span class="chip ${cls}" title="${esc(s.summary || s.thought || "")}"><span class="role">${esc(s.role)}</span> ${body}</span>`;
-  });
-  const u = p.usage || {}; const gate = p.gate ? ` · kapı: ${p.gate.closed.length ? "kapalı " + p.gate.closed.join(", ") : "hepsi açık"}` : "";
-  $("trace").innerHTML = `<span class="label" style="margin-right:4px">Araç izi</span>${chips.join("")}<span class="status mono" style="margin-left:auto">${(p.steps || []).filter((s) => s.tool).length} adım · ${fmtInt(u.prompt)} token · ${p.elapsed_s} s${gate}</span>`;
+function renderTrace(p) {           // tek satır özet; adımların kendisi "Adımları izle" penceresinde (ADR-0085)
+  const steps = p.steps || []; const tools = steps.filter((s) => s.tool).length; const errs = steps.filter((s) => s.tool && !s.ok).length;
+  const backs = steps.filter((s) => !s.tool && s.role === "validate").length; const u = p.usage || {};
+  const parts = [`${tools} adım`, errs ? `${errs} araç hatası` : "", backs ? `${backs} geri gönderme` : "", `${fmtInt(u.prompt)} token`,
+    `${String(p.elapsed_s ?? "–").replace(".", ",")} s`].filter(Boolean).join(" · ");   // araç kapısı pencerenin "Cevap" durağında
+  $("trace").innerHTML = `<span class="label" style="margin-right:4px;flex:none">Araç izi</span><span class="status mono tsum" title="${esc(parts)}">${esc(parts)}</span>${tools ? `<button type="button" class="jbtn" data-steps="1" style="margin-left:auto;flex:none">Adımları izle</button>` : ""}`;
 }
 
 let lastEvidence = null;
+let lastQuestion = "";
+let lastAnswer = null;   // "Adımları izle" bu cevabın adımlarını gösterir
 // ---- Kanıt akışı (ADR-0079): cevap → sorgu → Silver gözlemi → Bronze ham dosya → RAW kaynak; ilk kopuk halkadan sonrası soluk.
 // Cevap sayılarının listesi panelde gösterilmez (kullanıcı geri bildirimi, ADR-0078): halka başına sayım ve iz yeter.
 const hostOf = (u) => { const s = String(u || ""); const m = s.match(/^https?:\/\/([^/?#]+)/i); return m ? m[1].replace(/^www\./, "") : s.split("/").pop().replace(/^[0-9a-f]{8}_/, ""); };
@@ -546,7 +763,7 @@ function evidenceStages(ev) {
 }
 function renderEvidence(p, animate) {
   const ev = p.evidence; const body = $("ev-body"); const badge = $("ev-badge");
-  lastEvidence = ev || null; $("btn-journey").disabled = !ev;
+  lastEvidence = ev || null; lastQuestion = p.question || ""; lastAnswer = p; $("btn-journey").disabled = !ev; $("btn-steps").disabled = !(p.steps || []).some((s) => s.tool); renderMini(ev || null);
   if (!ev) { badge.className = "badge none"; badge.textContent = "—"; $("ev-summary").textContent = "Bu cevap için tablo yok."; $("ev-summary").title = ""; body.innerHTML = ""; return; }
   badge.className = "badge " + (ev.complete ? "ok" : "gap"); badge.textContent = ev.complete ? "tam" : "EKSİK";
   const st = ev.states || {};
@@ -602,7 +819,7 @@ async function ask() {
   let q = $("q").value.trim(); if (!q && !pending.length) return;
   const shown = q || "Bu dosyayı analiz et.";
   if (pending.length) q = (q || shown) + "\n\n" + pending.map((p) => `Dosya: ${p.path}`).join("\n");
-  $("btn-ask").disabled = true; $("q").value = "";
+  $("btn-ask").disabled = true; $("btn-new").disabled = true; $("btn-new2").disabled = true; $("q").value = "";
   if (typing) typing.finish();
   const files = pending.map((f) => f.name);
   pending = []; $("attach").innerHTML = ""; $("attach").hidden = true;
@@ -620,137 +837,411 @@ async function ask() {
       p = await r.json();
     }
     live.stop(); live.el.remove();
-    pq.remove(); answers.push(p); activeIndex = p.index; renderAnswer(p, {animate: true}); renderTrace(p); renderEvidence(p, true); renderSession();
+    pq.remove(); answers.push(p); activeIndex = p.index; renderAnswer(p, {animate: true}); renderTrace(p); renderEvidence(p, true); renderSession(); loadConversations();
     if (p.search_budget_remaining !== null && p.search_budget_remaining !== undefined) $("pill-budget").textContent = `Arama bütçesi ${p.search_budget_remaining}`;
   } catch (e) { live.stop(); live.el.remove(); fail((e && e.server ? "Hata: " : "Bağlantı hatası: ") + (e && e.message ? e.message : e)); }
-  finally { $("btn-ask").disabled = false; $("q").focus(); }
+  finally { $("btn-ask").disabled = false; $("btn-new").disabled = false; $("btn-new2").disabled = false; $("q").focus(); }
 }
 
-// ---------------- Kanıt yolculuğu: aynı veri, iki gösterim (SVG+CSS / three.js) ----------------
-function buildJourney(ev, idx) {
-  const num = (idx !== null && idx !== undefined) ? ev.numbers[idx] : null;
-  const col = num && num.column ? (ev.columns || []).find((c) => c.column === num.column) : (ev.columns || [])[0];
-  const obsList = ev.observations || [];
-  const obs = (num && obsList.find((o) => o.value !== null && Math.abs(Number(o.value) - Number(num.number)) < 1e-6)) || obsList[0] || null;
-  const web = (ev.web_sources || [])[0] || null;
-  const short = (x, n) => (x || "").length > n ? (x || "").slice(0, n) + "…" : (x || "");
-  const nodes = [
-    {title: "Cevap", detail: num ? `${num.text} → kolon "${num.column || "?"}", satır ${num.row_key ?? num.row_index ?? "?"}` : `${ev.numbers.length} sayı, ${ev.numbers.filter((n) => n.matched).length} tabloda`, ok: num ? !!num.matched : ev.numbers.every((n) => n.matched)},
-    {title: "Tablo · SQL", detail: col && col.sql ? short(col.sql.replace(/\s+/g, " "), 160) : "bu kolonun sorgu izi yok", ok: !!(col && col.sql)},
-  ];
-  if (obs) {
-    nodes.push({title: "Silver gözlemi", detail: `${obs.series_id} · ${obs.observation_date} · değer ${obs.value} · quality ${obs.quality_flag}${obs.vintage_id ? " · vintage " + obs.vintage_id : ""}`, ok: true});
-    nodes.push({title: "Bronze · artifact", detail: `sha256 ${(obs.artifact_sha256 || "").slice(0, 16)}… · run ${(obs.run_id || "—").slice(0, 8)} · ${obs.bronze_path ? "parquet: " + obs.bronze_path.split("/").slice(-2).join("/") : "parquet bulunamadı"}`, ok: !!obs.artifact_sha256});
-    nodes.push({title: "RAW · kaynak", detail: `${obs.locator || "kaynak adresi yok"} · HTTP ${obs.http_status ?? "—"} · çekim ${obs.fetched_at || "—"}${obs.raw_path ? " · " + obs.raw_path.split("/").slice(-1)[0] : ""}`, ok: !!(obs.locator && obs.fetched_at)});
-  } else if (web) {
-    nodes.push({title: web.ocr ? "Belge (OCR)" : "Web sayfası", detail: `${web.url} · sha256 ${(web.sha256 || "").slice(0, 16)}… · ${web.fetched_at || ""}${web.ocr ? " · " + (web.ocr.model || "") + " · kalite " + (web.ocr.quality || "") : ""}`, ok: !!(web.url && web.sha256)});
+// ---------------- Kanıt yolculuğu (ADR-0083): kanıtta olan halkalar durak olur; her tür kendi figürüyle, bağlantılar sırayla dolar ----------------
+// Tek gösterim (3B ve yürüyen karakter kaldırıldı). Duraklar `journeyStops` ile kanıt yükünden kurulur; sağ paneldeki küçük zincir de aynı kurucuyu kullanır.
+const JPAGE = `<path d="M28 12 H56 L68 24 V66 H28 Z" fill="#fbfaf7" stroke="#cfc8bb" stroke-width="1.5" stroke-linejoin="round"/><path d="M56 12 V24 H68" fill="#efece5" stroke="#cfc8bb" stroke-width="1.5" stroke-linejoin="round"/>`;
+const jBars = (ys, ws) => ys.map((y, i) => `<rect x="35" y="${y}" width="${ws[i]}" height="3" rx="1.5" fill="#c4bdb0"/>`).join("");
+const JTABLE = `<rect x="20" y="20" width="56" height="46" rx="4" fill="#fff" stroke="#cfc8bb" stroke-width="1.5"/><path d="M20 24 A4 4 0 0 1 24 20 H72 A4 4 0 0 1 76 24 V32 H20 Z" fill="#0f6b63"/><path d="M38.7 32 V66 M57.3 32 V66 M20 43.3 H76 M20 54.6 H76" stroke="#e3ded4" stroke-width="1.5"/>`;
+const JBROWSER = `<rect x="16" y="20" width="64" height="46" rx="6" fill="#fff" stroke="#cfc8bb" stroke-width="1.5"/><path d="M16 26 A6 6 0 0 1 22 20 H74 A6 6 0 0 1 80 26 V31 H16 Z" fill="#0f6b63"/><circle cx="22.5" cy="25.5" r="1.6" fill="#e9f3f1"/><circle cx="28" cy="25.5" r="1.6" fill="#e9f3f1"/><circle cx="33.5" cy="25.5" r="1.6" fill="#e9f3f1"/>`;
+const jSlab = (y) => `<rect x="22" y="${y + 4}" width="52" height="11" rx="5.5" fill="#86b3ac"/><rect x="22" y="${y}" width="52" height="11" rx="5.5" fill="#c7e0dc"/>`;
+const JFIG = {
+  cevap: `${JPAGE}${jBars([32, 40, 48, 56], [24, 26, 19, 23])}`,
+  tablo: `${JTABLE}`,
+  sql: `<rect x="22" y="23" width="52" height="45" rx="7" fill="#1f1d1a"/><rect x="22" y="18" width="52" height="45" rx="7" fill="#3a3731"/><text x="30" y="38" font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600" fill="#f6f4ef">SQL</text><rect x="30" y="46" width="30" height="3" rx="1.5" fill="#8a8478"/><rect x="30" y="53" width="21" height="3" rx="1.5" fill="#6b665d"/>`,
+  hesap: `${JTABLE}<circle cx="70" cy="60" r="12" fill="#0a4f49" stroke="#fbfaf7" stroke-width="2"/><text x="70" y="65.5" text-anchor="middle" font-family="IBM Plex Serif, Georgia, serif" font-size="15" font-weight="600" fill="#fff">Σ</text>`,
+  silver: `${jSlab(46)}${jSlab(32)}${jSlab(18)}`,
+  bronze: `<path d="M26 26 L34 18 H70 L62 26 Z" fill="#d6a071"/><path d="M62 26 L70 18 V58 L62 66 Z" fill="#96562b"/><rect x="26" y="26" width="36" height="40" fill="#b8733f"/><path d="M26 39.3 H62 M26 52.6 H62 M44 26 V39.3 M35 39.3 V52.6 M53 39.3 V52.6 M44 52.6 V66" stroke="#8c5127" stroke-width="1.5"/><path d="M62 39.3 L70 31.3 M62 52.6 L70 44.6" stroke="#7a4520" stroke-width="1.5"/>`,
+  raw: `${JPAGE}<text x="34" y="40" font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600" fill="#0a4f49">{ }</text>${jBars([48, 56], [24, 17])}`,
+  url: `${JBROWSER}<g transform="rotate(-45 48 48.5)" fill="none" stroke="#0f6b63" stroke-width="3"><rect x="33" y="43.5" width="18" height="10" rx="5"/><rect x="45" y="43.5" width="18" height="10" rx="5"/></g>`,
+  web: `${JBROWSER}<g fill="none" stroke="#0f6b63" stroke-width="2"><circle cx="48" cy="48.5" r="11"/><ellipse cx="48" cy="48.5" rx="4.5" ry="11"/><path d="M37 48.5 H59"/></g>`,
+  belge: `<path d="M31 18 H54 L64 28 V62 H31 Z" fill="#fbfaf7" stroke="#cfc8bb" stroke-width="1.5" stroke-linejoin="round"/><path d="M54 18 V28 H64" fill="#efece5" stroke="#cfc8bb" stroke-width="1.5" stroke-linejoin="round"/><rect x="37" y="34" width="20" height="3" rx="1.5" fill="#c4bdb0"/><rect x="37" y="49" width="22" height="3" rx="1.5" fill="#c4bdb0"/><rect x="37" y="56" width="15" height="3" rx="1.5" fill="#c4bdb0"/><rect x="25" y="41" width="46" height="3" rx="1.5" fill="#0f6b63" opacity=".6"/><path d="M23 20 V12 H31 M65 12 H73 V20 M73 58 V66 H65 M31 66 H23 V58" fill="none" stroke="#0f6b63" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`,
+};
+const JMETA = {   // ad, alt başlık, küçük zincir etiketi
+  cevap: ["Cevap", "yazılan sayı", "Cevap"],
+  tablo: ["Tablo", "analiz tablosu", "Tablo"],
+  sql: ["SQL", "sorgu izi", "SQL"],
+  hesap: ["Hesaplanmış tablo", "birleştirme, hizalama, akım", "Hesap"],
+  silver: ["Silver", "temizlenmiş gözlem", "Silver"],
+  bronze: ["Bronze", "arşivlenmiş kaynak dosyası", "Bronze"],
+  raw: ["RAW", "kaynaktan indirilen yanıt", "RAW"],
+  url: ["Kaynak URL", "verinin alındığı adres", "URL"],
+  web: ["Web sayfası", "okunan sayfa", "Web"],
+  belge: ["Belge (OCR)", "görüntüden okunan tablo", "OCR"],
+};
+const JBADGE = {
+  w: (s) => `<svg viewBox="0 0 22 22" width="${s}" height="${s}" aria-hidden="true"><circle cx="11" cy="11" r="9.5" fill="#a35a00" stroke="#fff" stroke-width="2"/><rect x="10" y="5.5" width="2" height="7" rx="1" fill="#fff"/><circle cx="11" cy="15.8" r="1.3" fill="#fff"/></svg>`,
+  b: (s) => `<svg viewBox="0 0 24 22" width="${s}" height="${Math.round(s * 22 / 24)}" aria-hidden="true"><path d="M12 2 L22.5 20 H1.5 Z" fill="#c53030" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><rect x="11" y="8" width="2" height="6.5" rx="1" fill="#fff"/><circle cx="12" cy="17.2" r="1.3" fill="#fff"/></svg>`,
+};
+const JICON = {
+  close: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 4 L12 12 M12 4 L4 12"/></svg>`,
+  replay: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7 A4.5 4.5 0 1 0 4 3.6"/><path d="M3.6 1.2 V3.9 H6.3"/></svg>`,
+  prev: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 3 L4.5 7 L8.5 11"/></svg>`,
+  next: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 3 L9.5 7 L5.5 11"/></svg>`,
+};
+const figSvg = (inner, size) => `<svg viewBox="0 0 96 96" width="${size}" height="${size}" aria-hidden="true" focusable="false"><ellipse cx="48" cy="86" rx="36" ry="5" fill="#1f1d1a" opacity=".07"/><rect class="ple" x="12" y="69" width="72" height="15" rx="7.5"/><rect class="plt" x="12" y="64" width="72" height="14" rx="7"/>${inner}</svg>`;
+const jSvg = (kind, size) => figSvg(JFIG[kind], size);
+const trNum = (v) => (v === null || v === undefined || v === "" || !isFinite(Number(v))) ? String(v ?? "") : Number(v).toLocaleString("tr-TR", {maximumFractionDigits: 4});
+const jf = (k, v, o) => ({k, v: v === null || v === undefined ? "" : String(v), ...(o || {})});
+const tailPath = (p, n) => String(p || "").split("/").filter(Boolean).slice(-n).join("/");
+const dayOf = (d) => String(d || "").slice(0, 10);
+const webCol = (c) => /^web_url\s/.test(String(c.sql || ""));
+const goldName = (s) => String(s).replace(/^gold\s*[—-]\s*/i, "");
+
+// idx = cevaptaki sayının sırası; null = bütün cevap (her kolon, her gözlem). Kurucu cevaptan kaynağa iner, dönüşte sıra kaynaktan cevaba çevrilir.
+function journeyStops(ev, idx) {
+  const nums = ev.numbers || []; const num = (idx === null || idx === undefined) ? null : (nums[idx] || null);
+  const cols = ev.columns || []; const col = num ? (cols.find((c) => c.column === num.column) || null) : null;
+  const scope = col ? [col] : cols; const stops = [];
+  if (num) {
+    const w = num.sign_warning ? "işaret tabloyla ters" : num.period_warning ? "dönem tabloyla uyuşmuyor" : "";
+    stops.push({kind: "cevap", state: !num.matched ? "broken" : w ? "warn" : "ok",
+      status: !num.matched ? (num.from_question ? "sorudan, tabloda yok" : "tabloda yok") : (w || "tabloda eşleşti"),
+      fields: [jf("Cevaptaki yazım", num.text, {mono: 1}), jf("Kolon", num.column, {mono: 1}), jf("Satır", num.row_key ?? num.row_index, {mono: 1}),
+        jf("İşaret ve dönem", w || "uyarı yok", {tone: w ? "warn" : ""})],
+      alert: num.matched ? null : {tone: "bad", text: "Bu sayı analiz tablosunda bulunamadı; cevaptaki yazımın kaynağı doğrulanamıyor."}});
   } else {
-    nodes.push({title: "Silver gözlemi", detail: "gözlem izi yok (seed adaptörü ya da hesaplanmış kolon)", ok: false});
+    const miss = nums.filter((n) => !n.matched).length; const warned = nums.filter((n) => n.matched && (n.sign_warning || n.period_warning)).length;
+    stops.push({kind: "cevap", state: miss ? "broken" : warned ? "warn" : "ok",
+      status: nums.length ? `${nums.length - miss}/${nums.length} sayı eşleşti` : "denetlenecek sayı yok",
+      fields: [jf("Denetlenen sayı", fmtInt(nums.length)), jf("Tabloda eşleşen", fmtInt(nums.length - miss)), jf("İşaret ya da dönem uyarısı", warned ? fmtInt(warned) : "", {tone: "warn"})],
+      alert: miss ? {tone: "bad", text: `${miss} sayı analiz tablosunda bulunamadı.`} : null});
   }
-  const firstBroken = nodes.findIndex((n) => !n.ok);
-  return {nodes, stopAt: firstBroken === -1 ? nodes.length - 1 : firstBroken, gaps: ev.gaps || []};
+  const rows = ev.table_rows || 0;
+  if (cols.length) {
+    stops.push({kind: "tablo", state: "ok", status: rows ? `${fmtInt(rows)} satır · ${cols.length} kolon` : `${cols.length} kolon`,
+      fields: [...(num ? [jf("Hücre", `${num.column || "?"} · ${num.row_key ?? num.row_index ?? "?"}`, {mono: 1}), jf("Tablodaki değer", trNum(num.number), {mono: 1})] : []),
+        jf("İncelenen", ev.inspected_rows && rows > ev.inspected_rows ? `ilk ${fmtInt(ev.inspected_rows)}/${fmtInt(rows)} satır` : (rows ? "satırların tamamı" : "")),
+        jf("Kolonlar", cols.map((c) => c.column).join(", "), {mono: 1})]});
+  } else {
+    stops.push({kind: "tablo", state: "broken", status: "analiz tablosu yok", fields: [],
+      alert: {tone: "bad", text: "Bu cevap bir analiz tablosuna bağlanmadı; sayılar hücreye kadar izlenemiyor."}});
+  }
+  const sqlCols = scope.filter((c) => !webCol(c));
+  if (sqlCols.length) {
+    const noSql = sqlCols.filter((c) => !c.sql); const texts = [...new Set(sqlCols.filter((c) => c.sql).map((c) => String(c.sql)))];
+    const plain = texts.filter((t) => !/^türetilmiş:/.test(t)).map((t) => t.replace(/^workspace_query:\s*/, ""));
+    const derived = texts.filter((t) => /^türetilmiş:/.test(t)).map((t) => t.replace(/^türetilmiş:\s*/, ""));
+    const tables = sqlTables(plain.join(" ")); const ran = sqlCols.map((c) => c.executed_at).filter(Boolean).sort();
+    stops.push({kind: "sql", state: noSql.length ? "broken" : "ok",
+      status: noSql.length ? "sorgu izi yok" : derived.length && !plain.length ? "türetilmiş kolon" : /^workspace_query:/.test(texts[0] || "") ? "tablo sorgusu" : `${texts.length} sorgu`,
+      code: plain.map(prettySql).join("\n\n"),
+      fields: [jf(col ? "Kolon" : "Kolonlar", sqlCols.map((c) => c.column).join(", "), {mono: 1}), ...derived.map((d) => jf("Hesap", d, {mono: 1})),
+        jf("Okunan tablo", tables.join(", "), {mono: 1}), jf("Çalıştırıldı", ran.length ? fmtWhen(ran[ran.length - 1]) : ""),
+        ...(noSql.length ? [jf("Sorgu izi olmayan", noSql.map((c) => c.column).join(", "), {mono: 1, tone: "bad"})] : []),
+        ...[...new Set(sqlCols.flatMap((c) => c.warnings || []))].map((w) => jf("Araç notu", w))],
+      alert: noSql.length ? {tone: "bad", text: "Kolonun hangi sorguyla üretildiği kayıtlı değil."} : null});
+  }
+  const gold = [...new Set(scope.flatMap((c) => (c.sources || []).filter((s) => /^gold\b/i.test(s))))];
+  if (gold.length || scope.some((c) => /\bgold\./i.test(String(c.sql || "")))) {
+    const inputs = [...new Set(scope.flatMap((c) => c.dataset_ids || []))];
+    stops.push({kind: "hesap", state: "ok", status: inputs.length ? `${inputs.length} girdi serisi` : "hesaplanmış tablo",
+      fields: [...gold.map((s) => jf("Hesaplama", goldName(s))), jf("Girdi serileri", inputs.join(", "), {mono: 1})]});
+  }
+  const obsAll = ev.observations || []; const web = ev.web_sources || [];
+  const webOnly = scope.length > 0 && scope.every(webCol);
+  if (obsAll.length && !webOnly) {
+    const ids = new Set(scope.flatMap((c) => c.dataset_ids || []));
+    const pool = obsAll.filter((o) => ids.has(o.series_id)); const base = pool.length ? pool : obsAll;
+    let obs = base;
+    if (num) {
+      const same = base.filter((o) => o.value !== null && o.value !== undefined && Math.abs(Number(o.value) - Number(num.number)) < 1e-6);
+      const byDay = num.row_key ? base.filter((o) => dayOf(o.observation_date) === dayOf(num.row_key)) : [];
+      const sameDay = same.filter((o) => byDay.includes(o));
+      obs = same.length ? (sameDay.length ? sameDay.slice(0, 1) : same.slice(0, 1)) : byDay.length ? byDay : base.slice(0, 1);
+    }
+    const one = obs.length === 1 ? obs[0] : null;
+    const flags = [...new Set(obs.map((o) => o.quality_flag).filter(Boolean))]; const flagWarn = flags.some((f) => f !== "ok");
+    const days = obs.map((o) => dayOf(o.observation_date)).filter(Boolean).sort();
+    stops.push({kind: "silver", state: "ok",
+      status: one ? `${dayOf(one.observation_date)} · ${trNum(one.value)}` : `${fmtInt(num ? obs.length : (ev.observation_count || obs.length))} gözlem`,
+      fields: one
+        ? [jf("Seri", one.series_id, {mono: 1}), jf("Kurum", one.entity_id, {mono: 1}), jf("Dönem", dayOf(one.observation_date), {mono: 1}), jf("Değer", trNum(one.value), {mono: 1}),
+          jf("Kalite bayrağı", one.quality_flag, {mono: 1, tone: flagWarn ? "warn" : ""}), jf("Sürüm", one.vintage_id, {mono: 1}), jf("Tablo", one.relation, {mono: 1})]
+        : [jf("Seriler", [...new Set(obs.map((o) => o.series_id))].join(", "), {mono: 1}),
+          jf("Dönemler", days.length ? (days[0] === days[days.length - 1] ? days[0] : `${days[0]} → ${days[days.length - 1]}`) : "", {mono: 1}),
+          jf("Kalite bayrağı", flags.join(", "), {mono: 1, tone: flagWarn ? "warn" : ""}),
+          jf("Gösterilen", !num && (ev.observation_count || 0) > obsAll.length ? `${obsAll.length} / ${fmtInt(ev.observation_count)} gözlem` : "")]});
+    const shas = [...new Set(obs.map((o) => o.artifact_sha256).filter(Boolean))];
+    const noSha = obs.filter((o) => !o.artifact_sha256).length; const bMiss = obs.filter((o) => o.artifact_sha256 && o.bronze_present === false).length;
+    stops.push({kind: "bronze", state: noSha || bMiss ? "broken" : "ok",
+      status: noSha ? "dosya kaydı yok" : bMiss ? (obs.length === 1 ? "dosya diskte yok" : `${bMiss}/${obs.length} dosya yok`)
+        : shas.length === 1 ? `sha256 ${shas[0].slice(0, 8)}…` : `${shas.length} dosya`,
+      fields: [...shas.slice(0, 4).map((s, i) => jf(shas.length > 1 ? `sha256 · ${i + 1}` : "Artifact sha256", s, {mono: 1, copy: 1})),
+        jf("Diğer dosyalar", shas.length > 4 ? `${shas.length - 4} dosya daha` : ""),
+        jf("Çalıştırma", [...new Set(obs.map((o) => o.run_id).filter(Boolean))].slice(0, 3).join(", "), {mono: 1, copy: 1}),
+        jf("Parquet", one ? tailPath(one.bronze_path, 2) : "", {mono: 1}), jf("Dosya", noSha ? "" : bMiss ? `${bMiss} dosya bulunamadı` : "diskte", {tone: bMiss ? "bad" : ""})],
+      alert: noSha ? {tone: "bad", text: "Gözlemin hangi kaynak dosyasından geldiği kayıtlı değil."}
+        : bMiss ? {tone: "bad", text: "Gözlemin arşivlenmiş kaynak dosyası diskte bulunamadı."} : null});
+    const rMiss = obs.filter((o) => o.raw_present === false).length;
+    const dBad = obs.filter((o) => o.raw_present !== false && o.raw_digest_ok === false).length;
+    const unchecked = obs.filter((o) => o.raw_present !== false && o.raw_digest_ok !== true && o.raw_digest_ok !== false).length;
+    const http = [...new Set(obs.map((o) => o.http_status).filter((x) => x !== null && x !== undefined))];
+    const fetched = obs.map((o) => o.fetched_at).filter(Boolean).sort(); const checked = obs.map((o) => o.checked_at).filter(Boolean).sort();
+    stops.push({kind: "raw", state: rMiss || dBad || unchecked ? "broken" : "ok",
+      status: rMiss ? (obs.length === 1 ? "dosya diskte yok" : `${rMiss}/${obs.length} dosya yok`) : dBad ? "özet uyuşmuyor" : unchecked ? "özet denetlenmedi"
+        : (http.length ? `HTTP ${http.join(", ")} · özet eşleşti` : "özet eşleşti"),
+      fields: [jf(one ? "Dosya" : "Örnek dosya", tailPath((one || obs[0]).raw_path, 3), {mono: 1}),
+        jf("Özet kontrolü", dBad ? "baytlar kayıtlı özetle uyuşmuyor" : unchecked ? "denetlenmedi" : rMiss ? "" : "dosyanın sha256 özeti artifact ile aynı", {tone: dBad || unchecked ? "bad" : ""}),
+        jf("HTTP yanıtı", http.join(", "), {mono: 1}), jf("Çekim", fetched.length ? fmtWhen(fetched[fetched.length - 1]) : ""), jf("Son kontrol", checked.length ? fmtWhen(checked[checked.length - 1]) : "")],
+      alert: rMiss ? {tone: "bad", text: "İşlenmiş dosya bu yanıttan üretilmiş, ama ham yanıt dosyası diskte yok. Kaynak adresine giden bağ doğrulanamıyor."}
+        : dBad ? {tone: "bad", text: "Diskteki ham yanıtın baytları kayıtlı özetle uyuşmuyor; dosya çekimden sonra değişmiş olabilir."}
+        : unchecked ? {tone: "bad", text: "Ham yanıt diskte ama özeti denetlenmedi; kaynağa giden bağ doğrulanmış sayılmaz."} : null});
+    const arts = ev.artifacts || {};
+    const locs = [...new Set(obs.map((o) => o.locator || (arts[o.artifact_sha256] || {}).locator).filter(Boolean))];
+    const pages = [...new Set(scope.flatMap((c) => c.source_urls || []))].filter((u) => !locs.includes(u));
+    const srcs = [...new Set(scope.flatMap((c) => c.sources || []))].filter((s) => !/^gold\b/i.test(s));
+    stops.push(locs.length
+      ? {kind: "url", name: locs.some(httpUrl) ? "Kaynak URL" : "Kaynak dosya", state: "ok", status: [...new Set(locs.map(hostOf))].slice(0, 2).join(", "),
+        fields: [...locs.slice(0, 3).map((l) => jf(httpUrl(l) ? "İstek adresi" : "Dosya", l, {mono: 1, href: !!httpUrl(l)})),
+          ...pages.slice(0, 2).map((u) => jf("Kaynak sayfası", u, {mono: 1, href: !!httpUrl(u)})), jf("Kaynak", srcs.slice(0, 3).join(" · "))]}
+      : {kind: "url", state: "broken", status: "adres kaydı yok", fields: [jf("Kaynak", srcs.slice(0, 3).join(" · "))],
+        alert: {tone: "bad", text: "Ham yanıtın hangi adresten çekildiği kayıtlı değil."}});
+  } else if (web.length) {
+    const w = web[0]; const ocr = w.ocr || null; const hasId = !!(w.url && w.sha256);
+    stops.push({kind: ocr ? "belge" : "web", state: !hasId ? "broken" : (ocr || ev.ocr_unverified) ? "warn" : "ok",
+      status: !hasId ? "özet kaydı yok" : ocr ? "OCR tahmini" : `sha256 ${String(w.sha256).slice(0, 8)}…`,
+      fields: [jf(ocr ? "Dosya" : "Başlık", ocr ? hostOf(w.url) : (w.title || "")), jf("sha256", w.sha256, {mono: 1, copy: 1}),
+        jf(ocr ? "Okundu" : "Çekim", w.fetched_at ? fmtWhen(w.fetched_at) : ""),
+        ...(ocr ? [jf("Okuyan model", ocr.model, {mono: 1}), jf("Sayfa", (ocr.pages || []).join(", ")), jf("Okuma kalitesi", ocr.quality, {tone: "warn"})] : []),
+        jf("Diğer kaynaklar", web.length > 1 ? `${web.length - 1} sayfa daha` : "")],
+      alert: !hasId ? {tone: "bad", text: "Okunan sayfanın baytlarının özeti kayıtlı değil."}
+        : ocr ? {tone: "warn", text: "Sayılar görüntüden okunmuş bir tablodan geliyor. Tabloda eşleşse de kesin sonuç sayılmaz; kaynağıyla karşılaştırın."} : null});
+    if (httpUrl(w.url)) stops.push({kind: "url", state: "ok", status: hostOf(w.url), fields: [jf("Adres", w.url, {mono: 1, href: 1}), jf("HTTP yanıtı", w.status ?? w.http_status ?? "", {mono: 1})]});
+  } else if (cols.length) {
+    stops.push({kind: "silver", state: "broken", status: "gözlem izi yok", fields: [],
+      alert: {tone: "bad", text: "Bu kolon kaynak gözlemine inmiyor (örnek veri adaptörü ya da türetilmiş kolon); zincir sorguda bitiyor."}});
+  }
+  stops.forEach((s) => { s.fields = (s.fields || []).filter((f) => f.v !== ""); });
+  return stops.reverse();   // gösterim verinin akışıyla: kaynak → … → cevap (kullanıcı, 15 Eyl); animasyon kaynaktan başlar, ilk kopuk halkada durur
 }
 
-const journey = {t: 0, playing: true, view: "svg", data: null, raf: 0, three: null, last: 0};
-const DUR = 9000;                     // bir tur (ms)
-function jState() {                   // 0..1 zaman → hangi halkada, aralarda nerede
-  const n = journey.data.nodes.length; const segs = n - 1;
-  const pos = Math.min(journey.t * segs, journey.data.stopAt);   // kopuk halkada durur
-  return {pos, at: Math.min(Math.floor(pos + 1e-6), n - 1), segs};
-}
-function openJourney(idx) {
-  if (!lastEvidence) return;
-  journey.data = buildJourney(lastEvidence, idx); journey.t = 0; journey.playing = true; journey.last = 0;
-  let m = $("journey");
-  if (!m) {
-    m = document.createElement("div"); m.className = "modal"; m.id = "journey";
-    m.innerHTML = `<div class="panel"><div class="mhead"><span class="t">Kanıt yolculuğu</span><span class="status">Smith her halkayı tek tek açıyor</span><div class="tabs"><button class="tab on" data-v="svg">2,5B · SVG + CSS</button><button class="tab" data-v="three">3B · three.js</button></div><button class="close" title="Kapat">×</button></div><div class="stage" id="stage"></div><div class="bubble"><div class="who" id="jwho"></div><div class="what" id="jwhat"></div><div class="ctl"><button id="jplay">Duraklat</button><button id="jstep">Sonraki halka</button></div></div></div>`;
-    document.body.appendChild(m);
-    m.querySelector(".close").addEventListener("click", closeJourney);
-    m.addEventListener("click", (e) => { if (e.target === m) closeJourney(); });
-    m.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => { m.querySelectorAll(".tab").forEach((x) => x.classList.toggle("on", x === b)); journey.view = b.dataset.v; mountView(); }));
-    $("jplay").addEventListener("click", () => { journey.playing = !journey.playing; $("jplay").textContent = journey.playing ? "Duraklat" : "Oynat"; });
-    $("jstep").addEventListener("click", () => { const s = jState(); journey.t = Math.min((s.at + 1) / s.segs, 1); journey.playing = false; $("jplay").textContent = "Oynat"; });
+// Zincir gösterici (ADR-0083, ADR-0085): kanıt yolculuğu ve adım yolculuğu aynı sahneyi, hareketi ve ayrıntı kartını paylaşır.
+// cfg: id, title, stepWord, halts (ilk kopuk durakta durur mu), meta(kind) → [ad, alt başlık], svg(kind, boy), build(ctx) → duraklar,
+// badge(duraklar) → [sınıf, metin], detail(durak, evre, bilgi) → HTML.
+const jNarrow = window.matchMedia ? window.matchMedia("(max-width: 720px)") : null;
+const jReduce = () => !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+const jName = (s) => s.name || JMETA[s.kind][0];
+function chainViewer(cfg) {
+  const V = {ctx: null, stops: [], lit: -1, done: false, sel: 0, picked: false, timer: 0, t0: 0, shown: "", el: null};
+  const q = (sel) => V.el.querySelector(sel);
+  const broken = () => cfg.halts ? V.stops.findIndex((s) => s.state === "broken") : -1;
+  const phase = (i) => { const b = broken(); return (V.done && b !== -1 && i > b) ? "unreach" : (i <= V.lit ? V.stops[i].state : "pending"); };
+  const name = (s) => s.name || cfg.meta(s.kind)[0];
+  const halt = () => { clearInterval(V.timer); clearTimeout(V.t0); V.timer = 0; V.t0 = 0; };
+  function mount() {
+    const m = document.createElement("div"); m.className = "modal jr"; m.id = cfg.id; m.hidden = true;
+    m.innerHTML = `<div class="panel" role="dialog" aria-modal="true" aria-labelledby="${cfg.id}-t"><div class="mhead"><span class="t" id="${cfg.id}-t">${esc(cfg.title)}</span><span class="jq"></span><span class="badge none jbadge">—</span><button type="button" class="close" aria-label="Kapat">${JICON.close}</button></div><div class="jstage"></div><div class="jdetail" aria-live="polite"></div><div class="jctl"><span class="step"></span><button type="button" class="jreplay">${JICON.replay}Yeniden oynat</button><button type="button" class="jprev">${JICON.prev}Önceki ${esc(cfg.stepWord)}</button><button type="button" class="jnext">Sonraki ${esc(cfg.stepWord)}${JICON.next}</button></div></div>`;
+    document.body.appendChild(m); V.el = m;
+    q(".close").addEventListener("click", close);
+    m.addEventListener("click", (e) => { if (e.target === m) close(); });
+    q(".jreplay").addEventListener("click", play);
+    q(".jprev").addEventListener("click", () => pick(V.sel - 1));
+    q(".jnext").addEventListener("click", () => pick(V.sel + 1));
+    q(".jstage").addEventListener("click", (e) => { const b = e.target.closest(".jstop"); if (b) pick(Number(b.dataset.i)); });
+    q(".jdetail").addEventListener("click", (e) => {
+      const b = e.target.closest(".jcopy"); if (!b) return;
+      const f = (V.stops[V.sel].fields || [])[Number(b.dataset.j)]; const done = (t) => { b.textContent = t; setTimeout(() => { b.textContent = "Kopyala"; }, 1600); };
+      try { navigator.clipboard.writeText(f.v).then(() => done("Kopyalandı"), () => done("Kopyalanamadı")); } catch (_) { done("Kopyalanamadı"); }
+    });
+    if (jNarrow && jNarrow.addEventListener) jNarrow.addEventListener("change", () => { if (!m.hidden) apply(); });
   }
-  m.hidden = false; mountView();
-}
-function closeJourney() { const m = $("journey"); if (m) m.hidden = true; cancelAnimationFrame(journey.raf); journey.raf = 0; if (journey.three) { journey.three.dispose(); journey.three = null; } }
-function tick(now) {
-  if (journey.playing) { if (journey.last) journey.t = (journey.t + (now - journey.last) / DUR) % 1; journey.last = now; } else journey.last = now;
-  const s = jState(); const node = journey.data.nodes[s.at];
-  $("jwho").textContent = `${s.at + 1}/${journey.data.nodes.length} · ${node.title}${node.ok ? "" : " · KOPUK"}`;
-  $("jwhat").textContent = node.detail + (s.at === journey.data.stopAt && !node.ok ? "   ⟵ zincir burada kopuyor" : "");
-  if (journey.view === "svg") drawSvg(s); else if (journey.three) journey.three.draw(s);
-  journey.raf = requestAnimationFrame(tick);
-}
-function mountView() {
-  cancelAnimationFrame(journey.raf); journey.raf = 0; journey.last = 0;
-  const stage = $("stage"); stage.innerHTML = "";
-  if (journey.three) { journey.three.dispose(); journey.three = null; }
-  if (journey.view === "svg") { stage.innerHTML = svgSkeleton(); journey.raf = requestAnimationFrame(tick); return; }
-  stage.innerHTML = `<div class="busy" style="padding:16px">three.js yükleniyor…</div>`;
-  import("/static/vendor/three.module.min.js").then((THREE) => { if (journey.view !== "three") return; journey.three = makeThree(THREE, stage); journey.raf = requestAnimationFrame(tick); })
-    .catch((e) => { stage.innerHTML = `<div class="err" style="margin:16px">three.js yüklenemedi: ${esc(String(e))}</div>`; });
-}
-// --- 2,5B: izometrik SVG; karakter yol boyunca, halkalar sırayla yanar
-function nodeXY(i, n) { const x0 = 90, x1 = 830, y0 = 300, y1 = 110; const k = n > 1 ? i / (n - 1) : 0; return [x0 + (x1 - x0) * k, y0 + (y1 - y0) * k]; }
-function svgSkeleton() {
-  const n = journey.data.nodes.length; const pts = journey.data.nodes.map((_, i) => nodeXY(i, n));
-  const grid = []; for (let i = 0; i < 9; i++) grid.push(`<path d="M ${30 + i * 60} 400 L ${330 + i * 60} 160" stroke="#e6e2d8"/>`); for (let i = 0; i < 5; i++) grid.push(`<path d="M ${30 + i * 75} ${400 - i * 60} L ${430 + i * 75} ${400 - i * 60 + 30}" stroke="#e6e2d8"/>`);
-  const links = pts.slice(1).map((p, i) => `<path id="jl${i}" d="M ${pts[i][0]} ${pts[i][1]} L ${p[0]} ${p[1]}" stroke="#c7e0dc" stroke-width="5" stroke-linecap="round"/>`).join("");
-  const boxes = pts.map((p, i) => { const node = journey.data.nodes[i]; const c = node.ok ? ["#0f6b63", "#0a4f49", "#083f3a"] : ["#c53030", "#9b2c2c", "#7a2222"]; return `<g id="jn${i}" transform="translate(${p[0]} ${p[1]})" opacity=".45"><path d="M -34 -16 L 0 -32 L 34 -16 L 0 0 Z" fill="${c[0]}"/><path d="M -34 -16 L -34 8 L 0 24 L 0 0 Z" fill="${c[1]}"/><path d="M 0 0 L 0 24 L 34 8 L 34 -16 Z" fill="${c[2]}"/><text y="46" text-anchor="middle" font-size="12" font-weight="500" fill="#1f1d1a">${esc(node.title)}</text></g>`; }).join("");
-  const smith = `<g id="jsmith"><ellipse cy="-2" rx="9" ry="4" fill="rgba(0,0,0,.15)"/><rect x="-7" y="-30" width="14" height="18" rx="4" fill="#0f6b63"/><circle cy="-36" r="8" fill="#f6f4ef" stroke="#1f1d1a" stroke-width="1.5"/><circle cx="-3" cy="-37" r="1.4" fill="#1f1d1a"/><circle cx="3" cy="-37" r="1.4" fill="#1f1d1a"/><g id="jlegs" stroke="#0f6b63" stroke-width="3" stroke-linecap="round"><path d="M -5 -12 L -9 -2"/><path d="M 5 -12 L 9 -2"/></g><rect x="-12" y="-27" width="9" height="9" rx="1.5" fill="#fff8e8" stroke="#a35a00"/></g>`;
-  return `<svg viewBox="0 0 920 440" xmlns="http://www.w3.org/2000/svg" style="font-family:'IBM Plex Sans',sans-serif"><g stroke-width="1" fill="none">${grid.join("")}</g>${links}${boxes}${smith}</svg>`;
-}
-function drawSvg(s) {
-  const n = journey.data.nodes.length; const i = Math.min(Math.floor(s.pos), n - 2); const f = Math.min(s.pos - i, 1);
-  const a = nodeXY(i, n), b = nodeXY(Math.min(i + 1, n - 1), n);
-  const x = a[0] + (b[0] - a[0]) * f, y = a[1] + (b[1] - a[1]) * f - 10;
-  const bob = journey.playing && s.pos < journey.data.stopAt ? Math.sin(performance.now() / 90) * 3 : 0;
-  const sm = $("jsmith"); if (sm) sm.setAttribute("transform", `translate(${x} ${y + bob})`);
-  const legs = $("jlegs"); if (legs) legs.setAttribute("transform", `skewX(${bob * 3})`);
-  for (let k = 0; k < n; k++) { const g = $("jn" + k); if (g) g.setAttribute("opacity", k <= s.at ? "1" : ".45"); }
-  for (let k = 0; k < n - 1; k++) { const l = $("jl" + k); if (l) l.setAttribute("stroke", k < s.at || (k === s.at && f > 0 && s.at < journey.data.stopAt) ? (journey.data.nodes[k + 1].ok ? "#0f6b63" : "#c53030") : "#c7e0dc"); }
-}
-// --- 3B: three.js; aynı zaman, aynı düğümler; kamera sürüklenir ve kendi döner
-function makeThree(THREE, stage) {
-  const W = stage.clientWidth || 1000, H = stage.clientHeight || 440;
-  stage.innerHTML = "";
-  const renderer = new THREE.WebGLRenderer({antialias: true, alpha: true}); renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(W, H); stage.appendChild(renderer.domElement);
-  const scene = new THREE.Scene(); scene.background = new THREE.Color(0xffffff);
-  const camera = new THREE.PerspectiveCamera(38, W / H, 0.1, 100);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xd9d3c7, 1.1)); const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(4, 8, 6); scene.add(sun);
-  const grid = new THREE.GridHelper(16, 16, 0xe6e2d8, 0xefece5); grid.position.y = -0.01; scene.add(grid);
-  const nodes = journey.data.nodes; const n = nodes.length;
-  const P = nodes.map((_, i) => { const k = n > 1 ? i / (n - 1) : 0; return new THREE.Vector3(-6.5 + 13 * k, 0.45 + i * 0.5, 1.2 - 2.4 * k); });
-  const mats = nodes.map((nd) => new THREE.MeshStandardMaterial({color: nd.ok ? 0x0f6b63 : 0xc53030, roughness: .55, metalness: .1, emissive: 0x000000}));
-  const boxes = nodes.map((_, i) => { const m = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.9, 1.1), mats[i]); m.position.copy(P[i]); scene.add(m); const ped = new THREE.Mesh(new THREE.CylinderGeometry(.5, .6, P[i].y - .45, 24), new THREE.MeshStandardMaterial({color: 0xe8e4da})); ped.position.set(P[i].x, (P[i].y - .45) / 2, P[i].z); scene.add(ped); return m; });
-  const linkMats = []; for (let i = 0; i < n - 1; i++) { const g = new THREE.BufferGeometry().setFromPoints([P[i].clone().add(new THREE.Vector3(0, .5, 0)), P[i + 1].clone().add(new THREE.Vector3(0, .5, 0))]); const mt = new THREE.LineBasicMaterial({color: 0xc7e0dc}); linkMats.push(mt); scene.add(new THREE.Line(g, mt)); }
-  const smith = new THREE.Group(); const body = new THREE.Mesh(new THREE.CapsuleGeometry(.22, .35, 4, 12), new THREE.MeshStandardMaterial({color: 0x0f6b63})); body.position.y = .45; const head = new THREE.Mesh(new THREE.SphereGeometry(.24, 20, 20), new THREE.MeshStandardMaterial({color: 0xf6f4ef})); head.position.y = .98; const eye1 = new THREE.Mesh(new THREE.SphereGeometry(.04, 8, 8), new THREE.MeshBasicMaterial({color: 0x1f1d1a})); eye1.position.set(-.08, 1.02, .2); const eye2 = eye1.clone(); eye2.position.x = .08; const bag = new THREE.Mesh(new THREE.BoxGeometry(.22, .22, .12), new THREE.MeshStandardMaterial({color: 0xfff8e8})); bag.position.set(-.3, .5, 0); smith.add(body, head, eye1, eye2, bag); scene.add(smith);
-  const labels = nodes.map((nd) => { const d = document.createElement("div"); d.className = "lbl"; d.textContent = nd.title; stage.appendChild(d); return d; });
-  let theta = 0.35, phi = 1.12, drag = null, auto = true;
-  renderer.domElement.addEventListener("pointerdown", (e) => { drag = [e.clientX, e.clientY]; auto = false; });
-  window.addEventListener("pointermove", (e) => { if (!drag) return; theta -= (e.clientX - drag[0]) * .006; phi = Math.max(.35, Math.min(1.4, phi - (e.clientY - drag[1]) * .006)); drag = [e.clientX, e.clientY]; });
-  window.addEventListener("pointerup", () => { drag = null; });
-  function draw(s) {
-    if (auto) theta += .0018;
-    const R = 15; camera.position.set(Math.sin(theta) * Math.sin(phi) * R, Math.cos(phi) * R + 1.2, Math.cos(theta) * Math.sin(phi) * R); camera.lookAt(0, 1.2, 0);
-    const i = Math.min(Math.floor(s.pos), n - 2); const f = Math.min(s.pos - i, 1);
-    smith.position.lerpVectors(P[i], P[Math.min(i + 1, n - 1)], f); smith.position.y += .45 + (journey.playing && s.pos < journey.data.stopAt ? Math.abs(Math.sin(performance.now() / 90)) * .12 : 0);
-    smith.lookAt(P[Math.min(i + 1, n - 1)].x, smith.position.y, P[Math.min(i + 1, n - 1)].z);
-    boxes.forEach((b, k) => { mats[k].emissive.setHex(k === s.at ? (nodes[k].ok ? 0x2fb3a5 : 0xff5555) : 0x000000); mats[k].emissiveIntensity = k === s.at ? .6 : 0; b.scale.setScalar(k <= s.at ? 1 : .8); mats[k].opacity = 1; });
-    linkMats.forEach((mt, k) => mt.color.setHex(k < s.at ? (nodes[k + 1].ok ? 0x0f6b63 : 0xc53030) : 0xc7e0dc));
-    renderer.render(scene, camera);
-    labels.forEach((d, k) => { const v = P[k].clone().add(new THREE.Vector3(0, .95, 0)).project(camera); d.style.left = ((v.x + 1) / 2 * W) + "px"; d.style.top = ((1 - v.y) / 2 * H) + "px"; d.style.opacity = k <= s.at ? "1" : ".5"; });
+  function open(ctx, subtitle) {
+    if (!V.el) mount();
+    V.ctx = ctx; const jq = q(".jq"); jq.textContent = subtitle || ""; jq.title = subtitle || "";
+    V.el.classList.toggle("still", jReduce()); V.el.hidden = false;
+    play(); q(".close").focus();
   }
-  return {draw, dispose() { renderer.dispose(); labels.forEach((d) => d.remove()); renderer.domElement.remove(); }};
+  function play() {
+    halt(); const stage = q(".jstage"); stage.after(q(".jdetail"));   // dar ekranda ayrıntı durağın altındaydı; sahne yeniden kurulmadan dışarı alınır
+    V.stops = cfg.build(V.ctx); V.picked = false; V.shown = "";
+    const [cls, text] = cfg.badge(V.stops); const bd = q(".jbadge"); bd.className = "badge jbadge " + cls; bd.textContent = text;
+    V.el.classList.toggle("dense", V.stops.length > 7); V.el.classList.toggle("denser", V.stops.length > 9);
+    stage.innerHTML = V.stops.map((s, i) => {
+      const stop = `<button type="button" class="jstop" data-i="${i}"><span class="jfig">${cfg.svg(s.kind, 88)}<span class="jbdg w">${JBADGE.w(22)}</span><span class="jbdg b">${JBADGE.b(24)}</span></span><span class="jname">${esc(name(s))}</span><span class="jsub">${esc(cfg.meta(s.kind)[1])}</span><span class="jst"><span class="jdot"></span><span class="jstt"></span></span><span class="jptr"></span></button>`;
+      return i < V.stops.length - 1 ? stop + `<span class="jlink" aria-hidden="true"><i><b class="base"></b><b class="fill"></b><b class="ring"></b><svg width="7" height="12" viewBox="0 0 7 12"><path d="M1.5 1.5 L5.5 6 L1.5 10.5" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></i></span>` : stop;
+    }).join("");
+    const b = broken(); const stopAt = b === -1 ? V.stops.length - 1 : b;
+    if (jReduce()) { V.lit = stopAt; V.done = true; V.sel = stopAt; apply(); return; }
+    V.lit = -1; V.done = false; V.sel = 0; apply();
+    V.t0 = setTimeout(() => { tick(); V.timer = setInterval(tick, 640); }, 300);
+  }
+  function tick() {
+    const b = broken(); const stopAt = b === -1 ? V.stops.length - 1 : b; const lit = V.lit + 1;
+    if (lit > stopAt) { halt(); V.done = true; apply(); return; }
+    V.lit = lit; if (!V.picked) V.sel = lit; apply();
+  }
+  function pick(i) { const sel = Math.max(0, Math.min(V.stops.length - 1, i)); if (sel === V.sel && V.picked) return; V.sel = sel; V.picked = true; apply(); }
+  function apply() {
+    const stage = q(".jstage"); const els = stage.querySelectorAll(".jstop"); const links = stage.querySelectorAll(".jlink"); const b = broken();
+    els.forEach((el, i) => {
+      const ph = phase(i); const status = ph === "unreach" ? "doğrulanamadı" : V.stops[i].status;
+      el.className = "jstop" + (ph === "pending" ? "" : ph === "unreach" ? " unreach" : " lit " + ph) + (i === V.sel ? " on" : "");
+      el.querySelector(".jstt").textContent = status;
+      el.setAttribute("aria-pressed", i === V.sel ? "true" : "false"); el.setAttribute("aria-label", `${name(V.stops[i])}: ${status}`);
+    });
+    links.forEach((l, i) => {
+      const into = cfg.halts ? (b !== -1 && i + 1 === b) : V.stops[i + 1].state === "broken";
+      l.className = "jlink" + (V.lit >= i + 1 ? " full" : "") + (into ? " tobroken" : "") + (b !== -1 && V.done && i >= b ? " dash" : "");
+    });
+    const s = V.stops[V.sel];
+    q(".jctl .step").textContent = `${V.sel + 1} / ${V.stops.length} · ${name(s)}`;
+    q(".jprev").disabled = V.sel === 0; q(".jnext").disabled = V.sel === V.stops.length - 1;
+    const key = `${V.sel}:${phase(V.sel)}`;
+    if (key !== V.shown) { V.shown = key; q(".jdetail").innerHTML = cfg.detail(s, phase(V.sel), {index: V.sel, count: V.stops.length, name: name(s)}); }
+    const det = q(".jdetail"); const narrow = !!(jNarrow && jNarrow.matches); const anchor = narrow ? els[V.sel] : stage;
+    if (anchor && anchor.nextElementSibling !== det) anchor.after(det);
+    if (narrow && els[V.sel]) {
+      const el = els[V.sel]; const top = el.offsetTop - 8; const bottom = det.offsetTop + det.offsetHeight + 8; let to = null;
+      if (top < stage.scrollTop) to = top; else if (bottom > stage.scrollTop + stage.clientHeight) to = Math.min(top, bottom - stage.clientHeight);
+      if (to !== null) stage.scrollTo({top: to, behavior: jReduce() ? "auto" : "smooth"});
+    }
+  }
+  function close() { if (V.el) V.el.hidden = true; halt(); }
+  return {open, close, state: V};
 }
+function journeyDetail(s, ph, info) {
+  const ST = {ok: ["doğrulandı", "ok"], warn: ["uyarı", "gap"], broken: ["zincir burada kopuyor", "bad"], unreach: ["doğrulanamadı", "none"], pending: ["sırası gelmedi", "none"]};
+  const alert = ph === "unreach" ? {tone: "muted", text: "Zincir önceki halkada koptuğu için bu halka doğrulanamadı. Aşağıdaki bilgiler kayıttan okunuyor, kontrol edilmedi."} : s.alert;
+  const fields = (s.fields || []).map((f, j) => {
+    const val = f.href && httpUrl(f.v) ? `<a class="${f.mono ? "mono" : ""}" href="${esc(f.v)}" target="_blank" rel="noopener noreferrer">${esc(f.v)}</a>`
+      : `<span class="${[f.mono ? "mono" : "", f.tone || ""].join(" ").trim()}">${esc(f.v)}</span>`;
+    return `<div class="jf"><span class="k">${esc(f.k)}</span><span class="v">${val}${f.copy ? `<button type="button" class="jcopy" data-j="${j}">Kopyala</button>` : ""}</span></div>`;
+  }).join("");
+  return `<div class="jdl"><span class="label">Halka ${info.index + 1} / ${info.count}</span><span class="t">${esc(info.name)}</span><span class="s">${esc(JMETA[s.kind][1])}</span><span class="badge ${ST[ph][1]}">${ST[ph][0]}</span></div><div class="jdr">${alert ? `<div class="jalert ${alert.tone}">${esc(alert.text)}</div>` : ""}${fields ? `<div class="jfields">${fields}</div>` : ""}${s.code ? `<pre class="sql">${esc(s.code)}</pre>` : ""}</div>`;
+}
+const journeyView = chainViewer({
+  id: "journey", title: "Kanıt yolculuğu", stepWord: "halka", halts: true, meta: (k) => JMETA[k], svg: jSvg,
+  build: (ev) => journeyStops(ev, null), detail: journeyDetail,
+  badge: (stops) => {
+    const broken = stops.some((s) => s.state === "broken"); const warn = stops.some((s) => s.state === "warn"); const ocr = stops.some((s) => s.kind === "belge" && s.state === "warn");
+    return [broken ? "bad" : warn ? "gap" : "ok", broken ? "zincir kopuk" : warn ? (ocr ? "OCR tahmini" : "uyarılı") : "zincir tam"];
+  },
+});
+function openJourney() { if (lastEvidence) journeyView.open(lastEvidence, lastQuestion || ""); }   // bütün cevabın zinciri; cevaptaki sayılar ayrıca gösterilmez (16 Eyl)
+function closeJourney() { journeyView.close(); }
+// Sağ panel: aynı zincirin küçük hâli (bütün cevap); tıklayınca yolculuk açılır.
+function renderMini(ev) {
+  const el = $("ev-mini"); if (!ev) { el.hidden = true; el.innerHTML = ""; return; }
+  const stops = journeyStops(ev, null); const b = stops.findIndex((s) => s.state === "broken");
+  el.innerHTML = stops.map((s, i) => {
+    const after = b !== -1 && i > b; const cls = after ? "unreach" : s.state;
+    const mark = !after && s.state === "broken" ? `<span class="mb">${JBADGE.b(15)}</span>` : !after && s.state === "warn" ? `<span class="mb">${JBADGE.w(14)}</span>` : "";
+    const link = i < stops.length - 1 ? `<i class="ml${b !== -1 && i >= b ? " dash" : i + 1 === b ? " tobroken" : ""}"></i>` : "";
+    return `<span class="ms ${cls}" title="${esc(jName(s))}: ${esc(after ? "doğrulanamadı" : s.status)}">${jSvg(s.kind, 38)}${mark}<span class="mlab">${esc(JMETA[s.kind][2])}</span></span>${link}`;
+  }).join("");
+  el.setAttribute("aria-label", `Kanıt yolculuğunu aç: ${stops.map((s, i) => `${jName(s)} ${b !== -1 && i > b ? "doğrulanamadı" : s.status}`).join(", ")}`);
+  el.hidden = false;
+}
+// ---------------- Adım yolculuğu (ADR-0085): ajanın araç adımları sırayla, her araç türü kendi figürüyle ----------------
+// Arka arkaya aynı araç tek durak (×N); hatalı çağrı kırmızı, kısmen hatalı amber rozet alır ama gösterim durmaz: ajan hatadan sonra sürer.
+const SFIG = {
+  search: `<rect x="18" y="16" width="44" height="50" rx="5" fill="#fff" stroke="#cfc8bb" stroke-width="1.5"/><rect x="26" y="26" width="26" height="3" rx="1.5" fill="#c4bdb0"/><rect x="26" y="34" width="28" height="3" rx="1.5" fill="#c4bdb0"/><rect x="26" y="42" width="20" height="3" rx="1.5" fill="#c4bdb0"/><rect x="26" y="50" width="24" height="3" rx="1.5" fill="#c4bdb0"/><circle cx="60" cy="47" r="12" fill="#e9f3f1" stroke="#0f6b63" stroke-width="3"/><path d="M69 56 L77 64" stroke="#0f6b63" stroke-width="4.5" stroke-linecap="round"/>`,
+  websearch: `${JBROWSER}<circle cx="46" cy="47" r="9" fill="#e9f3f1" stroke="#0f6b63" stroke-width="2.5"/><path d="M53 54 L60 61" stroke="#0f6b63" stroke-width="3.5" stroke-linecap="round"/>`,
+  describe: `<rect x="20" y="18" width="56" height="48" rx="5" fill="#fff" stroke="#cfc8bb" stroke-width="1.5"/><path d="M20 23 A5 5 0 0 1 25 18 H71 A5 5 0 0 1 76 23 V28 H20 Z" fill="#0a4f49"/><rect x="27" y="35" width="10" height="3" rx="1.5" fill="#0f6b63"/><rect x="41" y="35" width="26" height="3" rx="1.5" fill="#c4bdb0"/><rect x="27" y="44" width="10" height="3" rx="1.5" fill="#0f6b63"/><rect x="41" y="44" width="20" height="3" rx="1.5" fill="#c4bdb0"/><rect x="27" y="53" width="10" height="3" rx="1.5" fill="#0f6b63"/><rect x="41" y="53" width="24" height="3" rx="1.5" fill="#c4bdb0"/>`,
+  values: `<rect x="22" y="18" width="52" height="48" rx="5" fill="#fff" stroke="#cfc8bb" stroke-width="1.5"/><circle cx="31" cy="29" r="3" fill="#0f6b63"/><rect x="38" y="27.5" width="26" height="3" rx="1.5" fill="#c4bdb0"/><circle cx="31" cy="41" r="3" fill="#0f6b63"/><rect x="38" y="39.5" width="20" height="3" rx="1.5" fill="#c4bdb0"/><circle cx="31" cy="53" r="3" fill="#0f6b63"/><rect x="38" y="51.5" width="24" height="3" rx="1.5" fill="#c4bdb0"/>`,
+  query: `<path d="M26 22 V58 A22 7 0 0 0 70 58 V22" fill="#0f6b63"/><path d="M26 34 A22 7 0 0 0 70 34 M26 46 A22 7 0 0 0 70 46" fill="none" stroke="#c7e0dc" stroke-width="2"/><ellipse cx="48" cy="22" rx="22" ry="7" fill="#e9f3f1" stroke="#0a4f49" stroke-width="1.5"/>`,
+  wsquery: `${JTABLE}<circle cx="64" cy="55" r="9" fill="#e9f3f1" stroke="#0a4f49" stroke-width="2.5"/><path d="M71 62 L77 68" stroke="#0a4f49" stroke-width="3.5" stroke-linecap="round"/>`,
+  join: `<rect x="14" y="22" width="42" height="36" rx="4" fill="#fff" stroke="#cfc8bb" stroke-width="1.5"/><path d="M14 26 A4 4 0 0 1 18 22 H52 A4 4 0 0 1 56 26 V31 H14 Z" fill="#0f6b63"/><path d="M28 31 V58 M42 31 V58" stroke="#e3ded4" stroke-width="1.5"/><rect x="40" y="32" width="42" height="34" rx="4" fill="#fff" stroke="#cfc8bb" stroke-width="1.5"/><path d="M40 36 A4 4 0 0 1 44 32 H78 A4 4 0 0 1 82 36 V41 H40 Z" fill="#86b3ac"/><path d="M54 41 V66 M68 41 V66" stroke="#e3ded4" stroke-width="1.5"/>`,
+  compute: `${JTABLE}<circle cx="70" cy="60" r="12" fill="#0f6b63" stroke="#fbfaf7" stroke-width="2"/><text x="70" y="64.5" text-anchor="middle" font-family="IBM Plex Serif, Georgia, serif" font-size="13" font-style="italic" font-weight="600" fill="#fff">ƒx</text>`,
+  gold: JFIG.hesap,
+  analytics: `<rect x="16" y="18" width="64" height="48" rx="5" fill="#fff" stroke="#cfc8bb" stroke-width="1.5"/><path d="M24 55 L36 46 L46 50 L56 30 L66 43 L74 38" fill="none" stroke="#0f6b63" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="56" cy="30" r="4" fill="#c53030" stroke="#fff" stroke-width="1.5"/>`,
+  chart: `<rect x="16" y="18" width="64" height="48" rx="5" fill="#fff" stroke="#cfc8bb" stroke-width="1.5"/><rect x="24" y="40" width="9" height="19" rx="1.5" fill="#86b3ac"/><rect x="37" y="28" width="9" height="31" rx="1.5" fill="#0f6b63"/><rect x="50" y="44" width="9" height="15" rx="1.5" fill="#86b3ac"/><rect x="63" y="34" width="9" height="25" rx="1.5" fill="#0f6b63"/><path d="M22 59.5 H74" stroke="#cfc8bb" stroke-width="1.5"/>`,
+  web: JFIG.web,
+  ingest: `<path d="M20 44 H34 L38 52 H58 L62 44 H76 V64 H20 Z" fill="#c7e0dc" stroke="#0f6b63" stroke-width="1.5" stroke-linejoin="round"/><path d="M48 14 V40 M38 30 L48 40 L58 30" fill="none" stroke="#0f6b63" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`,
+  premise: `<rect x="26" y="18" width="44" height="48" rx="5" fill="#fff" stroke="#cfc8bb" stroke-width="1.5"/><rect x="38" y="13" width="20" height="9" rx="3" fill="#3a3731"/><path d="M36 42 L45 51 L61 33" fill="none" stroke="#0f6b63" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`,
+  clarify: `<path d="M18 22 A6 6 0 0 1 24 16 H72 A6 6 0 0 1 78 22 V48 A6 6 0 0 1 72 54 H42 L30 64 V54 H24 A6 6 0 0 1 18 48 Z" fill="#fff" stroke="#cfc8bb" stroke-width="1.5" stroke-linejoin="round"/><text x="48" y="44" text-anchor="middle" font-family="IBM Plex Serif, Georgia, serif" font-size="24" font-weight="600" fill="#0f6b63">?</text>`,
+  validate: `<path d="M48 12 L74 21 V38 C74 52 63 61 48 66 C33 61 22 52 22 38 V21 Z" fill="#e9f3f1" stroke="#0f6b63" stroke-width="2" stroke-linejoin="round"/><path d="M36 39 L45 48 L61 31" fill="none" stroke="#0f6b63" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`,
+  tool: `<circle cx="48" cy="40" r="18" fill="#c7e0dc" stroke="#0f6b63" stroke-width="2"/><circle cx="48" cy="40" r="7" fill="#fff" stroke="#0f6b63" stroke-width="2"/>`,
+  answer: JFIG.cevap,
+};
+const SMETA = {   // ad, alt başlık
+  search: ["Katalog araması", "uygun seriler aranır"], websearch: ["Web araması", "bağlam için arama"], describe: ["Tablo yapısı", "kolon ve birim okunur"],
+  values: ["Kolon değerleri", "geçerli değerler"], query: ["Veri sorgusu", "veri havuzundan okunur"], wsquery: ["Tablo sorgusu", "çalışma tablosuna bakılır"],
+  join: ["Tablo birleştirme", "anahtarla yan yana"], compute: ["Kolon hesabı", "tabloya kolon eklenir"], gold: ["Hesaplanmış tablo", "hizalama, bileşen, birleşim"],
+  analytics: ["Analiz", "olağandışı değer, kırılma"], chart: ["Grafik", "tablodan çizilir"], web: ["Sayfa okuma", "adres ya da dosya"],
+  ingest: ["Veri alma", "taslak seri ve onay"], premise: ["Öncül denetimi", "sorudaki varsayım"], clarify: ["Netleştirme", "kullanıcıya soru"],
+  validate: ["Doğrulama", "cevap taslağı denetlenir"], tool: ["Araç", "diğer araç"], answer: ["Cevap", "doğrulanmış metin"],
+};
+const STEP_KIND = {
+  lakehouse_search: "search", web_search: "websearch", lakehouse_describe: "describe", lakehouse_distinct_values: "values", lakehouse_query: "query",
+  workspace_query: "wsquery", workspace_show: "wsquery", workspace_join: "join", gold_join: "join", workspace_compute_column: "compute",
+  workspace_add_column: "compute", workspace_real_value: "compute", gold_align: "gold", gold_decompose: "gold", anomaly_detect: "analytics",
+  change_points: "analytics", lead_lag: "analytics", chart: "chart", web_url: "web", ingest_from_url: "ingest", ingest_source: "ingest",
+  promote_draft: "ingest", check_premise: "premise", clarify: "clarify",
+};
+const sSvg = (kind, size) => figSvg(SFIG[kind] || SFIG.tool, size);
+const secs = (ms) => `${(Number(ms || 0) / 1000).toFixed(1).replace(".", ",")} s`;
+function stepStops(p) {
+  const stops = [];
+  (p.steps || []).forEach((s) => {
+    if (!s.tool && s.role !== "validate") return;                 // araçsız anlatım turu cevap durağına katılır
+    const key = s.tool || "validate"; const last = stops[stops.length - 1];
+    if (last && last.key === key) last.calls.push(s);
+    else stops.push({key, kind: s.tool ? (STEP_KIND[s.tool] || "tool") : "validate", calls: [s]});
+  });
+  stops.forEach((st) => {
+    const n = st.calls.length; const ms = st.calls.reduce((t, c) => t + (Number(c.duration_ms) || 0), 0);
+    if (st.kind === "tool") st.name = st.key;
+    if (st.kind === "validate") { st.state = "warn"; st.status = n > 1 ? `${n} kez geri gönderildi` : "taslak geri gönderildi"; return; }
+    const fails = st.calls.filter((c) => !c.ok).length;
+    st.state = fails === n ? "broken" : fails ? "warn" : "ok";
+    st.status = [n > 1 ? `×${n}` : "", fails ? `${fails} hata` : "", ms ? secs(ms) : ""].filter(Boolean).join(" · ") || "tamam";
+  });
+  const all = p.steps || []; const u = p.usage || {};
+  stops.push({key: "answer", kind: "answer", calls: [], state: p.hit_step_limit ? "warn" : "ok",
+    status: p.elapsed_s !== undefined && p.elapsed_s !== null ? `${String(p.elapsed_s).replace(".", ",")} s` : "yazıldı",
+    total: {tools: all.filter((s) => s.tool).length, errors: all.filter((s) => s.tool && !s.ok).length, backs: all.filter((s) => !s.tool && s.role === "validate").length,
+      prompt: u.prompt, completion: u.completion, calls: u.calls, gate: p.gate, limit: !!p.hit_step_limit}});
+  return stops;
+}
+function stepDetail(st, ph, info) {
+  const ST = {ok: ["başarılı", "ok"], warn: [st.kind === "validate" ? "geri gönderildi" : st.kind === "answer" ? "adım sınırında" : "kısmen hatalı", "gap"], broken: ["hata", "bad"], pending: ["sırası gelmedi", "none"], unreach: ["—", "none"]};
+  const head = `<div class="jdl"><span class="label">Adım ${info.index + 1} / ${info.count}</span><span class="t">${esc(info.name)}</span><span class="s">${esc((SMETA[st.kind] || SMETA.tool)[1])}</span><span class="badge ${ST[ph][1]}">${ST[ph][0]}</span></div>`;
+  if (st.kind === "answer") {
+    const t = st.total; const closed = t.gate && t.gate.closed && t.gate.closed.length ? t.gate.closed.join(", ") : "";
+    const rows = [["Araç çağrısı", fmtInt(t.tools)], ["Araç hatası", fmtInt(t.errors), t.errors ? "warn" : ""], ["Geri gönderilen taslak", t.backs ? fmtInt(t.backs) : ""],
+      ["Model çağrısı", t.calls ? fmtInt(t.calls) : ""], ["Token (girdi / çıktı)", t.prompt ? `${fmtInt(t.prompt)} / ${fmtInt(t.completion)}` : ""], ["Toplam süre", st.status],
+      ["Kapalı araç grupları", closed]].filter((r) => r[1]);
+    const fields = rows.map(([k, v, tone]) => `<div class="jf"><span class="k">${esc(k)}</span><span class="v"><span class="${tone || ""}">${esc(v)}</span></span></div>`).join("");
+    return head + `<div class="jdr">${t.limit ? `<div class="jalert warn">Adım sınırına ulaşıldı; cevap kısmi olabilir.</div>` : ""}<div class="jfields">${fields}</div></div>`;
+  }
+  const calls = st.calls.map((c, i) => {
+    const back = !c.tool; const bad = !back && !c.ok;
+    const what = back ? validateReason(c.thought) : c.detail;
+    const result = back ? "" : (bad ? [c.error_code, c.summary].filter(Boolean).join(": ") : String(c.summary || "").split("\n")[0]);
+    const sql = c.args && c.args.sql ? `<pre class="sql">${esc(prettySql(c.args.sql))}</pre>` : "";
+    return `<div class="jcall${bad ? " bad" : back ? " back" : ""}"><div class="ch"><b>${st.calls.length > 1 ? `${i + 1}. çağrı` : back ? "Geri gönderme" : "Çağrı"}</b><span>${bad ? "hata" : back ? "geri gönderildi" : "başarılı"}</span><span class="ms">${c.duration_ms ? secs(c.duration_ms) : ""}</span></div>${what ? `<div class="cd">${esc(what)}</div>` : ""}${result ? `<div class="cr">${esc(result.slice(0, 280))}</div>` : ""}${sql}</div>`;
+  }).join("");
+  return head + `<div class="jdr"><div class="jcalls">${calls}</div></div>`;
+}
+const stepsView = chainViewer({
+  id: "steps", title: "Ajanın adımları", stepWord: "adım", halts: false, meta: (k) => SMETA[k] || SMETA.tool, svg: sSvg, build: stepStops, detail: stepDetail,
+  badge: (stops) => {
+    const t = stops[stops.length - 1].total;
+    return [t.errors || t.backs ? "gap" : "ok", `${t.tools} adım` + (t.errors ? ` · ${t.errors} hata` : "") + (t.backs ? ` · ${t.backs} geri gönderme` : "")];
+  },
+});
+function openSteps() { if (lastAnswer && (lastAnswer.steps || []).some((s) => s.tool)) stepsView.open(lastAnswer, lastQuestion || ""); }
+function closeSteps() { stepsView.close(); }
 $("btn-journey").addEventListener("click", () => openJourney(null));
+$("btn-steps").addEventListener("click", openSteps);
+$("trace").addEventListener("click", (e) => { if (e.target.closest("[data-steps]")) openSteps(); });
+$("ev-mini").addEventListener("click", () => openJourney(null));
 document.addEventListener("visibilitychange", () => { if (document.hidden && typing) typing.finish(); });
 $("btn-ask").addEventListener("click", ask);
 $("q").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.keyCode === 13) && !e.shiftKey) { e.preventDefault(); ask(); } });
-$("btn-reset").addEventListener("click", async () => { await fetch("/api/reset", {method: "POST"}); $("thread").innerHTML = ""; $("ev-body").innerHTML = ""; $("ev-badge").className = "badge none"; $("ev-badge").textContent = "—"; $("ev-summary").textContent = "Cevap gelince her sayı hücreye, sorguya, gözleme ve kaynağa bağlanır."; $("trace").innerHTML = `<span class="label" style="margin-right:4px">Araç izi</span><span class="status">henüz soru yok</span>`; answers = []; activeIndex = -1; renderSession(); lastEvidence = null; $("btn-journey").disabled = true; loadStatus(); });
-loadStatus(); loadAnswers();
+$("btn-reset").addEventListener("click", () => {   // açık sohbet ve yüklemeleri silinir: geri alınamaz, onay ister (ADR-0084)
+  showModal("Oturumu sıfırla", `<div class="kv"><div class="k">Silinecek</div><div class="v" style="font-family:inherit">Açık sohbet, tabloları ve bu sohbette yüklenen dosyalar. Diğer sohbetler ve veri havuzu korunur.</div><div class="k"></div><div class="v"><button id="rs-go" class="jbtn" style="border-color:#e5b4b4;background:var(--red-bg);color:var(--red)">Sohbeti sil ve sıfırla</button> <button id="rs-no" class="jbtn" style="border-color:#d9d3c7;background:#fff;color:var(--ink)">Vazgeç</button></div></div>`);
+  $("rs-no").addEventListener("click", () => { $("gmodal").hidden = true; });
+  $("rs-go").addEventListener("click", async () => { $("rs-go").disabled = true; await fetch("/api/reset", {method: "POST"}); clearChatView(); loadStatus(); loadConversations(); });
+});
+loadStatus(); loadAnswers().then(loadConversations);
 </script>
 </body>
 </html>

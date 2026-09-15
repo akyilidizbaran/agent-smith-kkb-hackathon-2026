@@ -554,3 +554,28 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
   - CI yeni PR koşusunda yeşil: agent-core 38 s, lakehouse-core 44 dk 41 s. PR sayfası ilk anda aynı commit'in eski koşusunu yeşil
     gösterdi; birleştirme yeni koşunun sonucu beklenerek yapıldı.
   - feature/agent-engine main'e ileri sarıldı.
+
+### 2.35 Kanıt yolculuğu tek gösterim, sohbet kaydı ve PR #7 birleştirmesi (15–16 Eylül)
+- **Kanıt yolculuğu (ADR-0083):**
+  - 3B three.js ve yürüyen karakter kaldırıldı; tıklanabilir tasarım prototipi gerçek kayıtla (Adana konut kredisi) hazırlanıp onaylandı.
+  - Duraklar yalnız kanıtta olan halkalardan kurulur; sıra verinin akışıdır: kaynak → RAW → Bronze → Silver → (hesaplanmış tablo) →
+    SQL → Tablo → Cevap. İlk uygulamada sıra tersti, kullanıcı ekranda görünce çevrildi.
+  - Animasyon ilk kopuk halkada durur, sonrası "doğrulanamadı". Sayı çipleri kullanıcı isteğiyle kaldırıldı; sağ panelde küçük zincir var.
+- **Sohbet kaydı (ADR-0084):**
+  - Her sohbet `DATA_ROOT/conversations/<kimlik>` altında, cevaptan sonra yazılır; uygulama yeniden açılınca son açık sohbet gelir.
+  - Sohbet listesi sol panelde, en son kullanılan en üstte. Önce hamburger menü denendi; kullanıcı sürekli görünen listeyi seçti.
+  - Yeni sohbet düğmesi, onaylı silme; "Oturumu sıfırla" açık sohbeti ve yüklemelerini siler.
+  - Tam veri sıfırlama sohbetleri korur ve "sıfırlamadan önce" diye işaretler.
+  - Orta genişlikte (≤1100 px) önce sağdaki kanıt paneli gizlenir, sohbet listesi solda kalır.
+- **origin/main birleştirmesi (PR #7, çok turlu bağlam):** feature/agent-engine'e yerel merge commit 05b06a3 ile alındı, çakışma
+  çıkmadı. Takip bağlamı (`_follow_up_context`) sohbete bağlandı: yeni sohbette boşalır, açılan sohbette geri gelir.
+- **Ölçüm:** agent testleri 675/675; arayüz kabulü (k01_ui) 15/15 (Playwright 1.62.0, önbellekteki tarayıcıyla).
+- **Adım yolculuğu (ADR-0085):** alttaki araç izi çubuğu 14 adımda altı satıra yayılıp konuşma alanını daraltıyordu (900 px ekranda
+  520 px). İzler "Yolculuğu izle"nin yanındaki "Adımları izle" penceresine taşındı:
+  - figürlerle ve sırayla; arka arkaya aynı araç tek durak (×N);
+  - hatalı çağrı kırmızı, geri gönderilen taslak amber; son durak cevap toplamları;
+  - kanıt yolculuğuyla ortak `chainViewer` motoru kullanılıyor;
+  - alt çubuk tek satır özet oldu (konuşma alanı 729 px). Testler 679/679.
+- **Durum:** commit edilmedi; kullanıcı kontrol ettikten sonra PR ile main'e gidecek.
+- **Son doğrulama ve PR (16 Eyl gece):** son kodla arayüz kabulü 15/15 (`docs/experiments/k01_ui_kabul_2026-09-16_0121`); kullanıcı
+  onayıyla commit edildi, feature/agent-engine'den main'e PR açıldı. main'e birleştirme CI yeşil gelince ayrıca onayla yapılacak.
