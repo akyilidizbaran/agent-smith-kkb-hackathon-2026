@@ -547,3 +547,10 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
     - 8 senaryo × 3 canlı 66/66: iç ad 0, boş başlık 0, silinen ifade 0, fark 3/3 doğru.
     - Kimlik deneyinde silinen ifade 0.
   - **Açık:** model cevabında iç kolon adı (`entity_id`) ve olmayan banka/kurum kırılımı iddiası görüldü.
+- **PR #6 main'e birleşti (15 Eyl akşam, kullanıcı onayıyla):**
+  - Birleştirme: merge commit 7e47213, ebeveynler 5a85254 ve fbeee45; `gh pr merge --merge`.
+  - Kapsam: ADR-0081 (bağlam kayması, kullanım soruları, uydurma tutar toleransı, sıfırlama cevabı), ADR-0082 ve ekleri (iç ad yok,
+    konu başlıklı veri seti cevabı, yeni kaynağın okunur adı, tablosuz sayı denetimi), sol panel etiketleri.
+  - CI yeni PR koşusunda yeşil: agent-core 38 s, lakehouse-core 44 dk 41 s. PR sayfası ilk anda aynı commit'in eski koşusunu yeşil
+    gösterdi; birleştirme yeni koşunun sonucu beklenerek yapıldı.
+  - feature/agent-engine main'e ileri sarıldı.
