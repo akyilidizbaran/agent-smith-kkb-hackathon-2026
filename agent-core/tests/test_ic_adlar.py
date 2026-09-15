@@ -102,6 +102,41 @@ def test_tablosuz_katalog_turunda_dogrulanmamis_sayi_yayimlanmaz() -> None:
     assert any("çıkarıldı" in (s.thought or "") for s in ans.steps)
 
 
+def test_tablosuz_turda_onceki_cevaptaki_dogru_sayi_silinmez_not_tablo_demez() -> None:
+    """S8 canlı senaryosu (15 Eyl, 3/3): önceki deterministik cevaptaki '81 il' model tarafından tekrarlanınca, havuz yalnız bu turun
+    araç çıktısı olduğu için doğru madde siliniyor ve not tablo yokken 'doğrulanmış değerler tabloda' diyordu."""
+    from kkb_agent.llm.base import ChatMessage
+
+    registry = ToolRegistry()
+    registry.register(_CatalogSearch())
+    llm = _ScriptedLLM([LLMResponse(content="", tool_calls=[ToolCall(id="c1", name="katalog_ara", arguments={"query": "konut"})]),
+                        # Kalan metin ≥40 harf olmalı: daha kısası D02'de "anlamlı metin kalmadı" sayılıp genel uyarıyla değişir.
+                        LLMResponse(content="İl bazında 81 il için konut kredisi ve takipteki konut kredisi serileri çeyreklik olarak var. "
+                                            "Toplamda 687 seri mevcut.")])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=6)
+    agent._history += [ChatMessage(role="user", content="elimizde hangi veriler var"),
+                       ChatMessage(role="assistant", content="- BDDK FinTürk (il bazında): 648 seri; 81 il × 8 konu: konut kredisi")]
+    ans = agent.ask("Bunlardan konut kredisiyle ilgili hangileri var?")
+    assert "81 il için konut kredisi ve takipteki konut kredisi" in ans.text, "önceki doğrulanmış cevaptaki sayı kaynak sayılır"
+    assert "687" not in ans.text and ans.text.rstrip().endswith("cevaptan çıkarıldı.)") and "tabloda" not in ans.text
+
+
+def test_aracsiz_tablosuz_turda_hesaplanmis_sayi_da_dogrulanir() -> None:
+    """S8 canlı (15 Eyl): model araç çağırmadan 'konut kredisiyle ilgili toplam 166 seri' yazdı; denetim yalnız araç çalışan turdaydı."""
+    from kkb_agent.llm.base import ChatMessage
+
+    reply = ("BDDK FinTürk'te 81 il için konut kredisi ve takipteki konut kredisi serileri çeyreklik olarak bulunuyor. "
+             "Toplamda konut kredisiyle ilgili 166 seri var.")
+    llm = _ScriptedLLM([LLMResponse(content=reply)])
+    agent, _ = _agent(llm)
+    agent._history += [ChatMessage(role="user", content="elimizde hangi veriler var"),
+                       ChatMessage(role="assistant", content="- BDDK FinTürk (il bazında): 648 seri; 81 il × 8 konu: konut kredisi")]
+    ans = agent.ask("Bunlardan konut kredisiyle ilgili hangileri var?")
+    assert "81 il için konut kredisi" in ans.text and "166" not in ans.text, ans.text
+    fresh, _ = _agent(_ScriptedLLM([LLMResponse(content=reply)]))
+    assert "166" in fresh.ask("Konut kredisiyle ilgili neler var?").text, "havuz boşsa (geçmiş, kart, araç yok) denetim atlanır"
+
+
 def test_istem_kurali_ve_arayuz_etiketleri() -> None:
     assert "veri mimarisi katman adları (Gold, Silver, Bronze, RAW, lakehouse) YAZMA" in SYSTEM_PROMPT
     html = HTML.read_text(encoding="utf-8")

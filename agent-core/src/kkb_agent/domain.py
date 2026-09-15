@@ -146,7 +146,8 @@ class DomainProfile:
         all_sources = sorted({s.source for s in datasets if s.source})
         primary = [x for x in all_sources if x not in derived]
         if primary:
-            labels = list(dict.fromkeys(names.get(x, x) for x in primary))
+            from .labels import source_display_name   # okunur adı tanımsız yeni kaynak: kurum adı / alan adı (15 Eyl)
+            labels = list(dict.fromkeys(source_display_name(x, datasets) for x in primary))
             derived_domain = domain or f"{join_tr(labels)} kaynaklı veriler"
         else:
             # Yalnız türetilmiş katman (boş katalogdan yeni alan): iç kimlik değil serilerin adı. Kimlik deneyi (15 Eyl): ajan

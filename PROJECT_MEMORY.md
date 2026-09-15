@@ -527,3 +527,23 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
   - **Açık soru (kullanıcıya soruldu).** Veri seti cevabı içeriği canlı katalogdan okuyor, ama yalnız kaynak, sayı ve dönem veriyor.
     Konu başlıkları eklenmesi ya da cevabı modelin katalog bilgisiyle yazması seçenekleri kullanıcıda. Okunur adı olmayan yeni
     kaynak ham kimlikle görünür.
+- **Veri seti cevabı konu başlıklı; tablosuz sayı denetimi düzeltildi (15 Eyl akşam, ADR-0082 ek 1-2):**
+  - **Kullanıcı kararı.** Deterministik veri seti cevabına konu başlıkları eklendi. İçerik her soruda canlı katalogdan okunuyor;
+    Architect ekleme ve onayı `reload()` ile kataloğu hemen yeniliyor.
+  - **Konu.** Ölçüm kolonunun ilk takma adından çıkarılıyor; il bazlı kaynakta il adı atılıyor ("81 il × 8 konu"), kısaltmalar
+    adındaki yazımla ("TÜFE"), en çok 6 konu.
+  - **Yeni kaynağın adı ayar dosyası olmadan:** source_names → adres/kimlikten kurum adı ("tuik" → "TÜİK") → alan adı → kimlik.
+    `meta.source` DB'de boş, kullanılmadı.
+  - **Kendi gerilemem.** Tablosuz sayı denetimi havuzu yalnız bu turun araç çıktısıydı. S8'de önceki deterministik cevaptan
+    tekrarlanan doğru "81 il" maddeleri 3/3 silindi, başlık boş kaldı; not da tablo yokken "tabloda" diyordu.
+  - **Düzeltme:**
+    - Havuz = araç çıktıları + ön-yükleme kartları + önceki cevaplar.
+    - Not metni düzeltildi.
+    - Denetim araçsız tura da uygulanıyor; model araçsız "166 seri" yazmıştı.
+  - **Kontrol dersi.** "Geri gönderilmez" denetimi yanlış şeyi ölçüyordu; S8 artık "boş başlık yok" arıyor. Kusurlar iki kez
+    otomatik denetimde değil elle okumada bulundu.
+  - **Ölçüm:**
+    - Ajan testleri 644; K01 22/22, K02 22/22, arayüz 15/15.
+    - 8 senaryo × 3 canlı 66/66: iç ad 0, boş başlık 0, silinen ifade 0, fark 3/3 doğru.
+    - Kimlik deneyinde silinen ifade 0.
+  - **Açık:** model cevabında iç kolon adı (`entity_id`) ve olmayan banka/kurum kırılımı iddiası görüldü.

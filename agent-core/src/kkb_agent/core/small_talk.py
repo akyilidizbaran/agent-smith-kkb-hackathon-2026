@@ -235,20 +235,27 @@ def data_sets_reply(specs: list, hints: dict) -> str:
                 cov = getattr(spec, "coverage", None)
                 uploads.append(series_label(spec) + _span(getattr(cov, "start", None), getattr(cov, "end", None)))
             continue
-        g = groups.setdefault(src, {"n": 0, "start": None, "end": None})
+        g = groups.setdefault(src, {"n": 0, "start": None, "end": None, "specs": []})
         g["n"] += 1
+        g["specs"].append(spec)
         cov = getattr(spec, "coverage", None)
         for key, value, pick in (("start", getattr(cov, "start", None), min), ("end", getattr(cov, "end", None), max)):
             if value is not None:
                 g[key] = value if g[key] is None else pick(g[key], value)
     if not groups and not uploads:
         return "Veri havuzunda şu an yüklü seri yok."
-    parts = [f"{names.get(src, src)}: {g['n']} seri{_span(g['start'], g['end'])}"
-             for src, g in sorted(groups.items(), key=lambda kv: -kv[1]["n"])]
-    text = ("Veri havuzunda şu kaynaklardan yüklü seriler var: " + "; ".join(parts) + ".") if parts else ""
+    # 15 Eyl kullanıcı kararı: kaynak başına konu başlıkları da (katalogdaki takma adlardan) ve okunur adı tanımsız yeni kaynak için
+    # kurum adı / alan adı. İçerik her soruda canlı katalogdan; veri eklenince cevap kendiliğinden değişir.
+    from ..labels import source_display_name, topics_summary
+
+    lines = []
+    for src, g in sorted(groups.items(), key=lambda kv: -kv[1]["n"]):
+        topics = topics_summary(g["specs"])
+        lines.append(f"- {source_display_name(src, g['specs'])}: {g['n']} seri{_span(g['start'], g['end'])}" + (f"; {topics}" if topics else ""))
+    text = ("Veri havuzunda şu kaynaklardan yüklü seriler var:\n" + "\n".join(lines)) if lines else ""
     if uploads:
         listed = ", ".join(uploads[:5]) + (f" ve {len(uploads) - 5} seri daha" if len(uploads) > 5 else "")
-        text += (f" Kullanıcının eklediği seriler: {listed}." if parts else f"Veri havuzunda kullanıcının eklediği seriler var: {listed}.")
+        text += (f"\nKullanıcının eklediği seriler: {listed}." if lines else f"Veri havuzunda kullanıcının eklediği seriler var: {listed}.")
     return text.strip()
 
 

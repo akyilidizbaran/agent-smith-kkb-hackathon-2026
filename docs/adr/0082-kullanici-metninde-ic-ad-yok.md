@@ -80,3 +80,83 @@ kaynak gibi söylenmemeli.
   - Önceki senaryolar (S1–S5) aynı koşuda 45/45; fark cevaplarında uydurma tutar yok.
 - Bilinen sınır: son güvence sözcük tabanlıdır; "altın" (gold) anlamındaki İngilizce "Gold" da çevrilir. Türkçe cevapta
   beklenmez.
+
+## Ek (15 Eylül akşam): veri seti cevabında konu başlıkları ve yeni kaynağın okunur adı
+
+**Bağlam.** Kullanıcı "elimizde hangi veriler var" cevabının tamamen deterministik olmasının veri değişince ne olacağını sordu.
+- İçerik zaten her soruda canlı katalogdan okunuyordu: kimlik deneyinde beş DB beş farklı cevap verdi. Uygulama içi ekleme ve
+  onay kataloğu `reload()` ile hemen yeniliyor.
+- İki gerçek sınır vardı:
+  - cevap yalnız kaynak, seri sayısı ve dönem veriyordu, konu yoktu;
+  - `source_hints.json`'da adı olmayan yeni kaynak ham kimlikle ("tuik: 5 seri") görünürdü.
+
+Kullanıcı konu başlıklı öneriyi kabul etti.
+
+**Karar** (`labels.topics_summary`, `labels.source_display_name`):
+- **Konu.** Her serinin ölçüm kolonunun ilk takma adı alınır; katalog bunu kısa okunur ad olarak tutuyor ("konut kredisi",
+  "politika faizi").
+  - Adında tamamı büyük harf bir varlık parçası varsa ("Konut Kredisi, ADANA (…)") varlık adı konudan atılır; harf ve aksan
+    farkı gözetilmez (İSTANBUL ~ istanbul).
+  - Kısaltmalar serinin tam adındaki yazımla döner ("tüfe" → "TÜFE", "m3" → "M3").
+  - Aynı konu bir kez yazılır, en çok 6 konu gösterilir, kalanı "ve N konu daha".
+  - Varlıklı kaynakta özet "81 il × 8 konu: …" biçimindedir ("il" etiketi yoksa "varlık").
+- **Kaynak adı sırası:**
+  1. `source_hints.source_names`;
+  2. kaynağın adresindeki ya da kimliğindeki bir parçayla eşleşen kurum adı (`source_hints.institutions`; "data.tuik.gov.tr" →
+     "TÜİK");
+  3. adresin alan adı;
+  4. kimlik.
+
+  Aynı sıra alan tanımında, arama kartında ve okunur kaynak etiketinde kullanılır. `meta.source` tablosu DB'de var ama boş ve
+  serbest açıklama taşıyor; ad kaynağı olarak kullanılmadı.
+- **Biçim.** Cevap kaynak başına bir madde. Kullanıcı serileri ve boş katalog cümleleri değişmedi.
+
+Gerçek demo DB'de cevap:
+
+    Veri havuzunda şu kaynaklardan yüklü seriler var:
+    - BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); 81 il × 8 konu: kredi kartı, ihtiyaç kredisi, konut kredisi, kredili mevduat hesabı, takipteki ihtiyaç kredisi, takipteki konut kredisi ve 2 konu daha
+    - BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); konular: toplam krediler, yurt içi yerleşik mevduat, toplam mevduat, tüketici kredileri, konut kredisi, taşıt kredisi ve 14 konu daha
+    - TCMB EVDS: 12 seri (2016-01 → 2026-07); konular: ağırlıklı ortalama fonlama maliyeti, politika faizi, euro kuru, dolar kuru, TÜFE, para arzı ve 5 konu daha
+    - BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06); konu: haftalık konut kredisi
+
+**Sonuçlar:**
+- Ajan testleri 642 (`tests/test_veri_seti_cevabi.py`). Testler şunları kapsar:
+  - il × konu özeti, 3 harfli il ve İ/i farkı;
+  - kısaltma yazımı ve tekrarın tekilleşmesi;
+  - konu sınırı;
+  - yeni kaynağın kurum adı, alan adı ve kimlik sırası;
+  - cevabın satır satır biçimi.
+- Canlı ölçüm: senaryo S8. Konu sırası katalog sırasıdır (seri kimliği); en genel konu her zaman önde değildir.
+
+## Ek 2 (15 Eylül akşam): tablosuz sayı denetiminin havuzu — kendi gerilememiz
+
+**Bulgu.** 8 senaryo × 3 koşusunda (`baglam_senaryolari_2026-09-15_190737_x3.json`) S8 takip sorusu "Bunlardan konut kredisiyle
+ilgili hangileri var?" 3 tekrarın 3'ünde bozuk çıktı.
+- "BDDK FinTürk (il bazında …)" başlığının altı boştu ve "doğrulanamayan 2 ifade çıkarıldı; doğrulanmış değerler tabloda" notu
+  vardı.
+- Sebep bu kararla eklenen tablosuz sayı denetimiydi. Model "81 il" bilgisini bir önceki deterministik cevaptan ("81 il × 8 konu")
+  tekrarladı. Havuz yalnız bu turun araç çıktılarıydı; "81" orada olmadığı için doğru maddeler silindi. Not da tablo yokken
+  "tabloda" diyordu.
+- Senaryo denetimi ("geri gönderilmez") bu kusuru değil olağan geri göndermeyi kırmızı saymıştı; kusur elle okumada bulundu.
+
+**Karar:**
+- **Havuz genişledi:** bu turun araç çıktıları + ön-yükleme kartları + sohbetteki önceki cevaplar. Önceki cevaplar ya doğrulanmış
+  ya da katalogdan deterministik üretilmiştir.
+- **Not metni:** tablo yoksa "doğrulanmış değerler tabloda" yazılmaz.
+- **Denetim araçsız tura da uygulanır.** Yeniden koşuda bir tekrarda model araç çağırmadan "konut kredisiyle ilgili 166 seri"
+  yazdı; denetim yalnız araç çalışan turdaydı. Havuz boşsa (ilk tur, kart yok) doğrulanacak kaynak da yoktur, denetim atlanır.
+- **Senaryo denetimi:** S8'de "geri gönderilmez" yerine "boş kalan başlık yok" aranır.
+
+**Ölçüm:**
+- S8 × 3 havuz düzeltmesinden sonra 6/6 (`…_191141_S8_x3.json`); FinTürk maddeleri geri geldi, boş başlık yok.
+- Araçsız tur genişletmesinden sonra:
+  - Ajan testleri 644. K01 22/22, K02 22/22 (`…_1913.json`, `…_1914.json`); arayüz 15/15 (`k01_ui_kabul_2026-09-15_1902/`).
+  - 8 senaryo × 3, gerçek model: 66/66 (`baglam_senaryolari_2026-09-15_191752_x3.json`). Elle ve kalıpla tarandı: iç ad 0, boş
+    başlık 0, son çıkışta silinen ifade 0. "Bir önceki aya göre fark" 3/3 doğru, uydurma tutar yok. S8 takip cevaplarında FinTürk
+    maddeleri yerinde; araçsız hesaplanmış sayı yok.
+  - Kimlik deneyi (finans ve sağlık DB, gerçek model, `kimlik_alan_deneyi_2026-09-15_1913.json`): son çıkışta silinen ifade 0;
+    "Sen kimsin?" cevapları bütün. Veri seti cevabı finansta kaynak başına konularla, sağlıkta kullanıcı serisinin adıyla.
+- **Açık (bu kararda değiştirilmedi), model cevaplarında elle görülen iki küçük kusur:**
+  - Sağlık DB'sinde "Neler yapabilirsin?" iç kolon adını (`entity_id`) yazdı ve olmayan bir kurum kırılımından söz etti. Son
+    güvence kolon adlarını kapsamaz.
+  - Finans DB'sinde "banka kırılımında karşılaştırma" dedi; veride banka kırılımı yok (sektör toplamı ve il).

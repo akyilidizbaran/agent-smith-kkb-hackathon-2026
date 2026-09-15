@@ -58,6 +58,11 @@ _INTERNAL = re.compile(r"(?<![\w.])(gold|silver|bronze)(?![\w])|gold\.[a-z0-9_]+
                        re.I)
 
 
+def empty_section(p: dict) -> bool:
+    """Kalın başlıktan hemen sonra (boş satırla) başka bir başlık ya da metin sonu: maddeleri silinmiş bölüm."""
+    return bool(re.search(r"\*\*[^*\n]+\*\*[ \t]*\n\s*\n\s*(\*\*|\Z)", p.get("text", "")))
+
+
 def no_internal(p: dict) -> bool:
     """Cevap metni, grafik başlıkları ve rapor 'Kaynaklar' listesi iç ad taşımıyor."""
     texts = [p.get("text", ""), *[str(c.get("title") or "") for c in p.get("charts") or []], p.get("_rapor_kaynaklar", "")]
@@ -117,6 +122,14 @@ SCENARIOS: list[tuple[str, list[tuple[str, str, object]]]] = [
          lambda p: bool(tools(p)) and no_internal(p)),
         ("Bunu çizgi grafik olarak çiz.", "grafik; cevap, grafik başlığı ve rapor kaynaklarında iç ad yok",
          lambda p: "chart" in tools(p) and no_internal(p)),
+    ]),
+    ("S8_veri_seti_konulari", [
+        ("elimizde hangi veriler var", "katalogdan (model çağrılmaz); kaynak başına sayı, dönem ve konular (81 il, TÜFE); iç ad yok",
+         lambda p: not llm_called(p) and "81 il × " in p["text"] and "konular:" in p["text"] and "TÜFE" in p["text"] and no_internal(p)),
+        # İlk koşu (15 Eyl 19:07): "geri gönderilmez" şartı yanlıştı (veri sorusu, geri gönderme olağan); asıl kusur boş kalan başlıktı
+        # (tablosuz sayı denetimi önceki cevaptaki doğru "81 il" maddelerini siliyordu).
+        ("Bunlardan konut kredisiyle ilgili hangileri var?", "konut kredisi serileri anlatılır; iç ad yok; boş kalan başlık yok",
+         lambda p: "konut" in p["text"].lower() and no_internal(p) and not empty_section(p)),
     ]),
     ("S7_ic_adlar_yan_yana", [
         ("2024 ve 2025 için aylık dolar kuru ile politika faizini aynı dönemde yan yana göster.",

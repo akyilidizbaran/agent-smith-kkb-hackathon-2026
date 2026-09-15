@@ -919,11 +919,19 @@ class AnalyticsAgent:
                     pool = self._frames_pool()
                     if unverified_numbers(answer_text, self.workspace.table, pool):
                         answer_text, rejected = self._final_exit(question, answer_text, None, steps, i)
-                elif not self.workspace.has_table and tool_texts:
+                elif not self.workspace.has_table:
+                    # Araçsız tur da (S8 canlı, 15 Eyl): model araç çağırmadan "konut kredisiyle ilgili 166 seri" yazdı; denetim yalnız
+                    # araç çalışan turdaydı. Havuz boşsa (ilk tur, kart yok) doğrulanacak kaynak da yoktur, denetim atlanır.
                     # ADR-0082: veri çekilmeden (yalnız katalog araması) yazılan tablosuz cevaptaki sayılar da araç çıktısında
                     # olmalı. "Elinde nasıl veriler var" cevabı doğrulanmamış "687+ seri" yazdı (doğrusu 681).
-                    if grounding_check(question, answer_text, tool_texts).startswith("MISS"):
-                        answer_text, rejected = self._final_exit(question, answer_text, tool_texts, steps, i)
+                    # Havuz: bu turun araç çıktıları + ön-yükleme kartları + sohbetteki önceki cevaplar (doğrulanmış ya da deterministik,
+                    # ör. "81 il × 8 konu"). Yalnız araç çıktısıyla, S8 canlı senaryosunda önceki cevaptan tekrarlanan doğru "81 il"
+                    # maddeleri siliniyor, başlık boş kalıyordu (15 Eyl, 3/3).
+                    context_text = getattr(self._last_context, "text", "") if self._last_context is not None else ""
+                    pool = [*tool_texts, *([context_text] if context_text else []),
+                            *(m.content for m in self._history if m.role == "assistant" and m.content)]
+                    if pool and grounding_check(question, answer_text, pool).startswith("MISS"):
+                        answer_text, rejected = self._final_exit(question, answer_text, pool, steps, i)
 
                 steps.append(
                     AgentStep(
@@ -1135,7 +1143,8 @@ class AnalyticsAgent:
         substantive = len(re.sub(r"[\W\d_]+", "", clean)) >= 40
         table = self.workspace.table
         if substantive:
-            final = clean + f"\n\n(Araç çıktısıyla doğrulanamayan {len(removed)} ifade cevaptan çıkarıldı; doğrulanmış değerler tabloda.)"
+            final = clean + (f"\n\n(Araç çıktısıyla doğrulanamayan {len(removed)} ifade cevaptan çıkarıldı"
+                             + ("; doğrulanmış değerler tabloda.)" if table is not None and len(table) else ".)"))
         elif table is not None and len(table):
             final = ("Bu soru için güvenilir bir açıklama üretemedim: anlatımdaki değerler araç çıktısıyla doğrulanamadığı için "
                      "cevaptan çıkarıldı. Araçların ürettiği doğrulanmış tablo:\n\n" + table_digest(table))

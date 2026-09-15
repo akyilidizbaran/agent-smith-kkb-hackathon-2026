@@ -1,0 +1,270 @@
+{
+  "meta": {
+    "commit": "075fcc8",
+    "kaynak_agac_temiz": false,
+    "model": "kkbhackathon2026/Qwen3.8-27B",
+    "tekrar": 3,
+    "web_aramasi": "kapalı",
+    "demo_db_degismedi": true,
+    "at": "2026-09-15T19:11:41"
+  },
+  "passed": 6,
+  "total": 6,
+  "kosular": [
+    {
+      "senaryo": "S8_veri_seti_konulari",
+      "tekrar": 1,
+      "turlar": [
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "katalogdan (model çağrılmaz); kaynak başına sayı, dönem ve konular (81 il, TÜFE); iç ad yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var:\n- BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); 81 il × 8 konu: kredi kartı, ihtiyaç kredisi, konut kredisi, kredili mevduat hesabı, takipteki ihtiyaç kredisi, takipteki konut kredisi ve 2 konu daha\n- BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); konular: toplam krediler, yurt içi yerleşik mevduat, toplam mevduat, tüketici kredileri, konut kredisi, taşıt kredisi ve 14 konu daha\n- TCMB EVDS: 12 seri (2016-01 → 2026-07); konular: ağırlıklı ortalama fonlama maliyeti, politika faizi, euro kuru, dolar kuru, TÜFE, para arzı ve 5 konu daha\n- BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06); konu: haftalık konut kredisi"
+        },
+        {
+          "soru": "Bunlardan konut kredisiyle ilgili hangileri var?",
+          "beklenen": "konut kredisi serileri anlatılır; iç ad yok; boş kalan başlık yok",
+          "ok": true,
+          "sure_s": 7.0,
+          "llm": true,
+          "geri_gonderildi": true,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "validate",
+              null,
+              "veri çekilmeden cevap denendi — geri gönderildi"
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Konut kredisiyle ilgili seriler şu kaynaklarda:\n\n**BDDK FinTürk (il bazında)** — 81 il × 2 konu:\n- Konut kredisi (dönem sonu bakiye, stok)\n- Takipteki konut kredisi\n\n**BDDK Aylık Bülten** — 2 seri:\n- Tüketici kredileri – Konut (Toplam, sektör)\n- Konut kredisi (ayrı kalemi)\n\n**TCMB EVDS** — 1 seri:\n- Konut kredisi faiz oranı (haftalık, ağırlıklı ortalama)\n\n**BDDK Haftalık Bülten** — 1 seri:\n- Haftalık konut kredisi\n\n**Hesaplanmış tablo** — 1 adet:\n- Konut kredisi bakiyesi, çeyreklik (sektör toplamı; aylık bakiyeden çeyrek sonu değerine indirgenmiş)\n\nToplamda konut kredisiyle ilgili 166 seri var. Hangisini incelemek istersin?"
+        }
+      ]
+    },
+    {
+      "senaryo": "S8_veri_seti_konulari",
+      "tekrar": 2,
+      "turlar": [
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "katalogdan (model çağrılmaz); kaynak başına sayı, dönem ve konular (81 il, TÜFE); iç ad yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var:\n- BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); 81 il × 8 konu: kredi kartı, ihtiyaç kredisi, konut kredisi, kredili mevduat hesabı, takipteki ihtiyaç kredisi, takipteki konut kredisi ve 2 konu daha\n- BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); konular: toplam krediler, yurt içi yerleşik mevduat, toplam mevduat, tüketici kredileri, konut kredisi, taşıt kredisi ve 14 konu daha\n- TCMB EVDS: 12 seri (2016-01 → 2026-07); konular: ağırlıklı ortalama fonlama maliyeti, politika faizi, euro kuru, dolar kuru, TÜFE, para arzı ve 5 konu daha\n- BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06); konu: haftalık konut kredisi"
+        },
+        {
+          "soru": "Bunlardan konut kredisiyle ilgili hangileri var?",
+          "beklenen": "konut kredisi serileri anlatılır; iç ad yok; boş kalan başlık yok",
+          "ok": true,
+          "sure_s": 13.4,
+          "llm": true,
+          "geri_gonderildi": true,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_search",
+            "lakehouse_search",
+            "lakehouse_search"
+          ],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "validate",
+              null,
+              "veri çekilmeden cevap denendi — geri gönderildi"
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi”",
+              "ozet": "Bulunan tablolar:\n- bddk_monthly:1534_Toplam: Tüketici Kredileri - Konut, Toplam (Sektör). BDDK Aylık Bülten, Tüketici Kredileri tablosu, \"Tüketici Kredileri - Konut\" kalemi, Toplam sütunu, Sektör tarafı. Dönem sonu konut kredisi bakiyesidi"
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“takipteki konut kredisi”",
+              "ozet": "Bulunan tablolar:\n- gold.takipteki_tuketici_kirilimi_aylik: Takipteki tüketici kredileri kırılımı, aylık (konut, taşıt, ihtiyaç, kredi kartı). BDDK Aylık Bülten'deki takipteki (tahsili gecikmiş) hanehalkı kredi kalemleri tek ay ekseninde: t"
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“takipteki konut kredisi il”",
+              "ozet": "Bulunan tablolar:\n- gold.takipteki_tuketici_kirilimi_aylik: Takipteki tüketici kredileri kırılımı, aylık (konut, taşıt, ihtiyaç, kredi kartı). BDDK Aylık Bülten'deki takipteki (tahsili gecikmiş) hanehalkı kredi kalemleri tek ay ekseninde: t"
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi haftalık”",
+              "ozet": "Bulunan tablolar:\n- bddk_weekly:5690_3: Konut Kredileri, Toplam (Sektör) - Haftalık. BDDK Haftalık Bülten, Krediler tablosu, \"a) Konut\" kalemi, Toplam sütunu, Sektör tarafı. Haftalık konut kredisi bakiyesidir (stok): dönemler toplanmaz, dah"
+            }
+          ],
+          "cevap": "Konut kredisiyle ilgili elimizdeki veriler:\n\n**BDDK Aylık Bülten (sektör toplamı, 2016-01 → 2026-06)**\n- Konut kredisi bakiyesi, aylık (milyon TL) — dönem sonu stok\n- Takipteki konut kredisi, aylık (milyon TL) — tahsili gecikmiş bakiye\n- Aynı bakiyenin çeyreklik indirgenmiş hâli (her çeyrek, o çeyreğin son ayının bakiyesi)\n\n**BDDK Haftalık Bülten (sektör toplamı, 2016-01 → 2026-06)**\n- Konut kredisi bakiyesi, haftalık (milyon TL)\n\n**BDDK FinTürk (il bazında, 2016-03 → 2026-06, çeyreklik)**\n- Konut kredisi bakiyesi, il bazında (bin TL) — 81 ilin her biri için ayrı\n- Takipteki konut kredisi, il bazında (bin TL) — 81 ilin her biri için ayrı\n\n**TCMB EVDS (haftalık, 2016-01 → 2026-07)**\n- Konut kredisi faiz oranı, ağırlıklı ortalama (%) — haftada yeni açılan kredilere uygulanan oran; mevcut stokun ortalama faizi değil\n\nKısaca: bakiye (stok) verisi aylık, haftalık ve il bazında çeyreklik olara"
+        }
+      ]
+    },
+    {
+      "senaryo": "S8_veri_seti_konulari",
+      "tekrar": 3,
+      "turlar": [
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "katalogdan (model çağrılmaz); kaynak başına sayı, dönem ve konular (81 il, TÜFE); iç ad yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var:\n- BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); 81 il × 8 konu: kredi kartı, ihtiyaç kredisi, konut kredisi, kredili mevduat hesabı, takipteki ihtiyaç kredisi, takipteki konut kredisi ve 2 konu daha\n- BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); konular: toplam krediler, yurt içi yerleşik mevduat, toplam mevduat, tüketici kredileri, konut kredisi, taşıt kredisi ve 14 konu daha\n- TCMB EVDS: 12 seri (2016-01 → 2026-07); konular: ağırlıklı ortalama fonlama maliyeti, politika faizi, euro kuru, dolar kuru, TÜFE, para arzı ve 5 konu daha\n- BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06); konu: haftalık konut kredisi"
+        },
+        {
+          "soru": "Bunlardan konut kredisiyle ilgili hangileri var?",
+          "beklenen": "konut kredisi serileri anlatılır; iç ad yok; boş kalan başlık yok",
+          "ok": true,
+          "sure_s": 12.6,
+          "llm": true,
+          "geri_gonderildi": true,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_search",
+            "lakehouse_search",
+            "lakehouse_search"
+          ],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "validate",
+              null,
+              "veri çekilmeden cevap denendi — geri gönderildi"
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi”",
+              "ozet": "Bulunan tablolar:\n- bddk_monthly:1534_Toplam: Tüketici Kredileri - Konut, Toplam (Sektör). BDDK Aylık Bülten, Tüketici Kredileri tablosu, \"Tüketici Kredileri - Konut\" kalemi, Toplam sütunu, Sektör tarafı. Dönem sonu konut kredisi bakiyesidi"
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“takipteki konut kredisi”",
+              "ozet": "Bulunan tablolar:\n- gold.takipteki_tuketici_kirilimi_aylik: Takipteki tüketici kredileri kırılımı, aylık (konut, taşıt, ihtiyaç, kredi kartı). BDDK Aylık Bülten'deki takipteki (tahsili gecikmiş) hanehalkı kredi kalemleri tek ay ekseninde: t"
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“takipteki konut kredisi il”",
+              "ozet": "Bulunan tablolar:\n- gold.takipteki_tuketici_kirilimi_aylik: Takipteki tüketici kredileri kırılımı, aylık (konut, taşıt, ihtiyaç, kredi kartı). BDDK Aylık Bülten'deki takipteki (tahsili gecikmiş) hanehalkı kredi kalemleri tek ay ekseninde: t"
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi haftalık”",
+              "ozet": "Bulunan tablolar:\n- bddk_weekly:5690_3: Konut Kredileri, Toplam (Sektör) - Haftalık. BDDK Haftalık Bülten, Krediler tablosu, \"a) Konut\" kalemi, Toplam sütunu, Sektör tarafı. Haftalık konut kredisi bakiyesidir (stok): dönemler toplanmaz, dah"
+            }
+          ],
+          "cevap": "Konut kredisiyle ilgili elimizdeki veriler:\n\n**BDDK Aylık Bülten (sektör toplamı, 2016-01 → 2026-06)**\n- Konut kredisi bakiyesi, aylık (milyon TL) — dönem sonu stok\n- Aynı serinin çeyreklik indirgenmiş hâli (her çeyreğin son ayının bakiyesi)\n- Takipteki konut kredisi, aylık (milyon TL) — tahsili gecikmiş bakiye\n\n**BDDK Haftalık Bülten (sektör toplamı, 2016-01 → 2026-06)**\n- Konut kredisi bakiyesi, haftalık (milyon TL)\n\n**BDDK FinTürk (il bazında, 2016-03 → 2026-06, çeyreklik)**\n- Konut kredisi bakiyesi, il bazında (bin TL) — 81 ilin her biri için ayrı seri\n- Takipteki konut kredisi, il bazında (bin TL) — 81 ilin her biri için ayrı seri\n\n**TCMB EVDS (haftalık, 2016-01 → 2026-07)**\n- Konut kredisi faiz oranı, haftalık (%) — o hafta içinde yeni açılan kredilere uygulanan ağırlıklı ortalama faiz; mevcut stokun ortalama faizi değil\n\nKısaca: bakiye verisi aylık, haftalık ve il bazında çeyrekli"
+        }
+      ]
+    }
+  ]
+}
