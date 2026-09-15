@@ -130,10 +130,77 @@ def is_identity_question(question: str) -> bool:
     return bool(text) and not re.search(r"\d", text) and len(text.split()) <= 8 and bool(_IDENTITY.search(text))
 
 
+# ---- ürün kullanım soruları (15 Eyl, arayüz denemesi): "architect rolüne nasıl geçebilirim" veri istemez. Model veri çekmeden
+# cevap yazınca "veri çekilmedi" diye geri gönderildi; sayı çekmeye zorlanan model geçmişteki son veri sorusuna ("elimizde hangi
+# veriler var") dönüp onu cevapladı. Rol, dosya yükleme ve indirme ürünün gerçek durumundan deterministik cevaplanır; diğer
+# kullanım soruları modele gider ama geri gönderilmez.
+_HOW = re.compile(r"(?<![\w])(nasıl|nereden|nereye|hangi\s+düğme|ne\s+yapmam\s+gerek\w*)(?![\w])", re.I)
+_PRODUCT = re.compile(r"(?<![\w])(architect|analyst|analist|rol|rolü\w*|rolün\w*|profil\w*|dosya\w*|belge\w*|yükle\w*|indir\w*|"
+                      r"dışa\s+aktar\w*|rapor\w*|kanıt\s+zincir\w*|yolculu\w*|oturum\w*|sıfırla\w*|arayüz\w*|düğme\w*|ekran\w*|"
+                      r"araç\s+izi\w*)(?![\w])", re.I)
+_ROLE = re.compile(r"(?<![\w])(architect|analyst|analist|rol|rolü\w*|rolün\w*|profil\w*)(?![\w])", re.I)
+_UPLOAD = re.compile(r"(?<![\w])(dosya\w*|belge\w*|csv|excel|xlsx|pdf|görsel\w*|yükle\w*)(?![\w])", re.I)
+_EXPORT = re.compile(r"(?<![\w])(indir\w*|dışa\s+aktar\w*|rapor\w*|kaydet\w*)(?![\w])", re.I)
+_RESET = re.compile(r"(?<![\w])(sıfırla\w*|baştan\s+başla\w*)(?![\w])", re.I)
+# Veri isteyen fiil ya da ekli dosya/adres: kullanım sorusu değildir ("risk profilini göster", "Dosya: /…/a.csv").
+_DATA_VERB = re.compile(r"(?<![\w])(göster\w*|hesapla\w*|karşılaştır\w*|getir\w*|çiz\w*|listele\w*|kaç|ne\s+kadar)(?![\w])", re.I)
+_ATTACHED = re.compile(r"(?:^|\n)\s*Dosya:\s*\S|https?://", re.I)
+UPLOAD_HELP_KINDS = ("CSV", "TSV", "TXT", "XLSX", "XLSM", "JSON", "PDF", "PNG", "JPG", "JPEG", "WEBP")   # web_app.UPLOAD_KINDS ile aynı (test)
+UPLOAD_HELP_MB = 25
+
+
+def is_usage_question(question: str) -> bool:
+    """Ürünün kullanımına dair kısa soru mu (rol, dosya, indirme, rapor, oturum…)? Veri çekmesi gerekmez."""
+    text = (question or "").strip()
+    if not text or re.search(r"\d", text) or len(text.split()) > 14 or _ATTACHED.search(text) or _DATA_VERB.search(text):
+        return False
+    return bool(_HOW.search(text) and _PRODUCT.search(text))
+
+
+def usage_reply(question: str, tools: set[str]) -> str | None:
+    """Rol geçişi, dosya yükleme ve indirme: arayüzün ve profilin gerçek durumundan tek paragraf; başka konuda None."""
+    if not is_usage_question(question):
+        return None
+    text = question.strip()
+    architect = bool({"ingest_from_url", "promote_draft"} & set(tools))
+    if _ROLE.search(text):
+        if architect:
+            return ("Şu an Architect profilindesin: dosyayı ya da kaynağı taslak seri olarak ekleyebilir, açık onayınla kataloğa "
+                    "alabilir ve veriyi sıfırlayabilirsin. Analyst'e (salt-okunur) dönmek için arayüzün üstündeki Profil rozetine "
+                    "tıkla ve Analyst'i seç; geçiş oturumu (sohbet, tablolar, yüklemeler) temizler.")
+        return ("Şu an Analyst profilindesin (salt-okunur): veriyi sorgular, analiz eder ve dosyaları okursun ama kataloğa yazmazsın. "
+                "Architect'e geçmek için arayüzün üstündeki Profil rozetine tıkla, Architect'i seç ve operatör anahtarını gir; "
+                "geçiş oturumu (sohbet, tablolar, yüklemeler) temizler. Rozet geçişe izin vermiyorsa profil sunucu başlatılırken "
+                "seçilir (AGENT_PROFILE=architect).")
+    if _RESET.search(text):
+        # Canlı bağlam senaryosu S5 (15 Eyl): model üç tekrarda da "'oturumu sıfırla' yazmanız yeterli" dedi; doğrusu düğme.
+        extra = (" Architect profilinde ayrıca 'Tam veri sıfırlama…' düğmesi var: veri kökündeki veritabanını, RAW/Bronze/Silver'ı, "
+                 "yüklemeleri ve önbelleği önizleme ve onay koduyla siler (kod ve .env korunur)." if architect
+                 else " Veri havuzunu sıfırlamak yalnız Architect profilinde yapılır.")
+        return ("Sol paneldeki 'Oturumu sıfırla' düğmesi sohbeti, tabloları ve bu oturumda yüklenen dosyaları temizler; veri havuzuna "
+                "dokunmaz." + extra)
+    if _EXPORT.search(text):
+        return ("Tablo içeren her cevabın altındaki 'tam tablo CSV' ve 'XLSX' bağlantıları tam tabloyu indirir (ekranda ilk 200 satır "
+                "gösterilse de); 'HTML rapor' cevabı tablo, grafik ve kanıt zinciriyle birlikte açar. Grafiklerin altında 'PNG indir' "
+                "bağlantısı var.")
+    if _UPLOAD.search(text):
+        where = (" Architect profilinde 'taslak seri olarak ekle' dersen taslak olur; kataloğa almak için ayrıca açık onay gerekir."
+                 if architect else " Analyst profilinde dosya okunur ve analiz edilir, kataloğa yazılmaz.")
+        return (f"Soru kutusunun solundaki Dosya düğmesiyle ya da dosyayı sayfaya sürükleyerek yükleyebilirsin: "
+                f"{', '.join(UPLOAD_HELP_KINDS)}; en çok {UPLOAD_HELP_MB} MB. Dosya bu oturuma özel saklanır; ardından ne "
+                f"yapılacağını yaz (ör. 'bu dosyayı analiz et')." + where)
+    return None
+
+
 def capability_reply(question: str, *, tools: set[str], datasets) -> str | None:
     """Yetenek ya da veri seti sorusu ise tek paragraf cevap; değilse None. Rakam geçen ya da uzun mesaj veri sorusudur."""
     text = (question or "").strip()
-    if not text or re.search(r"\d", text) or len(text.split()) > 14 or _ANALYTIC.search(text):
+    if not text or re.search(r"\d", text) or len(text.split()) > 14:
+        return None
+    usage = usage_reply(text, tools)       # analiz sözcüğü korumasından önce: "profili nasıl değiştiririm", "tabloyu nasıl indiririm"
+    if usage is not None:
+        return usage
+    if _ANALYTIC.search(text):
         return None
     from ..source_hints import load_source_hints
 

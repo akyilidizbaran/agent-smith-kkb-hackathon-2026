@@ -1,0 +1,1161 @@
+{
+  "meta": {
+    "commit": "fe4432d",
+    "kaynak_agac_temiz": false,
+    "model": "kkbhackathon2026/Qwen3.8-27B",
+    "tekrar": 3,
+    "web_aramasi": "kapalı",
+    "demo_db_degismedi": true,
+    "at": "2026-09-15T17:56:31"
+  },
+  "passed": 45,
+  "total": 45,
+  "kosular": [
+    {
+      "senaryo": "S1_kullanici_akisi",
+      "tekrar": 1,
+      "turlar": [
+        {
+          "soru": "naber",
+          "beklenen": "selamlaşma, model çağrılmaz",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "selamlaşma — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Selam. Sorunu yazabilirsin."
+        },
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "veri setleri katalogdan",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var: BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); TCMB EVDS: 12 seri (2016-01 → 2026-07); BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06)."
+        },
+        {
+          "soru": "architect rolüne nasıl geçebilirim",
+          "beklenen": "rol cevabı; önceki soruya kaymaz, geri gönderilmez, veri aracı yok",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Şu an Analyst profilindesin (salt-okunur): veriyi sorgular, analiz eder ve dosyaları okursun ama kataloğa yazmazsın. Architect'e geçmek için arayüzün üstündeki Profil rozetine tıkla, Architect'i seç ve operatör anahtarını gir; geçiş oturumu (sohbet, tablolar, yüklemeler) temizler. Rozet geçişe izin vermiyorsa profil sunucu başlatılırken seçilir (AGENT_PROFILE=architect)."
+        }
+      ]
+    },
+    {
+      "senaryo": "S1_kullanici_akisi",
+      "tekrar": 2,
+      "turlar": [
+        {
+          "soru": "naber",
+          "beklenen": "selamlaşma, model çağrılmaz",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "selamlaşma — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Selam. Sorunu yazabilirsin."
+        },
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "veri setleri katalogdan",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var: BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); TCMB EVDS: 12 seri (2016-01 → 2026-07); BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06)."
+        },
+        {
+          "soru": "architect rolüne nasıl geçebilirim",
+          "beklenen": "rol cevabı; önceki soruya kaymaz, geri gönderilmez, veri aracı yok",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Şu an Analyst profilindesin (salt-okunur): veriyi sorgular, analiz eder ve dosyaları okursun ama kataloğa yazmazsın. Architect'e geçmek için arayüzün üstündeki Profil rozetine tıkla, Architect'i seç ve operatör anahtarını gir; geçiş oturumu (sohbet, tablolar, yüklemeler) temizler. Rozet geçişe izin vermiyorsa profil sunucu başlatılırken seçilir (AGENT_PROFILE=architect)."
+        }
+      ]
+    },
+    {
+      "senaryo": "S1_kullanici_akisi",
+      "tekrar": 3,
+      "turlar": [
+        {
+          "soru": "naber",
+          "beklenen": "selamlaşma, model çağrılmaz",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "selamlaşma — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Selam. Sorunu yazabilirsin."
+        },
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "veri setleri katalogdan",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var: BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); TCMB EVDS: 12 seri (2016-01 → 2026-07); BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06)."
+        },
+        {
+          "soru": "architect rolüne nasıl geçebilirim",
+          "beklenen": "rol cevabı; önceki soruya kaymaz, geri gönderilmez, veri aracı yok",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Şu an Analyst profilindesin (salt-okunur): veriyi sorgular, analiz eder ve dosyaları okursun ama kataloğa yazmazsın. Architect'e geçmek için arayüzün üstündeki Profil rozetine tıkla, Architect'i seç ve operatör anahtarını gir; geçiş oturumu (sohbet, tablolar, yüklemeler) temizler. Rozet geçişe izin vermiyorsa profil sunucu başlatılırken seçilir (AGENT_PROFILE=architect)."
+        }
+      ]
+    },
+    {
+      "senaryo": "S2_kullanim_arasi_sonra_takip",
+      "tekrar": 1,
+      "turlar": [
+        {
+          "soru": "2025 yılında aylık konut kredisi bakiyesini göster.",
+          "beklenen": "12 aylık tablo araçla",
+          "ok": true,
+          "sure_s": 11.2,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_describe",
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value"
+          ],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_describe",
+              ""
+            ],
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "2025 yılında aylık konut kredisi bakiyesi (BDDK Aylık Bülten, Tüketici Kredileri – Konut, Toplam, sektör; dönem sonu bakiyesi, milyon TL):\n\n| Ay | Bakiye (milyon TL) |\n|---|---|\n| Ocak 2025 | 523.455 |\n| Şubat 2025 | 535.029 |\n| Mart 2025 | 548.385 |\n| Nisan 2025 | 561.793 |\n| Mayıs 2025 | 575.453 |\n| Haziran 2025 | 583.265 |\n| Temmuz 2025 | 594.607 |\n| Ağustos 2025 | 608.694 |\n| Eylül 2025 | 623.765 |\n| Ekim 2025 | 642.144 |\n| Kasım 2025 | 658.770 |\n| Aralık 2025 | 678.970 |\n\nYıl içinde bakiye Ocak'taki 523.455 milyon TL'den Aralık'taki 678.970 milyon TL'ye yükseldi; her ay artış oldu.\n\nKaynak: BDDK Aylık Bülten, \"Tüketici Kredileri – Konut (Toplam, Sektör)\" kalemi; 2025-01 → 2025-12 dönem sonu değerleri."
+        },
+        {
+          "soru": "Bunu nasıl indirebilirim?",
+          "beklenen": "indirme cevabı (CSV/XLSX); tablo sorgusu yok",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Tablo içeren her cevabın altındaki 'tam tablo CSV' ve 'XLSX' bağlantıları tam tabloyu indirir (ekranda ilk 200 satır gösterilse de); 'HTML rapor' cevabı tablo, grafik ve kanıt zinciriyle birlikte açar. Grafiklerin altında 'PNG indir' bağlantısı var."
+        },
+        {
+          "soru": "Peki aynı dönemin konut kredisi faiz oranını da ekle.",
+          "beklenen": "bağlam korunur: 2025 tablosuna faiz kolonu",
+          "ok": true,
+          "sure_s": 9.6,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "workspace_add_column",
+            "workspace_show"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value",
+            "konut_kredisi_faizi"
+          ],
+          "adimlar": [
+            [
+              "execute",
+              "workspace_add_column",
+              ""
+            ],
+            [
+              "retrieve",
+              "workspace_show",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "Konut kredisi faiz oranını aynı tabloya yeni sütun olarak ekledim (tablo bozulmadı, 12 satır):\n\n| Ay | Bakiye (milyon TL) | Faiz oranı (%) |\n|---|---|---|\n| Ocak 2025 | 523.455 | 40,54 |\n| Şubat 2025 | 535.029 | 39,98 |\n| Mart 2025 | 548.385 | 39,38 |\n| Nisan 2025 | 561.793 | 39,56 |\n| Mayıs 2025 | 575.453 | 42,14 |\n| Haziran 2025 | 583.265 | 43,47 |\n| Temmuz 2025 | 594.607 | 42,56 |\n| Ağustos 2025 | 608.694 | 40,36 |\n| Eylül 2025 | 623.765 | 38,80 |\n| Ekim 2025 | 642.144 | 37,94 |\n| Kasım 2025 | 658.770 | 37,76 |\n| Aralık 2025 | 678.970 | 37,29 |\n\nFaiz oranı, TCMB EVDS haftalık konut kredisi faiz oranının (yeni açılan kredilere uygulanan ağırlıklı ortalama faiz) ay ortalamasıdır. Yıl içinde Ocak'taki %40,54'ten Haziran'da zirve olan %43,47'ye çıktı, ardından Aralık'ta %37,29'a geriledi.\n\nKaynak: Bakiye — BDDK Aylık Bülten (Tüketici Kredileri – Konut, Toplam, Sektör, dönem sonu); faiz — "
+        }
+      ]
+    },
+    {
+      "senaryo": "S2_kullanim_arasi_sonra_takip",
+      "tekrar": 2,
+      "turlar": [
+        {
+          "soru": "2025 yılında aylık konut kredisi bakiyesini göster.",
+          "beklenen": "12 aylık tablo araçla",
+          "ok": true,
+          "sure_s": 10.8,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_describe",
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value"
+          ],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_describe",
+              ""
+            ],
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "2025 yılı boyunca konut kredisi bakiyesi her ay artarak 523.455 milyon TL'den 678.970 milyon TL'ye çıktı (BDDK Aylık Bülten, Tüketici Kredileri – Konut, Toplam, sektör; dönem sonu stok, milyon TL):\n\n| Dönem | Bakiye (milyon TL) |\n|---|---|\n| Ocak 2025 | 523.455 |\n| Şubat 2025 | 535.029 |\n| Mart 2025 | 548.385 |\n| Nisan 2025 | 561.793 |\n| Mayıs 2025 | 575.453 |\n| Haziran 2025 | 583.265 |\n| Temmuz 2025 | 594.607 |\n| Ağustos 2025 | 608.694 |\n| Eylül 2025 | 623.765 |\n| Ekim 2025 | 642.144 |\n| Kasım 2025 | 658.770 |\n| Aralık 2025 | 678.970 |\n\nKaynak: BDDK Aylık Bülten, \"Tüketici Kredileri – Konut, Toplam (Sektör)\" kalemi; değerler dönem sonu bakiyesi, milyon TL."
+        },
+        {
+          "soru": "Bunu nasıl indirebilirim?",
+          "beklenen": "indirme cevabı (CSV/XLSX); tablo sorgusu yok",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Tablo içeren her cevabın altındaki 'tam tablo CSV' ve 'XLSX' bağlantıları tam tabloyu indirir (ekranda ilk 200 satır gösterilse de); 'HTML rapor' cevabı tablo, grafik ve kanıt zinciriyle birlikte açar. Grafiklerin altında 'PNG indir' bağlantısı var."
+        },
+        {
+          "soru": "Peki aynı dönemin konut kredisi faiz oranını da ekle.",
+          "beklenen": "bağlam korunur: 2025 tablosuna faiz kolonu",
+          "ok": true,
+          "sure_s": 13.4,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_distinct_values",
+            "lakehouse_distinct_values",
+            "workspace_add_column",
+            "workspace_add_column",
+            "workspace_show"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value",
+            "konut_kredisi_faizi"
+          ],
+          "adimlar": [
+            [
+              "validate",
+              "lakehouse_distinct_values",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_distinct_values",
+              ""
+            ],
+            [
+              "execute",
+              "workspace_add_column",
+              ""
+            ],
+            [
+              "execute",
+              "workspace_add_column",
+              ""
+            ],
+            [
+              "retrieve",
+              "workspace_show",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "Tabloya aynı ayların konut kredisi faiz oranını (yüzde) yeni sütun olarak ekledim:\n\n| Dönem | Bakiye (milyon TL) | Faiz oranı (%) |\n|---|---|---|\n| Ocak 2025 | 523.455 | 40,54 |\n| Şubat 2025 | 535.029 | 39,98 |\n| Mart 2025 | 548.385 | 39,38 |\n| Nisan 2025 | 561.793 | 39,56 |\n| Mayıs 2025 | 575.453 | 42,14 |\n| Haziran 2025 | 583.265 | 43,47 |\n| Temmuz 2025 | 594.607 | 42,56 |\n| Ağustos 2025 | 608.694 | 40,36 |\n| Eylül 2025 | 623.765 | 38,80 |\n| Ekim 2025 | 642.144 | 37,94 |\n| Kasım 2025 | 658.770 | 37,76 |\n| Aralık 2025 | 678.970 | 37,29 |\n\nFaiz oranı TCMB EVDS haftalık konut kredisi faiz oranının aylık ortalamasıdır (akım: o ayda yeni açılan kredilere uygulanan oran); bakiye BDDK Aylık Bülten dönem sonu stokudur. İndirmek için cevabın altındaki 'tam tablo CSV' / 'XLSX' bağlantılarını kullan."
+        }
+      ]
+    },
+    {
+      "senaryo": "S2_kullanim_arasi_sonra_takip",
+      "tekrar": 3,
+      "turlar": [
+        {
+          "soru": "2025 yılında aylık konut kredisi bakiyesini göster.",
+          "beklenen": "12 aylık tablo araçla",
+          "ok": true,
+          "sure_s": 11.6,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_describe",
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value"
+          ],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_describe",
+              ""
+            ],
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "2025 yılı aylık konut kredisi bakiyeleri (BDDK Aylık Bülten, \"Tüketici Kredileri - Konut, Toplam\", sektör tarafı, dönem sonu stok, milyon TL):\n\n| Ay | Bakiye (milyon TL) |\n|---|---|\n| Ocak 2025 | 523.455 |\n| Şubat 2025 | 535.029 |\n| Mart 2025 | 548.385 |\n| Nisan 2025 | 561.793 |\n| Mayıs 2025 | 575.453 |\n| Haziran 2025 | 583.265 |\n| Temmuz 2025 | 594.607 |\n| Ağustos 2025 | 608.694 |\n| Eylül 2025 | 623.765 |\n| Ekim 2025 | 642.144 |\n| Kasım 2025 | 658.770 |\n| Aralık 2025 | 678.970 |\n\nYıl boyunca bakiye her ay artmış; Ocak sonu 523.455 milyon TL'den Aralık sonu 678.970 milyon TL'ye yükselmiş."
+        },
+        {
+          "soru": "Bunu nasıl indirebilirim?",
+          "beklenen": "indirme cevabı (CSV/XLSX); tablo sorgusu yok",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Tablo içeren her cevabın altındaki 'tam tablo CSV' ve 'XLSX' bağlantıları tam tabloyu indirir (ekranda ilk 200 satır gösterilse de); 'HTML rapor' cevabı tablo, grafik ve kanıt zinciriyle birlikte açar. Grafiklerin altında 'PNG indir' bağlantısı var."
+        },
+        {
+          "soru": "Peki aynı dönemin konut kredisi faiz oranını da ekle.",
+          "beklenen": "bağlam korunur: 2025 tablosuna faiz kolonu",
+          "ok": true,
+          "sure_s": 16.4,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "workspace_add_column",
+            "workspace_show"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value",
+            "konut_kredisi_faizi"
+          ],
+          "adimlar": [
+            [
+              "execute",
+              "workspace_add_column",
+              ""
+            ],
+            [
+              "validate",
+              null,
+              "grounding: MISS:583.265, 44,28, 594.607, 45,86, 608.694, 46,65, 623.765, 47,34, "
+            ],
+            [
+              "retrieve",
+              "workspace_show",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "Tabloya aynı ayların konut kredisi faiz oranını ekledim (TCMB EVDS haftalık konut kredisi faiz oranının aylık ortalaması, %).\n\n| Ay | Bakiye (milyon TL) | Faiz (%) |\n|---|---|---|\n| Ocak 2025 | 523.455 | 40,54 |\n| Şubat 2025 | 535.029 | 39,98 |\n| Mart 2025 | 548.385 | 39,38 |\n| Nisan 2025 | 561.793 | 39,56 |\n| Mayıs 2025 | 575.453 | 42,14 |\n| Haziran 2025 | 583.265 | 43,47 |\n| Temmuz 2025 | 594.607 | 42,56 |\n| Ağustos 2025 | 608.694 | 40,36 |\n| Eylül 2025 | 623.765 | 38,80 |\n| Ekim 2025 | 642.144 | 37,94 |\n| Kasım 2025 | 658.770 | 37,76 |\n| Aralık 2025 | 678.970 | 37,29 |\n\nBakiye yıl boyunca her ay artarken, faiz oranı Mayıs'taki 42,14%'ten sonra düşüşe geçmiş ve Aralık'ta 37,29%'a inmiş; iki seri yıl içinde zıt yönde hareket ediyor."
+        }
+      ]
+    },
+    {
+      "senaryo": "S3_modele_giden_kullanim_sonra_takip",
+      "tekrar": 1,
+      "turlar": [
+        {
+          "soru": "2025 Aralık ayında konut kredisi bakiyesi ne kadar?",
+          "beklenen": "sayı araçla",
+          "ok": true,
+          "sure_s": 6.3,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value"
+          ],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "2025 Aralık sonu itibarıyla konut kredisi bakiyesi **678.970 milyon TL**'dir.\n\nKaynak: BDDK Aylık Bülten, \"Tüketici Kredileri – Konut\" kalemi (sektör toplamı), dönem sonu bakiyesi."
+        },
+        {
+          "soru": "Kanıt zincirini nasıl okurum?",
+          "beklenen": "kanıt zinciri anlatılır; bakiye tekrar sorgulanmaz",
+          "ok": true,
+          "sure_s": 9.9,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "Kanıt zinciri, bir sayının hangi adımlardan geçtiğini izlemeni sağlayan kayıtların sıralı listesidir. Bu oturumda zincir şu şekilde oluştu:\n\n1. **Sorgu kaydı** — \"2025 Aralık sonu konut kredisi bakiyesini getir\" başlıklı sorgu çalıştırıldı; veri havuzundaki BDDK Aylık Bülten tablosundan 2025-12-31 tarihli konut kredisi bakiyesi çekildi.\n2. **Aktif tablo** — Sorgunun sonucu 1 satırlık bir tablo olarak kaydedildi: `observation_date = 2025-12-31`, `value = 678.970` (milyon TL).\n3. **Cevap** — Yukarıdaki sayı, bu tablodaki tek satırdan aynen aktarıldı; arada toplama, ortalama ya da birim çevrimi yapılmadı.\n\nYani zincirde her halka bir öncekinin çıktısını kullanır: kaynak tablo → sorgu → aktif tablo → cevap. Bir sayıyı sorgularken \"bu sayı hangi sorgudan geldi, o sorgu hangi tabloya baktı\" sorusunu bu kayıtlardan yanıtlayabilirsin.\n\nElindeki bir sayının zincirini birlikte izlememi istersen, o"
+        },
+        {
+          "soru": "Bir önceki aya göre farkı ne?",
+          "beklenen": "bağlam korunur; tutarlar gerçek (Kasım 658.770, fark 20.200), uydurma sayı yok",
+          "ok": true,
+          "sure_s": 6.2,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "aralik_2025",
+            "kasim_2025",
+            "fark"
+          ],
+          "adimlar": [
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "2025 Aralık sonu konut kredisi bakiyesi, bir önceki aya göre **20.200 milyon TL** arttı:\n\n- 2025 Kasım sonu: 658.770 milyon TL\n- 2025 Aralık sonu: 678.970 milyon TL\n\nKaynak: BDDK Aylık Bülten, \"Tüketici Kredileri – Konut\" kalemi (sektör toplamı), dönem sonu bakiyeleri."
+        }
+      ]
+    },
+    {
+      "senaryo": "S3_modele_giden_kullanim_sonra_takip",
+      "tekrar": 2,
+      "turlar": [
+        {
+          "soru": "2025 Aralık ayında konut kredisi bakiyesi ne kadar?",
+          "beklenen": "sayı araçla",
+          "ok": true,
+          "sure_s": 6.6,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value"
+          ],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "2025 Aralık sonu itibarıyla konut kredisi bakiyesi **678.970 milyon TL**'dir.\n\nKaynak: BDDK Aylık Bülten, \"Tüketici Kredileri - Konut\" kalemi (sektör toplamı), dönem sonu bakiyesi."
+        },
+        {
+          "soru": "Kanıt zincirini nasıl okurum?",
+          "beklenen": "kanıt zinciri anlatılır; bakiye tekrar sorgulanmaz",
+          "ok": true,
+          "sure_s": 13.8,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "validate",
+              null,
+              "araç çağrılmadan işlem iddiası ya da okunmamış dosya — geri gönderildi"
+            ],
+            [
+              "validate",
+              null,
+              "son çıkış: doğrulanamayan 2 ifade cevaptan çıkarıldı"
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "Kanıt zinciri, bir sayının hangi adımlardan geçtiğini izlemeni sağlayan kayıtların sıralı listesidir. Bu oturumda zincir şu şekilde okunur:\n\n**1. Seri kartı (katalog bilgisi)**\nSorgudan önce sistem, kullanacağın serinin kim olduğunu ve özelliklerini gösterir:\n- Adı: \"Tüketici Kredileri - Konut\"\n- Kapsam: 2016-01 → 2025-12 (aylık)\n- Ölçüm: `value` (milyon TL)\n- Kırılım: `series_id` (kalem seçimi)\n\nBu kart, \"hangi veri kaynağından, hangi birimle, hangi dönemde\" sorularını cevaplar.\n\n**2. Sorgu (analiz adımı)**\nZincirin ikinci halkası, sayıyı üreten sorgudur:\n- Amaç: \"2025 Aralık sonu konut kredisi bakiyesini getir\"\n- Sonuç: 1 satır, 2 sütun\n\nBu adım, \"hangi filtreyle, hangi tablodan\" çekildiğini gösterir.\n\n**3. Sonuç tablosu (aktif tablo)**\nZincirin son halkası, üzerinde çalıştığın tablodur:\n- 1 satır: `2025-12-31 | 678970.0`\n- Sütunlar: `observation_date`, `value`\n\n**Nasıl doğrulayabilirs"
+        },
+        {
+          "soru": "Bir önceki aya göre farkı ne?",
+          "beklenen": "bağlam korunur; tutarlar gerçek (Kasım 658.770, fark 20.200), uydurma sayı yok",
+          "ok": true,
+          "sure_s": 8.5,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "konut_kredisi",
+            "fark"
+          ],
+          "adimlar": [
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "2025 Aralık sonu konut kredisi bakiyesi, bir önceki aya (Kasım) göre **20.200 milyon TL** artmıştır:\n\n| Dönem | Konut Kredisi (milyon TL) | Fark (milyon TL) |\n|---|---|---|\n| 2025-11 | 658.770 | — |\n| 2025-12 | 678.970 | **+20.200** |\n\nKaynak: BDDK Aylık Bülten, \"Tüketici Kredileri - Konut\" kalemi (sektör toplamı), dönem sonu bakiyesi."
+        }
+      ]
+    },
+    {
+      "senaryo": "S3_modele_giden_kullanim_sonra_takip",
+      "tekrar": 3,
+      "turlar": [
+        {
+          "soru": "2025 Aralık ayında konut kredisi bakiyesi ne kadar?",
+          "beklenen": "sayı araçla",
+          "ok": true,
+          "sure_s": 5.1,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value"
+          ],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "2025 Aralık sonu itibarıyla sektör toplam konut kredisi bakiyesi **678.970 milyon TL**'dir.\n\nKaynak: BDDK Aylık Bülten, \"Tüketici Kredileri - Konut\" kalemi (sektör toplamı), 31 Aralık 2025 dönem sonu bakiyesi."
+        },
+        {
+          "soru": "Kanıt zincirini nasıl okurum?",
+          "beklenen": "kanıt zinciri anlatılır; bakiye tekrar sorgulanmaz",
+          "ok": true,
+          "sure_s": 3.1,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "Kanıt zinciri, bir sayının hangi adımlardan geçtiğini gösteren kayıtların sıralı listesi. Sırayla okursan:\n\n1. **Sorgu kaydı** — Sayının hangi kaynaktan, hangi kalemle çekildiği yazılıdır. Bu cevapta: BDDK Aylık Bülten, \"Tüketici Kredileri – Konut\" kalemi, 31 Aralık 2025 dönem sonu bakiyesi.\n\n2. **Tablo durumu** — Sayının üzerinde çalıştığı tablonun anlık hali: kaç satır, hangi sütunlar, hangi değerler. Burada tek satır: 2025-12-31 → 678.970.\n\n3. **Uygulanan işlemler** — Tabloya sırayla eklenen adımlar (sütun ekleme, hesaplama, filtreleme). Bu cevapta işlem yok; sayı doğrudan kaynaktan geldi.\n\nOkuma kuralı: zincirde bir sayı görürsen, o sayıyı üreten adımın üstündeki kayıtlara bak. Bir adım eksik ya da çelişkili görünüyorsa, o sayıya güvenme.\n\nBu cevapta zincir tek adımlı: kaynak → değer. Hesaplama, birim çevirisi veya filtre yok."
+        },
+        {
+          "soru": "Bir önceki aya göre farkı ne?",
+          "beklenen": "bağlam korunur; tutarlar gerçek (Kasım 658.770, fark 20.200), uydurma sayı yok",
+          "ok": true,
+          "sure_s": 4.0,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value",
+            "fark"
+          ],
+          "adimlar": [
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "2025 Aralık sonu konut kredisi bakiyesi, bir önceki aya göre **20.200 milyon TL** arttı:\n\n- 30 Kasım 2025: 658.770 milyon TL\n- 31 Aralık 2025: 678.970 milyon TL\n\nKaynak: BDDK Aylık Bülten, \"Tüketici Kredileri – Konut\" kalemi, dönem sonu bakiyeleri."
+        }
+      ]
+    },
+    {
+      "senaryo": "S4_tablosuz_kimlik_ve_belirsiz",
+      "tekrar": 1,
+      "turlar": [
+        {
+          "soru": "Sen kimsin?",
+          "beklenen": "kimlik; geri gönderilmez",
+          "ok": true,
+          "sure_s": 2.8,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "BDDK ve TCMB kaynaklı finansal veriler üzerinde çalışan bir veri analisti ajansım. İl bazında BDDK FinTürk, BDDK Aylık ve Haftalık Bülten ile TCMB EVDS verilerini sorgulayıp analiz ediyorum: bakiyeler, akımlar, oranlar, dönemsel değişimler, reel değer hesapları ve frekans dönüşümleri gibi işleri yapıyorum.\n\nBana doğal dilde bir soru sorabilirsin; örneğin \"2024'te konut kredisi bakiyesi ne kadar arttı?\" ya da \"son 12 ayda il bazında kredi dağılımını göster\"."
+        },
+        {
+          "soru": "Bu sistemi kim geliştirdi?",
+          "beklenen": "önceki soruya kaymaz (kimlik cevabını ya da veri listesini tekrarlamaz)",
+          "ok": true,
+          "sure_s": 2.1,
+          "llm": true,
+          "geri_gonderildi": true,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "validate",
+              null,
+              "veri çekilmeden cevap denendi — geri gönderildi"
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "Bu konuda elimde bilgi yok. Veri havuzunda ya da kullandığım kaynaklarda sistemin geliştiricisiyle ilgili bir kayıt bulunmuyor."
+        },
+        {
+          "soru": "Grafiği nasıl indiririm?",
+          "beklenen": "indirme cevabı (PNG)",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Tablo içeren her cevabın altındaki 'tam tablo CSV' ve 'XLSX' bağlantıları tam tabloyu indirir (ekranda ilk 200 satır gösterilse de); 'HTML rapor' cevabı tablo, grafik ve kanıt zinciriyle birlikte açar. Grafiklerin altında 'PNG indir' bağlantısı var."
+        }
+      ]
+    },
+    {
+      "senaryo": "S4_tablosuz_kimlik_ve_belirsiz",
+      "tekrar": 2,
+      "turlar": [
+        {
+          "soru": "Sen kimsin?",
+          "beklenen": "kimlik; geri gönderilmez",
+          "ok": true,
+          "sure_s": 2.5,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "BDDK ve TCMB kaynaklı finansal veriler üzerinde çalışan bir veri analisti ajansım. İl bazında BDDK FinTürk, BDDK Aylık ve Haftalık Bülten ile TCMB EVDS verilerini sorgulayıp analiz ediyorum: bakiyeler, akımlar, oranlar, dönemsel değişimler, reel değer hesapları ve frekans dönüşümleri gibi işlemleri yapıp sonucu kaynağıyla birlikte sunuyorum.\n\nBir soru sormak istersen başlayabiliriz."
+        },
+        {
+          "soru": "Bu sistemi kim geliştirdi?",
+          "beklenen": "önceki soruya kaymaz (kimlik cevabını ya da veri listesini tekrarlamaz)",
+          "ok": true,
+          "sure_s": 3.0,
+          "llm": true,
+          "geri_gonderildi": true,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "validate",
+              null,
+              "veri çekilmeden cevap denendi — geri gönderildi"
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "Bu konuda elimde bilgi yok. Veri havuzunda ya da kullandığım kaynaklarda sistemin geliştiricisiyle ilgili bir kayıt bulunmuyor.\n\nBenim işim BDDK ve TCMB verileri üzerinde analiz yapmak; sistemin kim tarafından geliştirildiği hakkında bilgi veremem."
+        },
+        {
+          "soru": "Grafiği nasıl indiririm?",
+          "beklenen": "indirme cevabı (PNG)",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Tablo içeren her cevabın altındaki 'tam tablo CSV' ve 'XLSX' bağlantıları tam tabloyu indirir (ekranda ilk 200 satır gösterilse de); 'HTML rapor' cevabı tablo, grafik ve kanıt zinciriyle birlikte açar. Grafiklerin altında 'PNG indir' bağlantısı var."
+        }
+      ]
+    },
+    {
+      "senaryo": "S4_tablosuz_kimlik_ve_belirsiz",
+      "tekrar": 3,
+      "turlar": [
+        {
+          "soru": "Sen kimsin?",
+          "beklenen": "kimlik; geri gönderilmez",
+          "ok": true,
+          "sure_s": 2.3,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "BDDK ve TCMB kaynaklı finansal veriler üzerinde çalışan bir veri analisti ajansım. İl bazında BDDK FinTürk, BDDK Aylık ve Haftalık Bülten ile TCMB EVDS verilerini sorgulayıp analiz ediyorum: bakiyeler, akımlar, oranlar, dönemsel değişimler, reel değer hesapları ve frekans dönüşümleri gibi işleri yapıyorum.\n\nBana doğal dilde bir soru sorabilirsin; örneğin \"2024'te konut kredisi bakiyesi ne kadar arttı?\" ya da \"son 12 ayda il bazında kredi dağılımını göster\"."
+        },
+        {
+          "soru": "Bu sistemi kim geliştirdi?",
+          "beklenen": "önceki soruya kaymaz (kimlik cevabını ya da veri listesini tekrarlamaz)",
+          "ok": true,
+          "sure_s": 2.2,
+          "llm": true,
+          "geri_gonderildi": true,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "validate",
+              null,
+              "veri çekilmeden cevap denendi — geri gönderildi"
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "cevap": "Bu konuda elimde bilgi yok. Veri havuzunda ve kullandığım kaynaklarda sistemin geliştiricisiyle ilgili bir kayıt bulunmuyor."
+        },
+        {
+          "soru": "Grafiği nasıl indiririm?",
+          "beklenen": "indirme cevabı (PNG)",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Tablo içeren her cevabın altındaki 'tam tablo CSV' ve 'XLSX' bağlantıları tam tabloyu indirir (ekranda ilk 200 satır gösterilse de); 'HTML rapor' cevabı tablo, grafik ve kanıt zinciriyle birlikte açar. Grafiklerin altında 'PNG indir' bağlantısı var."
+        }
+      ]
+    },
+    {
+      "senaryo": "S5_veri_listesi_sonrasi_kullanim",
+      "tekrar": 1,
+      "turlar": [
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "veri setleri katalogdan",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var: BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); TCMB EVDS: 12 seri (2016-01 → 2026-07); BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06)."
+        },
+        {
+          "soru": "Oturumu nasıl sıfırlarım?",
+          "beklenen": "sıfırlama cevabı: 'Oturumu sıfırla' düğmesi; veri listesini tekrarlamaz, sorgu yok",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Sol paneldeki 'Oturumu sıfırla' düğmesi sohbeti, tabloları ve bu oturumda yüklenen dosyaları temizler; veri havuzuna dokunmaz. Veri havuzunu sıfırlamak yalnız Architect profilinde yapılır."
+        },
+        {
+          "soru": "Dosyayı nasıl yüklerim?",
+          "beklenen": "yükleme cevabı (türler, 25 MB)",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Soru kutusunun solundaki Dosya düğmesiyle ya da dosyayı sayfaya sürükleyerek yükleyebilirsin: CSV, TSV, TXT, XLSX, XLSM, JSON, PDF, PNG, JPG, JPEG, WEBP; en çok 25 MB. Dosya bu oturuma özel saklanır; ardından ne yapılacağını yaz (ör. 'bu dosyayı analiz et'). Analyst profilinde dosya okunur ve analiz edilir, kataloğa yazılmaz."
+        }
+      ]
+    },
+    {
+      "senaryo": "S5_veri_listesi_sonrasi_kullanim",
+      "tekrar": 2,
+      "turlar": [
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "veri setleri katalogdan",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var: BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); TCMB EVDS: 12 seri (2016-01 → 2026-07); BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06)."
+        },
+        {
+          "soru": "Oturumu nasıl sıfırlarım?",
+          "beklenen": "sıfırlama cevabı: 'Oturumu sıfırla' düğmesi; veri listesini tekrarlamaz, sorgu yok",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Sol paneldeki 'Oturumu sıfırla' düğmesi sohbeti, tabloları ve bu oturumda yüklenen dosyaları temizler; veri havuzuna dokunmaz. Veri havuzunu sıfırlamak yalnız Architect profilinde yapılır."
+        },
+        {
+          "soru": "Dosyayı nasıl yüklerim?",
+          "beklenen": "yükleme cevabı (türler, 25 MB)",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Soru kutusunun solundaki Dosya düğmesiyle ya da dosyayı sayfaya sürükleyerek yükleyebilirsin: CSV, TSV, TXT, XLSX, XLSM, JSON, PDF, PNG, JPG, JPEG, WEBP; en çok 25 MB. Dosya bu oturuma özel saklanır; ardından ne yapılacağını yaz (ör. 'bu dosyayı analiz et'). Analyst profilinde dosya okunur ve analiz edilir, kataloğa yazılmaz."
+        }
+      ]
+    },
+    {
+      "senaryo": "S5_veri_listesi_sonrasi_kullanim",
+      "tekrar": 3,
+      "turlar": [
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "veri setleri katalogdan",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var: BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); TCMB EVDS: 12 seri (2016-01 → 2026-07); BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06)."
+        },
+        {
+          "soru": "Oturumu nasıl sıfırlarım?",
+          "beklenen": "sıfırlama cevabı: 'Oturumu sıfırla' düğmesi; veri listesini tekrarlamaz, sorgu yok",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Sol paneldeki 'Oturumu sıfırla' düğmesi sohbeti, tabloları ve bu oturumda yüklenen dosyaları temizler; veri havuzuna dokunmaz. Veri havuzunu sıfırlamak yalnız Architect profilinde yapılır."
+        },
+        {
+          "soru": "Dosyayı nasıl yüklerim?",
+          "beklenen": "yükleme cevabı (türler, 25 MB)",
+          "ok": true,
+          "sure_s": 0.0,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "cevap": "Soru kutusunun solundaki Dosya düğmesiyle ya da dosyayı sayfaya sürükleyerek yükleyebilirsin: CSV, TSV, TXT, XLSX, XLSM, JSON, PDF, PNG, JPG, JPEG, WEBP; en çok 25 MB. Dosya bu oturuma özel saklanır; ardından ne yapılacağını yaz (ör. 'bu dosyayı analiz et'). Analyst profilinde dosya okunur ve analiz edilir, kataloğa yazılmaz."
+        }
+      ]
+    }
+  ]
+}

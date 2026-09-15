@@ -479,3 +479,28 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
   - İkisi de `gh pr merge --merge` ile birleştirildi: repoda squash ve rebase de açık, düğme seçimi hataya açık.
   - main'e push'ta CI iş akışı çalışmıyor; iş akışı yalnız PR'da koşuyor.
   - feature/agent-engine main'e ileri sarıldı; 8765 sunucusu bu kodla çalışıyor.
+- **Bağlam kayması ve kullanım soruları (15 Eyl akşam, ADR-0081; kullanıcı kararı: önce çoklu senaryo testi, PR yok):**
+  - **Bulgu (arayüz).** "naber" → "elimizde hangi veriler var" → "architect rolüne nasıl geçebilirim" akışında üçüncü soru veri
+    seti tablosuyla cevaplandı.
+    - Kayıtlı adımlar: "veri çekilmeden cevap denendi — geri gönderildi" → katalog araması → iki sorgu.
+    - Bağlam penceresi değil, geri gönderme notunun "sayıları çek" zorlaması modeli geçmişteki son veri sorusuna döndürdü.
+  - **Düzeltmeler:**
+    - Rol, dosya yükleme, indirme ve oturum sıfırlama soruları arayüzün ve profilin gerçek durumundan deterministik cevaplanıyor.
+    - Kullanım soruları "veri çekilmedi" diye geri gönderilmiyor.
+    - Üç geri gönderme notu (veri çekilmedi, işlem iddiası, tabloda olmayan sayı) "Kullanıcının SON sorusu: «…». Önceki sorulara
+      dönme" ile başlıyor.
+  - **Canlı senaryolar ek iki gerçek hata buldu:**
+    - Araçsız turda uydurma fark ("Kasım 677.970, +1.000") yayımlandı. `unverified_numbers`'ın göreli %0,5 toleransı ve "1.000"ın
+      ondalık okumasının satır sayısına eşleşmesi sebepti. Tolerans gösterim hassasiyetinin yarım birimine indirildi.
+    - "Oturumu nasıl sıfırlarım?" sorusuna model "yazmanız yeterli" diye uydurdu; artık düğmeleri anıyor.
+  - **Kendi hatam.** İlk koşuda senaryo denetimi yalnız "kasım/fark" sözcüğüne bakıyordu ve uydurma cevabı geçirdi; elle okumada
+    bulundu, denetim tutar karşılaştırmasına çevrildi. Aynı dakikada biten iki koşu aynı rapor dosyasına yazdı; S3 ×5 konsol
+    çıktısı saklandı, betik adı düzeltildi.
+  - **Ölçüm:**
+    - Ajan testleri 632; K01 22/22, K02 22/22.
+    - Son tüm senaryolar koşusu sıkı denetimle 45/45, son S3 ×5 13/15.
+    - Fark cevaplarında uydurma tutar: düzeltmeden önce 11 cevapta 2, sonra 8 cevapta 0.
+  - **Açık:**
+    - Tek satırlık tablodan sonra "önceki aya göre fark" planlaması: bir tekrarda `workspace_add_column` önceki ayı aynı tarihe
+      ekledi, cevap "0 değişim" oldu.
+    - Araçlı turların `grounding_check`'i de göreli %0,5 tolerans kullanıyor.
