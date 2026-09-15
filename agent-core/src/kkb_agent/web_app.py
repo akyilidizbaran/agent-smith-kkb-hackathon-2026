@@ -14,11 +14,13 @@ from dataclasses import dataclass
 
 import base64
 import json
+import queue
 import re
 import shutil
 import threading
 import time
 import uuid
+from contextlib import nullcontext
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -26,9 +28,11 @@ from typing import Any, Callable, Literal
 
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+from .live_steps import args_detail, live_hooks, tool_label
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 MAX_ROWS = 200
@@ -149,6 +153,7 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict
     for s in getattr(answer, "steps", []):
         steps.append({
             "index": s.index, "role": s.role, "thought": s.thought, "tool": s.tool_name,
+            "label": tool_label(s.tool_name), "detail": args_detail(s.tool_name, s.tool_args),
             "args": _json_safe(s.tool_args), "ok": bool(s.ok), "error_code": s.error_code,
             "summary": (s.result_summary or "")[:400], "duration_ms": round(float(getattr(s, "duration_ms", 0.0) or 0.0)),
             "candidates": list(getattr(s, "candidates", []) or []),
@@ -564,11 +569,13 @@ class Session:
         self.uploads.append(info)
         return info
 
-    def ask(self, question: str) -> dict[str, Any]:
+    def ask(self, question: str, on_event: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
+        """`on_event` verilirse soru süresince canlı adım olayları ona gider (ADR-0079); cevap yükü aynıdır."""
         with self._lock:
             started = time.perf_counter()
             table_before = getattr(self.agent.workspace, "table", None)
-            answer = self.agent.ask(question)
+            with live_hooks(self.agent, on_event) if on_event is not None else nullcontext():
+                answer = self.agent.ask(question)
             payload = answer_to_dict(answer, self.agent, table_before=table_before)
             payload["elapsed_s"] = round(time.perf_counter() - started, 1)
             payload["question"] = question
@@ -710,6 +717,38 @@ def create_app(agent_factory: Callable[..., Any], *, profile: str = "analyst", a
         except Exception as exc:  # noqa: BLE001 — arayüz düşmez, hata görünür
             raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
         return JSONResponse(_json_safe(payload))
+
+    @app.post("/api/ask/stream")
+    def ask_stream(req: AskRequest) -> StreamingResponse:
+        """Aynı soru, satır satır JSON (NDJSON): önce canlı adımlar, en sonda `/api/ask` ile aynı cevap yükü (ADR-0079).
+        Cevap metni akıtılmaz; doğrulama kapılarından geçmiş nihai metin tek parça gelir."""
+        question = req.question.strip()
+        events: queue.Queue = queue.Queue()
+
+        def work() -> None:
+            try:
+                payload = session.ask(question, on_event=events.put)
+                events.put({"type": "answer", "payload": _json_safe(payload)})
+            except Exception as exc:  # noqa: BLE001 — arayüz düşmez, hata görünür
+                events.put({"type": "error", "detail": f"{type(exc).__name__}: {exc}"})
+            finally:
+                events.put(None)
+
+        threading.Thread(target=work, name="ask-stream", daemon=True).start()
+
+        def lines():
+            while True:
+                try:
+                    event = events.get(timeout=10)
+                except queue.Empty:
+                    yield b'{"type":"ping"}\n'       # uzun araç çağrısında bağlantı açık kalsın
+                    continue
+                if event is None:
+                    return
+                yield (json.dumps(event, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
+
+        return StreamingResponse(lines(), media_type="application/x-ndjson",
+                                 headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
     @app.get("/api/answers")
     def answers() -> JSONResponse:
