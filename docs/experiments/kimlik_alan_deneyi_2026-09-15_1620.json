@@ -1,0 +1,323 @@
+{
+  "meta": {
+    "commit": "baa0df4",
+    "at": "2026-09-15T16:18:50",
+    "demo_db_sha256_once": "c2cf0aece473423158bf42113632c88ee7691058e51ed19f09f7f252c405f59d",
+    "demo_db_sha256_sonra": "c2cf0aece473423158bf42113632c88ee7691058e51ed19f09f7f252c405f59d",
+    "demo_db_degismedi": true
+  },
+  "senaryolar": [
+    {
+      "ad": "A_finans",
+      "taban": "demo",
+      "eklenen_seriler": [],
+      "kurulum": [],
+      "katalog_kaynaklari": {
+        "bddk_finturk": 648,
+        "bddk_monthly": 20,
+        "bddk_weekly": 1,
+        "evds": 12,
+        "gold": 6
+      },
+      "alan_tanimi": "BDDK FinTürk (il bazında), BDDK Aylık Bülten, BDDK Haftalık Bülten ve TCMB EVDS kaynaklı veriler",
+      "cevaplar": [
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 1,
+          "cevap": "BDDK ve TCMB verileri üzerinde çalışan bir veri analisti ajansım. İl bazında BDDK FinTürk, BDDK Aylık ve Haftalık Bülten ile TCMB EVDS kaynaklı tabloları keşfedip sorgulayarak sorularınızı sayısal olarak cevaplıyorum: büyüme oranları, dönemsel değişimler, kırılımlar, reel değer hesapları, frekans dönüşümleri ve iki seriyi aynı dönemde karşılaştırma gibi işleri yaparım.\n\nSorunuzu sorabilirsiniz.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 3.8
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 2,
+          "cevap": "Merhaba! Ben, BDDK ve TCMB verileri üzerinde çalışan bir veri analisti asistanıyım.\n\n**Ne yapabilirim:**\n- **BDDK FinTürk** (il bazında), **BDDK Aylık/Haftalık Bülten** ve **TCMB EVDS** kaynaklı verileri sorgulayabilirim.\n- Doğal dildeki sorularınızı anlayıp doğru veri kaynağını bulur, analizi adım adım yürütür ve sonucu kanıtıyla birlikte sunarım.\n- Toplama, ortalama, yüzde değişim, büyüme oranı gibi hesaplamaları veritabanı üzerinde yaptırırım.\n- İsterseniz veriyi **reel değere** (enflasyondan arındırılmış) çevirebilirim.\n- İki seriyi aynı dönemde karşılaştırabilir, frekans dönüşümü (aylık ↔ çeyreklik) yapabilirim.\n- İstediğinizde veriyi **grafikle** görselleştirebilirim.\n- Resmi kamu kaynaklarından (TCMB, BDDK, TÜİK vb.) verileri doğrudan çekebilirim.\n\n**Nasıl kullanabilirsiniz:**\nSadece sorunuzu yazmanız yeterli. Örneğin:\n- *\"2024'te konut kredisi bakiyesi ne kadar arttı?\"*\n- *\"İstanbul ve Ankara'daki banka şube sayılarını karşılaştır\"*\n- *\"Son 12 ayda TL mevduatın reel değişimini göster\"*\n- *\"Faiz oranları ile kredi büyümesini aynı grafikte göster\"*\n\nHangi veriyle ilgili bir sorunuz var?",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 10.8
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 3,
+          "cevap": "Merhaba! Ben, BDDK ve TCMB verileri üzerinde çalışan bir veri analisti asistanıyım.\n\n**Ne yapabilirim:**\n- **BDDK FinTürk** (il bazında finansal veriler), **BDDK Aylık/Haftalık Bülten** ve **TCMB EVDS** kaynaklarındaki verileri sorgulayabilirim.\n- Bankacılık sektörü göstergeleri, kredi/mevduat bakiyeleri, faiz oranları, döviz kurları, enflasyon gibi konularda analiz yapabilirim.\n- Verileri karşılaştırma, büyüme oranı hesaplama, dönemsel değişim analizi, reel değer hesabı gibi işlemler yapabilirim.\n- İsterseniz sonuçları grafik olarak da görselleştirebilirim.\n\n**Nasıl kullanabilirsiniz:**\nDoğal dilde soru sormanız yeterli. Örneğin:\n- \"2024'te toplam kredi bakiyesi ne kadar?\"\n- \"Son 12 ayda mevduat faiz oranları nasıl değişti?\"\n- \"İstanbul ve Ankara'daki bankacılık verilerini karşılaştır\"\n- \"2023 enflasyonuna göre reel mevduat bakiyesini hesapla\"\n\nHangi konuda analiz yapmamı istersiniz?",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 6.7
+        },
+        {
+          "soru": "Neler yapabilirsin?",
+          "tekrar": 1,
+          "cevap": "BDDK ve TCMB kaynaklı finansal veriler üzerinde şu işleri yapabiliyorum:\n\n**Veri keşfi ve sorgulama**\n- BDDK FinTürk (il bazında), BDDK Aylık ve Haftalık Bülten, TCMB EVDS verilerini tarayarak istediğin kalemi bulma\n- Bakiye, akım, oran gibi ölçümleri dönem, il, banka veya kategori kırılımıyla çekme\n\n**Hesaplama ve analiz**\n- Dönemsel değişim, büyüme oranı, yüzde fark, oran ve kırılım hesapları\n- Nominal tutarları enflasyondan arındırarak reel değere çevirme\n- İki seriyi aynı dönem ekseninde karşılaştırma (aylık/çeyreklik hizalama)\n- Yıl başından birikimli (kümülatif) serileri dönem akımlarına çözme\n- Aykırı değer, kırılma noktası ve öncülük/korelasyon analizi\n\n**Tablo işlemleri**\n- Mevcut bir tabloyu bozmadan yeni sütun ekleme, sütunlardan yeni hesap türetme\n- Filtreleme, sıralama, gruplama, dönem kırpma\n- İki tabloyu anahtar kolonla birleştirme\n\n**Görselleştirme**\n- İstediğinde çizgi grafik, karşılaştırmalı grafik veya harita üretme\n\n**Dış kaynak**\n- TCMB, BDDK, TÜİK gibi resmi sitelerden (ör. günlük döviz kurları) veri çekme\n- Verdiğin bir web adresindeki tabloyu okuma\n\nÖrnek sorular:\n- \"2024'te konut kredisi bakiyesi aylık nasıl değişti?\"\n- \"İstanbul ve Ankara'da ticari kredi bakiyelerini karşılaştır\"\n- \"Son 5 yılda mevduat faizi ile enflasyonu aynı grafikte göster\"\n- \"2023'te hangi ilde konut kredisi en çok arttı?\"\n\nHangi veriyi incelemek istersin?",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 6.8
+        },
+        {
+          "soru": "Hangi veri setlerine sahipsin?",
+          "tekrar": 1,
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var: BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); TCMB EVDS: 12 seri (2016-01 → 2026-07); BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06).",
+          "araclar": [],
+          "llm": false,
+          "sure_s": 0.0
+        }
+      ]
+    },
+    {
+      "ad": "B_bos",
+      "taban": "none",
+      "eklenen_seriler": [],
+      "kurulum": [],
+      "katalog_kaynaklari": {},
+      "alan_tanimi": "yapılandırılmış veri",
+      "cevaplar": [
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 1,
+          "cevap": "Merhaba! Ben, yapılandırılmış veriler üzerinde çalışan bir veri analisti asistanıyım.\n\nYapabileceklerim kısaca şöyle:\n\n- **Veri havuzundaki tabloları keşfetmek** ve sorularınızı bu verilerle yanıtlamak\n- **Hesaplamalar yapmak**: toplamlar, ortalamalar, yüzde değişimler, büyüme oranları, dönemsel karşılaştırmalar\n- **Filtreleme ve kırılım analizi**: kategori, dönem, kalem bazında detaylı inceleme\n- **Reel değer dönüşümü**: enflasyondan arındırılmış (sabit fiyatlı) hesaplar\n- **Frekans dönüşümü**: günlük/aylık veriyi çeyreklik/yıllığa indirme, kümülatif seriyi dönem akımlarına çözme\n- **İki veya daha fazla seriyi** aynı dönem ekseninde yan yana getirme ve karşılaştırma\n- **Aykırılık, kırılma noktası ve öncül-sonuç ilişkisi** analizi\n- **Web'den resmi kamu kaynaklarını** (TCMB, TÜİK, BDDK vb.) okuyup tablo olarak yükleyip analiz etme\n- **Grafik oluşturma**: istediğinizde veriyi görselleştirme\n\nBana doğal dilde bir soru sorun, örneğin:\n- *\"2023'te aylık enflasyon neydi?\"*\n- *\"Son 5 yılda konut fiyatlarındaki değişimi çeyreklik göster\"*\n- *\"Bu tabloya reel gelir sütunu ekle\"*\n\nNasıl yardımcı olabilirim?",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 5.7
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 2,
+          "cevap": "Merhaba! Ben, yapılandırılmış veriler üzerinde çalışan bir veri analisti asistanıyım.\n\nYapabileceklerim kısaca şöyle:\n\n- **Veri havuzundaki tabloları keşfetmek** ve sorularınızı bu verilerle yanıtlamak\n- **Hesaplamalar yapmak**: toplamlar, ortalamalar, yüzde değişimler, büyüme oranları, dönemsel karşılaştırmalar\n- **Filtreleme ve kırılım analizi**: kategori, dönem, kalem bazında detaylı inceleme\n- **Reel değer dönüşümü**: enflasyondan arındırılmış (sabit fiyatlı) hesaplar\n- **Frekans dönüşümü**: günlük/aylık veriyi çeyreklik/yıllığa indirme, kümülatif seriyi dönem akımlarına çözme\n- **İki veya daha fazla seriyi** aynı dönem ekseninde yan yana getirme ve karşılaştırma\n- **Aykırılık, kırılma noktası ve öncülük** analizleri\n- **Web'den resmi kamu kaynaklarını** (TCMB, TÜİK, BDDK vb.) okuyup tablo olarak kullanma\n- **Grafik oluşturma** (istemeniz halinde)\n\nSormak istediğiniz bir veri sorusu varsa, doğrudan sorabilirsiniz. Örneğin:\n- \"2024'te aylık enflasyon neydi?\"\n- \"Son 5 yılda konut fiyatlarındaki değişim nasıl?\"\n- \"Döviz kuru ile faiz oranı arasındaki ilişkiyi incele\"\n\nNasıl yardımcı olabilirim?",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 4.1
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 3,
+          "cevap": "Merhaba! Ben bir **veri analisti asistanıyım**. Yapılandırılmış veriler üzerinde çalışarak sorularınızı cevaplıyorum.\n\nYapabileceklerim:\n\n- **Veri havuzundaki tabloları keşfetmek** ve hangi verilerin mevcut olduğunu görmek\n- **Doğal dilde sorduğunuz soruları** SQL sorgularına çevirip çalıştırmak\n- **Hesaplamalar yapmak**: toplam, ortalama, yüzde değişim, büyüme oranı, dönemsel karşılaştırma\n- **Filtreleme ve kırılım** uygulamak (kategori, dönem, kalem bazında)\n- **Farklı tabloları birleştirmek** ve karşılaştırmalı analiz yapmak\n- **Reel değer** hesaplamak (enflasyondan arındırma)\n- **Frekans dönüşümü** yapmak (günlük → aylık, aylık → çeyreklik, kümülatif → akım)\n- **Grafik** oluşturmak (istemeniz halinde)\n- **Web'den resmi kamu kaynaklarını** okumak (TCMB, TÜİK, BDDK vb.)\n\nKısacası, elimdeki veri kaynaklarını kullanarak size **kanıtına dayalı, doğru sayılarla** cevap veriyorum.\n\nHangi veri üzerinde çalışmak istersiniz? Bir soru sorun ya da analiz etmek istediğiniz konuyu belirtin.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 4.5
+        },
+        {
+          "soru": "Neler yapabilirsin?",
+          "tekrar": 1,
+          "cevap": "Veri havuzundaki tablolar üzerinde doğal dilde soru sorarak analiz yaptırabilirim. Yapabileceklerim:\n\n**Keşif ve sorgulama**\n- Hangi tabloların, hangi dönem ve kırılımların mevcut olduğunu bulma\n- Belirli bir kalemin, kategorinin, dönemin değerini çekme\n- Toplam, ortalama, yüzde değişim, büyüme oranı gibi hesapları veriden yapma\n\n**Karşılaştırma ve kırılım**\n- Dönemler arası değişim (aylık, yıllık)\n- Alt kalemlerin kırılımını çıkarma, üst toplamla karşılaştırma\n- Birden çok seriyi aynı dönemde yan yana getirme\n\n**Frekans ve birim dönüşümü**\n- Günlük/aylık veriyi çeyreklik ya da yıllık gösterme\n- Yıl başından birikimli (kümülatif) seriyi dönem akımlarına çözme\n- Nominal tutarı fiyat endeksiyle reel değere çevirme (enflasyondan arındırma)\n\n**Analiz**\n- Aykırı/olağandışı dönemleri tespit etme\n- Kırılma noktası ve rejim değişimi analizi\n- İki serinin birbirini öncüleyip öncüleyemediğini inceleme\n\n**Dış kaynak**\n- Veri havuzunda olmayan resmi kamu verilerini (TCMB, TÜİK, BDDK, HMB, SPK, TBB, Borsa İstanbul) adresini vererek ya da \"internetten ara\" diyerek getirtme\n- Verdiğin bir web sayfası ya da PDF'teki tabloyu okuyup analiz etme\n\n**Görselleştirme**\n- İstediğinde sonucu grafik olarak çizme\n\n**Yüklenen tablo üzerinde çalışma**\n- Kendi tablonu yükleyip üzerinde filtreleme, sıralama, yeni sütun ekleme, hesap türetme\n\nNasıl başlaymak istersin? Bir soru sorabilir ya da analiz etmek istediğin konuyu söyleyebilirsin.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 5.2
+        },
+        {
+          "soru": "Hangi veri setlerine sahipsin?",
+          "tekrar": 1,
+          "cevap": "Veri havuzunda şu an yüklü seri yok.",
+          "araclar": [],
+          "llm": false,
+          "sure_s": 0.0
+        }
+      ]
+    },
+    {
+      "ad": "C_saglik",
+      "taban": "none",
+      "eklenen_seriler": [
+        "acil"
+      ],
+      "kurulum": [
+        {
+          "arac": "ingest_from_url",
+          "seri": "acil_basvuru",
+          "ok": true,
+          "ozet": "EKLENDİ: adhoc:acil_basvuru — Acil servis başvuruları (aylık)\nkatalog adı: acil_basvuru — acil_basvuru_aylik.csv (taslak)\nkaynak: /private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80b/scratchpad/kimlik2/C_sag"
+        },
+        {
+          "arac": "promote_draft",
+          "seri": "acil_basvuru",
+          "ok": true,
+          "ozet": "ONAYLANDI: adhoc:acil_basvuru — kullanıcı onayı\ndurum: taslak → aktif (kullanıcı onayı, semantik kaynağı 'manual')\nSilver'a kopyalanan gözlem: 12; provenance (artifact, run, vintage) korundu\nsemantik güveni: derived — doğrulanmadı; Gold hes"
+        }
+      ],
+      "katalog_kaynaklari": {
+        "adhoc": 1
+      },
+      "alan_tanimi": "kullanıcının eklediği acil basvuru verileri",
+      "cevaplar": [
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 1,
+          "cevap": "Kullanıcının eklediği acil başvuru verileri üzerinde çalışan bir veri analisti ajansım. Doğal dildeki sorularınızı anlayıp doğru veri kaynağını seçer, analizi adım adım yürütür ve sonucu kanıtıyla birlikte sunuyorum.\n\nElimde şu an **acil başvuru** verisi var: aylık, kişi cinsinden, 2025 yılı (Ocak–Aralık) kapsamındaki bir seri. Bu veri üzerinde istediğiniz analizi yapmamı söyleyebilirsiniz.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 3.2
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 2,
+          "cevap": "Ben, eklediğiniz acil başvuru verileri üzerinde çalışan bir veri analisti ajansım. Görevim, verilerinizle ilgili sorularınızı anlamak, doğru kaynağı bulmak, hesaplamaları yapmak ve sonucu kanıtıyla birlikte sunmak.\n\nElimde şu an **acil başvuru** verisi var: aylık frekansta, 2025 yılını kapsayan (Ocak–Aralık), kişi cinsinden bir seri. Bu veriyle ilgili bir sorunuz varsa sorabilirsiniz.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 2.2
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 3,
+          "cevap": "Kısa bir veri analisti asistanıyım. Bana yüklediğin veya veri havuzundaki tablolar üzerinde çalışırım: sorularını anlar, doğru kaynağı bulur, hesapları yapar ve sonucu kaynağıyla birlikte özetlerim.\n\nŞu an üzerinde çalışabileceğim bir veri var: **acil başvuru** verisi (aylık, kişi cinsinden, Ocak–Aralık 2025). İstersen bu veriyle ilgili bir soru sorabilirsin.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 2.0
+        },
+        {
+          "soru": "Neler yapabilirsin?",
+          "tekrar": 1,
+          "cevap": "Elimdeki acil başvuru verisi üzerinde şunları yapabilirim:\n\n- **Aylık seyir:** 2025'in tamamında (Ocak–Aralık) acil başvuru sayısının nasıl değiştiğini gösterme, en yüksek/düşük ayları bulma\n- **Değişim analizi:** aydan aya artış/düşüş, yüzde değişim, yıllık karşılaştırma (veride 2025 tek yıl olduğu için)\n- **Kırılım:** entity_id kırılımına göre kurum/bölüm bazında başvuru dağılımı\n- **Tablo üzerinde işlem:** mevcut tabloyu bozmadan yeni sütun ekleme (değişim, oran), filtreleme, sıralama\n- **Görselleştirme:** istersen aylık seyrin grafiğini çizebilirim\n\nBir not: bu veri kaynağı taslak niteliğinde ve semantiği doğrulanmamış; yani \"acil başvuru\" tanımının tam olarak neyi kapsadığı (ör. yalnızca hastane acil servisleri mi, 112 çağrıları mı) kaynaktan doğrulanmış değil. Sayıları verirken bu sınırlamayı belirtirim.\n\nHangi analizi istersin?",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 8.2
+        },
+        {
+          "soru": "Hangi veri setlerine sahipsin?",
+          "tekrar": 1,
+          "cevap": "Veri havuzunda kullanıcının eklediği seriler var: acil basvuru (2025-01 → 2025-12).",
+          "araclar": [],
+          "llm": false,
+          "sure_s": 0.0
+        }
+      ]
+    },
+    {
+      "ad": "D_web",
+      "taban": "none",
+      "eklenen_seriler": [
+        "web"
+      ],
+      "kurulum": [
+        {
+          "arac": "ingest_from_url",
+          "seri": "web_ziyaret",
+          "ok": true,
+          "ozet": "EKLENDİ: adhoc:web_ziyaret — Günlük web ziyareti (aylık)\nkatalog adı: web_ziyaret — web_ziyaret_kirilma.csv (taslak)\nkaynak: /private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80b/scratchpad/kimlik2/D_web/data"
+        },
+        {
+          "arac": "promote_draft",
+          "seri": "web_ziyaret",
+          "ok": true,
+          "ozet": "ONAYLANDI: adhoc:web_ziyaret — kullanıcı onayı\ndurum: taslak → aktif (kullanıcı onayı, semantik kaynağı 'manual')\nSilver'a kopyalanan gözlem: 24; provenance (artifact, run, vintage) korundu\nsemantik güveni: derived — doğrulanmadı; Gold hesa"
+        }
+      ],
+      "katalog_kaynaklari": {
+        "adhoc": 1
+      },
+      "alan_tanimi": "kullanıcının eklediği web ziyaret verileri",
+      "cevaplar": [
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 1,
+          "cevap": "Kısa cevap: veri analisti ajansıyım.\n\nYani senin eklediğin web ziyaret verileri (ve veri havuzundaki diğer tablolar) üzerinde çalışan, doğal dildeki sorularını anlayıp doğru kaynağı bulup analizi adım adım yürüten bir asistanım.\n\nYapabildiklerim:\n- **Keşif:** Hangi tabloların, hangi kolonların ve hangi dönemlerin mevcut olduğunu bulma\n- **Sorgu ve hesaplama:** Toplam, ortalama, yüzde değişim, büyüme oranı gibi hesapları verinin kendisi üzerinde (SQL ile) yapma\n- **Frekans dönüşümü:** Aylık/çeyreklik/yıllık seriler arasında geçiş, kümülatif seriyi dönem akımlarına çözme\n- **Reel değer:** Nominal tutarları fiyat endeksiyle enflasyondan arındırma\n- **Analitik:** Aykırı değer, kırılma noktası, öncülük/korelasyon tespiti\n- **Görselleştirme:** İstersen grafiğe dökme\n- **Dış kaynak:** Veri havuzunda olmayan bir şeyi resmi kamu kaynaklarından (TCMB, TÜİK, BDDK vb.) çekme\n\nŞu an elimde **web ziyaret** verin var: aylık frekansta, 2024-01 → 2025-12 arası, `entity_id` kırılımında.\n\nNe analiz etmemi istersin?",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 5.8
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 2,
+          "cevap": "Veri analisti ajansım. Eklediğin web ziyaret verileri üzerinde çalışıyorum: sorularını anlıyorum, doğru tabloyu buluyorum, hesapları veriden yapıyorum ve sonucu kaynağıyla birlikte sunuyorum.\n\nElinde şu an bir web ziyaret tablosu var (2024-01 → 2025-12, aylık, ziyaret sayısı). Üzerinde ne yapmak istersin?",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 4.8
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 3,
+          "cevap": "Kullanıcının eklediği web ziyaret verileri üzerinde çalışan bir veri analisti ajansım. Doğal dildeki sorularınızı anlayıp doğru veri kaynağını seçer, analizi adım adım yürütür ve sonucu kanıtıyla birlikte sunuyorum.\n\nElimde şu an yüklü bir veri var: **web ziyaret kırılımı** (2024-01 → 2025-12, aylık, ziyaret sayısı). Bu veri üzerinde istediğiniz analizi yapabilirim — örneğin dönemsel değişim, kırılma noktası, aykırı dönem tespiti, en yüksek/ düşük dönemler gibi.\n\nNe hesaplamamı istersiniz?",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 2.1
+        },
+        {
+          "soru": "Neler yapabilirsin?",
+          "tekrar": 1,
+          "cevap": "Veri havuzundaki tabloları keşfedip kolonlarını ve birimlerini inceler, kırılım değerlerini doğrulayarak SQL sorguları çalıştırırım. Toplam, ortalama, yüzde değişim, büyüme oranı gibi hesapları sorgu içinde yaptırıp sonucu kaynağıyla birlikte sunarım.\n\nAyrıca:\n\n- **Mevcut tablo üzerinde çalışma:** Aktif tabloyu bozmadan yeni sütun ekler, mevcut sütunlardan oran/değişim hesaplarım.\n- **Frekans dönüşümü:** Aylık/çeyreklik serileri katalog kuralıyla dönüştürür, birikimli (YTD) serileri dönem akımlarına çözer, birden çok seriyi aynı dönem ekseninde yan yana koyarım.\n- **Reel değer:** Nominal tutarları fiyat endeksiyle enflasyondan arındırırım.\n- **Analitik:** Aykırı değer, kırılma noktası ve öncülük/korelasyon analizleri yaparım.\n- **Dış kaynak:** Veri havuzunda olmayan bilgi için web'den resmi kamu kaynaklarını (TCMB, TÜİK, BDDK vb.) okur, tabloları yüklerim.\n- **Görselleştirme:** İstersen sonucu grafik olarak çizerim.\n\nElinde bir soru ya da analiz isteği varsa söyle, başlayalım.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 3.2
+        },
+        {
+          "soru": "Hangi veri setlerine sahipsin?",
+          "tekrar": 1,
+          "cevap": "Veri havuzunda kullanıcının eklediği seriler var: web ziyaret (2024-01 → 2025-12).",
+          "araclar": [],
+          "llm": false,
+          "sure_s": 0.0
+        }
+      ]
+    },
+    {
+      "ad": "E_finans_saglik",
+      "taban": "demo",
+      "eklenen_seriler": [
+        "acil"
+      ],
+      "kurulum": [
+        {
+          "arac": "ingest_from_url",
+          "seri": "acil_basvuru",
+          "ok": true,
+          "ozet": "EKLENDİ: adhoc:acil_basvuru — Acil servis başvuruları (aylık)\nkatalog adı: acil_basvuru — acil_basvuru_aylik.csv (taslak)\nkaynak: /private/tmp/claude-501/-Users-baran-Desktop-KKB/4fab9d95-de15-4cc6-a565-34123873c80b/scratchpad/kimlik2/E_fin"
+        },
+        {
+          "arac": "promote_draft",
+          "seri": "acil_basvuru",
+          "ok": true,
+          "ozet": "ONAYLANDI: adhoc:acil_basvuru — kullanıcı onayı\ndurum: taslak → aktif (kullanıcı onayı, semantik kaynağı 'manual')\nSilver'a kopyalanan gözlem: 12; provenance (artifact, run, vintage) korundu\nsemantik güveni: derived — doğrulanmadı; Gold hes"
+        }
+      ],
+      "katalog_kaynaklari": {
+        "adhoc": 1,
+        "bddk_finturk": 648,
+        "bddk_monthly": 20,
+        "bddk_weekly": 1,
+        "evds": 12,
+        "gold": 6
+      },
+      "alan_tanimi": "BDDK FinTürk (il bazında), BDDK Aylık Bülten, BDDK Haftalık Bülten ve TCMB EVDS kaynaklı veriler",
+      "cevaplar": [
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 1,
+          "cevap": "BDDK ve TCMB verileri üzerinde çalışan bir veri analisti ajansım. İl bazında BDDK FinTürk, BDDK Aylık ve Haftalık Bülten ile TCMB EVDS kaynaklı tabloları keşfedip sorgulayarak sorularınızı sayısal olarak cevaplıyorum: bakiye, akım ve oran serilerini dönemsel olarak karşılaştırma, değişim ve oran hesaplama, frekans dönüşümü (aylık/çeyreklik), reel değer hesabı ve isterseniz görselleştirme.\n\nSorunuzu sorabilirsiniz.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 3.1
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 2,
+          "cevap": "BDDK ve TCMB verileri üzerinde çalışan bir veri analisti ajansım. İl bazında BDDK FinTürk, BDDK Aylık ve Haftalık Bülten ile TCMB EVDS kaynaklı tabloları keşfedip sorgulayarak sorularınızı sayı ve kanıtıyla cevaplıyorum.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 3.4
+        },
+        {
+          "soru": "Sen kimsin?",
+          "tekrar": 3,
+          "cevap": "BDDK ve TCMB verileri üzerinde çalışan bir veri analisti ajansım. İl bazında BDDK FinTürk, BDDK Aylık ve Haftalık Bülten ile TCMB EVDS kaynaklı tabloları keşfedip sorgulayarak sorularınızı cevaplıyorum: bakiye, akım ve oran serilerini dönemsel olarak karşılaştırma, değişim ve oran hesaplama, frekans dönüşümü (aylık/çeyreklik), reel değer hesabı, iki tabloyu birleştirme ve isterseniz görselleştirme.\n\nSorunuzu sorabilirsiniz.\n\n\nBDDK ve TCMB verileri üzerinde çalışan bir veri analisti ajansım. İl bazında BDDK FinTürk, BDDK Aylık ve Haftalık Bülten ile TCMB EVDS kaynaklı tabloları keşfedip sorgulayarak sorularınızı cevaplıyorum: bakiye, akım ve oran serilerini dönemsel olarak karşılaştırma, değişim ve oran hesaplama, frekans dönüşümü (aylık/çeyreklik), reel değer hesabı, iki tabloyu birleştirme ve isterseniz görselleştirme.\n\nSorunuzu sorabilirsiniz.",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 4.2
+        },
+        {
+          "soru": "Neler yapabilirsin?",
+          "tekrar": 1,
+          "cevap": "BDDK ve TCMB kaynaklı finansal veriler üzerinde şu işleri yapabilirim:\n\n**Veri keşfi ve sorgulama**\n- BDDK FinTürk (il bazında), BDDK Aylık/Haftalık Bülten ve TCMB EVDS verilerinde aradığın kalemi bulup sorgulama\n- Banka, il, ürün (kredi, mevduat, konut kredisi vb.) kırılımlarında karşılaştırma\n\n**Hesaplama ve analiz**\n- Dönemsel değişim, büyüme oranı, yüzde fark, oran hesapları\n- Nominal tutarları enflasyondan arındırarak reel değere çevirme\n- Farklı frekanstaki verileri (günlük → aylık, aylık → çeyreklik) doğru kurala göre dönüştürme\n- Yıl başından birikimli (kümülatif) serileri dönem akımlarına çözme\n- İki seriyi aynı dönemde yan yana hizalayıp karşılaştırma\n- Aykırı değer, kırılma noktası ve öncülük/korelasyon analizi\n\n**Tablo üzerinde çalışma**\n- Mevcut tabloyu bozmadan yeni sütun ekleme, hesap türetme\n- Filtreleme, sıralama, gruplama, dönem kırpma\n- İki tabloyu anahtar kolonla birleştirme\n\n**Görselleştirme**\n- İstediğinde çizgi grafik, karşılaştırmalı grafik, harita\n\n**Dış kaynak**\n- TCMB, BDDK, TÜİK gibi resmi sitelerden güncel veri çekme (ör. günlük döviz kurları)\n- Verdiğin bir web adresindeki tabloyu okuyup analiz etme\n\nHangi veri veya soru üzerinde çalışmamı istersin?",
+          "araclar": [],
+          "llm": true,
+          "sure_s": 5.7
+        },
+        {
+          "soru": "Hangi veri setlerine sahipsin?",
+          "tekrar": 1,
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var: BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); TCMB EVDS: 12 seri (2016-01 → 2026-07); BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06). Kullanıcının eklediği seriler: acil basvuru (2025-01 → 2025-12).",
+          "araclar": [],
+          "llm": false,
+          "sure_s": 0.0
+        }
+      ]
+    }
+  ]
+}

@@ -80,6 +80,18 @@ def _convert(res: TeamToolResult) -> ToolResult:
     ))
 
 
+def _convert_error(team_err: object | None, layer: str) -> ToolError | None:
+    """Ekip aracının ön denetim hatası (referans/politika) → V3 hatası.
+
+    Ekip araçları boş çalışma alanını `run()` ÖNCESİNDE `validate_refs`'te yakalar; `run()` içinde yalnız `assert` kalır
+    (14 Eyl, M08/M09/M11). Adaptör ön denetimi atlarsa boş tabloda V3 AssertionError'ı TOOL_FAILED sanıyordu (PR #4 CI)."""
+    if team_err is None:
+        return None
+    code = _TEAM_CODE_MAP.get(team_err.error_code, team_err.error_code)
+    return ToolError(error_code=code, layer=layer, message=team_err.message[:300], hint=team_err.hint,
+                     candidates=list(team_err.candidates)[:5], retryable=team_err.is_retryable)
+
+
 class _Adapted(Tool):
     """Ekip aracını V3 sözleşmesine sarar; ad/şema/parametre modeli aynen geçer."""
 
@@ -92,6 +104,12 @@ class _Adapted(Tool):
 
     def run(self, params):  # type: ignore[override]
         return _convert(self._inner.run(params))
+
+    def validate_refs(self, params):  # type: ignore[override]
+        return _convert_error(self._inner.validate_refs(params), "reference")
+
+    def check_policy(self, params):  # type: ignore[override]
+        return _convert_error(self._inner.check_policy(params), "policy")
 
 
 def workspace_tools(lakehouse: LakehouseClient, workspace: AnalysisWorkspace) -> list[Tool]:

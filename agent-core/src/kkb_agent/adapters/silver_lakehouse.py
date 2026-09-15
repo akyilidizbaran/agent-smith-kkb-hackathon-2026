@@ -253,23 +253,20 @@ class SilverLakehouse:
             ORDER BY series_id
             """
         ).fetchall()
-        counts = dict(
-            self._conn().execute(
-                f"SELECT series_id, count(*) FROM {SILVER_RELATION} GROUP BY 1"
-            ).fetchall()
-        )
+        # Gözlem sayısı ve dönem aralığı birlikte okunur: onaylanan kullanıcı serisinde meta.series first_obs/last_obs boş
+        # kalıyor (kimlik deneyi, 15 Eyl: kapsam 1900-01 → 1900-01 görünüyordu); aralık gözlemlerden gelir.
+        span_sql = "SELECT series_id, count(*), min(observation_date), max(observation_date) FROM {} GROUP BY 1"
+        spans = {sid: (n, lo, hi) for sid, n, lo, hi in self._conn().execute(span_sql.format(SILVER_RELATION)).fetchall()}
+        counts = {sid: v[0] for sid, v in spans.items()}
         # Taslak seriler adhoc ilişkisinde yaşar; ingest'ten hemen sonra Analist'in onları
         # görmesi gerekir (ölçüldü: görmüyordu — "yeni: []"). Kaynağı 'adhoc' olan seri o
         # ilişkiden sayılır ve sorgulanır; küratörlü olanlar Silver'dan.
         self._relation_by_series: dict[str, str] = {}
         if getattr(self, "_has_adhoc", False):
-            adhoc_counts = dict(
-                self._conn().execute(
-                    f"SELECT series_id, count(*) FROM {ADHOC_RELATION} GROUP BY 1"
-                ).fetchall()
-            )
+            adhoc_spans = {sid: (n, lo, hi) for sid, n, lo, hi in self._conn().execute(span_sql.format(ADHOC_RELATION)).fetchall()}
         else:
-            adhoc_counts = {}
+            adhoc_spans = {}
+        adhoc_counts = {sid: v[0] for sid, v in adhoc_spans.items()}
         catalog: dict[str, DatasetSpec] = {}
         self._uningested: dict[str, str] = {}
         for row in rows:
@@ -278,7 +275,8 @@ class SilverLakehouse:
             self._relation_by_series[series_id] = relation
             n = adhoc_counts.get(series_id) if relation == ADHOC_RELATION else counts.get(series_id)
             if n:
-                catalog[series_id] = self._to_spec(row, n)
+                span = (adhoc_spans if relation == ADHOC_RELATION else spans).get(series_id, (n, None, None))
+                catalog[series_id] = self._to_spec(row, n, span=(span[1], span[2]))
             else:
                 self._uningested[series_id] = name_tr
         catalog.update(self._load_gold_catalog(catalog))
@@ -448,7 +446,7 @@ class SilverLakehouse:
             last_refreshed=None,
         )
 
-    def _to_spec(self, row: tuple, row_count: int | None) -> DatasetSpec:
+    def _to_spec(self, row: tuple, row_count: int | None, span: tuple = (None, None)) -> DatasetSpec:
         (series_id, source_id, native_code, dataset_id, name_tr, description, aliases, tags,
          frequency, week_anchor, unit, measure_type, default_agg, cumulative_reset,
          confidence, first_obs, last_obs, metadata_url, status) = row
@@ -520,10 +518,10 @@ class SilverLakehouse:
                 ),
             ],
             coverage=Coverage(
-                start=first_obs or date(1900, 1, 1),
-                end=last_obs or date(1900, 1, 1),
+                start=first_obs or span[0] or date(1900, 1, 1),
+                end=last_obs or span[1] or date(1900, 1, 1),
                 row_count=row_count,
-                known_gaps=[] if first_obs else ["kapsam hesaplanmamış: seride gözlem yok"],
+                known_gaps=[] if (first_obs or span[0]) else ["kapsam hesaplanmamış: seride gözlem yok"],
             ),
             tags=list(tags or []),
             notes=notes,

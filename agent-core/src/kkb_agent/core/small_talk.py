@@ -115,6 +115,21 @@ _FILLER = re.compile(r"^\s*(?:(?:anladım|anladim|anlaşıldı|not aldım|not al
                      r"kusura bakma(?:yın)?|affedersin(?:iz)?)\s*[,.!]?\s*)+", re.I)
 
 
+# İkinci tekil şart: "Faiz düşerse kredi ne yapabilir?" veri sorusudur, kimlik sorusu değil.
+_IDENTITY = re.compile(r"(?<![\w])(kimsin(?:iz)?|sen\s+nesin|kendini(?:zi)?\s+tanıt\w*|kendin(?:iz)?den\s+bahset\w*|"
+                       r"ne(?:ler)?\s+yapabilirsin(?:iz)?|ne\s+işe\s+yar(?:arsın|ıyorsun)\w*|nasıl\s+çalışıyorsun(?:uz)?|adın\s+ne)(?![\w])", re.I)
+
+
+def is_identity_question(question: str) -> bool:
+    """"Sen kimsin?", "Neler yapabilirsin?" gibi kısa kimlik/tanıtım sorusu mu? Veri çekmesi gerekmez.
+
+    Kimlik deneyi (15 Eyl, docs/experiments/kimlik_alan_deneyi_2026-09-15_1546.json): aktif tablo yokken ajan bu soruyu
+    "veri çekilmeden cevap denendi" diye geri gönderiyor, doğru ilk taslak "önceki mesajın 'Sen kimsin?' idi" diye bozuluyordu;
+    tek kullanıcı serili DB'de model kimlik yerine tablo döküyordu. Rakamlı ya da uzun mesaj veri sorusudur."""
+    text = (question or "").strip()
+    return bool(text) and not re.search(r"\d", text) and len(text.split()) <= 8 and bool(_IDENTITY.search(text))
+
+
 def capability_reply(question: str, *, tools: set[str], datasets) -> str | None:
     """Yetenek ya da veri seti sorusu ise tek paragraf cevap; değilse None. Rakam geçen ya da uzun mesaj veri sorusudur."""
     text = (question or "").strip()
@@ -139,13 +154,17 @@ def capability_reply(question: str, *, tools: set[str], datasets) -> str | None:
 
 def data_sets_reply(specs: list, hints: dict) -> str:
     """Birincil kaynaklara göre yüklü seriler (okunur ad, seri sayısı, kapsam); türetilmiş katmanlar kaynak sayılmaz."""
+    from ..domain import series_label
+
     names, derived = hints.get("source_names", {}), set(hints.get("derived_sources", ()))
     groups: dict[str, dict] = {}
-    uploads = 0
+    uploads: list[str] = []
     for spec in specs:
         src = getattr(spec, "source", "") or ""
         if src in derived:
-            uploads += src == "adhoc"
+            if src == "adhoc":   # kimlik deneyi (15 Eyl): "Kullanıcının eklediği 1 seri de var." yarım cümleydi, seri adı yoktu
+                cov = getattr(spec, "coverage", None)
+                uploads.append(series_label(spec) + _span(getattr(cov, "start", None), getattr(cov, "end", None)))
             continue
         g = groups.setdefault(src, {"n": 0, "start": None, "end": None})
         g["n"] += 1
@@ -155,14 +174,20 @@ def data_sets_reply(specs: list, hints: dict) -> str:
                 g[key] = value if g[key] is None else pick(g[key], value)
     if not groups and not uploads:
         return "Veri havuzunda şu an yüklü seri yok."
-    parts = []
-    for src, g in sorted(groups.items(), key=lambda kv: -kv[1]["n"]):
-        span = f" ({g['start']:%Y-%m} → {g['end']:%Y-%m})" if g["start"] and g["end"] else ""
-        parts.append(f"{names.get(src, src)}: {g['n']} seri{span}")
+    parts = [f"{names.get(src, src)}: {g['n']} seri{_span(g['start'], g['end'])}"
+             for src, g in sorted(groups.items(), key=lambda kv: -kv[1]["n"])]
     text = ("Veri havuzunda şu kaynaklardan yüklü seriler var: " + "; ".join(parts) + ".") if parts else ""
     if uploads:
-        text += f" Kullanıcının eklediği {uploads} seri de var."
+        listed = ", ".join(uploads[:5]) + (f" ve {len(uploads) - 5} seri daha" if len(uploads) > 5 else "")
+        text += (f" Kullanıcının eklediği seriler: {listed}." if parts else f"Veri havuzunda kullanıcının eklediği seriler var: {listed}.")
     return text.strip()
+
+
+def _span(start, end) -> str:
+    """' (2025-01 → 2025-12)'; kapsam bilinmiyorsa (adaptörün 1900 yer tutucusu) boş."""
+    if not start or not end or getattr(start, "year", 1900) <= 1900:
+        return ""
+    return f" ({start:%Y-%m} → {end:%Y-%m})"
 
 
 def strip_filler_opening(text: str) -> tuple[str, bool]:

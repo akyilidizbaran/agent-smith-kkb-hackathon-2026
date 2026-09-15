@@ -31,7 +31,7 @@ from .grounding import causal_language, grounding_check, _NUM_RE, _ascii_minus, 
 from .claim_check import claim_cell, range_claim   # G5/G6 (Büşra, V3 §3.9): sayı doğru dönemle mi yazılmış
 from .question_preflight import _PREMISE as _PREMISE_ASK
 from .small_talk import capability_reply, strip_filler_opening
-from .small_talk import is_small_talk, small_talk_reply, trim_unsolicited_offers
+from .small_talk import is_identity_question, is_small_talk, small_talk_reply, trim_unsolicited_offers
 from . import tool_gate
 
 # Kullanıcının grafik isteği (Türkçe çekimli: grafiği, grafiğini, çiz, çizer misin, görselleştir).
@@ -724,7 +724,9 @@ class AnalyticsAgent:
                 # Ölçüldü (Deney 1): terfi ya da grafik sonrası da "veri çekilmedi" diye geri
                 # gönderiyordu; model tabloyu yeniden gösterip aynı cevabı yazdı (fazla adım).
                 # Bu turda iş yapan bir araç çalıştıysa ya da tablo önceki turdan hazırsa uyarı yok.
-                if not produced_data and not nudged and not acted and not self.workspace.has_table:
+                # Kimlik sorusu ("Sen kimsin?") veri istemez: geri gönderilince doğru taslak bozuluyordu (kimlik deneyi, 15 Eyl).
+                if (not produced_data and not nudged and not acted and not self.workspace.has_table
+                        and not is_identity_question(question)):
                     nudged = True
                     steps.append(
                         AgentStep(

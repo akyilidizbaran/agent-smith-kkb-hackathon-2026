@@ -40,6 +40,9 @@ DEFAULT_CONCEPTS_PATH = Path(__file__).resolve().parent.parent / "config_data" /
 
 _TOK = re.compile(r"[a-zçğıöşüâîû0-9]+", re.I)
 _YEAR = re.compile(r"\b(20[0-9]{2}|19[0-9]{2})\b")
+_MONTH_NAME = re.compile(r"(ocak|şubat|subat|mart|nisan|mayıs|mayis|haziran|temmuz|ağustos|agustos|eylül|eylul|ekim|kasım|kasim|"
+                         r"aralık|aralik|jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|june?|july?|aug(ust)?|sep(tember)?|"
+                         r"oct(ober)?|nov(ember)?|dec(ember)?)\.?", re.I)
 #: İlişki sorusu: iki özne — tek özneyi taşıyan dosya "kısmen"dir, ret değil (ikinci kaynak gerekir).
 _RELATION = re.compile(r"ilişki|etki|düştüğünde|arttığında|yükseldiğinde|karşılaştır|arasında|birlikte|öncül|korelasyon|"
                        r"relationship|when |versus|\bvs\b", re.I)
@@ -268,7 +271,10 @@ def signature_of(frame: pd.DataFrame, locator: str, *, mapping: Any = None, sema
             ys = pd.to_numeric(frame[year_col], errors="coerce").dropna()
             ys = ys[(ys >= 1900) & (ys <= 2100)]
             if len(ys):
-                years, freq, date_col = (int(ys.min()), int(ys.max())), freq or "yearly", str(year_col)
+                # Geniş tablo (Yıl | Ocak | Şubat …): satır başına bir yıl ama ay kolonları var → aylık veri. Yıllık sayılınca
+                # "2025 Ocak" sorusu granülarite ile reddediliyordu (PR #4 CI, test_vision OCR belgesi).
+                months = sum(bool(_MONTH_NAME.match(h.strip())) for h in headers)
+                years, freq, date_col = (int(ys.min()), int(ys.max())), freq or ("monthly" if months >= 2 else "yearly"), str(year_col)
         if years is None and len(frame):
             best, best_ratio = None, 0.0
             for c in frame.columns:

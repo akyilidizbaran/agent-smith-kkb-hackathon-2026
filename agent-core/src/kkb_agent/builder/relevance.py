@@ -57,12 +57,21 @@ def stem(word: str) -> str:
     return w[:_STEM_LEN] if len(w) > _STEM_LEN else w
 
 
-def content_terms(text: str) -> set[str]:
-    """Metnin konu sözcükleri: küçük harf, durak sözcükler atılmış, ≥4 harf, kaba kök."""
+# Beyan sözcükleri yalnız SORU tarafında atılır (15 Eyl, PR #4 CI): "belgesini taslak seri olarak ekle; birim kg, ölçüm tipi
+# dönemlik akım, aylık kural toplam" konu terimi değildir, terim sayılınca dosya ilgisiz sayılıyordu. Durak listesine girmez:
+# katalog alias'larında ("kalem türü") anlam taşırlar. Kök değil TAM sözcük: 'birimsiz.csv' dosya adı 'birim' kökü yüzünden atılmasın.
+_DECLARE = frozenset(w.casefold() for w in """
+belge belgeyi belgesi belgesini belgedeki belgeden birim birimi ölçüm ölçümü olcum tipi kural kuralı kurali
+dönemlik donemlik akım akim flow periodic count
+""".split())
+
+
+def content_terms(text: str, drop: frozenset[str] = frozenset()) -> set[str]:
+    """Metnin konu sözcükleri: küçük harf, durak sözcükler (ve `drop`) atılmış, ≥4 harf, kaba kök."""
     out: set[str] = set()
     for m in _WORD.finditer(text or ""):
         w = m.group(0).casefold()
-        if len(w) < 4 or w in _STOP:
+        if len(w) < 4 or w in _STOP or w in drop:
             continue
         out.add(stem(w))
     return out
@@ -155,7 +164,7 @@ def assess(
 ) -> RelevanceReport:
     """Üç ölçütü uygula; yalnız uygulanabilenleri say."""
     q_text = question or user_text or ""
-    q_terms = content_terms(q_text) or content_terms(user_text)
+    q_terms = content_terms(q_text, _DECLARE) or content_terms(user_text, _DECLARE)
     q_years = years_in(question) or years_in(user_text)
     f_terms = file_terms(frame, locator)
     f_years = file_year_range(frame, mapping)

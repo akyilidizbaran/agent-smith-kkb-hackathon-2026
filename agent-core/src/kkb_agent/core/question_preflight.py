@@ -28,9 +28,32 @@ from .fitness import DEFAULT_CONCEPTS_PATH, Lexicon, _GRAN_RANK, _GRAN_WORDS, _m
 
 _FORECAST = re.compile(r"tahmin|öngörü|ongoru|projeksiyon|forecast|gelecek yıl|önümüzdeki|olacak mı|ne olur", re.I)
 #: Öncül kalıbı: "X düştüğü için / arttığı için / neden arttı" — soru bir yön varsayıyor.
-_PREMISE = re.compile(r"(düştüğü|azaldığı|arttığı|yükseldiği|gerilediği)\s+(için|halde|hâlde)|"
-                      r"(düştüğü|azaldığı|arttığı|yükseldiği)ne göre|neden\s+(arttı|azaldı|geriledi|düştü|yükseldi)|"
-                      r"(düşüş|artış|gerileme|yükseliş)ün(ün|ü)?\s+(nedeni|sebebi)", re.I)
+_PREMISE_RE = re.compile(r"(düştüğü|azaldığı|arttığı|yükseldiği|gerilediği)\s+(için|halde|hâlde)|"
+                         r"(düştüğü|azaldığı|arttığı|yükseldiği)ne göre|neden\s+(arttı|azaldı|geriledi|düştü|yükseldi)|"
+                         r"(düşüş|artış|gerileme|yükseliş)ün(ün|ü)?\s+(nedeni|sebebi)", re.I)
+#: "X düştüğü halde Y artmadığı dönemler olmuş mu?" bir yön VARSAYMAZ; koşulu sağlayan dönemi arar (K02 A06 bulgusu, 15 Eyl:
+#: PR #4 entegrasyonunda bu soru check_premise'e zorlanıyordu). "halde" kalıbı dönem/zaman araması içindeyse öncül sayılmaz;
+#: "düştüğü için" ve "neden arttı" öncül kalır.
+_CONDITIONAL_SEARCH = re.compile(r"(dönem|aylar|yıllar|haftalar|zaman|tarih)\w*\s+(ol(?:muş|du|mış)|var)\s*m[ıiuü]|"
+                                 r"hangi\s+(dönem|ay|yıl|hafta|tarih)|ne\s+zaman", re.I)
+
+
+class _PremisePattern:
+    """`re.Pattern` gibi kullanılır (agent ve tool_gate `.search` çağırır); koşullu dönem aramasını öncül saymaz."""
+
+    pattern = _PREMISE_RE.pattern
+
+    def finditer(self, text: str):
+        for m in _PREMISE_RE.finditer(text or ""):
+            if (m.group(2) or "").casefold() in ("halde", "hâlde") and _CONDITIONAL_SEARCH.search(text or ""):
+                continue
+            yield m
+
+    def search(self, text: str):
+        return next(self.finditer(text), None)
+
+
+_PREMISE = _PremisePattern()
 _FREQ_VALUE = {"daily": 0, "weekly": 1, "monthly": 2, "quarterly": 3, "yearly": 4}
 #: "kaç puan arttı" — yüzde puanı yalnız oran/yüzde/endeks serileri için tanımlıdır; bir tutar/bakiye için sorulursa model
 #: ya tutar farkı verip "puan"a hiç değinmiyor ya da keyfi yorumluyor (UEB A08: üç koşuda 2 SAFE / 1 SILENT, modele bağlı).

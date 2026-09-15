@@ -417,3 +417,57 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
 - **Kullanıcı geri bildirimi (14 Eyl akşam, ADR-0078):** arayüz denemesinde dokuz sorun bildirildi, hepsi kapatıldı. Kişi sorusunda (ekip üyesi) model 'genel bilgimden' diyerek başka birine ait uydurma biyografi yazdı → istem kuralı + deterministik kapı (bir kez geri gönderme, sürerse yayımlanmaz). Yetenek ve veri seti soruları katalog ve kayıtlı araçlardan deterministik (Gold anlatılmıyor; alan tanımı birincil kaynak adlarıyla, adlar `source_hints.json`'da). Resmi kamu alan adları (tcmb.gov.tr …) model tarafından açılabilir; TCMB kur XML'i tablo olur; belge metni 8.000 karakterlik pencereyle ve devam notuyla (önce 1.500'de kesiliyordu). Arayüz: sağda sayı listesi yok, mesaj hemen görünür ve altında 'Düşünüyor…'. Canlı denemede kullanıcının mesajları: kişi sorusu 'elimde bilgi yok'; 2 Ocak 2015 ve 1 Temmuz 2026 dolar kuru TCMB'den (model adresi kendisi açtı); 2 sayfalık PDF'in iki bölümü de özetlendi. Canlı denemede bulunan ek yanlış negatif: 'bülten no 2026/120' kimliği sayı sanılıyordu → yıl/sıra kimliği maskelendi.
 - **main entegrasyonu hazırlığı (14 Eyl akşam):** arkadaşlar main'e PR #1 (Elif Güngen) ve #2 (Zümral) ile lakehouse işini birleştirdi. Bizim dal 107 commit'le tam geçmişiyle birleştirilecek (kullanıcı kararı; commit sıkıştırma yok). main ile deneme birleştirmesinde lakehouse-core/ 16 dosya add/add çatışması verdi; sebep git'in ortak atasının ilk taslak commit'i olması. Bizim lakehouse-core kopyası main geçmişindeki cf3e878 ile birebir aynı çıktı; bu tabanla üç yönlü birleştirmede 15 dosya otomatik birleşti, tek gerçek çakışma docs/sources/evds.md paragrafı (main'in güncel metni + bizim TÜFE bölümü). main iki doğrulanmış BDDK serisi ekledi (158_Toplam, 194_Toplam; katalog 2.214 → 2.216); K01 artık sayıyı katalog dosyalarından okuyor. Birleşik ağaçta K01 koşusu bugünkü yetenek cevabının bir analiz sorusunu yakaladığını gösterdi (merge kaynaklı değil, bd32404'te de) → sözcük sınırı ve analiz sözcüğü koruması (ADR-0078 eki). Büşra'nın dalına dokunulmadı; o gerekirse bizim üzerimize push atacak.
 - **main entegrasyon dalı hazır (14 Eyl akşam):** `integration/agent-engine-main` = feature/agent-engine (8bf4f28) + origin/main (582ee98) birleştirmesi 51ccc17 ve bu kanıt commit'i; main'e gidecek 109 commit'imiz tam geçmişiyle. 16 lakehouse-core çatışması ortak taban cf3e878 ile çözüldü (15 otomatik, 1 doküman paragrafı elle). Birleşik ağaçta: ajan 495 geçti + 1 atlandı (yerel seed DB yok), lakehouse 1.126 geçti, K01 22/22, K01-T07 arayüz 15/15, K02 finans 22/22, ön kontrol hazır. Entegrasyon K01 koşusu bir ürün hatası buldu (yetenek cevabı analiz sorusunu yakalıyordu) ve iki sabit sayı güncellendi (katalog 2.216, etkin 1.907: main 309 EVDS serisini deprecated işaretledi). main'e birleştirme PR ile, kullanıcı onayıyla; Büşra'nın dalına dokunulmadı.
+- **Architect kayıt süresi ve onay hatası (15 Eyl):** gerçek araç ve CLI ile: dosya → taslak 1,1 s, taslak → katalog + Silver 1,05 s, kaynaktan dönem çekme (canlı BDDK) 5,6–7,7 s, tam sıfırlama 0,3 s. Canlı modelle arayüzde onay iki denemede de reddediliyordu: yükleme ön eki (8 onaltılık) seri kimliğine giriyor, kullanıcı ön eksiz ad yazıyor → onay eşleşmesi ön eksiz adı da kabul ediyor (ADR-0068 eki). Düzeltmeden sonra canlı 3/3 kataloğa alındı; ekleme turu ortalama 5,7 s, onay turu 4,6 s. Ön ekin ingest anahtarına hiç girmemesi tools/ingest.py'de, PR #4 birleşince.
+- **Arayüz: canlı adımlar, yazım animasyonu, kanıt akışı (15 Eyl, ADR-0079):**
+  - Kullanıcı üç şey istedi: kanıt akışı düzgün görünsün, "Düşünüyor…" sırasında ne yapıldığı görünsün, cevap bir anda düşmesin.
+  - Cevap token token akıtılmadı. Doğrulama kapısı taslağı geri gönderebildiği için yayımlanmamış sayı ekrana düşerdi.
+  - `POST /api/ask/stream` (NDJSON) adım olaylarını, sonunda da `/api/ask` ile aynı yükü gönderir. Kanca `kkb_agent/live_steps.py`'de,
+    soru süresince örnek düzeyinde kurulur; `core/agent.py`'ye dokunulmadı (PR #4).
+  - Doğrulanmış metin istemcide harf harf açılır; tam metin DOM'da kalır, kabul betiklerinin `.busy` beklemesi değişmedi.
+  - Sağ panel halka halka: cevap → tablo → sorgu → Silver → Bronze → RAW. Aynı SQL tek sorgu; SQL ve notlar kapalı kutuda.
+  - Canlı denemede (qwen3.8-27B, iki serili soru, 24,5 s) model turları 3,1–3,6 s, katalog ve sorgu araçları ≤0,3 s sürdü:
+    bekleme süresi modelde geçiyor.
+  - İlk sürümde kanıt halkaları yolculuk penceresinin `.stage` stiliyle çakışıyordu (440 px beyaz kutu), `hop` adına geçti.
+  - Ajan testleri 504. K01-T07 arayüz kabulü yeni akış ucu ve yazım animasyonuyla 15/15 (`docs/experiments/k01_ui_kabul_2026-09-15_1533/`).
+  - Canlı sunucuda başsız Chromium: yazım ortasında 358 harfin 295'i saydam kuyruktaydı, tamamı DOM'daydı; yazım 1,8 s sürdü.
+  - Görünmeyen sekmede kare çizilmediği için animasyon atlanır, metin hemen tam gelir.
+- **Kimlik deneyi: yalnız DB değişince "Sen kimsin?" (15 Eyl):**
+  - Betik: `scripts/kimlik_alan_deneyi.py`. Rapor: `docs/experiments/kimlik_alan_deneyi_2026-09-15_1546.json`.
+  - Aynı kod, istem ve gerçek model; beş DB: finans kopyası, boş, sağlık serisi, web ziyareti serisi, finans + sağlık. Asıl demo DB değişmedi.
+  - Alan tanımı DB'ye göre değişiyor ama ürün cevabı sorunlu çıktı.
+  - **Sebep 1:** aktif tablo yokken ajan "veri çekilmeden cevap denendi" diye kimlik cevabını geri gönderiyor.
+    - İlk taslak doğruydu ("BDDK ve TCMB verileri üzerinde çalışan…").
+    - Yeniden yazılan cevap "önceki mesajın 'Sen kimsin?' idi" diye bozuluyor.
+    - Sağlık ve web DB'lerinde model tablo döküyor.
+    - Kullanıcının arayüzde gördüğü iyi cevap aktif tablo olduğu içindi (kural susuyor); canlı tekrarla doğrulandı.
+    - Kural `core/agent.py`'de, PR #4'ün değiştirdiği dosya.
+  - **Sebep 2:** yalnız kullanıcı serisi olan katalogda alan tanımı "adhoc kaynaklı veriler" (iç kimlik).
+  - **Sebep 3:** "Hangi veri setlerine sahipsin?" cevabı eksik cümle ("Kullanıcının eklediği 1 seri de var.") ve seri adını söylemiyor.
+  - Boş katalogda model örnek olarak enflasyon/döviz/BDDK yazdı (istemdeki finans örnekleri).
+- **PR #4 entegrasyonu (15 Eyl, ADR-0080):**
+  - **Karar.** Kullanıcı önce "Büşra'yı bekleyelim" dedi, sonra PR #4'ü birleştirip eksiklerini bizim düzeltmemize onay verdi.
+  - **Dal.** `integration/user-error-gates-main` = feature/agent-engine + PR #4 merge commit (baa0df4).
+    - Büşra'nın 30 commit'i aynı kimliklerle içeride; bu dalda olmayan PR #4 commit'i 0.
+    - Büşra'nın dalına push yok.
+  - **Durum.** Deneme birleştirmesi PR #4 → main ve bizim dal → (main + PR #4) çatışmasızdı. Birleşik ağaçta 611 test geçti,
+    3 test kırıktı, K02 A06 kırmızıydı.
+  - **Kök nedenler:**
+    - Geniş ay kolonlu OCR tablosu (Yıl | Ocak | Şubat) yıllık sayılıp "2025 Ocak" reddediliyordu.
+    - İlgi kapısı pytest yolunun dizin parçalarını ve kullanıcının beyan cümlesini konu terimi sayıyordu.
+    - V3 adaptörü `validate_refs`'i atlıyordu. Kırılma PR #4'ten değil, 14 Eyl'de bizim workspace araçlarındaki boş tablo
+      denetimini `validate_refs`'e taşımamızdan.
+    - "düştüğü halde … dönemler olmuş mu?" öncül sayılıyordu.
+    - Kimlik sorusu "veri çekilmedi" diye geri gönderiliyordu.
+    - Kullanıcı serisi iç kimlikle anılıyordu ("adhoc kaynaklı veriler"); kapsamı 1900 görünüyordu. lakehouse-core onayda
+      `meta.series` first_obs/last_obs'u güncellemiyor.
+    - Yükleme ön eki seri anahtarına giriyordu.
+  - **Düzeltme sırasında kendi hatalarım:**
+    - Beyan sözcüklerini ortak durak listesine ekledim; katalog alias'ı "kalem türü" bozuldu.
+    - Adresi tümden sildim; kullanıcının dosyayı adıyla anması ilgi işareti olmaktan çıktı.
+    - Beyan sözcüğünü kökle düşürdüm; `birimsiz.csv` adı "birim" kökü yüzünden atıldı.
+    - Üçü de testte yakalandı: soru tarafında tam sözcük, adres yerine dosya adı.
+  - **Ölçüm:**
+    - Ajan testleri 621.
+    - K02 22/22, K01 22/22 (ilk koşu 21/22: T06 betiği "adhoc" arıyordu, beklenti seri adına sıkılaştırıldı), K01-T07 arayüz 15/15.
+    - Kimlik deneyi yeniden: "Sen kimsin?" 15/15 kimlik anlatıyor (önce 2/15; biri de "adhoc kaynaklı veriler" diyordu).
+  - **Sıra.** Kullanıcı onayıyla önce PR #4 GitHub'da merge commit, hemen ardından entegrasyon PR'ı.
