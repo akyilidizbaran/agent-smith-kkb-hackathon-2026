@@ -330,7 +330,8 @@ def main() -> int:
     domain = agent2.profile.domain
     leak = [w for w in ("bddk", "evds", "konut", "kredi") if w in (search.content or "").lower() or w in domain.lower()]
     rep.check("T06-sizinti", "yeniden başlatmada alan profili yalnız yeni katalogdan; arama eski finans serisi döndürmez",
-              not leak and "adhoc" in domain, {"alan": domain, "sızan": leak, "arama": (search.content or "")[:200]})
+              # ADR-0080: yalnız kullanıcı serisi varsa alan iç kimlikle ("adhoc") değil serinin okunur adıyla kurulur.
+              not leak and "web ziyaret" in domain, {"alan": domain, "sızan": leak, "arama": (search.content or "")[:200]})
     cache_dir = data / "cache"
     rep.check("T06-onbellek", "sıfırlama sonrası eski embedding önbelleği yok", not any(cache_dir.rglob("*")) if cache_dir.exists() else True,
               sorted(str(p) for p in cache_dir.rglob("*"))[:5] if cache_dir.exists() else "önbellek dizini yok")

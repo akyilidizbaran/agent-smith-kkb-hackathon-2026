@@ -444,3 +444,30 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
   - **Sebep 2:** yalnız kullanıcı serisi olan katalogda alan tanımı "adhoc kaynaklı veriler" (iç kimlik).
   - **Sebep 3:** "Hangi veri setlerine sahipsin?" cevabı eksik cümle ("Kullanıcının eklediği 1 seri de var.") ve seri adını söylemiyor.
   - Boş katalogda model örnek olarak enflasyon/döviz/BDDK yazdı (istemdeki finans örnekleri).
+- **PR #4 entegrasyonu (15 Eyl, ADR-0080):**
+  - **Karar.** Kullanıcı önce "Büşra'yı bekleyelim" dedi, sonra PR #4'ü birleştirip eksiklerini bizim düzeltmemize onay verdi.
+  - **Dal.** `integration/user-error-gates-main` = feature/agent-engine + PR #4 merge commit (baa0df4).
+    - Büşra'nın 30 commit'i aynı kimliklerle içeride; bu dalda olmayan PR #4 commit'i 0.
+    - Büşra'nın dalına push yok.
+  - **Durum.** Deneme birleştirmesi PR #4 → main ve bizim dal → (main + PR #4) çatışmasızdı. Birleşik ağaçta 611 test geçti,
+    3 test kırıktı, K02 A06 kırmızıydı.
+  - **Kök nedenler:**
+    - Geniş ay kolonlu OCR tablosu (Yıl | Ocak | Şubat) yıllık sayılıp "2025 Ocak" reddediliyordu.
+    - İlgi kapısı pytest yolunun dizin parçalarını ve kullanıcının beyan cümlesini konu terimi sayıyordu.
+    - V3 adaptörü `validate_refs`'i atlıyordu. Kırılma PR #4'ten değil, 14 Eyl'de bizim workspace araçlarındaki boş tablo
+      denetimini `validate_refs`'e taşımamızdan.
+    - "düştüğü halde … dönemler olmuş mu?" öncül sayılıyordu.
+    - Kimlik sorusu "veri çekilmedi" diye geri gönderiliyordu.
+    - Kullanıcı serisi iç kimlikle anılıyordu ("adhoc kaynaklı veriler"); kapsamı 1900 görünüyordu. lakehouse-core onayda
+      `meta.series` first_obs/last_obs'u güncellemiyor.
+    - Yükleme ön eki seri anahtarına giriyordu.
+  - **Düzeltme sırasında kendi hatalarım:**
+    - Beyan sözcüklerini ortak durak listesine ekledim; katalog alias'ı "kalem türü" bozuldu.
+    - Adresi tümden sildim; kullanıcının dosyayı adıyla anması ilgi işareti olmaktan çıktı.
+    - Beyan sözcüğünü kökle düşürdüm; `birimsiz.csv` adı "birim" kökü yüzünden atıldı.
+    - Üçü de testte yakalandı: soru tarafında tam sözcük, adres yerine dosya adı.
+  - **Ölçüm:**
+    - Ajan testleri 621.
+    - K02 22/22, K01 22/22 (ilk koşu 21/22: T06 betiği "adhoc" arıyordu, beklenti seri adına sıkılaştırıldı), K01-T07 arayüz 15/15.
+    - Kimlik deneyi yeniden: "Sen kimsin?" 15/15 kimlik anlatıyor (önce 2/15; biri de "adhoc kaynaklı veriler" diyordu).
+  - **Sıra.** Kullanıcı onayıyla önce PR #4 GitHub'da merge commit, hemen ardından entegrasyon PR'ı.

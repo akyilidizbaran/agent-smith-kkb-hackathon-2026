@@ -27,7 +27,7 @@ from ..builder.read import ReadRefused, read_bytes_for_profiling, read_table_for
 from ..builder.crosscheck import cross_check, file_points
 from ..builder.quality import table_quality
 from ..builder.relevance import assess as assess_relevance, catalog_entries, user_confirmed
-from ..core.fitness import Lexicon, assess as assess_fitness, signature_of
+from ..core.fitness import _LOCATOR as _LOCATOR_RE, Lexicon, assess as assess_fitness, signature_of
 from ..builder.unit_guess import guess_unit
 from ..builder.verify import verify_mapping
 from ..adapters.duckdb_lakehouse import release_connections
@@ -72,6 +72,22 @@ class IngestParams(BaseModel):
         default=False,
         description="Kullanıcı 'yine de ekle' ya da 'doğru dosya bu' dediyse true; ilgi kapısını geçer.",
     )
+
+
+# Arayüz yüklemesi dosyaya 8 onaltılık ön ek koyar (web_app.save_upload: "cb6d79f3_hastane.csv"). Kullanıcı ön eki görmez;
+# seri anahtarına girince "adhoc:cb6d79f3_hastane" olur ve onay cümlesindeki adla eşleşmez (ADR-0068 eki, 15 Eyl).
+_UPLOAD_PREFIX = re.compile(r"^[0-9a-f]{8}_(?=\w)")
+
+
+def _locator_names(text: str) -> str:
+    """Metindeki adres/yolu yalnız dosya adıyla değiştirir: '/private/var/…/incoming/cb6d79f3_sicaklik.csv' → 'sicaklik'.
+
+    İlgi kapısı için (15 Eyl, PR #4 CI): dizin parçaları ('folders', 'incoming', kullanıcı adı) soru terimi sayılıyordu; adresi
+    tümden silmek de kullanıcının dosyayı adıyla anmasını ('sicaklik.csv dosyasını ekle') ilgi işareti olmaktan çıkarıyordu."""
+    def name(match: re.Match) -> str:
+        base = re.split(r"[\\/]", match.group(0).split("?")[0].rstrip("/\\"))[-1]
+        return " " + _UPLOAD_PREFIX.sub("", base.rsplit(".", 1)[0] if "." in base else base) + " "
+    return _LOCATOR_RE.sub(name, text or "")
 
 
 def _slug(text: str) -> str:
@@ -252,7 +268,7 @@ class IngestFromUrlTool(Tool):
             return ToolResult(content=err.render(), ok=False, error=err)
 
         # 2. profil + öneri
-        key = params.series_key or _slug(Path(params.locator.split("?")[0]).stem)
+        key = params.series_key or _slug(_UPLOAD_PREFIX.sub("", Path(params.locator.split("?")[0]).stem))
         series_id = f"adhoc:{key}"
         profile = profile_table(frame)
         mapping, semantics = propose(profile, frame, series_id=series_id)
@@ -278,8 +294,9 @@ class IngestFromUrlTool(Tool):
         # oturumda bakılan öbür dosyaların puanları hatırlanır: "doğru + yanlış dosya"
         # durumunda kart hangisinin daha uygun göründüğünü söyler (kanıt paneline de gider).
         specs_all = list(self.lakehouse.list_datasets())
+        # Adreslerden yalnız dosya adı soru metninde kalır (dizin parçaları terim değildir; dosyanın adıyla anılması ilgidir).
         relevance = assess_relevance(
-            question, self._user_text(), params.locator, frame, mapping,
+            _locator_names(question), _locator_names(self._user_text()), params.locator, frame, mapping,
             catalog=catalog_entries(s for s in specs_all if getattr(s, "source", "") != "adhoc"),
         )
         # 2b'. uygunluk kapısı (core/fitness.py, 15 Eyl): sözcük örtüşmesi değil GEREKSİNİM — soru hangi ölçümü/varlığı/

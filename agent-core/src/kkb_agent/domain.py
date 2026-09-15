@@ -48,6 +48,25 @@ def kisa_terim(deger: str, max_uzunluk: int = 24) -> str:
     return aday if 0 < len(aday) <= max_uzunluk else deger[:max_uzunluk].strip()
 
 
+def join_tr(items: list[str]) -> str:
+    """'a' · 'a ve b' · 'a, b ve c'."""
+    items = [i for i in items if i]
+    if len(items) <= 1:
+        return items[0] if items else ""
+    return ", ".join(items[:-1]) + " ve " + items[-1]
+
+
+def series_label(spec: object) -> str:
+    """Okunur seri adı. Kullanıcı serisinin katalog adı deterministik kurulur ('acil_basvuru — acil_basvuru_aylik.csv (taslak)',
+    tools/ingest.py) ve onaydan sonra da öyle kalır; kimlik ve veri seti cevabında 'acil basvuru' olarak okunur."""
+    name = str(getattr(spec, "name", "") or getattr(spec, "dataset_id", "") or "")
+    if getattr(spec, "source", "") == "adhoc":
+        name = re.sub(r"\s+—\s+.*$", "", name)
+        name = re.sub(r"\s*\(taslak\)\s*$", "", name, flags=re.I)
+        name = name.split(":", 1)[-1].replace("_", " ")
+    return name.strip() or str(getattr(spec, "dataset_id", ""))
+
+
 @dataclass(frozen=True)
 class DomainProfile:
     """Motorun hangi alanda çalıştığını anlatan, çalışma anında sabit bilgi.
@@ -125,10 +144,18 @@ class DomainProfile:
         hints = load_source_hints()
         names, derived = hints.get("source_names", {}), set(hints.get("derived_sources", ()))
         all_sources = sorted({s.source for s in datasets if s.source})
-        primary = [x for x in all_sources if x not in derived] or all_sources
-        labels = list(dict.fromkeys(names.get(x, x) for x in primary))
-        joined = labels[0] if len(labels) == 1 else ", ".join(labels[:-1]) + " ve " + labels[-1] if labels else ""
-        derived_domain = domain or (f"{joined} kaynaklı veriler" if labels else cls.domain)
+        primary = [x for x in all_sources if x not in derived]
+        if primary:
+            labels = list(dict.fromkeys(names.get(x, x) for x in primary))
+            derived_domain = domain or f"{join_tr(labels)} kaynaklı veriler"
+        else:
+            # Yalnız türetilmiş katman (boş katalogdan yeni alan): iç kimlik değil serilerin adı. Kimlik deneyi (15 Eyl): ajan
+            # kendini "adhoc kaynaklı veriler üzerinde çalışan…" diye tanıtıyordu.
+            labels = list(dict.fromkeys(series_label(s) for s in datasets))
+            shown = labels[:3]
+            listed = (", ".join(shown) + f" ve {len(labels) - 3} seri daha") if len(labels) > 3 else join_tr(shown)
+            who = "kullanıcının eklediği " if all(s.source == "adhoc" for s in datasets) else ""
+            derived_domain = domain or (f"{who}{listed} verileri" if shown else cls.domain)
 
         measures = [c for c in spec.columns if c.role == ColumnRole.MEASURE]
         dimensions = [c for c in spec.columns if c.role == ColumnRole.DIMENSION]
