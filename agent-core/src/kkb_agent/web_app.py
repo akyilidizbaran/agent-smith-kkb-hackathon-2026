@@ -179,6 +179,7 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict
         scope = "ortak veri havuzu"
     gate = getattr(agent, "last_gate", None)
     search = getattr(getattr(agent.registry.get("web_search"), "search", None), "remaining", None) if agent.registry.get("web_search") else None
+    follow_up = getattr(agent, "follow_up_resolution", None)
     return {
         "text": answer.text,
         "steps": steps,
@@ -191,6 +192,7 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict
         "usage": dict(getattr(answer, "usage", {}) or {}),
         "context": getattr(answer, "context", "") or "",
         "grounding": getattr(answer, "grounding", "") or "",
+        "follow_up": follow_up.as_dict() if follow_up is not None else None,
         "hit_step_limit": bool(getattr(answer, "hit_step_limit", False)),
         "gate": {"allowed": sorted(gate.allowed), "opened": list(gate.opened), "closed": list(gate.closed)} if gate else None,
         "search_budget_remaining": search,
