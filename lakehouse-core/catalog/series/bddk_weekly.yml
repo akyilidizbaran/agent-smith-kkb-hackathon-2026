@@ -31,6 +31,8 @@ series:
       - haftalık konut kredisi bakiyesi
       - haftalık mortgage bakiyesi
       - BDDK haftalık konut kredisi
+      - türkiye konut kredisi haftalık
+      - konut kredisi toplamı haftalık
     tags: [kredi, konut, bankacilik, bddk, stok, haftalik]
     frequency: weekly
     week_anchor: friday

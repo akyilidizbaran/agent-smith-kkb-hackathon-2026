@@ -27,6 +27,10 @@ series:
       - konut kredisi bakiyesi
       - konut kredisi tutarı
       - konut kredisi stoku
+      - türkiye konut kredisi
+      - toplam konut kredisi
+      - konut kredisi toplamı
+      - türkiye geneli konut kredisi
     tags: [kredi, konut, bankacilik, bddk, stok]
     frequency: monthly
     unit: TRY_mn
@@ -54,6 +58,7 @@ series:
       - tüketici kredisi toplamı
       - bireysel krediler
       - toplam tüketici kredisi
+      - türkiye tüketici kredileri
     tags: [kredi, tuketici, bankacilik, bddk, stok]
     frequency: monthly
     unit: TRY_mn
@@ -78,6 +83,9 @@ series:
       - araç kredisi
       - otomobil kredisi
       - taşıt kredisi bakiyesi
+      - taşıt kredisi toplamı
+      - türkiye taşıt kredisi
+      - toplam taşıt kredisi
     tags: [kredi, tasit, tuketici, bankacilik, bddk, stok]
     frequency: monthly
     unit: TRY_mn
@@ -101,6 +109,9 @@ series:
       - ihtiyaç kredileri
       - tüketici kredisi ihtiyaç
       - ihtiyaç kredisi bakiyesi
+      - ihtiyaç kredisi toplamı
+      - türkiye ihtiyaç kredisi
+      - toplam ihtiyaç kredisi
     tags: [kredi, ihtiyac, tuketici, bankacilik, bddk, stok]
     frequency: monthly
     unit: TRY_mn
@@ -283,6 +294,9 @@ series:
       - bankacılık sektörü kredileri
       - toplam kredi bakiyesi
       - nakdi krediler
+      - türkiye toplam krediler
+      - sektör toplam kredi
+      - kredi toplamı
     tags: [kredi, bilanco, bankacilik, bddk, stok]
     frequency: monthly
     unit: TRY_mn
@@ -378,6 +392,8 @@ series:
       - bankacılık sektörü mevduatı
       - mevduat toplamı
       - toplam mevduat bakiyesi
+      - türkiye toplam mevduat
+      - türkiye geneli mevduat
     tags: [mevduat, bankacilik, bddk, stok]
     frequency: monthly
     unit: TRY_mn
