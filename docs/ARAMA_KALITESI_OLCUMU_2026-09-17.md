@@ -1,18 +1,18 @@
 # Katalog büyüyünce arama ne oldu? — 17 Eylül 2026
 
-Dal: `feature/lakehouse-data-breadth` (push edilmedi). İlgili commit'ler: `5079016` (BDDK aylık 22 → 498 seri), `c141a26` (FinTürk 648 → 4.536 seri), `ee39b5e` (FinTürk açıklamalarının sadeleştirilmesi — bu raporun veri ekibi kısmı), `f1521a4` (güncel main'in dala alınması), `d45c53d` (arama hızı düzeltmesi, §4.4).
+Dal: `feature/lakehouse-data-breadth` (push edilmedi). İlgili commit'ler: `5079016` (BDDK aylık 22 → 498 seri), `c141a26` (FinTürk 648 → 4.536 seri), `ee39b5e` (FinTürk açıklamalarının sadeleştirilmesi — bu raporun veri ekibi kısmı), `f1521a4` (güncel main'in dala alınması), `d45c53d` (arama hızı düzeltmesi, §4.4), `34baacd` (tablo 3 açıklamaları ve ulusal alias'lar, §4.1-4.2).
 
-**Sonuç:** Veri havuzunu 1.940 seriden 6.304 seriye çıkardık. Ajan artık daha çok soruyu cevaplıyor, ama iki sorun çıktı: (1) en önemli sorumuz olan “konut kredisi ne kadar?” kırılganlaştı, (2) **her arama dört kat yavaşladı** (4 sn → 16-26 sn). İkisinin de kök sebebi ölçüldü. **Arama hızı düzeltildi** (§4.4, `d45c53d`): önbellek zaten yazılmıştı ama tek kelimelik bir karşılaştırma hatası yüzünden hiç tutmuyordu; arama artık ilk çağrıdan sonra 0,02-0,20 sn. Veri ekibinin katalog kısmı da uygulandı. Doğruluk için kalan iki katalog düzeltmesi ve aday havuzu değişikliği Baran'ın onayını bekliyor.
+**Sonuç:** Veri havuzunu 1.940 seriden 6.304 seriye çıkardık. Ajan artık daha çok soruyu cevaplıyor, ama iki sorun çıktı: (1) en önemli sorumuz olan “konut kredisi ne kadar?” kırılganlaştı, (2) **her arama dört kat yavaşladı** (4 sn → 16-26 sn). İkisinin de kök sebebi ölçüldü. **Arama hızı düzeltildi** (§4.4, `d45c53d`): önbellek zaten yazılmıştı ama tek kelimelik bir karşılaştırma hatası yüzünden hiç tutmuyordu; arama artık ilk çağrıdan sonra 0,02-0,20 sn. **Doğruluk düzeltmeleri de uygulandı** (`ee39b5e`, `34baacd`): gerçek veritabanında 1. sıradaki doğru seri kelime aramasında 14 → 18 (24/24 bulunuyor), anlam aramasında 19 → 21; üç konut kredisi sorusunun üçü de #1. Açık kalan tek madde isteğe bağlı: aday havuzu değişikliği (§4.3) artık kelime aramasında bir şey eklemiyor, anlam aramasında +1; karar ajan tarafına bırakıldı.
 
 ## 1. Kısa özet
 
 | | Durum |
 |---|---|
 | Genel doğruluk | **Daha iyi.** Eski havuzla aynı 15 sorudan 9'u bulunuyordu, yeni havuzla 15'i. Yeni veriyle gelen 5 sorunun hepsi cevaplanabiliyor. |
-| Zayıf nokta | Anlam araması çalışmazsa (yedek mod) ulusal konut kredisi serisi arama sonuçlarından tamamen düşüyor. |
+| Zayıf nokta | Anlam araması çalışmazsa (yedek mod) ulusal konut kredisi serisi arama sonuçlarından tamamen düşüyordu. **Düzeltildi:** yedek modda da #1 (`34baacd`). |
 | Doğruluk sebepleri | 3 ayrı: ikisi katalog metninde, biri arama kodunda. Hiçbiri tek başına yetmiyor. |
 | Hız | Arama aracı başına **4,2 sn → 16-26 sn** idi; asıl arama 0,17 sn, kalanı her aramada dizinin baştan kurulmasıydı. **Düzeltildi:** ilk çağrıdan sonra 0,02-0,20 sn (`d45c53d`). |
-| Düzeltme sonrası (kopyada ölçüldü) | Yedek modda 1. sırada doğru seri 14 → 18, 24 sorunun hepsi bulunuyor. Varsayılan modda 19 → 22. |
+| Düzeltme sonrası (gerçek veritabanı) | Yedek modda 1. sırada doğru seri 14 → 18, 24 sorunun hepsi bulunuyor. Varsayılan modda 19 → 21 (aday havuzu değişikliğiyle 22). |
 
 ## 2. Önce bilinmesi gereken: arama iki modda çalışıyor
 
@@ -42,7 +42,9 @@ Ajan bir soruyu cevaplamadan önce kataloğu arar (`lakehouse_search`). İki yol
 | + Veri ekibi kısmı *(uygulandı, `ee39b5e`)* | 16 (21/24) | 20 (24/24) |
 | + Kod düzeltmesi (aday havuzu) | 14 (22/24) | 21 (24/24) |
 | + Katalog düzeltmesinin tamamı *(veri ekibi + tablo 3 + ulusal alias'lar, kopyada)* | 17 (23/24) | 22 (24/24) |
-| **+ Katalog tamamı ve kod düzeltmesi birlikte** *(kopyada)* | **18 (24/24)** | **22 (24/24)** |
+| + Katalog tamamı ve kod düzeltmesi birlikte *(kopyada)* | 18 (24/24) | 22 (24/24) |
+| **Tüm katalog düzeltmeleri** *(uygulandı, `ee39b5e` + `34baacd`, gerçek veritabanı)* | **18 (24/24)** | **21 (24/24)** |
+| Tüm katalog düzeltmeleri + aday havuzu *(gerçek veritabanı, geçici)* | 18 (24/24) | 22 (24/24) |
 
 Konut kredisi soruları özelinde:
 
@@ -71,14 +73,14 @@ Adana'nın **konut** kredisi serisinin açıklaması:
 
 | Cümle | Seri sayısı | Kimin | Durum |
 |---|---:|---|---|
-| “konut kredisi serisiyle aynı çekilişten gelir” | 567 (81 il × 7 sütun) | tablo 3, `cf3e878` (13 Eylül) | onay bekliyor |
-| “81 ilin … toplamı … ulusal konut kredisi” | 81 | tablo 3, `c333fec` (11 Eylül) | onay bekliyor |
+| “konut kredisi serisiyle aynı çekilişten gelir” | 567 (81 il × 7 sütun) | tablo 3, `cf3e878` (13 Eylül) | **düzeltildi (`34baacd`)** |
+| “81 ilin … toplamı … ulusal konut kredisi” | 81 | tablo 3, `c333fec` (11 Eylül) | **düzeltildi (`34baacd`)** |
 | tablo 6 kanıt cümlesi “…ANKARA… toplam nakdi krediyle örtüşüyor” | 486 | tablo 6, bu geceki üretim | **düzeltildi (`ee39b5e`)** |
-| “Mart/Haziran/Eylül/Aralık” (soruda ay adı geçince bütün il serileri puan topluyor) | 3.888 (tablo 1, 2, 4, 6) + 648 (tablo 3) | — | 3.888 **düzeltildi**; tablo 3 onay bekliyor |
+| “Mart/Haziran/Eylül/Aralık” (soruda ay adı geçince bütün il serileri puan topluyor) | 3.888 (tablo 1, 2, 4, 6) + 648 (tablo 3) | — | **hepsi düzeltildi** (`ee39b5e`, `34baacd`) |
 
 **Neden zararlı:** bu notlar doğru ve değerli — ama aramanın gözünde “Adana taşıt kredisi”ni bir konut kredisi serisine, 81 il serisini de “ulusal toplam” serisine benzetiyor. Soruda il yokken yüzlerce il serisi ulusal serinin önüne geçiyor.
 
-**Öneri:** açıklama yalnız o seriyi anlatsın. Kanıt notları silinmesin, `lakehouse-core/docs/sources/bddk_finturk.md` belgesine taşınsın; açıklamada o belgeye işaret kalsın. Tablo 1, 2, 4, 6 için bu yapıldı ve belgeye “Genişletme (2026-09-16)” ile “Arama hijyeni” bölümleri eklendi.
+**Öneri:** açıklama yalnız o seriyi anlatsın. Kanıt notları silinmesin, `lakehouse-core/docs/sources/bddk_finturk.md` belgesine taşınsın; açıklamada o belgeye işaret kalsın. Tablo 1, 2, 4, 6 için yapıldı ve belgeye “Genişletme (2026-09-16)” ile “Arama hijyeni” bölümleri eklendi. Tablo 3'te de yapıldı (`34baacd`); iki kanıt zaten belgede kayıtlıydı. Kaynağın kendi tanım notları korundu: “(KMH)”, “(tahsili gecikmiş)”, “(ihtiyaç kredileri dahil)”.
 
 **Geçmiş:** cümleler katalog bugünkünden çok daha küçükken eklendi. Dünkü 2.252 serilik katalogda bile konut kredisi sorusu hâlâ 1. sıradaydı; sorun bu geceki büyümeyle görünür hâle geldi.
 
@@ -88,7 +90,7 @@ Türkiye'nin toplam konut kredisi serisi (`bddk_monthly:1534_Toplam`), BDDK'nın
 
 Jüri ise “**Türkiye'de** konut kredisi ne kadar?” ya da “konut kredisi **toplamı**” diye soracak. Serinin adında, açıklamasında ve 8 alias'ında “Türkiye” kelimesi hiç geçmiyor; bu kelimeyi taşıyan EVDS serileri (“Konut Birim Kira (Türkiye)” gibi) öne geçiyor.
 
-**Öneri:** en önemli 7 ulusal seriye insanların kullandığı ifadeleri alias olarak eklemek. Kopyada denenen liste:
+**Uygulandı (`34baacd`):** en önemli 7 ulusal seriye insanların kullandığı ifadeler alias olarak eklendi (zaten var olanlar tekrar eklenmedi):
 
 | Seri | Eklenen alias'lar |
 |---|---|
@@ -113,7 +115,9 @@ Ulusal haftalık      : puan 15,9  →  sıralamada #84, havuza giremiyor
 Ulusal aylık         : puan 12,9  →  sıralamada #109, havuza giremiyor
 ```
 
-**Öneri:** soruda il geçmiyorsa havuzu doldurmadan önce ulusal ve il adaylarını ayırıp ulusalları öne almak. Soruda il geçiyorsa davranış değişmiyor. `CatalogRetriever.search` içinde ~10 satır:
+**Güncel durum:** katalog düzeltmeleri uygulandıktan sonra bu değişiklik kelime aramasında hiçbir şey eklemiyor (18 → 18), anlam aramasında 1 soru ekliyor (21 → 22). Artık zorunlu değil; il sayısı ya da benzer il serileri ileride artarsa tekrar önem kazanabilir. Karar ajan tarafının.
+
+**Öneri (isteğe bağlı):** soruda il geçmiyorsa havuzu doldurmadan önce ulusal ve il adaylarını ayırıp ulusalları öne almak. Soruda il geçiyorsa davranış değişmiyor. `CatalogRetriever.search` içinde ~10 satır:
 
 ```python
 by_id = {r.id: r for r in self.records}
@@ -191,9 +195,9 @@ Eski havuzda aynı sorunun ilk üç sonucu:
 |---|---|---|---|
 | **Arama dizini önbelleğinin karşılaştırma hatası** (`is not id(...)` → `is not self._catalog`) | `agent-core/…/silver_lakehouse.py`, `duckdb_lakehouse.py` | Arama başına 7,5 sn → 0,02-0,20 sn (ölçüldü) | **uygulandı · `d45c53d`** |
 | Tablo 1, 2, 4, 6 açıklamalarını sadeleştirmek; il alias'larını ikiye indirmek; Türkçe küçük harf (ŞIRNAK → şırnak) | `generate_bddk_finturk_catalog.py` | Kelime: 1. sırada 14 → 16, kaybolan soru yok. Anlam: 19 → 20; “konut kredisi toplamı” #2 → #1 | **uygulandı · `ee39b5e`** |
-| Tablo 3 açıklamalarındaki iki cümleyi ve ay adlarını belgeye taşımak | `bddk_finturk.yml` (el yazısı bölüm) | 648 seride başka seri adı temizlenir | Baran'ın onayı |
-| 7 ana ulusal seriye alias eklemek | `bddk_monthly.yml`, `bddk_weekly.yml` | “Türkiye'de konut kredisi” yok → #1 | Baran'ın onayı |
-| Aday havuzunu il kuralından önce ayırmak | `agent-core/…/retriever.py` | Yedek modda 24/24 bulunma | Baran'ın kararı |
+| Tablo 3 açıklamalarındaki iki cümleyi ve ay adlarını belgeye taşımak | `bddk_finturk.yml` (el yazısı bölüm) | 648 seride başka seri adı temizlendi | **uygulandı · `34baacd`** |
+| 7 ana ulusal seriye alias eklemek | `bddk_monthly.yml`, `bddk_weekly.yml` | Kelime: 16 → 18, 24/24; anlam: 20 → 21; “Türkiye'de konut kredisi” yok → #1 | **uygulandı · `34baacd`** |
+| Aday havuzunu il kuralından önce ayırmak | `agent-core/…/retriever.py` | Katalog düzeltmelerinden sonra: kelime +0, anlam +1 | isteğe bağlı · ajan tarafının kararı |
 
 ## 7. Bundan sonrası için iki öneri
 
