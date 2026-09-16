@@ -211,16 +211,9 @@ ENTRY = """  - series_id: bddk_finturk:{series_key}
     dataset_id: {dataset_id}
     name_tr: {name_tr}
     description: >-
-      BDDK FinTürk (İllere Göre), {table_name} tablosu (tabloNo={tablo_no}), "{column}" sütunu,
-      {province} ili, Sektör tarafı. {shape_note}
-      FREKANS NÜANSI: kaynak çeyreklik yayınlanıyor (Mart/Haziran/Eylül/Aralık), aylık değil —
-      bkz. docs/sources/bddk_finturk.md.
-      BİRİM: {unit} — kaynağın kendi tablo seçicisi bu tabloyu "{selector_label}" diye
-      etiketliyor.{unit_extra}
-      KİMLİK: sütun adı kaynağın kendi kolon adıdır; tabloNo eşlemesi
-      scripts/bddk_finturk_table_map.json içinde üretilmiş olarak tutulur.
-      Bu giriş scripts/generate_bddk_finturk_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      BDDK FinTürk (İllere Göre), {table_name} tablosu, {measure_words}, {province} ili,
+      Sektör tarafı. {shape_note} Çeyreklik yayınlanır. Birim: {unit_words}.
+      Kaynak, birim kanıtı ve üretim notları: docs/sources/bddk_finturk.md.
     aliases:
 {aliases}
     tags: [{tags}]
@@ -242,23 +235,36 @@ SHAPE_NOTES = {
              "son değer alınır.",
 }
 
-UNIT_EXTRA = {
-    "6": (" Tablo iki birim taşıyor: şube ve nüfus sütunları adet, kişi başı sütunları TL. "
-          "2025-09 ANKARA aritmetiği bunu doğruluyor: 982 şube × 4.867 kişi = 4,78 milyon "
-          "kişi ve 595.699,42 TL/kişi × 4,78 milyon = 2,85 trilyon TL, tablo 1'in aynı il ve "
-          "çeyrek için verdiği toplam nakdi krediyle örtüşüyor."),
-}
+UNIT_WORDS = {"TRY_th": "bin TL", "TRY": "TL", "adet": "adet"}
+"""How the unit reads to a person. The evidence for each unit lives in the source document.
+
+Descriptions are indexed by the agent's search, so they carry only what describes the series
+itself. They used to hold the unit evidence too — table 6's arithmetic check named ANKARA and
+"toplam nakdi kredi", the frequency note listed "Mart/Haziran/Eylül/Aralık" — and every one of
+those words made thousands of province series match questions that were about something else
+(measured 2026-09-16; see docs/sources/bddk_finturk.md, "Arama hijyeni").
+"""
+
+
+def tr_lower(value: str) -> str:
+    """Turkish lowercase: "ŞIRNAK" -> "şırnak", not Python's "şirnak"."""
+
+    return value.replace("I", "ı").replace("İ", "i").lower()
 
 
 def aliases_for(province: str, column: str, rule: TableRule) -> list[str]:
-    place = province.translate(_TR_ASCII).lower() if province.isupper() else province.lower()
-    place = province.lower().replace("i̇", "i")
+    """Two phrases, both naming the province.
+
+    Search indexes aliases three times over, and word order does not matter to it, so a
+    reordered phrase ("insaat adana") only inflated the measure's weight. A phrase shaped like a
+    national question ("… sektörüne açılan kredi") copied into all 81 provinces made them
+    outrank the national series for questions that name no province (measured 2026-09-16).
+    A province question names the province, so these two phrases are enough to find it.
+    """
+
+    place = tr_lower(province)
     thing = spaced(column)
-    out = [f"{place} {thing}", f"{place} ili {thing}", f"{thing} {place}"]
-    if rule.number == "4":
-        out.append(f"{place} {thing} sektörüne açılan kredi")
-    if rule.number == "2":
-        out.append(f"{place} mevduat")
+    out = [f"{place} {thing}", f"{place} ili {thing}"]
     seen: list[str] = []
     for phrase in out:
         cleaned = " ".join(phrase.split())
@@ -299,8 +305,8 @@ def build(client: requests.Session) -> tuple[list[str], dict[str, str], dict[str
                     province=province,
                     shape_note=SHAPE_NOTES.get(measure_type, ""),
                     unit=unit,
-                    selector_label=selector,
-                    unit_extra=UNIT_EXTRA.get(rule.number, ""),
+                    measure_words=spaced(column),
+                    unit_words=UNIT_WORDS.get(unit, unit),
                     aliases="\n".join(f"      - {a}" for a in aliases_for(province, column, rule)),
                     tags=", ".join(rule.tags),
                     measure_type=measure_type,
