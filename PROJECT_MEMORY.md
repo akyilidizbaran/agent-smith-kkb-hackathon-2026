@@ -417,3 +417,165 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
 - **Kullanıcı geri bildirimi (14 Eyl akşam, ADR-0078):** arayüz denemesinde dokuz sorun bildirildi, hepsi kapatıldı. Kişi sorusunda (ekip üyesi) model 'genel bilgimden' diyerek başka birine ait uydurma biyografi yazdı → istem kuralı + deterministik kapı (bir kez geri gönderme, sürerse yayımlanmaz). Yetenek ve veri seti soruları katalog ve kayıtlı araçlardan deterministik (Gold anlatılmıyor; alan tanımı birincil kaynak adlarıyla, adlar `source_hints.json`'da). Resmi kamu alan adları (tcmb.gov.tr …) model tarafından açılabilir; TCMB kur XML'i tablo olur; belge metni 8.000 karakterlik pencereyle ve devam notuyla (önce 1.500'de kesiliyordu). Arayüz: sağda sayı listesi yok, mesaj hemen görünür ve altında 'Düşünüyor…'. Canlı denemede kullanıcının mesajları: kişi sorusu 'elimde bilgi yok'; 2 Ocak 2015 ve 1 Temmuz 2026 dolar kuru TCMB'den (model adresi kendisi açtı); 2 sayfalık PDF'in iki bölümü de özetlendi. Canlı denemede bulunan ek yanlış negatif: 'bülten no 2026/120' kimliği sayı sanılıyordu → yıl/sıra kimliği maskelendi.
 - **main entegrasyonu hazırlığı (14 Eyl akşam):** arkadaşlar main'e PR #1 (Elif Güngen) ve #2 (Zümral) ile lakehouse işini birleştirdi. Bizim dal 107 commit'le tam geçmişiyle birleştirilecek (kullanıcı kararı; commit sıkıştırma yok). main ile deneme birleştirmesinde lakehouse-core/ 16 dosya add/add çatışması verdi; sebep git'in ortak atasının ilk taslak commit'i olması. Bizim lakehouse-core kopyası main geçmişindeki cf3e878 ile birebir aynı çıktı; bu tabanla üç yönlü birleştirmede 15 dosya otomatik birleşti, tek gerçek çakışma docs/sources/evds.md paragrafı (main'in güncel metni + bizim TÜFE bölümü). main iki doğrulanmış BDDK serisi ekledi (158_Toplam, 194_Toplam; katalog 2.214 → 2.216); K01 artık sayıyı katalog dosyalarından okuyor. Birleşik ağaçta K01 koşusu bugünkü yetenek cevabının bir analiz sorusunu yakaladığını gösterdi (merge kaynaklı değil, bd32404'te de) → sözcük sınırı ve analiz sözcüğü koruması (ADR-0078 eki). Büşra'nın dalına dokunulmadı; o gerekirse bizim üzerimize push atacak.
 - **main entegrasyon dalı hazır (14 Eyl akşam):** `integration/agent-engine-main` = feature/agent-engine (8bf4f28) + origin/main (582ee98) birleştirmesi 51ccc17 ve bu kanıt commit'i; main'e gidecek 109 commit'imiz tam geçmişiyle. 16 lakehouse-core çatışması ortak taban cf3e878 ile çözüldü (15 otomatik, 1 doküman paragrafı elle). Birleşik ağaçta: ajan 495 geçti + 1 atlandı (yerel seed DB yok), lakehouse 1.126 geçti, K01 22/22, K01-T07 arayüz 15/15, K02 finans 22/22, ön kontrol hazır. Entegrasyon K01 koşusu bir ürün hatası buldu (yetenek cevabı analiz sorusunu yakalıyordu) ve iki sabit sayı güncellendi (katalog 2.216, etkin 1.907: main 309 EVDS serisini deprecated işaretledi). main'e birleştirme PR ile, kullanıcı onayıyla; Büşra'nın dalına dokunulmadı.
+- **Architect kayıt süresi ve onay hatası (15 Eyl):** gerçek araç ve CLI ile: dosya → taslak 1,1 s, taslak → katalog + Silver 1,05 s, kaynaktan dönem çekme (canlı BDDK) 5,6–7,7 s, tam sıfırlama 0,3 s. Canlı modelle arayüzde onay iki denemede de reddediliyordu: yükleme ön eki (8 onaltılık) seri kimliğine giriyor, kullanıcı ön eksiz ad yazıyor → onay eşleşmesi ön eksiz adı da kabul ediyor (ADR-0068 eki). Düzeltmeden sonra canlı 3/3 kataloğa alındı; ekleme turu ortalama 5,7 s, onay turu 4,6 s. Ön ekin ingest anahtarına hiç girmemesi tools/ingest.py'de, PR #4 birleşince.
+- **Arayüz: canlı adımlar, yazım animasyonu, kanıt akışı (15 Eyl, ADR-0079):**
+  - Kullanıcı üç şey istedi: kanıt akışı düzgün görünsün, "Düşünüyor…" sırasında ne yapıldığı görünsün, cevap bir anda düşmesin.
+  - Cevap token token akıtılmadı. Doğrulama kapısı taslağı geri gönderebildiği için yayımlanmamış sayı ekrana düşerdi.
+  - `POST /api/ask/stream` (NDJSON) adım olaylarını, sonunda da `/api/ask` ile aynı yükü gönderir. Kanca `kkb_agent/live_steps.py`'de,
+    soru süresince örnek düzeyinde kurulur; `core/agent.py`'ye dokunulmadı (PR #4).
+  - Doğrulanmış metin istemcide harf harf açılır; tam metin DOM'da kalır, kabul betiklerinin `.busy` beklemesi değişmedi.
+  - Sağ panel halka halka: cevap → tablo → sorgu → Silver → Bronze → RAW. Aynı SQL tek sorgu; SQL ve notlar kapalı kutuda.
+  - Canlı denemede (qwen3.8-27B, iki serili soru, 24,5 s) model turları 3,1–3,6 s, katalog ve sorgu araçları ≤0,3 s sürdü:
+    bekleme süresi modelde geçiyor.
+  - İlk sürümde kanıt halkaları yolculuk penceresinin `.stage` stiliyle çakışıyordu (440 px beyaz kutu), `hop` adına geçti.
+  - Ajan testleri 504. K01-T07 arayüz kabulü yeni akış ucu ve yazım animasyonuyla 15/15 (`docs/experiments/k01_ui_kabul_2026-09-15_1533/`).
+  - Canlı sunucuda başsız Chromium: yazım ortasında 358 harfin 295'i saydam kuyruktaydı, tamamı DOM'daydı; yazım 1,8 s sürdü.
+  - Görünmeyen sekmede kare çizilmediği için animasyon atlanır, metin hemen tam gelir.
+- **Kimlik deneyi: yalnız DB değişince "Sen kimsin?" (15 Eyl):**
+  - Betik: `scripts/kimlik_alan_deneyi.py`. Rapor: `docs/experiments/kimlik_alan_deneyi_2026-09-15_1546.json`.
+  - Aynı kod, istem ve gerçek model; beş DB: finans kopyası, boş, sağlık serisi, web ziyareti serisi, finans + sağlık. Asıl demo DB değişmedi.
+  - Alan tanımı DB'ye göre değişiyor ama ürün cevabı sorunlu çıktı.
+  - **Sebep 1:** aktif tablo yokken ajan "veri çekilmeden cevap denendi" diye kimlik cevabını geri gönderiyor.
+    - İlk taslak doğruydu ("BDDK ve TCMB verileri üzerinde çalışan…").
+    - Yeniden yazılan cevap "önceki mesajın 'Sen kimsin?' idi" diye bozuluyor.
+    - Sağlık ve web DB'lerinde model tablo döküyor.
+    - Kullanıcının arayüzde gördüğü iyi cevap aktif tablo olduğu içindi (kural susuyor); canlı tekrarla doğrulandı.
+    - Kural `core/agent.py`'de, PR #4'ün değiştirdiği dosya.
+  - **Sebep 2:** yalnız kullanıcı serisi olan katalogda alan tanımı "adhoc kaynaklı veriler" (iç kimlik).
+  - **Sebep 3:** "Hangi veri setlerine sahipsin?" cevabı eksik cümle ("Kullanıcının eklediği 1 seri de var.") ve seri adını söylemiyor.
+  - Boş katalogda model örnek olarak enflasyon/döviz/BDDK yazdı (istemdeki finans örnekleri).
+- **PR #4 entegrasyonu (15 Eyl, ADR-0080):**
+  - **Karar.** Kullanıcı önce "Büşra'yı bekleyelim" dedi, sonra PR #4'ü birleştirip eksiklerini bizim düzeltmemize onay verdi.
+  - **Dal.** `integration/user-error-gates-main` = feature/agent-engine + PR #4 merge commit (baa0df4).
+    - Büşra'nın 30 commit'i aynı kimliklerle içeride; bu dalda olmayan PR #4 commit'i 0.
+    - Büşra'nın dalına push yok.
+  - **Durum.** Deneme birleştirmesi PR #4 → main ve bizim dal → (main + PR #4) çatışmasızdı. Birleşik ağaçta 611 test geçti,
+    3 test kırıktı, K02 A06 kırmızıydı.
+  - **Kök nedenler:**
+    - Geniş ay kolonlu OCR tablosu (Yıl | Ocak | Şubat) yıllık sayılıp "2025 Ocak" reddediliyordu.
+    - İlgi kapısı pytest yolunun dizin parçalarını ve kullanıcının beyan cümlesini konu terimi sayıyordu.
+    - V3 adaptörü `validate_refs`'i atlıyordu. Kırılma PR #4'ten değil, 14 Eyl'de bizim workspace araçlarındaki boş tablo
+      denetimini `validate_refs`'e taşımamızdan.
+    - "düştüğü halde … dönemler olmuş mu?" öncül sayılıyordu.
+    - Kimlik sorusu "veri çekilmedi" diye geri gönderiliyordu.
+    - Kullanıcı serisi iç kimlikle anılıyordu ("adhoc kaynaklı veriler"); kapsamı 1900 görünüyordu. lakehouse-core onayda
+      `meta.series` first_obs/last_obs'u güncellemiyor.
+    - Yükleme ön eki seri anahtarına giriyordu.
+  - **Düzeltme sırasında kendi hatalarım:**
+    - Beyan sözcüklerini ortak durak listesine ekledim; katalog alias'ı "kalem türü" bozuldu.
+    - Adresi tümden sildim; kullanıcının dosyayı adıyla anması ilgi işareti olmaktan çıktı.
+    - Beyan sözcüğünü kökle düşürdüm; `birimsiz.csv` adı "birim" kökü yüzünden atıldı.
+    - Üçü de testte yakalandı: soru tarafında tam sözcük, adres yerine dosya adı.
+  - **Ölçüm:**
+    - Ajan testleri 621.
+    - K02 22/22, K01 22/22 (ilk koşu 21/22: T06 betiği "adhoc" arıyordu, beklenti seri adına sıkılaştırıldı), K01-T07 arayüz 15/15.
+    - Kimlik deneyi yeniden: "Sen kimsin?" 15/15 kimlik anlatıyor (önce 2/15; biri de "adhoc kaynaklı veriler" diyordu).
+  - **Sıra.** Kullanıcı onayıyla önce PR #4 GitHub'da merge commit, hemen ardından entegrasyon PR'ı.
+- **main birleştirmeleri (15 Eyl, kullanıcı onayıyla):**
+  - PR #4 → main, merge commit 83d73f9. Ebeveynleri bacab9d ve 1cfb85d.
+  - PR #5 (entegrasyon) → main, merge commit 5a85254. Ebeveynleri 83d73f9 ve 70a0893. CI: agent-core 37 s, lakehouse-core
+    46 dk 58 s, ikisi de yeşil.
+  - PR #3'ten bu yana main'e 30 commit Büşra'dan (30 tekil kimlik, GitHub hesabı bushushow), 7 commit Baran'dan girdi.
+  - İkisi de `gh pr merge --merge` ile birleştirildi: repoda squash ve rebase de açık, düğme seçimi hataya açık.
+  - main'e push'ta CI iş akışı çalışmıyor; iş akışı yalnız PR'da koşuyor.
+  - feature/agent-engine main'e ileri sarıldı; 8765 sunucusu bu kodla çalışıyor.
+- **Bağlam kayması ve kullanım soruları (15 Eyl akşam, ADR-0081; kullanıcı kararı: önce çoklu senaryo testi, PR yok):**
+  - **Bulgu (arayüz).** "naber" → "elimizde hangi veriler var" → "architect rolüne nasıl geçebilirim" akışında üçüncü soru veri
+    seti tablosuyla cevaplandı.
+    - Kayıtlı adımlar: "veri çekilmeden cevap denendi — geri gönderildi" → katalog araması → iki sorgu.
+    - Bağlam penceresi değil, geri gönderme notunun "sayıları çek" zorlaması modeli geçmişteki son veri sorusuna döndürdü.
+  - **Düzeltmeler:**
+    - Rol, dosya yükleme, indirme ve oturum sıfırlama soruları arayüzün ve profilin gerçek durumundan deterministik cevaplanıyor.
+    - Kullanım soruları "veri çekilmedi" diye geri gönderilmiyor.
+    - Üç geri gönderme notu (veri çekilmedi, işlem iddiası, tabloda olmayan sayı) "Kullanıcının SON sorusu: «…». Önceki sorulara
+      dönme" ile başlıyor.
+  - **Canlı senaryolar ek iki gerçek hata buldu:**
+    - Araçsız turda uydurma fark ("Kasım 677.970, +1.000") yayımlandı. `unverified_numbers`'ın göreli %0,5 toleransı ve "1.000"ın
+      ondalık okumasının satır sayısına eşleşmesi sebepti. Tolerans gösterim hassasiyetinin yarım birimine indirildi.
+    - "Oturumu nasıl sıfırlarım?" sorusuna model "yazmanız yeterli" diye uydurdu; artık düğmeleri anıyor.
+  - **Kendi hatam.** İlk koşuda senaryo denetimi yalnız "kasım/fark" sözcüğüne bakıyordu ve uydurma cevabı geçirdi; elle okumada
+    bulundu, denetim tutar karşılaştırmasına çevrildi. Aynı dakikada biten iki koşu aynı rapor dosyasına yazdı; S3 ×5 konsol
+    çıktısı saklandı, betik adı düzeltildi.
+  - **Ölçüm:**
+    - Ajan testleri 632; K01 22/22, K02 22/22.
+    - Son tüm senaryolar koşusu sıkı denetimle 45/45, son S3 ×5 13/15.
+    - Fark cevaplarında uydurma tutar: düzeltmeden önce 11 cevapta 2, sonra 8 cevapta 0.
+  - **Açık:**
+    - Tek satırlık tablodan sonra "önceki aya göre fark" planlaması: bir tekrarda `workspace_add_column` önceki ayı aynı tarihe
+      ekledi, cevap "0 değişim" oldu.
+    - Araçlı turların `grounding_check`'i de göreli %0,5 tolerans kullanıyor.
+- **Kullanıcı metninde iç ad yok (15 Eyl akşam, ADR-0082; kullanıcı kararı, PR yok):**
+  - **Bulgu.** Arayüzde "Elinde nasıl veriler var" deterministik yola düşmedi (kalıp yalnız hangi/ne/neler), modele gitti.
+    - Model "Hazır Gold tabloları" başlığı ve doğrulanmamış "687+ seri" yazdı (doğrusu 681).
+    - Grafik altyazısı ve rapor kaynakları "bddk_monthly — / gold —" diye yazılıyordu.
+  - **Kullanıcı kararı:**
+    - Cevap metninde iç kimlik ve mimari adı olmayacak.
+    - Kanıt zinciri katman adlarını taşımaya devam edecek.
+    - Sol panel sayaçları kullanıcı diliyle yazılacak.
+  - **Düzeltmeler:**
+    - "nasıl / ne tür / ne çeşit veriler" deterministik.
+    - Sistem istemi ve Gold istemi iç adı yasaklıyor; kural alan bağımsız, finans terimi yok.
+    - Arama kartı tablonun kaynağını yazıyor ("hesaplanmış tablo (TCMB EVDS ve BDDK Aylık Bülten verisinden)").
+    - `labels.readable_source` grafik altyazısı ve rapor için okunur ad veriyor.
+    - `labels.humanize_internal` son güvence: kimlik → katalog adı, "Gold tablosunda" → "hesaplanmış tabloda".
+    - Tablosuz ve veri çekilmemiş turda sayılar araç çıktısıyla doğrulanıyor.
+    - Sol panel "gözlem / hesaplanmış tablo".
+  - **Ölçüm:**
+    - Ajan testleri 638; K01 22/22, K02 22/22, arayüz 15/15.
+    - Canlı 7 senaryo × 3 kayıtlı 57/60. Üç kırmızı da denetim kalıbımın hatası: okunur "TCMB EVDS:" ifadesini `evds:` kimliği
+      saydı. Kalıp düzeltildi, 60 cevabın hiçbirinde iç ad yok.
+  - **Açık soru (kullanıcıya soruldu).** Veri seti cevabı içeriği canlı katalogdan okuyor, ama yalnız kaynak, sayı ve dönem veriyor.
+    Konu başlıkları eklenmesi ya da cevabı modelin katalog bilgisiyle yazması seçenekleri kullanıcıda. Okunur adı olmayan yeni
+    kaynak ham kimlikle görünür.
+- **Veri seti cevabı konu başlıklı; tablosuz sayı denetimi düzeltildi (15 Eyl akşam, ADR-0082 ek 1-2):**
+  - **Kullanıcı kararı.** Deterministik veri seti cevabına konu başlıkları eklendi. İçerik her soruda canlı katalogdan okunuyor;
+    Architect ekleme ve onayı `reload()` ile kataloğu hemen yeniliyor.
+  - **Konu.** Ölçüm kolonunun ilk takma adından çıkarılıyor; il bazlı kaynakta il adı atılıyor ("81 il × 8 konu"), kısaltmalar
+    adındaki yazımla ("TÜFE"), en çok 6 konu.
+  - **Yeni kaynağın adı ayar dosyası olmadan:** source_names → adres/kimlikten kurum adı ("tuik" → "TÜİK") → alan adı → kimlik.
+    `meta.source` DB'de boş, kullanılmadı.
+  - **Kendi gerilemem.** Tablosuz sayı denetimi havuzu yalnız bu turun araç çıktısıydı. S8'de önceki deterministik cevaptan
+    tekrarlanan doğru "81 il" maddeleri 3/3 silindi, başlık boş kaldı; not da tablo yokken "tabloda" diyordu.
+  - **Düzeltme:**
+    - Havuz = araç çıktıları + ön-yükleme kartları + önceki cevaplar.
+    - Not metni düzeltildi.
+    - Denetim araçsız tura da uygulanıyor; model araçsız "166 seri" yazmıştı.
+  - **Kontrol dersi.** "Geri gönderilmez" denetimi yanlış şeyi ölçüyordu; S8 artık "boş başlık yok" arıyor. Kusurlar iki kez
+    otomatik denetimde değil elle okumada bulundu.
+  - **Ölçüm:**
+    - Ajan testleri 644; K01 22/22, K02 22/22, arayüz 15/15.
+    - 8 senaryo × 3 canlı 66/66: iç ad 0, boş başlık 0, silinen ifade 0, fark 3/3 doğru.
+    - Kimlik deneyinde silinen ifade 0.
+  - **Açık:** model cevabında iç kolon adı (`entity_id`) ve olmayan banka/kurum kırılımı iddiası görüldü.
+- **PR #6 main'e birleşti (15 Eyl akşam, kullanıcı onayıyla):**
+  - Birleştirme: merge commit 7e47213, ebeveynler 5a85254 ve fbeee45; `gh pr merge --merge`.
+  - Kapsam: ADR-0081 (bağlam kayması, kullanım soruları, uydurma tutar toleransı, sıfırlama cevabı), ADR-0082 ve ekleri (iç ad yok,
+    konu başlıklı veri seti cevabı, yeni kaynağın okunur adı, tablosuz sayı denetimi), sol panel etiketleri.
+  - CI yeni PR koşusunda yeşil: agent-core 38 s, lakehouse-core 44 dk 41 s. PR sayfası ilk anda aynı commit'in eski koşusunu yeşil
+    gösterdi; birleştirme yeni koşunun sonucu beklenerek yapıldı.
+  - feature/agent-engine main'e ileri sarıldı.
+
+### 2.35 Kanıt yolculuğu tek gösterim, sohbet kaydı ve PR #7 birleştirmesi (15–16 Eylül)
+- **Kanıt yolculuğu (ADR-0083):**
+  - 3B three.js ve yürüyen karakter kaldırıldı; tıklanabilir tasarım prototipi gerçek kayıtla (Adana konut kredisi) hazırlanıp onaylandı.
+  - Duraklar yalnız kanıtta olan halkalardan kurulur; sıra verinin akışıdır: kaynak → RAW → Bronze → Silver → (hesaplanmış tablo) →
+    SQL → Tablo → Cevap. İlk uygulamada sıra tersti, kullanıcı ekranda görünce çevrildi.
+  - Animasyon ilk kopuk halkada durur, sonrası "doğrulanamadı". Sayı çipleri kullanıcı isteğiyle kaldırıldı; sağ panelde küçük zincir var.
+- **Sohbet kaydı (ADR-0084):**
+  - Her sohbet `DATA_ROOT/conversations/<kimlik>` altında, cevaptan sonra yazılır; uygulama yeniden açılınca son açık sohbet gelir.
+  - Sohbet listesi sol panelde, en son kullanılan en üstte. Önce hamburger menü denendi; kullanıcı sürekli görünen listeyi seçti.
+  - Yeni sohbet düğmesi, onaylı silme; "Oturumu sıfırla" açık sohbeti ve yüklemelerini siler.
+  - Tam veri sıfırlama sohbetleri korur ve "sıfırlamadan önce" diye işaretler.
+  - Orta genişlikte (≤1100 px) önce sağdaki kanıt paneli gizlenir, sohbet listesi solda kalır.
+- **origin/main birleştirmesi (PR #7, çok turlu bağlam):** feature/agent-engine'e yerel merge commit 05b06a3 ile alındı, çakışma
+  çıkmadı. Takip bağlamı (`_follow_up_context`) sohbete bağlandı: yeni sohbette boşalır, açılan sohbette geri gelir.
+- **Ölçüm:** agent testleri 675/675; arayüz kabulü (k01_ui) 15/15 (Playwright 1.62.0, önbellekteki tarayıcıyla).
+- **Adım yolculuğu (ADR-0085):** alttaki araç izi çubuğu 14 adımda altı satıra yayılıp konuşma alanını daraltıyordu (900 px ekranda
+  520 px). İzler "Yolculuğu izle"nin yanındaki "Adımları izle" penceresine taşındı:
+  - figürlerle ve sırayla; arka arkaya aynı araç tek durak (×N);
+  - hatalı çağrı kırmızı, geri gönderilen taslak amber; son durak cevap toplamları;
+  - kanıt yolculuğuyla ortak `chainViewer` motoru kullanılıyor;
+  - alt çubuk tek satır özet oldu (konuşma alanı 729 px). Testler 679/679.
+- **Durum:** commit edilmedi; kullanıcı kontrol ettikten sonra PR ile main'e gidecek.
+- **Son doğrulama ve PR (16 Eyl gece):** son kodla arayüz kabulü 15/15 (`docs/experiments/k01_ui_kabul_2026-09-16_0121`); kullanıcı
+  onayıyla commit edildi, feature/agent-engine'den main'e PR açıldı. main'e birleştirme CI yeşil gelince ayrıca onayla yapılacak.

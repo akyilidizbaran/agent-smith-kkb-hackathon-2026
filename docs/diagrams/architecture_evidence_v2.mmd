@@ -1,0 +1,37 @@
+flowchart TD
+    U[User query and follow-up] --> API[Session API]
+    API --> CTRL[Run controller and state]
+    CTRL --> GW[MIA gateway and capability flags]
+    GW --> MIA[Qwen reasoning]
+    MIA --> ACT[Action or final proposal]
+    ACT --> AV[Schema reference and policy validation]
+    AV -->|valid action| EX[Bounded executor]
+    AV -->|repair or clarify| CTRL
+    EX --> RET[Metadata retrieval]
+    EX --> SEARCH[Search provider adapter]
+    EX --> FETCH[Safe fetch and format router]
+    EX --> DATA[Lakehouse tools and numeric kernel]
+    FETCH --> PARSE[Parser or conditional OCR]
+    PARSE --> QUAR[Quarantine and semantic validation]
+    QUAR --> ING[Deterministic ingestion]
+    ING --> RAW[Immutable raw and versioned Parquet]
+    RAW --> CAT[Catalog and curated Gold snapshot]
+    CAT --> IDX[Index generation]
+    IDX --> RET
+    CAT --> DATA
+    RET --> OBS[Typed observations]
+    SEARCH --> OBS
+    DATA --> RV[Numeric and financial validation]
+    RV --> COMMIT[Single workspace commit]
+    COMMIT --> WS[Versioned workspace]
+    WS --> OBS
+    OBS --> CTRL
+    ACT -->|final proposal| CV[Claim evidence validation]
+    COMMIT --> LEDGER[Results and provenance ledger]
+    SEARCH --> LEDGER
+    LEDGER --> CV
+    CV -->|verified| OUT[Answer table chart and evidence]
+    CV -->|failed| CTRL
+    CTRL -.-> TRACE[Redacted trace and checkpoints]
+    EX -.-> TRACE
+    COMMIT -.-> TRACE

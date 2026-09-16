@@ -65,7 +65,8 @@ def test_cizgi_grafik_kural_aracta_denetci_gecti_png_yazildi(env) -> None:
     # SQL'de yeniden adlandırılmış tek ölçüm: birim ve stok bilgisi katalogdan geldi
     assert spec["title"]["text"] == "Konut kredisi bakiyesi · milyon TL · 2025-01-28 → 2025-12-28"
     assert spec["layer"][0]["encoding"]["y"]["scale"] == {"zero": True}
-    assert spec["title"]["subtitle"].startswith("Kaynak: bddk_monthly")
+    # ADR-0082: altyazı iç kaynak kimliğiyle değil kurumun adıyla ("bddk_monthly —" değil).
+    assert spec["title"]["subtitle"].startswith("Kaynak: BDDK Aylık Bülten") and "bddk_monthly" not in spec["title"]["subtitle"]
     assert "denetim: 6/6 kural geçti" in r.content.splitlines()[1]
     assert "png:" in r.content and "YAPACAĞIN" in r.content
 

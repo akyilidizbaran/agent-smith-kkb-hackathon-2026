@@ -17,16 +17,20 @@ import re
 from dataclasses import dataclass
 
 from .intent import write_intent
+from .question_preflight import _PREMISE as _PREMISE_Q   # öncül kalıbı tek yerde (Büşra, V3 §3.9)
 
 ALWAYS = frozenset({
     "lakehouse_search", "lakehouse_describe", "lakehouse_distinct_values", "lakehouse_query",
     "workspace_add_column", "workspace_compute_column", "workspace_show", "workspace_query", "workspace_real_value", "workspace_join",
     "gold_align", "gold_decompose", "gold_join",
+    "clarify",   # netleştirme (tools/clarify.py): şema küçük, politika kapısı kendi içinde (yalnız uygunluk "kısmen" dediğinde)
 })
 CHART = frozenset({"chart"})
 ANALYTICS = frozenset({"anomaly_detect", "change_points", "lead_lag"})
 WEB = frozenset({"web_url", "web_search"})
 ARCHITECT = frozenset({"ingest_from_url", "ingest_source", "promote_draft"})
+#: Öncül ailesi (Büşra, tools/premise.py): soru bir yön varsayıyorsa ("düştüğü için", "neden arttı") açılır.
+PREMISE = frozenset({"check_premise"})
 
 _CHART = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
 _ANALYTICS = re.compile(r"anomali|aykır|olağan ?dışı|sıra ?dışı|kırılma|rejim değişi|öncül|önden mi|korelasyon|granger|ilişki", re.I)
@@ -49,7 +53,8 @@ def decide(question: str, registered: set[str] | frozenset[str], *, user_text: s
     allowed = set(ALWAYS)
     opened: list[str] = []
     closed: list[str] = []
-    for family, names, pattern in (("grafik", CHART, _CHART), ("analitik", ANALYTICS, _ANALYTICS), ("web", WEB, _WEB)):
+    for family, names, pattern in (("grafik", CHART, _CHART), ("analitik", ANALYTICS, _ANALYTICS), ("web", WEB, _WEB),
+                                   ("öncül", PREMISE, _PREMISE_Q)):
         if pattern.search(question) or (family == "web" and pattern.search(user_text)):
             allowed |= names
             opened.append(family)
@@ -63,4 +68,4 @@ def decide(question: str, registered: set[str] | frozenset[str], *, user_text: s
     return GateDecision(frozenset(n for n in allowed if n in registered), tuple(opened), tuple(closed))
 
 
-__all__ = ["ALWAYS", "ANALYTICS", "ARCHITECT", "CHART", "GateDecision", "WEB", "decide"]
+__all__ = ["ALWAYS", "ANALYTICS", "ARCHITECT", "CHART", "GateDecision", "PREMISE", "WEB", "decide"]

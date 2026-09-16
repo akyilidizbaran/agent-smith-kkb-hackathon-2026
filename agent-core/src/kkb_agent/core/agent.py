@@ -28,9 +28,13 @@ from ..domain import DomainProfile
 from ..llm.base import ChatMessage, LLMClient, ToolCall
 from .errors import ToolError
 from .grounding import causal_language, grounding_check, _NUM_RE, _ascii_minus, numbers_in
+from .claim_check import claim_cell, range_claim   # G5/G6 (Büşra, V3 §3.9): sayı doğru dönemle mi yazılmış
+from .question_preflight import _PREMISE as _PREMISE_ASK
 from .small_talk import capability_reply, strip_filler_opening
-from .small_talk import is_small_talk, small_talk_reply, trim_unsolicited_offers
+from .small_talk import is_identity_question, is_small_talk, is_usage_question, small_talk_reply, trim_unsolicited_offers
+from ..labels import humanize_internal
 from . import tool_gate
+from .follow_up import FollowUpContext, FollowUpResolution, resolve_follow_up
 
 # Kullanıcının grafik isteği (Türkçe çekimli: grafiği, grafiğini, çiz, çizer misin, görselleştir).
 _CHART_ASK = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
@@ -44,6 +48,10 @@ _REQUESTED_CAPABILITIES: tuple[tuple[str, "re.Pattern[str]", frozenset[str], str
     ("analitik", _ANALYTICS_ASK, frozenset({"anomaly_detect", "change_points", "lead_lag"}),
      "Kullanıcı aykırılık / kırılma / öncülük sordu ama analitik aracı (anomaly_detect, change_points, "
      "lead_lag) çağırmadın. Veri hazır; iddiayı araçsız yazma, uygun aracı çağır ve sonra cevabını yaz."),
+    # Öncül (Büşra, tools/premise.py, V3 §3.9): soru bir yön varsayıyorsa yön araçla sınanmadan cevap yazılmaz (UEB A09/A10).
+    ("öncül", _PREMISE_ASK, frozenset({"check_premise"}),
+     "Soru bir yön varsayıyor ama check_premise ile doğrulamadın. Öncülü araçla sına (seri, kırılım değeri, yıl, "
+     "iddia edilen yön); kart ÇELİŞİYOR derse cevabın ilk cümlesi düzeltme olsun. Sonra cevabını yaz."),
 )
 from .registry import ToolRegistry
 from .tool import ToolResult
@@ -75,6 +83,11 @@ LAG({example_measure}) OVER (ORDER BY {example_time_column}) AS degisim FROM ...
 BİRİM KURALI:
 Sorgu sonucunda birimler ayrıca bildirilir. Cevabında sayıyı YAZDIĞIN birimle birlikte ver \
 ("523.455 milyon TL" gibi). Birimi kendin çevirme, dönüştürme yapma.
+
+UYARI SIRASI KURALI:
+Soruya eklenmiş bir "ÖN-KOŞUL" satırı ya da araç kartında "UYARI:" / "uygunluk: kısmen" satırı varsa \
+cevabın İLK cümlesi o uyarıdır (eksik ölçüm, kısmi yıl, eksik dönem, belirsiz birim, doğrulanmayan öncül); \
+sayılar ondan SONRA gelir. Uyarıyı cevabın sonuna not olarak bırakma. Tahmin aracı yokken projeksiyon üretme.
 
 DİĞER KURALLAR:
 - ASLA veri uydurma. Bir sayıyı ancak bir araçtan aldıysan söyleyebilirsin. \
@@ -112,6 +125,9 @@ tablo bozulur.
 - Muhatabın bir {audience}, geliştirici DEĞİL. Nihai cevapta SQL, kolon adı, araç adı, \
 hata mesajı veya "sorgunuzu kontrol edin" türü teknik yönlendirme YAZMA. Veri yoksa bunu \
 sade bir cümleyle söyle ve elde hangi dönemin bulunduğunu belirt.
+- Nihai cevapta tablo ya da seri kimliği (gold. ile başlayan ya da kaynak:kod biçimindeki kimlikler) ve veri mimarisi \
+katman adları (Gold, Silver, Bronze, RAW, lakehouse) YAZMA. Hesaplanmış bir tabloyu hangi kaynağın verisinden ve hangi \
+kuralla hesaplandığıyla anlat; kaynağı kurumun adıyla an.
 
 Bir araç hata döndürürse hatayı oku, çağrını düzelt ve tekrar dene. \
 Yeterli bilgiye ulaştığında araç çağırmayı bırak ve nihai cevabını yaz."""
@@ -192,8 +208,12 @@ def vague_candidates(question: str, search) -> list[str]:
 
 
 def unverified_numbers(answer: str, table, extra_frames=()) -> list[str]:
-    """Aktif tabloda bulunmayan cevap sayıları (yıl ve ≤31 küçük tam sayı hariç). Tolerans: göreli %0,5 ya da virgüllü
-    yazımda gösterilen hassasiyetin yarım birimi; tek noktalı üç haneli yazım binlik ve ondalık olarak iki kez denenir."""
+    """Aktif tabloda bulunmayan cevap sayıları (yıl ve ≤31 küçük tam sayı hariç).
+
+    Tolerans: gösterilen hassasiyetin yarım birimi (tam sayı yazımında 0,5; '17,99'da 0,005). Göreli tolerans YOK: bağlam
+    senaryosu (15 Eyl) %0,5 göreli toleransla uydurma "Kasım 677.970"ı tablodaki 678.970'e eşleşmiş saydı. Tek noktalı üç haneli
+    yazım ('18.388') ondalık olarak da denenir; ondalık okuması tam sayıya düşerse ('1.000' → 1) denenmez, yoksa satır sayısı 1
+    ile eşleşip uydurma "+1.000" farkını geçiriyordu."""
     if table is None or len(table) == 0:
         return []
     import numpy as np
@@ -218,10 +238,11 @@ def unverified_numbers(answer: str, table, extra_frames=()) -> list[str]:
         n = parsed[0]
         if float(n).is_integer() and (1900 <= abs(n) <= 2100 or (abs(n) <= 31 and len(raw.lstrip("+-")) <= 2)):
             continue
-        cands = [n] + ([float(raw)] if re.fullmatch(r"[-+]?\d{1,3}\.\d{3}", raw) else [])
-        half = 0.5 * 10 ** -len(raw.rsplit(",", 1)[1]) if "," in raw else 0.0
-        if not any(np.any(np.abs(values - c) <= max(abs(c) * 0.005, half, 1e-9)) or
-                   np.any(np.abs(np.abs(values) - abs(c)) <= max(abs(c) * 0.005, half, 1e-9)) for c in cands):
+        pairs = [(n, 0.5 * 10 ** -(len(raw.rsplit(",", 1)[1]) if "," in raw else 0))]
+        if re.fullmatch(r"[-+]?\d{1,3}\.\d{3}", raw.strip("+-")) and not float(raw).is_integer():
+            pairs.append((float(raw), 0.0005))
+        if not any(np.any(np.abs(values - c) <= tol + 1e-9) or np.any(np.abs(np.abs(values) - abs(c)) <= tol + 1e-9)
+                   for c, tol in pairs):
             if raw not in out:
                 out.append(raw)
     return out
@@ -296,6 +317,10 @@ def table_digest(frame, max_rows: int = 12) -> str:
 NO_TOOL_NUMBERS_NOTE = ("Bu turda HİÇBİR ARAÇ ÇALIŞMADI ve cevabındaki şu sayılar aktif tabloda yok: {nums}. Sayı uydurma ve "
                         "kafadan hesaplama yapma: fark, oran ya da filtre gerekiyorsa workspace_query ile tabloda hesaplat, "
                         "sonra yalnız araç çıktısındaki sayılarla cevabını yaz.")
+# Geri gönderme notlarının ortak başı (ADR-0081): son soru açıkça yazılır. "Sayıları çek / tablodaki sayılarla yaz" denince model
+# geçmişteki başka bir veri sorusuna dönüyordu (arayüzde rol sorusu → veri seti tablosu; canlı S3'te "Kanıt zincirini nasıl okurum?"
+# → önceki Aralık bakiyesi).
+LAST_QUESTION_NOTE = "Kullanıcının SON sorusu: «{q}». Önceki sorulara dönme; yalnız bu soruya cevap ver. "
 
 
 CLARIFY_NOTE = ("\n\n(Bu kısa mesaj, önceki cevabında sorduğun soruya verilen yanıttır: «{q}». Eksik bilgiyi "
@@ -461,6 +486,8 @@ class AnalyticsAgent:
             "lead_lag",
             # Ingest kartı da bir cevaptır: "bu dosyayı ekle" isteğinde sorgu gerekmez.
             "ingest_from_url",
+            # Öncül kartı da cevaptır (Büşra, V3 §3.9): ilk/son gözlem ve karar kartta; sayılar grounding havuzuna girer.
+            "check_premise",
         }
     )
 
@@ -492,6 +519,7 @@ class AnalyticsAgent:
         # turlar (anlatı, hesap kolonu) bu sıcaklıkla: cümleler değişir, sayılar değişmez (ADR-0046).
         self.narrate_temperature = max(0.0, float(narrate_temperature))
         self.last_gate = None
+        self.last_preflight = None   # son sorunun ön-koşul raporu (core/question_preflight); iz ve koşucular okur
         self.llm = llm
         self.registry = registry
         self.workspace = workspace or AnalysisWorkspace()
@@ -509,6 +537,8 @@ class AnalyticsAgent:
         self._system_prompt_template = system_prompt
         self._system_prompt = self.profile.render(system_prompt)
         self._history: list[ChatMessage] = []  # turlar arası konuşma hafızası
+        self._follow_up_context = FollowUpContext()
+        self._follow_up_resolution: FollowUpResolution | None = None
 
     def reset(self) -> None:
         self._history.clear()
@@ -516,6 +546,18 @@ class AnalyticsAgent:
             self.registry.user_text = ""
             self.registry.sanctioned_locators = set()
         self.workspace = AnalysisWorkspace()
+        self._follow_up_context = FollowUpContext()
+        self._follow_up_resolution = None
+
+    @property
+    def follow_up_context(self) -> FollowUpContext:
+        """Son başarılı veri turunun güvenli, session-scoped bağlamı."""
+        return self._follow_up_context
+
+    @property
+    def follow_up_resolution(self) -> FollowUpResolution | None:
+        """Son sorunun inherited/override/clear karar izi."""
+        return self._follow_up_resolution
 
     # ------------------------------------------------------------------
     def _catalog_specs(self) -> list:
@@ -529,6 +571,7 @@ class AnalyticsAgent:
         """Bir soruyu uçtan uca cevaplar; cevaba kanıt panelini iliştirir."""
         self._usage = {"prompt": 0, "completion": 0, "calls": 0}
         self._last_context = None
+        self._follow_up_resolution = None
         if is_small_talk(question):
             # Harness kuralı: selamlaşma LLM'e gitmez; tablo ve kanıt paneli yok (ADR-0045).
             text = small_talk_reply(question, has_table=self.workspace.has_table)
@@ -548,6 +591,7 @@ class AnalyticsAgent:
         clarify = self._vague_clarification(question)
         if clarify is not None:
             return clarify
+        self._prepare_follow_up(question)
         self._truncated = False
         try:
             answer = self._ask(question)
@@ -562,9 +606,13 @@ class AnalyticsAgent:
                     f"deneyin.{note} Sayı üretmedim.")
             self._history.append(ChatMessage(role="user", content=question))
             self._history.append(ChatMessage(role="assistant", content=text))
-            return AgentAnswer(text=text, steps=[AgentStep(index=1, role="narrate", thought="model servisi kesintisi",
-                                                           result_summary=str(exc)[:200], ok=False, error_code="LLM_UNAVAILABLE")],
-                               workspace=self.workspace, usage=dict(self._usage))
+            return self._complete_follow_up(AgentAnswer(
+                text=text,
+                steps=[AgentStep(index=1, role="narrate", thought="model servisi kesintisi",
+                                 result_summary=str(exc)[:200], ok=False, error_code="LLM_UNAVAILABLE")],
+                workspace=self.workspace,
+                usage=dict(self._usage),
+            ))
         if self._truncated:
             answer.text = answer.text.rstrip() + "\n\n(Not: model çıktısı uzunluk sınırında kesildi; tablo ve indirmeler tamdır.)"
         trimmed_text, trimmed = trim_unsolicited_offers(answer.text)
@@ -587,6 +635,20 @@ class AnalyticsAgent:
                 if step.role == "narrate":
                     step.thought = (step.thought or "nihai cevap") + (" · genel bilgi cevabı yayımlanmadı" if dropped else "") + (" · dolgu kırpıldı" if stripped else "")
                     break
+        # ADR-0082: kullanıcıya giden metinde tablo/seri kimliği ve mimari katman adı yok (kanıt zinciri onları taşır).
+        try:
+            specs = self._catalog_specs()
+        except Exception:  # noqa: BLE001 — katalog okunamazsa kimlikler genel adla çevrilir
+            specs = []
+        humane, internal = humanize_internal(answer.text, specs)
+        if internal:
+            answer.text = humane
+            if self._history and self._history[-1].role == "assistant":
+                self._history[-1] = ChatMessage(role="assistant", content=humane)
+            for step in reversed(answer.steps):
+                if step.role == "narrate":
+                    step.thought = (step.thought or "nihai cevap") + " · iç adlar kullanıcı diline çevrildi"
+                    break
         answer.usage = dict(self._usage)
         answer.context = self._last_context.summary() if self._last_context is not None else ""
         if self.evidence_builder is not None:
@@ -596,6 +658,27 @@ class AnalyticsAgent:
                 )
             except Exception as exc:  # noqa: BLE001 — panel cevabı asla düşürmez
                 log.warning("kanıt paneli kurulamadı: %s", exc)
+        return self._complete_follow_up(answer)
+
+    def _prepare_follow_up(self, question: str) -> None:
+        try:
+            specs = self._catalog_specs()
+        except Exception:  # noqa: BLE001 — resolver cevabı asla düşürmez
+            specs = []
+        self._follow_up_resolution = resolve_follow_up(question, self._follow_up_context, specs)
+
+    def _complete_follow_up(self, answer: AgentAnswer) -> AgentAnswer:
+        resolution = self._follow_up_resolution
+        if resolution is None:
+            return answer
+        committed = any(
+            step.ok and step.tool_name in self.DATA_PRODUCING_TOOLS
+            for step in answer.steps
+        ) and not resolution.clarification_required
+        if committed:
+            self._follow_up_context = resolution.context
+            self._follow_up_resolution = resolution.mark_committed()
+        answer.artifacts.append({"kind": "follow_up_resolution", **self._follow_up_resolution.as_dict()})
         return answer
 
     def _vague_clarification(self, question: str) -> AgentAnswer | None:
@@ -710,7 +793,11 @@ class AnalyticsAgent:
                 # Ölçüldü (Deney 1): terfi ya da grafik sonrası da "veri çekilmedi" diye geri
                 # gönderiyordu; model tabloyu yeniden gösterip aynı cevabı yazdı (fazla adım).
                 # Bu turda iş yapan bir araç çalıştıysa ya da tablo önceki turdan hazırsa uyarı yok.
-                if not produced_data and not nudged and not acted and not self.workspace.has_table:
+                # Kimlik sorusu ("Sen kimsin?") veri istemez: geri gönderilince doğru taslak bozuluyordu (kimlik deneyi, 15 Eyl).
+                # Ürün kullanım sorusu ("architect rolüne nasıl geçebilirim") da: geri gönderilen model geçmişteki son veri
+                # sorusuna dönüp onu cevapladı (arayüz denemesi, 15 Eyl).
+                if (not produced_data and not nudged and not acted and not self.workspace.has_table
+                        and not is_identity_question(question) and not is_usage_question(question)):
                     nudged = True
                     steps.append(
                         AgentStep(
@@ -725,10 +812,13 @@ class AnalyticsAgent:
                     messages.append(
                         ChatMessage(
                             role="user",
-                            content="Henüz hiçbir veri sorgusu çalıştırmadın; yalnızca "
-                            "katalogu inceledin. Katalog bilgisi cevap DEĞİLDİR. "
-                            "Kullanıcının sorusunu cevaplayan sayıları lakehouse_query ile "
-                            "çek, sonra cevabını yaz.",
+                            # Son soru açıkça yazılır: yalnız "sayıları çek" denince model geçmişteki başka bir veri
+                            # sorusuna dönüyordu (arayüz denemesi, 15 Eyl).
+                            content=LAST_QUESTION_NOTE.format(q=question[:300]) + "Henüz hiçbir veri sorgusu "
+                            "çalıştırmadın; yalnızca katalogu inceledin. Katalog bilgisi cevap DEĞİLDİR. Bu soru veri "
+                            "istiyorsa onu cevaplayan sayıları lakehouse_query ile çek, sonra cevabını yaz. Soru veri "
+                            "istemiyorsa (ürünün kullanımı, roller, dosya yükleme gibi) araç çağırma, yalnız bu soruya "
+                            "cevabını yeniden yaz.",
                         )
                     )
                     continue
@@ -762,17 +852,20 @@ class AnalyticsAgent:
                                  else unverified_numbers(self._strip_reasoning(response.content or ""), self.workspace.table,
                                                          self._frames_pool()))
                 # D02-T05: araçsız turda tek doğrulanamayan sayı da yeter (önce ≥2 idi; tek yanlış sayı kapıyı atlatıyordu).
+                # ADR-0081: kullanım sorusunu anlatırken "sorgu çalıştırılır, hesaplanır" demek işlem iddiası değildir (canlı S3).
+                # Tabloda olmayan sayı ve okunmamış dosya kapısı kullanım sorusunda da sürer.
+                claim = bool(_ACTION_CLAIM.search(response.content or "")) and not is_usage_question(question)
                 if not acted_this_turn and not action_claim_nudged and (
-                    _ACTION_CLAIM.search(response.content or "") or _FILE_REF.search(question) or len(loose_numbers) >= 1
+                    claim or _FILE_REF.search(question) or len(loose_numbers) >= 1
                 ):
                     action_claim_nudged = True
                     steps.append(AgentStep(index=i, role="validate", ok=False,
                                            thought="araç çağrılmadan işlem iddiası ya da okunmamış dosya — geri gönderildi",
                                            duration_ms=(time.perf_counter() - started) * 1000))
                     messages.append(ChatMessage(role="assistant", content=response.content))
-                    messages.append(ChatMessage(role="user", content=(
+                    messages.append(ChatMessage(role="user", content=LAST_QUESTION_NOTE.format(q=question[:300]) + (
                         NO_TOOL_NUMBERS_NOTE.format(nums=", ".join(loose_numbers[:10])) if len(loose_numbers) >= 1
-                        and not (_ACTION_CLAIM.search(response.content or "") or _FILE_REF.search(question))
+                        and not (claim or _FILE_REF.search(question))
                         else ACTION_CLAIM_NOTE)))
                     continue
 
@@ -807,16 +900,22 @@ class AnalyticsAgent:
                     causal = causal_language(answer_text)
                     if causal:
                         grounding += " | CAUSAL:" + ",".join(causal)
+                    # G5/G6 (Büşra, core/claim_check, V3 §3.9): sayı tabloda var ama BAŞKA dönemin değeri (UEB A06: Ekim değeri
+                    # "Aralık" diye) ya da kapsam beyanı tablonun aralığıyla çelişiyor (B01). MISS gibi iki geri gönderme hakkı.
+                    frames = [f for f in [self.workspace.table, *self._frames_pool()] if f is not None]
+                    cells = claim_cell(answer_text, frames) + range_claim(answer_text, frames)
+                    if cells:
+                        grounding += " | CELL:" + "; ".join(cells)
                     # Nedensellik iddiası için ikinci bir geri gönderme hakkı: ölçüldü (G17), model
                     # kartın "neden deme" uyarısına rağmen ilk yeniden yazımda da nedensellik dili kullandı.
                     causal_retry = causal and causal_rounds < 2
                     # M16 beşinci koşu: tek geri göndermeden sonra da doğrulanamayan bakiye cevaba notla çıktı; MISS de iki hak alır.
-                    miss_retry = grounding.startswith("MISS") and miss_rounds < 2
+                    miss_retry = (grounding.startswith("MISS") or bool(cells)) and miss_rounds < 2
                     if miss_retry or causal_retry:
                         regenerated = True
                         if causal:
                             causal_rounds += 1
-                        if grounding.startswith("MISS"):
+                        if grounding.startswith("MISS") or cells:
                             miss_rounds += 1
                         steps.append(
                             AgentStep(
@@ -835,6 +934,10 @@ class AnalyticsAgent:
                             )
                         if causal:
                             problems.append("nedensellik iddiası var: " + ", ".join(causal))
+                        if cells:
+                            problems.append("dönem–sayı eşleşmesi tabloyla çelişiyor: " + "; ".join(cells)
+                                            + " (her sayıyı tablodaki KENDİ dönemiyle yaz; kart önizlemesi ilk satırlarla sınırlı "
+                                            "olabilir, tablonun tamamına göre yaz)")
                         messages.append(ChatMessage(role="assistant", content=response.content))
                         messages.append(
                             ChatMessage(
@@ -850,11 +953,27 @@ class AnalyticsAgent:
                         continue
                     if grounding.startswith("MISS"):
                         answer_text, rejected = self._final_exit(question, answer_text, tool_texts, steps, i)
+                    if cells:
+                        # Geri gönderme hakkı bitti, çelişki sürüyor: kullanıcıya deterministik not (sayı gizlenmez, etiketi sorgulanır).
+                        answer_text = answer_text.rstrip() + "\n\n(Not: cevaptaki dönem etiketi tabloyla uyuşmuyor — " + "; ".join(cells) + ".)"
                 elif not acted_this_turn and self.workspace.has_table:
                     # D02-T05: önceki turun tablosuyla araçsız verilen cevap da doğrulama kapısından geçer.
                     pool = self._frames_pool()
                     if unverified_numbers(answer_text, self.workspace.table, pool):
                         answer_text, rejected = self._final_exit(question, answer_text, None, steps, i)
+                elif not self.workspace.has_table:
+                    # Araçsız tur da (S8 canlı, 15 Eyl): model araç çağırmadan "konut kredisiyle ilgili 166 seri" yazdı; denetim yalnız
+                    # araç çalışan turdaydı. Havuz boşsa (ilk tur, kart yok) doğrulanacak kaynak da yoktur, denetim atlanır.
+                    # ADR-0082: veri çekilmeden (yalnız katalog araması) yazılan tablosuz cevaptaki sayılar da araç çıktısında
+                    # olmalı. "Elinde nasıl veriler var" cevabı doğrulanmamış "687+ seri" yazdı (doğrusu 681).
+                    # Havuz: bu turun araç çıktıları + ön-yükleme kartları + sohbetteki önceki cevaplar (doğrulanmış ya da deterministik,
+                    # ör. "81 il × 8 konu"). Yalnız araç çıktısıyla, S8 canlı senaryosunda önceki cevaptan tekrarlanan doğru "81 il"
+                    # maddeleri siliniyor, başlık boş kalıyordu (15 Eyl, 3/3).
+                    context_text = getattr(self._last_context, "text", "") if self._last_context is not None else ""
+                    pool = [*tool_texts, *([context_text] if context_text else []),
+                            *(m.content for m in self._history if m.role == "assistant" and m.content)]
+                    if pool and grounding_check(question, answer_text, pool).startswith("MISS"):
+                        answer_text, rejected = self._final_exit(question, answer_text, pool, steps, i)
 
                 steps.append(
                     AgentStep(
@@ -865,7 +984,7 @@ class AnalyticsAgent:
                         duration_ms=(time.perf_counter() - started) * 1000,
                     )
                 )
-                answer_text = self._source_note(answer_text, steps, artifacts)
+                answer_text = self._coverage_note(self._source_note(answer_text, steps, artifacts), artifacts)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=answer_text))
                 return AgentAnswer(text=answer_text, steps=steps, workspace=self.workspace,
@@ -943,6 +1062,19 @@ class AnalyticsAgent:
                     self.workspace.remember_web(result.artifacts["web"])  # sonraki turların zinciri için
                 if result.ok and result.artifacts.get("web_search"):   # K02-T04: bağlam kaynağı, veri değil (ADR-0075)
                     artifacts.append({"kind": "web_search", **result.artifacts["web_search"]})
+                if result.ok and result.artifacts.get("fitness"):      # uygunluk kararı + kapsam (V3 §3.9): kanıt paneli ve kapsam beyanı
+                    artifacts.append({"kind": "fitness", **result.artifacts["fitness"]})
+                    # Netleştirme kapısı (tools/clarify.py) bu turun kararını okur: yalnız "kısmen" ise soru sorulabilir.
+                    self.registry.last_fitness = {**result.artifacts["fitness"], "turn": getattr(self.registry, "turn", 0)}
+                if result.ok and call.name == "clarify":
+                    # Netleştirme (Büşra, V3 §3.9): araç turu bitirir — soru kullanıcıya gider, sayı üretilmez, model yeniden
+                    # çağrılmaz. Kullanıcının cevabı bekleyen soru mekanizmasıyla (pending_question) sonraki tura bağlanır.
+                    artifacts.append({"kind": "clarify", **(result.artifacts.get("clarify") or {})})
+                    text = self._coverage_note(result.content, artifacts)
+                    self._history.append(ChatMessage(role="user", content=question))
+                    self._history.append(ChatMessage(role="assistant", content=text))
+                    log.info("adım %d: clarify — tur netleştirme sorusuyla bitti", i)
+                    return AgentAnswer(text=text, steps=steps, workspace=self.workspace, artifacts=artifacts)
                 if result.error is not None and not result.error.is_retryable and getattr(result.error, "terminal", None) is not False:
                     terminal = result.error
                 log.info("adım %d: %s -> %s", i, call.name, "ok" if result.ok else "HATA")
@@ -967,7 +1099,7 @@ class AnalyticsAgent:
                 )
                 text = self._strip_reasoning(final.content)
                 text, rejected = self._checked_final(question, text, tool_texts, steps, i)
-                text = self._source_note(text, steps, artifacts)
+                text = self._coverage_note(self._source_note(text, steps, artifacts), artifacts)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=text))
                 return AgentAnswer(text=text, steps=steps, workspace=self.workspace,
@@ -987,7 +1119,7 @@ class AnalyticsAgent:
         )
         text = self._strip_reasoning(final.content)
         text, rejected = self._checked_final(question, text, tool_texts, steps, self.max_steps + 1)
-        text = self._source_note(text, steps, artifacts)
+        text = self._coverage_note(self._source_note(text, steps, artifacts), artifacts)
         if budget_hit:
             # K02-T10 (A27): sınır kullanıcıya deterministik söylenir; modelin bunu yazmasına bırakılmaz.
             text = text.rstrip() + (f"\n\n(Not: soru başına süre bütçesi ({self.time_budget_s:.0f} s) doldu; cevap o ana kadar "
@@ -1053,7 +1185,8 @@ class AnalyticsAgent:
         substantive = len(re.sub(r"[\W\d_]+", "", clean)) >= 40
         table = self.workspace.table
         if substantive:
-            final = clean + f"\n\n(Araç çıktısıyla doğrulanamayan {len(removed)} ifade cevaptan çıkarıldı; doğrulanmış değerler tabloda.)"
+            final = clean + (f"\n\n(Araç çıktısıyla doğrulanamayan {len(removed)} ifade cevaptan çıkarıldı"
+                             + ("; doğrulanmış değerler tabloda.)" if table is not None and len(table) else ".)"))
         elif table is not None and len(table):
             final = ("Bu soru için güvenilir bir açıklama üretemedim: anlatımdaki değerler araç çıktısıyla doğrulanamadığı için "
                      "cevaptan çıkarıldı. Araçların ürettiği doğrulanmış tablo:\n\n" + table_digest(table))
@@ -1106,6 +1239,11 @@ class AnalyticsAgent:
         if self.workspace.has_table:
             system += "\n\nMEVCUT ANALİZ DURUMU:\n" + self.workspace.describe_for_llm()
 
+        if self._follow_up_resolution is not None:
+            follow_up_note = self._follow_up_resolution.prompt()
+            if follow_up_note:
+                system += "\n\n" + follow_up_note
+
         msgs = [ChatMessage(role="system", content=system)]
         msgs += self._history[-8:]  # son turlar — bağlamı korur, pencereyi şişirmez
         # Aynı soru oturumda tekrar sorulduysa model tarihçedeki kendi cevabını kopyalıyor
@@ -1115,8 +1253,42 @@ class AnalyticsAgent:
         pending = pending_question(self._history, question)
         if pending:
             question = question + CLARIFY_NOTE.format(q=pending)
+        # Soru ön-koşulu (core/question_preflight, V3 §3.9): katalogda olmayan ölçüm/kırılım, ince frekans, tahmin
+        # yetkisi, öncül — deterministik, araç çağrılmadan; model ilk cümlede söyler. Hesaplanamazsa soru olduğu gibi gider.
+        note = self._preflight_note(question)
+        if note:
+            question = question + "\n\n" + note
         msgs.append(ChatMessage(role="user", content=question))
         return msgs
+
+    def _preflight_note(self, question: str) -> str:
+        try:
+            from .question_preflight import CatalogFacts, preflight
+
+            specs = self._catalog_specs()
+            report = preflight(question, CatalogFacts.from_specs(specs) if specs else None,
+                               tools=set(self.registry.names()), has_table=self.workspace.has_table)
+        except Exception as exc:  # noqa: BLE001 — ön-koşul cevabı asla düşürmez
+            log.warning("soru ön-koşulu hesaplanamadı: %s", exc)
+            return ""
+        self.last_preflight = report
+        return report.note()
+
+    def _coverage_note(self, text: str, artifacts: list) -> str:
+        """Kapsam beyanı (V3 §3.9, 15 Eyl): dış kaynaktan (web_url / ingest) yüklenen tablonun adı, dönemi, satırı ve
+        kalite/uygunluk uyarıları cevabın İLK satırında, deterministik. Modelin hatırlamasına bırakılmaz: ölçüldü (UEB B02),
+        uyarı cevabın sonuna not olarak düştü, kullanıcı sayıları önce okudu."""
+        fits = [a for a in artifacts if a.get("kind") == "fitness"]
+        if not fits:
+            return text
+        f = fits[-1]
+        warn = list(f.get("quality") or [])
+        if f.get("decision") == "partial":
+            warn.insert(0, "uygunluk kısmen — " + "; ".join(f.get("reasons") or []))
+        if f.get("confirmed"):
+            warn.insert(0, "kullanıcı onayıyla yüklendi; kapı bu tabloyu uygun bulmamıştı")
+        line = f"Veri: {f.get('coverage', '')}" + (" | UYARI: " + " | ".join(warn) if warn else "")
+        return f"({line})\n\n{text}"
 
     def _asked_before(self, question: str) -> bool:
         key = _norm_question(question)

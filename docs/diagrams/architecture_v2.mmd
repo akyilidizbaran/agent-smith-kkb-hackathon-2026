@@ -1,0 +1,64 @@
+---
+title: KKB Agentic Data Analytics - Architecture V2 (Plan · Execute · Verify)
+---
+flowchart TB
+  U["Kullanici · Turkce soru / URL"] --> IG["Input Guard<br/>kapsam · injection · URL"]
+  IG --> CB["Context Builder<br/>workspace projeksiyonu + adaylar + verified queries"]
+  CB --> RET
+  subgraph RET["RETRIEVAL ENGINE (deterministic)"]
+    AL["Alias exact"] --> RRF["RRF + alias boost"]
+    BM["BM25 · DuckDB FTS turkish"] --> RRF
+    DE["Qwen3-Embedding-8B (P1)"] --> RRF
+    RRF --> RR["Reranker (P1, olcume bagli)"] --> MV["Metadata validation + confidence"]
+  end
+  MV --> PL["PLANNER · LLM#1<br/>AnalysisPlan JSON + assumptions"]
+  PL --> PV["Plan Validator<br/>seri varligi · tip · coverage · index kilidi · tool allowlist"]
+  PV -- "hata + hint (≤2)" --> PL
+  PV --> EX["Executor (deterministic)"]
+  subgraph TR["TOOL REGISTRY (slayt isimleri)"]
+    T1["Lakehouse Tool<br/>search_series · describe · get_series · execute_sql(guarded)"]
+    T2["Web Search Tool<br/>SearchProvider: Tavily | Firecrawl | cache"]
+    T3["Web URL Agent Tool<br/>ingest_adhoc → Document Reader LLM#3 (≤4 adim)"]
+    T4["Anomali Tool<br/>STL + ESD"]
+    T5["Causality Tool<br/>ADF/KPSS · lagged corr · Toda-Yamamoto"]
+    T6["Change Detection Tool<br/>PELT"]
+    T7["Donusum · DQ · Chart<br/>align · decumulate · deflate · pct/pp"]
+  end
+  EX --> TR
+  T1 --> SQLG["SQL Guard<br/>sqlglot AST · allowlist · LIMIT · timeout"] --> DB[("DuckDB agent.duckdb<br/>gold.* · meta.* · read-only")]
+  T3 --> Q[("quarantine.*")]
+  T2 --> WC[("web cache + provenance")]
+  T4 --> NK["Numeric Kernel<br/>tip sistemi · statsmodels · ruptures"]
+  T5 --> NK
+  T6 --> NK
+  T7 --> NK
+  NK --> CAT[("meta.series · relationships<br/>verified_queries · domain_notes")]
+  DB --> CAT
+  EX --> CP{"gozlem sonrasi<br/>revise? (≤1)"}
+  CP -- evet --> PL
+  CP -- hayir --> VF["Verifier (deterministic)<br/>birim · frekans · n · subtotal · nominal/reel"]
+  VF -- hata --> PL
+  VF --> WS[("Analysis Workspace<br/>v_n+1 immutable · kolon soyagaci")]
+  WS --> NA["NARRATOR · LLM#2<br/>placeholder'li anlatim"]
+  NA --> OG["Output Guard<br/>her sayi ledger'da · nedensellik dili"]
+  OG -- "temellenmemis" --> NA
+  OG --> OUT["Tablo · Grafik · Rapor + Kaynak"]
+  EX --> LED[("Provenance Ledger<br/>claim → tool → kolon → seri → artifact SHA → URL")]
+  LED --> OUT
+  GW["MIA Gateway<br/>rol bazli thinking/effort · JSON merdiveni · backoff · cache"]
+  PL -.-> GW
+  NA -.-> GW
+  T3 -.-> GW
+  DE -.-> GW
+  GW --> M1["Qwen3.8-27B"]
+  GW --> M2["Qwen3-Embedding-8B"]
+  GW --> M3["Unlimited-OCR"]
+  TRC[("Trace JSONL · query_id")]
+  EX -.-> TRC
+  PL -.-> TRC
+  classDef llm fill:#0F6E7A,stroke:#0B4F58,color:#fff
+  classDef det fill:#2F7D4F,stroke:#1F5A38,color:#fff
+  classDef store fill:#4A4E69,stroke:#2E3047,color:#fff
+  class PL,NA,M1,M2,M3 llm
+  class IG,CB,PV,EX,VF,OG,SQLG,NK,GW,RRF,MV det
+  class DB,Q,WC,CAT,WS,LED,TRC store

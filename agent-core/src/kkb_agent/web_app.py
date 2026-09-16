@@ -14,11 +14,14 @@ from dataclasses import dataclass
 
 import base64
 import json
+import logging
+import queue
 import re
 import shutil
 import threading
 import time
 import uuid
+from contextlib import nullcontext
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -26,9 +29,16 @@ from typing import Any, Callable, Literal
 
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+from .conversations import ConversationStore, conversation_title, new_conversation_id, now_iso
+from .core.workspace import AnalysisWorkspace
+from .labels import readable_source
+from .live_steps import args_detail, live_hooks, tool_label
+
+log = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 MAX_ROWS = 200
@@ -149,6 +159,7 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict
     for s in getattr(answer, "steps", []):
         steps.append({
             "index": s.index, "role": s.role, "thought": s.thought, "tool": s.tool_name,
+            "label": tool_label(s.tool_name), "detail": args_detail(s.tool_name, s.tool_args),
             "args": _json_safe(s.tool_args), "ok": bool(s.ok), "error_code": s.error_code,
             "summary": (s.result_summary or "")[:400], "duration_ms": round(float(getattr(s, "duration_ms", 0.0) or 0.0)),
             "candidates": list(getattr(s, "candidates", []) or []),
@@ -173,6 +184,7 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict
         scope = "ortak veri havuzu"
     gate = getattr(agent, "last_gate", None)
     search = getattr(getattr(agent.registry.get("web_search"), "search", None), "remaining", None) if agent.registry.get("web_search") else None
+    follow_up = getattr(agent, "follow_up_resolution", None)
     return {
         "text": answer.text,
         "steps": steps,
@@ -185,6 +197,7 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict
         "usage": dict(getattr(answer, "usage", {}) or {}),
         "context": getattr(answer, "context", "") or "",
         "grounding": getattr(answer, "grounding", "") or "",
+        "follow_up": follow_up.as_dict() if follow_up is not None else None,
         "hit_step_limit": bool(getattr(answer, "hit_step_limit", False)),
         "gate": {"allowed": sorted(gate.allowed), "opened": list(gate.opened), "closed": list(gate.closed)} if gate else None,
         "search_budget_remaining": search,
@@ -275,7 +288,7 @@ def report_html(payload: dict[str, Any], frame: pd.DataFrame | None, *, model: s
         table_html = show.to_html(index=False, na_rep="", border=0, classes="data", float_format=lambda v: f"{v:,.4f}".rstrip("0").rstrip("."))
     srcs = []
     for c in ev.get("columns") or []:
-        srcs += [str(x) for x in (c.get("sources") or [])]
+        srcs += [readable_source(str(x)) for x in (c.get("sources") or [])]   # ADR-0082: rapor kullanıcı diliyle
     for w in ev.get("web_sources") or []:
         srcs.append(f"{w.get('url')} · sha256 {str(w.get('sha256') or '')[:16]}… · {w.get('fetched_at') or ''}")
     for w in ev.get("context_sources") or []:
@@ -502,20 +515,40 @@ def _close_agent_readers(agent: Any, db_path: Path | None) -> None:
     gc.collect()
 
 
-class Session:
-    """Tek ajan, sıralı sorular. `reset` ajanı yeniden kurar (temiz workspace)."""
+def _history_row(p: dict[str, Any]) -> dict[str, Any]:
+    return {"index": p.get("index"), "question": p.get("question", ""), "elapsed_s": p.get("elapsed_s"),
+            "steps": len([s for s in p.get("steps") or [] if s.get("tool")]), "evidence": (p.get("evidence") or {}).get("summary")}
 
-    def __init__(self, agent_factory: Callable[..., Any], *, profile: str = "analyst", architect_token: str = "") -> None:
+
+class Session:
+    """Tek ajan, sıralı sorular; açık olan tek sohbet. `store` verilirse her sohbet diske yazılır ve uygulama yeniden açılınca
+    son sohbet kaldığı yerden sürer (ADR-0084); verilmezse sohbet yalnız bellekte. `reset` açık sohbeti siler, ajanı yeniden kurar."""
+
+    def __init__(self, agent_factory: Callable[..., Any], *, profile: str = "analyst", architect_token: str = "",
+                 store: ConversationStore | None = None) -> None:
         self._factory = agent_factory
         self._lock = threading.Lock()
         self.profile = profile
         self.architect_token = architect_token
         self.agent = self._build(profile)
+        self.store = store
         self.history: list[dict[str, Any]] = []
         self.answers: list[dict[str, Any]] = []   # tam cevap yükleri; sayfa yenilenince yeniden çizilir
-        self.id = uuid.uuid4().hex[:8]
+        self.id = new_conversation_id()            # sohbet kimliği; yüklemeler de bu kimliğin dizininde
+        self.title = ""
+        self.created_at = now_iso()
+        self._epoch = store.epoch if store is not None else 0
         self.uploads: list[dict[str, Any]] = []
         self.tables: dict[int, pd.DataFrame] = {}   # cevap sürümü → tam tablo (dışa aktarım önizlemeden değil)
+        if store is not None:
+            latest = store.listing()
+            resume = store.last_active() or (str(latest[0]["id"]) if latest else None)
+            if resume:
+                try:
+                    self._open(resume)   # uygulama yeniden açıldı: kullanıcının en son açık tuttuğu sohbet kaldığı yerden
+                except Exception as exc:  # noqa: BLE001 — okunamayan kayıt açılışı düşürmez; boş sohbetle başlanır
+                    log.warning("son sohbet açılamadı: %s", exc)
+                    self._fresh()
 
     def _build(self, profile: str) -> Any:
         try:
@@ -530,9 +563,10 @@ class Session:
         if profile == "architect" and token != self.architect_token:
             raise HTTPException(status_code=403, detail="Architect anahtarı yanlış")
         with self._lock:
+            self._leave()                                  # ADR-0084: önceki sohbet kayıtlı kalır, geçiş yeni sohbet açar
             self.profile = profile
             self.agent = self._build(profile)
-            self.history, self.answers, self.tables = [], [], {}
+            self._fresh()
 
     @property
     def upload_dir(self) -> Path:
@@ -564,32 +598,158 @@ class Session:
         self.uploads.append(info)
         return info
 
-    def ask(self, question: str) -> dict[str, Any]:
+    def ask(self, question: str, on_event: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
+        """`on_event` verilirse soru süresince canlı adım olayları ona gider (ADR-0079); cevap yükü aynıdır."""
         with self._lock:
             started = time.perf_counter()
             table_before = getattr(self.agent.workspace, "table", None)
-            answer = self.agent.ask(question)
+            with live_hooks(self.agent, on_event) if on_event is not None else nullcontext():
+                answer = self.agent.ask(question)
             payload = answer_to_dict(answer, self.agent, table_before=table_before)
             payload["elapsed_s"] = round(time.perf_counter() - started, 1)
             payload["question"] = question
             payload["index"] = len(self.answers)
-            self.history.append({"index": payload["index"], "question": question, "elapsed_s": payload["elapsed_s"],
-                                 "steps": len([s for s in payload["steps"] if s["tool"]]),
-                                 "evidence": (payload["evidence"] or {}).get("summary")})
+            self.history.append(_history_row(payload))
             self.answers.append(payload)
             if payload.get("table") is not None and getattr(self.agent.workspace, "table", None) is not None:
                 self.tables[payload["index"]] = self.agent.workspace.table.copy()
+            if not self.title:
+                self.title = conversation_title(question)
+            self._save()                                   # ADR-0084: cevaptan sonra; kayıt hatası cevabı düşürmez
             return payload
 
     def reset(self) -> None:
+        """Oturumu sıfırla: açık sohbet, tabloları ve bu sohbette yüklenen dosyalar silinir; yeni boş sohbet (M10-T12, ADR-0084)."""
         with self._lock:
+            if self.store is not None:
+                self.store.delete(self.id)
+            shutil.rmtree(self.upload_dir, ignore_errors=True)
             self.agent = self._build(self.profile)
-            self.history = []
-            self.answers = []
-            shutil.rmtree(self.upload_dir, ignore_errors=True)   # oturum dosyaları geçicidir (M10-T12)
-            self.uploads = []
-            self.tables = {}
-            self.id = uuid.uuid4().hex[:8]
+            self._fresh()
+
+    # ---------------- sohbetler (ADR-0084) ----------------
+    def _agent_state(self) -> dict[str, Any]:
+        agent = self.agent
+        ws = getattr(agent, "workspace", None)
+        reg = getattr(agent, "registry", None)
+        return {"workspace": dict(vars(ws)) if isinstance(ws, AnalysisWorkspace) else None,
+                "history": list(getattr(agent, "_history", None) or []),
+                "user_text": getattr(reg, "user_text", "") or "",
+                "sanctioned_locators": sorted(getattr(reg, "sanctioned_locators", None) or []),
+                "follow_up_context": getattr(agent, "_follow_up_context", None),   # çok turlu bağlam (PR #7) sohbete aittir
+                "tables": dict(self.tables)}
+
+    def _clear_agent_state(self) -> None:
+        """Ajanı yeniden kurmadan sohbet durumunu boşaltır. Araçlar çalışma alanının AYNI nesnesini tutar (cli.build_agent):
+        yeni nesne atanmaz, içi sıfırlanır; konuşma hafızası listesi de yerinde boşalır."""
+        agent = self.agent
+        ws = getattr(agent, "workspace", None)
+        if isinstance(ws, AnalysisWorkspace):
+            ws.__dict__.clear()
+            ws.__init__()
+        history = getattr(agent, "_history", None)
+        if isinstance(history, list):
+            history.clear()
+        reg = getattr(agent, "registry", None)
+        if reg is not None and hasattr(reg, "user_text"):
+            reg.user_text = ""
+            reg.sanctioned_locators = set()
+        if hasattr(agent, "_follow_up_context"):
+            agent._follow_up_context = type(agent._follow_up_context)()   # takip bağlamı başka sohbete taşınmaz (PR #7)
+        for attr in ("_last_context", "last_gate", "last_preflight", "_follow_up_resolution"):
+            if hasattr(agent, attr):
+                setattr(agent, attr, None)
+
+    def _fresh(self) -> None:
+        self._clear_agent_state()
+        self.history, self.answers, self.tables, self.uploads = [], [], {}, []
+        self.id, self.title, self.created_at = new_conversation_id(), "", now_iso()
+        self._epoch = self.store.epoch if self.store is not None else 0
+
+    def _save(self) -> None:
+        if self.store is None or not self.answers:
+            return
+        meta = {"id": self.id, "title": self.title or conversation_title(str(self.answers[0].get("question", ""))),
+                "created_at": self.created_at, "updated_at": now_iso(), "count": len(self.answers), "profile": self.profile,
+                "epoch": self._epoch, "uploads": _json_safe(self.uploads)}
+        try:
+            self.store.save(self.id, meta=meta, answers=_json_safe(self.answers), state=self._agent_state())
+            self.store.set_active(self.id)
+        except Exception as exc:  # noqa: BLE001 — disk hatası cevabı ya da geçişi düşürmez; log'a düşer
+            log.warning("sohbet %s kaydedilemedi: %s", self.id, exc)
+
+    def _leave(self) -> None:
+        """Başka sohbete geçmeden önce: sorulu sohbet kaydedilir; hiç soru sorulmamışsa yüklediği dosyalar silinir."""
+        if self.answers:
+            self._save()
+        else:
+            shutil.rmtree(self.upload_dir, ignore_errors=True)
+
+    def _open(self, cid: str) -> None:
+        meta, answers, state = self.store.load(cid)   # type: ignore[union-attr]
+        self._clear_agent_state()
+        agent = self.agent
+        ws = getattr(agent, "workspace", None)
+        if isinstance(ws, AnalysisWorkspace) and isinstance(state.get("workspace"), dict):
+            ws.__dict__.update(state["workspace"])
+        history = getattr(agent, "_history", None)
+        if isinstance(history, list):
+            history.extend(state.get("history") or [])
+        follow_up = state.get("follow_up_context")
+        if follow_up is not None and hasattr(agent, "_follow_up_context") and isinstance(follow_up, type(agent._follow_up_context)):
+            agent._follow_up_context = follow_up
+        reg = getattr(agent, "registry", None)
+        if reg is not None and hasattr(reg, "user_text"):
+            reg.user_text = str(state.get("user_text") or "")
+            reg.sanctioned_locators = set(state.get("sanctioned_locators") or [])
+        self.answers = list(answers)
+        self.tables = {int(k): v for k, v in (state.get("tables") or {}).items()}
+        self.history = [_history_row(p) for p in self.answers]
+        self.id, self.title = cid, str(meta.get("title") or "")
+        self.created_at = str(meta.get("created_at") or now_iso())
+        self._epoch = int(meta.get("epoch", 0) or 0)
+        self.uploads = [u for u in meta.get("uploads") or [] if isinstance(u, dict) and Path(str(u.get("path", ""))).is_file()]
+        self.store.set_active(cid)   # type: ignore[union-attr]
+
+    def conversations(self) -> dict[str, Any]:
+        items = self.store.listing() if self.store is not None else []
+        if self.answers and not any(i.get("id") == self.id for i in items):   # bellek kipinde açık sohbet de listede
+            items.insert(0, {"id": self.id, "title": self.title, "updated_at": now_iso(), "count": len(self.answers), "stale": False})
+        current = self.store.epoch if self.store is not None else 0
+        keys = ("id", "title", "created_at", "updated_at", "used_at", "count", "profile", "stale")
+        return {"active": self.id, "persistent": self.store is not None, "active_stale": bool(self.answers) and self._epoch < current,
+                "items": [{**{k: i.get(k) for k in keys}, "active": i.get("id") == self.id} for i in items]}
+
+    def new_conversation(self) -> str:
+        with self._lock:
+            if self.answers or self.uploads:
+                self._leave()
+                self._fresh()
+            return self.id
+
+    def open_conversation(self, cid: str) -> str:
+        if self.store is None or not self.store.exists(cid):
+            raise HTTPException(status_code=404, detail="böyle bir sohbet yok")
+        with self._lock:
+            if cid != self.id:
+                self._leave()
+                self._open(cid)
+            return self.id
+
+    def delete_conversation(self, cid: str) -> str:
+        """Sohbet ve yüklediği dosyalar silinir (geri alınamaz; arayüz onay ister). Açık sohbet silinirse yeni boş sohbet açılır."""
+        with self._lock:
+            if cid == self.id:
+                if self.store is not None:
+                    self.store.delete(cid)
+                shutil.rmtree(self.upload_dir, ignore_errors=True)
+                self._fresh()
+            else:
+                if self.store is None or not self.store.exists(cid):
+                    raise HTTPException(status_code=404, detail="böyle bir sohbet yok")
+                self.store.delete(cid)
+                shutil.rmtree(self.upload_dir.parent / cid, ignore_errors=True)
+            return self.id
 
     def status(self) -> dict[str, Any]:
         agent = self.agent
@@ -636,13 +796,15 @@ class Session:
             "search_budget_remaining": getattr(getattr(search_tool, "search", None), "remaining", None) if search_tool else None,
             "model": getattr(agent.llm, "model", None),
             "history": self.history,
+            "conversation": {"id": self.id, "title": self.title, "count": len(self.answers), "persistent": self.store is not None},
         }
 
 
 def create_app(agent_factory: Callable[..., Any], *, profile: str = "analyst", architect_token: str = "",
-               reset_paths: "ResetPaths | tuple[Path, Path] | None" = None, bootstrap: Callable[..., tuple[int, str]] | None = None) -> FastAPI:
+               reset_paths: "ResetPaths | tuple[Path, Path] | None" = None, bootstrap: Callable[..., tuple[int, str]] | None = None,
+               conversations: ConversationStore | None = None) -> FastAPI:
     app = FastAPI(title="Agent Smith", docs_url=None, redoc_url=None)
-    session = Session(agent_factory, profile=profile, architect_token=architect_token)
+    session = Session(agent_factory, profile=profile, architect_token=architect_token, store=conversations)
     app.state.session = session
     pending_reset: dict[str, str] = {}
 
@@ -676,18 +838,20 @@ def create_app(agent_factory: Callable[..., Any], *, profile: str = "analyst", a
             raise HTTPException(status_code=409, detail="veri kökü dışını gösteren ayar var: " + ", ".join(f"{l} {p}" for l, p in plan.outside))
         pending_reset.clear()
         with session._lock:                              # D05-T04: soru/yükleme ile eşzamanlı silme yok
+            session._save()                               # ADR-0084: sohbetler sıfırlama hedefi değil; açık sohbet önce kayıtlı
             report = execute_full_reset(plan, paths.data_root, bootstrap=bootstrap, db_path=paths.db_path,
                                         close_readers=lambda: _close_agent_readers(session.agent, paths.db_path))
-            session.history, session.answers, session.tables, session.uploads = [], [], {}, []
-            session.id = uuid.uuid4().hex[:8]             # D05-T07: eski grafik/cevap bağlantıları geçersiz
+            if session.store is not None:
+                session.store.bump_epoch()                # önceki sohbetler "sıfırlamadan önce" işaretlenir
             try:
                 session.agent = session._build(session.profile)
                 report["agent"] = {"ok": True, "detail": "ajan yeni veriyle kuruldu"}
             except Exception as exc:  # noqa: BLE001 — yeniden kurulum hatası başarı diye sunulmaz
                 report["agent"] = {"ok": False, "detail": f"{type(exc).__name__}: {exc}"}
                 report["status"] = "kısmi"
+            session._fresh()                              # D05-T07: yeni boş sohbet; eski grafik/cevap bağlantıları o sohbette kalır
         return JSONResponse(_json_safe(report))
-    # Yerel dosyalar (three.js vb.); CDN yok, demo çevrimdışı da çalışır (ADR-0047).
+    # Yerel dosyalar; CDN yok, demo çevrimdışı da çalışır (ADR-0083: 3B kütüphanesi kaldırıldı).
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     @app.get("/", response_class=HTMLResponse)
@@ -710,6 +874,38 @@ def create_app(agent_factory: Callable[..., Any], *, profile: str = "analyst", a
         except Exception as exc:  # noqa: BLE001 — arayüz düşmez, hata görünür
             raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
         return JSONResponse(_json_safe(payload))
+
+    @app.post("/api/ask/stream")
+    def ask_stream(req: AskRequest) -> StreamingResponse:
+        """Aynı soru, satır satır JSON (NDJSON): önce canlı adımlar, en sonda `/api/ask` ile aynı cevap yükü (ADR-0079).
+        Cevap metni akıtılmaz; doğrulama kapılarından geçmiş nihai metin tek parça gelir."""
+        question = req.question.strip()
+        events: queue.Queue = queue.Queue()
+
+        def work() -> None:
+            try:
+                payload = session.ask(question, on_event=events.put)
+                events.put({"type": "answer", "payload": _json_safe(payload)})
+            except Exception as exc:  # noqa: BLE001 — arayüz düşmez, hata görünür
+                events.put({"type": "error", "detail": f"{type(exc).__name__}: {exc}"})
+            finally:
+                events.put(None)
+
+        threading.Thread(target=work, name="ask-stream", daemon=True).start()
+
+        def lines():
+            while True:
+                try:
+                    event = events.get(timeout=10)
+                except queue.Empty:
+                    yield b'{"type":"ping"}\n'       # uzun araç çağrısında bağlantı açık kalsın
+                    continue
+                if event is None:
+                    return
+                yield (json.dumps(event, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
+
+        return StreamingResponse(lines(), media_type="application/x-ndjson",
+                                 headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
     @app.get("/api/answers")
     def answers() -> JSONResponse:
@@ -774,6 +970,22 @@ def create_app(agent_factory: Callable[..., Any], *, profile: str = "analyst", a
         st = session.status()
         return HTMLResponse(report_html(p, session.tables.get(index), model=str(st.get("model") or ""), version=_git_version()))
 
+    @app.get("/api/conversations")
+    def conversation_list() -> JSONResponse:
+        return JSONResponse(_json_safe(session.conversations()))
+
+    @app.post("/api/conversations")
+    def conversation_new() -> JSONResponse:
+        return JSONResponse({"ok": True, "active": session.new_conversation()})
+
+    @app.post("/api/conversations/{cid}/open")
+    def conversation_open(cid: str) -> JSONResponse:
+        return JSONResponse({"ok": True, "active": session.open_conversation(cid)})
+
+    @app.delete("/api/conversations/{cid}")
+    def conversation_delete(cid: str) -> JSONResponse:
+        return JSONResponse({"ok": True, "active": session.delete_conversation(cid)})
+
     @app.post("/api/reset")
     def reset() -> JSONResponse:
         session.reset()
@@ -796,7 +1008,8 @@ def build_default_app() -> FastAPI:
         return proc.returncode, proc.stdout + proc.stderr
 
     return create_app(lambda profile="analyst": build_agent(max_steps=12, profile=profile), profile=s.agent_profile,
-                      architect_token=s.architect_token, reset_paths=ResetPaths.from_settings(s), bootstrap=bootstrap)
+                      architect_token=s.architect_token, reset_paths=ResetPaths.from_settings(s), bootstrap=bootstrap,
+                      conversations=ConversationStore(Path(s.data_root) / "conversations"))
 
 
 __all__ = ["AskRequest", "Session", "answer_to_dict", "build_default_app", "create_app", "evidence_to_dict", "frame_to_dict",

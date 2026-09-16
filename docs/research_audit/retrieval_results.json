@@ -1,0 +1,854 @@
+{
+  "scope": "Synthetic diagnostic fixture, not official KKB data. Written before MIA embedding calls. No tuning or production accuracy claim.",
+  "fixture_sha256": "4c87f9a19e52cfa7aa4ff79fe3e6890e91ef014dafd7aa46b2aa14cdd3e7009a",
+  "evaluator_sha256": "e27e46f59171ce02d82fb904572ddc93309865dc818944dce74b832dadc9a6e9",
+  "summary": {
+    "BM25": {
+      "n": 32,
+      "recall@1": 0.625,
+      "precision@1": 0.65625,
+      "recall@3": 0.8125,
+      "precision@3": 0.29166666666666663,
+      "recall@5": 0.84375,
+      "precision@5": 0.18125000000000002,
+      "mrr": 0.746130171911422,
+      "ndcg@5": 0.7562300892842845
+    }
+  },
+  "details": [
+    {
+      "query_id": "Q01",
+      "category": "exact",
+      "method": "BM25",
+      "ranking": [
+        "housing_stock",
+        "auto_stock",
+        "bist",
+        "commercial_stock",
+        "consumer_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.08939998224377632
+    },
+    {
+      "query_id": "Q02",
+      "category": "exact",
+      "method": "BM25",
+      "ranking": [
+        "housing_rate",
+        "auto_stock",
+        "bist",
+        "commercial_stock",
+        "consumer_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.07800012826919556
+    },
+    {
+      "query_id": "Q03",
+      "category": "abbreviation",
+      "method": "BM25",
+      "ranking": [
+        "housing_price",
+        "auto_stock",
+        "bist",
+        "commercial_stock",
+        "consumer_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.049800146371126175
+    },
+    {
+      "query_id": "Q04",
+      "category": "abbreviation",
+      "method": "BM25",
+      "ranking": [
+        "auto_stock",
+        "bist",
+        "commercial_stock",
+        "consumer_stock",
+        "cpi"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 0.0,
+        "precision@1": 0.0,
+        "recall@3": 0.0,
+        "precision@3": 0.0,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 0.2,
+        "ndcg@5": 0.38685280723454163
+      },
+      "combined_ranking_cpu_ms": 0.060900114476680756
+    },
+    {
+      "query_id": "Q05",
+      "category": "turkish",
+      "method": "BM25",
+      "ranking": [
+        "housing_stock",
+        "consumer_stock",
+        "auto_stock",
+        "npl_ratio",
+        "housing_flow"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.19369972869753838
+    },
+    {
+      "query_id": "Q06",
+      "category": "turkish",
+      "method": "BM25",
+      "ranking": [
+        "housing_rate",
+        "deposit_rate",
+        "policy_rate",
+        "housing_count",
+        "npl_ratio"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.2851998433470726
+    },
+    {
+      "query_id": "Q07",
+      "category": "synonym",
+      "method": "BM25",
+      "ranking": [
+        "housing_count",
+        "auto_stock",
+        "bist",
+        "commercial_stock",
+        "consumer_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 0.0,
+        "precision@1": 0.0,
+        "recall@3": 0.0,
+        "precision@3": 0.0,
+        "recall@5": 0.0,
+        "precision@5": 0.0,
+        "mrr": 0.09090909090909091,
+        "ndcg@5": 0.0
+      },
+      "combined_ranking_cpu_ms": 0.20750006660819054
+    },
+    {
+      "query_id": "Q08",
+      "category": "english",
+      "method": "BM25",
+      "ranking": [
+        "auto_stock",
+        "bist",
+        "commercial_stock",
+        "consumer_stock",
+        "cpi"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 0.0,
+        "precision@1": 0.0,
+        "recall@3": 0.0,
+        "precision@3": 0.0,
+        "recall@5": 0.0,
+        "precision@5": 0.0,
+        "mrr": 0.07692307692307693,
+        "ndcg@5": 0.0
+      },
+      "combined_ranking_cpu_ms": 0.11640042066574097
+    },
+    {
+      "query_id": "Q09",
+      "category": "english",
+      "method": "BM25",
+      "ranking": [
+        "deposit_rate",
+        "fx",
+        "housing_rate",
+        "policy_rate",
+        "auto_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 0.0,
+        "precision@1": 0.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 0.3333333333333333,
+        "ndcg@5": 0.5
+      },
+      "combined_ranking_cpu_ms": 0.10850001126527786
+    },
+    {
+      "query_id": "Q10",
+      "category": "english",
+      "method": "BM25",
+      "ranking": [
+        "gold",
+        "bist",
+        "cpi",
+        "housing_price",
+        "auto_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 0.0,
+        "precision@1": 0.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 0.3333333333333333,
+        "ndcg@5": 0.5
+      },
+      "combined_ranking_cpu_ms": 0.13349996879696846
+    },
+    {
+      "query_id": "Q11",
+      "category": "hard_negative",
+      "method": "BM25",
+      "ranking": [
+        "gold",
+        "housing_price",
+        "consumer_stock",
+        "housing_count",
+        "participation_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 0.0,
+        "precision@1": 0.0,
+        "recall@3": 0.0,
+        "precision@3": 0.0,
+        "recall@5": 0.0,
+        "precision@5": 0.0,
+        "mrr": 0.125,
+        "ndcg@5": 0.0
+      },
+      "combined_ranking_cpu_ms": 0.3149998374283314
+    },
+    {
+      "query_id": "Q12",
+      "category": "hard_negative",
+      "method": "BM25",
+      "ranking": [
+        "housing_price",
+        "cpi",
+        "housing_flow",
+        "commercial_stock",
+        "consumer_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.20499993115663528
+    },
+    {
+      "query_id": "Q13",
+      "category": "stock_flow",
+      "method": "BM25",
+      "ranking": [
+        "housing_flow",
+        "consumer_stock",
+        "housing_count",
+        "housing_rate",
+        "npl_ratio"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.2649999223649502
+    },
+    {
+      "query_id": "Q14",
+      "category": "stock_flow",
+      "method": "BM25",
+      "ranking": [
+        "housing_flow",
+        "consumer_stock",
+        "housing_count",
+        "npl_ratio",
+        "housing_rate"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 0.0,
+        "precision@1": 0.0,
+        "recall@3": 0.0,
+        "precision@3": 0.0,
+        "recall@5": 0.0,
+        "precision@5": 0.0,
+        "mrr": 0.16666666666666666,
+        "ndcg@5": 0.0
+      },
+      "combined_ranking_cpu_ms": 0.1762998290359974
+    },
+    {
+      "query_id": "Q15",
+      "category": "financial",
+      "method": "BM25",
+      "ranking": [
+        "policy_rate",
+        "auto_stock",
+        "bist",
+        "commercial_stock",
+        "consumer_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.17069978639483452
+    },
+    {
+      "query_id": "Q16",
+      "category": "financial",
+      "method": "BM25",
+      "ranking": [
+        "deposit_rate",
+        "housing_rate",
+        "policy_rate",
+        "npl_stock",
+        "gold"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.157100148499012
+    },
+    {
+      "query_id": "Q17",
+      "category": "financial",
+      "method": "BM25",
+      "ranking": [
+        "auto_stock",
+        "npl_ratio",
+        "npl_stock",
+        "commercial_stock",
+        "consumer_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.27639977633953094
+    },
+    {
+      "query_id": "Q18",
+      "category": "financial",
+      "method": "BM25",
+      "ranking": [
+        "commercial_stock",
+        "consumer_stock",
+        "housing_stock",
+        "auto_stock",
+        "bist"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.1825997605919838
+    },
+    {
+      "query_id": "Q19",
+      "category": "population",
+      "method": "BM25",
+      "ranking": [
+        "participation_stock",
+        "housing_flow",
+        "auto_stock",
+        "housing_price",
+        "consumer_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.2292003482580185
+    },
+    {
+      "query_id": "Q20",
+      "category": "measure",
+      "method": "BM25",
+      "ranking": [
+        "housing_count",
+        "policy_rate",
+        "housing_price",
+        "consumer_stock",
+        "participation_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.16489997506141663
+    },
+    {
+      "query_id": "Q21",
+      "category": "hard_negative",
+      "method": "BM25",
+      "ranking": [
+        "npl_ratio",
+        "npl_stock",
+        "commercial_stock",
+        "housing_flow",
+        "deposit_rate"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.20990008488297462
+    },
+    {
+      "query_id": "Q22",
+      "category": "hard_negative",
+      "method": "BM25",
+      "ranking": [
+        "npl_ratio",
+        "npl_stock",
+        "auto_stock",
+        "commercial_stock",
+        "participation_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 0.0,
+        "precision@1": 0.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 0.5,
+        "ndcg@5": 0.6309297535714575
+      },
+      "combined_ranking_cpu_ms": 0.13640010729432106
+    },
+    {
+      "query_id": "Q23",
+      "category": "cumulative",
+      "method": "BM25",
+      "ranking": [
+        "profit_month",
+        "profit_ytd",
+        "auto_stock",
+        "bist",
+        "commercial_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 0.0,
+        "precision@1": 0.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 0.5,
+        "ndcg@5": 0.6309297535714575
+      },
+      "combined_ranking_cpu_ms": 0.20639970898628235
+    },
+    {
+      "query_id": "Q24",
+      "category": "cumulative",
+      "method": "BM25",
+      "ranking": [
+        "profit_month",
+        "housing_count",
+        "participation_stock",
+        "profit_ytd",
+        "housing_flow"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.19959965720772743
+    },
+    {
+      "query_id": "Q25",
+      "category": "abbreviation",
+      "method": "BM25",
+      "ranking": [
+        "fx",
+        "auto_stock",
+        "bist",
+        "commercial_stock",
+        "consumer_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.10519986972212791
+    },
+    {
+      "query_id": "Q26",
+      "category": "synonym",
+      "method": "BM25",
+      "ranking": [
+        "housing_price",
+        "bist",
+        "cpi",
+        "auto_stock",
+        "commercial_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 0.0,
+        "precision@1": 0.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 0.5,
+        "ndcg@5": 0.6309297535714575
+      },
+      "combined_ranking_cpu_ms": 0.2123001031577587
+    },
+    {
+      "query_id": "Q27",
+      "category": "unit",
+      "method": "BM25",
+      "ranking": [
+        "gold",
+        "auto_stock",
+        "bist",
+        "commercial_stock",
+        "consumer_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.14119967818260193
+    },
+    {
+      "query_id": "Q28",
+      "category": "unseen_domain",
+      "method": "BM25",
+      "ranking": [
+        "npl_stock",
+        "npl_ratio",
+        "auto_stock",
+        "commercial_stock",
+        "consumer_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 0.0,
+        "precision@1": 0.0,
+        "recall@3": 0.0,
+        "precision@3": 0.0,
+        "recall@5": 0.0,
+        "precision@5": 0.0,
+        "mrr": 0.05,
+        "ndcg@5": 0.0
+      },
+      "combined_ranking_cpu_ms": 0.1943996176123619
+    },
+    {
+      "query_id": "Q29",
+      "category": "unseen_domain",
+      "method": "BM25",
+      "ranking": [
+        "unseen_energy",
+        "auto_stock",
+        "bist",
+        "commercial_stock",
+        "consumer_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.22789975628256798
+    },
+    {
+      "query_id": "Q30",
+      "category": "partial",
+      "method": "BM25",
+      "ranking": [
+        "unseen_energy",
+        "auto_stock",
+        "bist",
+        "commercial_stock",
+        "consumer_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333333333333333,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.06170012056827545
+    },
+    {
+      "query_id": "Q31",
+      "category": "multiple",
+      "method": "BM25",
+      "ranking": [
+        "housing_stock",
+        "housing_flow",
+        "housing_rate",
+        "auto_stock",
+        "consumer_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 0.5,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.6666666666666666,
+        "recall@5": 1.0,
+        "precision@5": 0.4,
+        "mrr": 1.0,
+        "ndcg@5": 0.9197207891481876
+      },
+      "combined_ranking_cpu_ms": 0.4595997743308544
+    },
+    {
+      "query_id": "Q32",
+      "category": "multiple",
+      "method": "BM25",
+      "ranking": [
+        "cpi",
+        "housing_price",
+        "consumer_stock",
+        "housing_count",
+        "participation_stock"
+      ],
+      "eligible": true,
+      "metrics": {
+        "recall@1": 0.5,
+        "precision@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.6666666666666666,
+        "recall@5": 1.0,
+        "precision@5": 0.4,
+        "mrr": 1.0,
+        "ndcg@5": 1.0
+      },
+      "combined_ranking_cpu_ms": 0.22999988868832588
+    },
+    {
+      "query_id": "Q33",
+      "category": "missing",
+      "method": "BM25",
+      "ranking": [
+        "bist",
+        "gold",
+        "fx",
+        "policy_rate",
+        "auto_stock"
+      ],
+      "eligible": false,
+      "metrics": null,
+      "combined_ranking_cpu_ms": 0.15980005264282227
+    },
+    {
+      "query_id": "Q34",
+      "category": "missing",
+      "method": "BM25",
+      "ranking": [
+        "commercial_stock",
+        "housing_flow",
+        "auto_stock",
+        "bist",
+        "consumer_stock"
+      ],
+      "eligible": false,
+      "metrics": null,
+      "combined_ranking_cpu_ms": 0.16249995678663254
+    },
+    {
+      "query_id": "Q35",
+      "category": "ambiguous",
+      "method": "BM25",
+      "ranking": [
+        "commercial_stock",
+        "housing_flow",
+        "auto_stock",
+        "bist",
+        "consumer_stock"
+      ],
+      "eligible": false,
+      "metrics": null,
+      "combined_ranking_cpu_ms": 0.08390005677938461
+    },
+    {
+      "query_id": "Q36",
+      "category": "adversarial",
+      "method": "BM25",
+      "ranking": [
+        "auto_stock",
+        "bist",
+        "commercial_stock",
+        "consumer_stock",
+        "cpi"
+      ],
+      "eligible": false,
+      "metrics": null,
+      "combined_ranking_cpu_ms": 0.48690009862184525
+    }
+  ],
+  "limitations": [
+    "20 documents; synthetic developer-authored queries; no production challenge coverage",
+    "No reranker or local sentence-transformer measured; no deployment agent tested",
+    "Dense query embeddings batched offline; ranking CPU time excludes network/model time",
+    "No confidence threshold calibrated; no claim of missing-data rejection performance"
+  ]
+}

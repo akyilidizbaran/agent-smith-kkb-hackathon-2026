@@ -79,11 +79,13 @@ class LakehouseSearchTool(Tool):
             return ToolResult(content="\n".join(lines), ok=True)
         self._empty_streak = 0
         terms = getattr(self.lakehouse, "last_search_terms", {}) or {}
+        from ..labels import spec_origin
         lines = ["Bulunan tablolar:"]
         for s in specs:
+            # ADR-0082: kimlik SQL içindir; kullanıcıya kaynak adıyla anlatılır ("hesaplanmış tablo (… verisinden)").
             lines.append(
                 f"- {s.dataset_id}: {s.name}. {s.description[:180]} "
-                f"[frekans: {s.frequency.value}, kapsam: {s.coverage.start}→{s.coverage.end}]"
+                f"[frekans: {s.frequency.value}, kapsam: {s.coverage.start}→{s.coverage.end}, kaynak: {spec_origin(s)}]"
             )
             matched, unmatched = terms.get(s.dataset_id, ([], []))
             if unmatched:
@@ -379,16 +381,16 @@ class LakehouseQueryTool(Tool):
             # bu sonuçtan doğru yazdı ("40,54" ← 40.536) ama panel "tabloda yok" dedi. workspace_query'deki gibi bakış kaydı.
             self.workspace.note_peek(params.sql, result.data)
 
-        # Modele TAM tablo değil, özet gider: context window'u koruyoruz.
+        # Modele TAM tablo değil, özet gider: context window'u koruyoruz. Sınır boyuta bağlı (core/preview, PART 41):
+        # ≤24 satır tamamı (12 satırın 10'u gösterilince model kalan ayları "yok" sanıyordu — UEB A15/A06/A24), üstü baş+son.
+        from ..core.preview import preview_table
+
         df = result.data
-        preview_rows = min(10, len(df))
         content = (
             f"Sorgu başarılı: {len(df)} satır, {len(df.columns)} sütun.\n"
             f"Sütunlar: {', '.join(df.columns)}\n"
-            f"İlk {preview_rows} satır:\n{df.head(preview_rows).to_string(index=False)}"
+            + preview_table(df, where="aktif analiz tablosunda" if params.as_active_table else "bu sorgunun sonucunda")
         )
-        if len(df) > preview_rows:
-            content += f"\n... ({len(df) - preview_rows} satır daha; tamamı analiz tablosunda)"
         units = self._units_for(df.columns, result.provenance.dataset_ids)
         if units:
             content += "\nBirimler: " + ", ".join(units)

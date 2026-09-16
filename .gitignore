@@ -30,6 +30,9 @@ incoming/
 .idea/
 .vscode/
 
+# Claude Code kişisel ayarlar (takım ayarları .claude/settings.json'a yazılır)
+.claude/settings.local.json
+
 # Seed edilmiş tasarım kanvası (2,5 MB, çalışma dosyalarından yeniden üretilir)
 docs/design/agentsmithler-arayuz.html
 

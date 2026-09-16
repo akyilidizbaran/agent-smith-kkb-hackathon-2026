@@ -79,7 +79,8 @@ def test_alan_tanimi_birincil_kaynak_adlariyla_gold_yok() -> None:
     d0, d1 = date(2016, 1, 31), date(2026, 6, 30)
     p = DomainProfile.from_catalog([_spec("a", "bddk_monthly", d0, d1), _spec("b", "evds", d0, d1), _spec("gold.x", "gold", d0, d1)])
     assert p.domain == "BDDK Aylık Bülten ve TCMB EVDS kaynaklı veriler"
-    assert DomainProfile.from_catalog([_spec("adhoc:x", "adhoc", d0, d1)]).domain == "adhoc kaynaklı veriler", "yalnız yükleme varsa kimliği"
+    assert DomainProfile.from_catalog([_spec("adhoc:x", "adhoc", d0, d1)]).domain == "kullanıcının eklediği x verileri", \
+        "yalnız yükleme varsa serinin adı (iç kimlik 'adhoc' değil; kimlik deneyi, 15 Eyl)"
 
 
 def test_yetenek_ve_veri_seti_sorulari_deterministik() -> None:
@@ -91,7 +92,7 @@ def test_yetenek_ve_veri_seti_sorulari_deterministik() -> None:
              _spec("gold.x", "gold", d0, d1), _spec("adhoc:y", "adhoc", d0, d1)]
     reply = capability_reply("hangi veri setlerine sahipsin", tools=set(), datasets=lambda: specs)
     assert "BDDK Aylık Bülten: 2 seri (2016-01 → 2026-06)" in reply and "TCMB EVDS: 1 seri (2016-01 → 2026-07)" in reply
-    assert "gold" not in reply.lower() and "Kullanıcının eklediği 1 seri" in reply
+    assert "gold" not in reply.lower() and "Kullanıcının eklediği seriler: y (2016-01 → 2026-06)." in reply
     assert data_sets_reply([], load_source_hints()) == "Veri havuzunda şu an yüklü seri yok."
     for q in ("2025'te hangi veriler arttı?", "Hangi seriler konut kredisini gösteriyor?", "Elif Sena Önsöz kimdir?", "konut kredisini internetten bul"):
         assert capability_reply(q, tools={"web_search", "web_url"}, datasets=lambda: specs) is None, q

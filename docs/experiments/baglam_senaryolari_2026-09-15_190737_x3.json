@@ -1,0 +1,2447 @@
+{
+  "meta": {
+    "commit": "075fcc8",
+    "kaynak_agac_temiz": false,
+    "model": "kkbhackathon2026/Qwen3.8-27B",
+    "tekrar": 3,
+    "web_aramasi": "kapalı",
+    "demo_db_degismedi": true,
+    "at": "2026-09-15T19:07:37"
+  },
+  "passed": 62,
+  "total": 66,
+  "kosular": [
+    {
+      "senaryo": "S1_kullanici_akisi",
+      "tekrar": 1,
+      "turlar": [
+        {
+          "soru": "naber",
+          "beklenen": "selamlaşma, model çağrılmaz",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "selamlaşma — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Selam. Sorunu yazabilirsin."
+        },
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "veri setleri katalogdan",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var:\n- BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); 81 il × 8 konu: kredi kartı, ihtiyaç kredisi, konut kredisi, kredili mevduat hesabı, takipteki ihtiyaç kredisi, takipteki konut kredisi ve 2 konu daha\n- BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); konular: toplam krediler, yurt içi yerleşik mevduat, toplam mevduat, tüketici kredileri, konut kredisi, taşıt kredisi ve 14 konu daha\n- TCMB EVDS: 12 seri (2016-01 → 2026-07); konular: ağırlıklı ortalama fonlama maliyeti, politika faizi, euro kuru, dolar kuru, TÜFE, para arzı ve 5 konu daha\n- BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06); konu: haftalık konut kredisi"
+        },
+        {
+          "soru": "architect rolüne nasıl geçebilirim",
+          "beklenen": "rol cevabı; önceki soruya kaymaz, geri gönderilmez, veri aracı yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Şu an Analyst profilindesin (salt-okunur): veriyi sorgular, analiz eder ve dosyaları okursun ama kataloğa yazmazsın. Architect'e geçmek için arayüzün üstündeki Profil rozetine tıkla, Architect'i seç ve operatör anahtarını gir; geçiş oturumu (sohbet, tablolar, yüklemeler) temizler. Rozet geçişe izin vermiyorsa profil sunucu başlatılırken seçilir (AGENT_PROFILE=architect)."
+        }
+      ]
+    },
+    {
+      "senaryo": "S1_kullanici_akisi",
+      "tekrar": 2,
+      "turlar": [
+        {
+          "soru": "naber",
+          "beklenen": "selamlaşma, model çağrılmaz",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "selamlaşma — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Selam. Sorunu yazabilirsin."
+        },
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "veri setleri katalogdan",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var:\n- BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); 81 il × 8 konu: kredi kartı, ihtiyaç kredisi, konut kredisi, kredili mevduat hesabı, takipteki ihtiyaç kredisi, takipteki konut kredisi ve 2 konu daha\n- BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); konular: toplam krediler, yurt içi yerleşik mevduat, toplam mevduat, tüketici kredileri, konut kredisi, taşıt kredisi ve 14 konu daha\n- TCMB EVDS: 12 seri (2016-01 → 2026-07); konular: ağırlıklı ortalama fonlama maliyeti, politika faizi, euro kuru, dolar kuru, TÜFE, para arzı ve 5 konu daha\n- BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06); konu: haftalık konut kredisi"
+        },
+        {
+          "soru": "architect rolüne nasıl geçebilirim",
+          "beklenen": "rol cevabı; önceki soruya kaymaz, geri gönderilmez, veri aracı yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Şu an Analyst profilindesin (salt-okunur): veriyi sorgular, analiz eder ve dosyaları okursun ama kataloğa yazmazsın. Architect'e geçmek için arayüzün üstündeki Profil rozetine tıkla, Architect'i seç ve operatör anahtarını gir; geçiş oturumu (sohbet, tablolar, yüklemeler) temizler. Rozet geçişe izin vermiyorsa profil sunucu başlatılırken seçilir (AGENT_PROFILE=architect)."
+        }
+      ]
+    },
+    {
+      "senaryo": "S1_kullanici_akisi",
+      "tekrar": 3,
+      "turlar": [
+        {
+          "soru": "naber",
+          "beklenen": "selamlaşma, model çağrılmaz",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "selamlaşma — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Selam. Sorunu yazabilirsin."
+        },
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "veri setleri katalogdan",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var:\n- BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); 81 il × 8 konu: kredi kartı, ihtiyaç kredisi, konut kredisi, kredili mevduat hesabı, takipteki ihtiyaç kredisi, takipteki konut kredisi ve 2 konu daha\n- BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); konular: toplam krediler, yurt içi yerleşik mevduat, toplam mevduat, tüketici kredileri, konut kredisi, taşıt kredisi ve 14 konu daha\n- TCMB EVDS: 12 seri (2016-01 → 2026-07); konular: ağırlıklı ortalama fonlama maliyeti, politika faizi, euro kuru, dolar kuru, TÜFE, para arzı ve 5 konu daha\n- BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06); konu: haftalık konut kredisi"
+        },
+        {
+          "soru": "architect rolüne nasıl geçebilirim",
+          "beklenen": "rol cevabı; önceki soruya kaymaz, geri gönderilmez, veri aracı yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Şu an Analyst profilindesin (salt-okunur): veriyi sorgular, analiz eder ve dosyaları okursun ama kataloğa yazmazsın. Architect'e geçmek için arayüzün üstündeki Profil rozetine tıkla, Architect'i seç ve operatör anahtarını gir; geçiş oturumu (sohbet, tablolar, yüklemeler) temizler. Rozet geçişe izin vermiyorsa profil sunucu başlatılırken seçilir (AGENT_PROFILE=architect)."
+        }
+      ]
+    },
+    {
+      "senaryo": "S2_kullanim_arasi_sonra_takip",
+      "tekrar": 1,
+      "turlar": [
+        {
+          "soru": "2025 yılında aylık konut kredisi bakiyesini göster.",
+          "beklenen": "12 aylık tablo araçla",
+          "ok": true,
+          "sure_s": 7.8,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_describe",
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value"
+          ],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_describe",
+              ""
+            ],
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi bakiyesi aylık”",
+              "ozet": "Bulunan tablolar:\n- gold.konut_faizi_aylik: Konut kredisi faiz oranı, aylık ortalama (akım, %). TCMB EVDS haftalık konut kredisi faiz oranının (evds:TP.KTF12) takvim aylarına indirgenmiş hâli. Oran serisi olduğu için ay değeri haftalık gözl"
+            },
+            {
+              "arac": "lakehouse_describe",
+              "ok": true,
+              "kod": null,
+              "detay": "bddk_monthly:1534_Toplam",
+              "ozet": "### bddk_monthly:1534_Toplam — Tüketici Kredileri - Konut, Toplam (Sektör)\nAçıklama: BDDK Aylık Bülten, Tüketici Kredileri tablosu, \"Tüketici Kredileri - Konut\" kalemi, Toplam sütunu, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (sto"
+            },
+            {
+              "arac": "lakehouse_query",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 yılı aylık konut kredisi bakiyelerini getir",
+              "ozet": "Sorgu başarılı: 12 satır, 2 sütun.\nSütunlar: observation_date, value\nSatırlar (12, tamamı):\nobservation_date    value\n      2025-01-31 523455.0\n      2025-02-28 535029.0\n      2025-03-31 548385.0\n      2025-04-30 561793.0\n      2025-05-31 5"
+            }
+          ],
+          "cevap": "2025 yılı boyunca konut kredisi bakiyesi (BDDK Aylık Bülten, \"Tüketici Kredileri – Konut, Toplam\", sektör tarafı, dönem sonu stok, milyon TL):\n\n| Ay | Bakiye (milyon TL) |\n|---|---|\n| Ocak | 523.455 |\n| Şubat | 535.029 |\n| Mart | 548.385 |\n| Nisan | 561.793 |\n| Mayıs | 575.453 |\n| Haziran | 583.265 |\n| Temmuz | 594.607 |\n| Ağustos | 608.694 |\n| Eylül | 623.765 |\n| Ekim | 642.144 |\n| Kasım | 658.770 |\n| Aralık | 678.970 |\n\nYıl içinde bakiye her ay arttı; Ocak'tan Aralık'a 523.455'ten 678.970 milyon TL'ye yükseldi."
+        },
+        {
+          "soru": "Bunu nasıl indirebilirim?",
+          "beklenen": "indirme cevabı (CSV/XLSX); tablo sorgusu yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Tablo içeren her cevabın altındaki 'tam tablo CSV' ve 'XLSX' bağlantıları tam tabloyu indirir (ekranda ilk 200 satır gösterilse de); 'HTML rapor' cevabı tablo, grafik ve kanıt zinciriyle birlikte açar. Grafiklerin altında 'PNG indir' bağlantısı var."
+        },
+        {
+          "soru": "Peki aynı dönemin konut kredisi faiz oranını da ekle.",
+          "beklenen": "bağlam korunur: 2025 tablosuna faiz kolonu",
+          "ok": true,
+          "sure_s": 12.7,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_query",
+            "lakehouse_search",
+            "lakehouse_query",
+            "workspace_add_column",
+            "workspace_show"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value",
+            "konut_faizi"
+          ],
+          "adimlar": [
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "execute",
+              "workspace_add_column",
+              ""
+            ],
+            [
+              "retrieve",
+              "workspace_show",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_query",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 yılı aylık konut kredisi bakiyelerini getir",
+              "ozet": "Sorgu çalıştı ancak hiç satır dönmedi. Dönem aralığı kapsam içinde, yani sorun büyük olasılıkla filtre değerinde. Kalem/kategori adını lakehouse_distinct_values ile doğrula."
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi bakiyesi aylık”",
+              "ozet": "Bulunan tablolar:\n- gold.konut_faizi_aylik: Konut kredisi faiz oranı, aylık ortalama (akım, %). TCMB EVDS haftalık konut kredisi faiz oranının (evds:TP.KTF12) takvim aylarına indirgenmiş hâli. Oran serisi olduğu için ay değeri haftalık gözl"
+            },
+            {
+              "arac": "lakehouse_query",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 yılı aylık konut kredisi bakiyelerini getir",
+              "ozet": "Sorgu başarılı: 12 satır, 2 sütun.\nSütunlar: observation_date, value\nSatırlar (12, tamamı):\nobservation_date    value\n      2025-01-31 523455.0\n      2025-02-28 535029.0\n      2025-03-31 548385.0\n      2025-04-30 561793.0\n      2025-05-31 5"
+            },
+            {
+              "arac": "workspace_add_column",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 aylarına konut kredisi faiz oranı (aylık ortalama, %) sütunu ekle",
+              "ozet": "'konut_faizi' sütunu eklendi. Tablo bozulmadı: 12 satır, 3 sütun.\nSütunlar: observation_date, value, konut_faizi\nBirim: yüzde · ölçüm tipi: rate · kaynak frekansı: monthly · kaynak kapsamı 2016-01-01 → 2026-07-31\nDönem eşleşmesi: 12/12 satı"
+            },
+            {
+              "arac": "workspace_show",
+              "ok": true,
+              "kod": null,
+              "detay": "",
+              "ozet": "Analiz tablosu: 12 satır, 3 sütun\nobservation_date    value  konut_faizi\n      2025-01-31 523455.0      40.5360\n      2025-02-28 535029.0      39.9750\n      2025-03-31 548385.0      39.3800\n      2025-04-30 561793.0      39.5625\n      2025-"
+            }
+          ],
+          "cevap": "Tabloya konut kredisi faiz oranı (TCMB EVDS haftalık konut kredisi faizinin aylık ortalaması, %) eklendi:\n\n| Ay | Bakiye (milyon TL) | Faiz (%) |\n|---|---|---|\n| Ocak | 523.455 | 40,54 |\n| Şubat | 535.029 | 39,98 |\n| Mart | 548.385 | 39,38 |\n| Nisan | 561.793 | 39,56 |\n| Mayıs | 575.453 | 42,14 |\n| Haziran | 583.265 | 43,47 |\n| Temmuz | 594.607 | 42,56 |\n| Ağustos | 608.694 | 40,36 |\n| Eylül | 623.765 | 38,80 |\n| Ekim | 642.144 | 37,94 |\n| Kasım | 658.770 | 37,76 |\n| Aralık | 678.970 | 37,29 |\n\nFaiz oranı yıl içinde Haziran'da zirve (43,47%) yaptıktan sonra Aralık'a doğru düşüşte; bakiye ise her ay artmaya devam etti."
+        }
+      ]
+    },
+    {
+      "senaryo": "S2_kullanim_arasi_sonra_takip",
+      "tekrar": 2,
+      "turlar": [
+        {
+          "soru": "2025 yılında aylık konut kredisi bakiyesini göster.",
+          "beklenen": "12 aylık tablo araçla",
+          "ok": true,
+          "sure_s": 9.0,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_describe",
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value"
+          ],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_describe",
+              ""
+            ],
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi bakiyesi aylık”",
+              "ozet": "Bulunan tablolar:\n- gold.konut_faizi_aylik: Konut kredisi faiz oranı, aylık ortalama (akım, %). TCMB EVDS haftalık konut kredisi faiz oranının (evds:TP.KTF12) takvim aylarına indirgenmiş hâli. Oran serisi olduğu için ay değeri haftalık gözl"
+            },
+            {
+              "arac": "lakehouse_describe",
+              "ok": true,
+              "kod": null,
+              "detay": "bddk_monthly:1534_Toplam",
+              "ozet": "### bddk_monthly:1534_Toplam — Tüketici Kredileri - Konut, Toplam (Sektör)\nAçıklama: BDDK Aylık Bülten, Tüketici Kredileri tablosu, \"Tüketici Kredileri - Konut\" kalemi, Toplam sütunu, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (sto"
+            },
+            {
+              "arac": "lakehouse_query",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 yılı aylık konut kredisi bakiyelerini getir",
+              "ozet": "Sorgu başarılı: 12 satır, 2 sütun.\nSütunlar: observation_date, value\nSatırlar (12, tamamı):\nobservation_date    value\n      2025-01-31 523455.0\n      2025-02-28 535029.0\n      2025-03-31 548385.0\n      2025-04-30 561793.0\n      2025-05-31 5"
+            }
+          ],
+          "cevap": "2025 yılı aylık konut kredisi bakiyeleri (BDDK Aylık Bülten, \"Tüketici Kredileri – Konut\" kalemi, sektör toplamı; dönem sonu bakiyesi, milyon TL):\n\n| Ay sonu | Bakiye (milyon TL) |\n|---|---|\n| Ocak 2025 | 523.455 |\n| Şubat 2025 | 535.029 |\n| Mart 2025 | 548.385 |\n| Nisan 2025 | 561.793 |\n| Mayıs 2025 | 575.453 |\n| Haziran 2025 | 583.265 |\n| Temmuz 2025 | 594.607 |\n| Ağustos 2025 | 608.694 |\n| Eylül 2025 | 623.765 |\n| Ekim 2025 | 642.144 |\n| Kasım 2025 | 658.770 |\n| Aralık 2025 | 678.970 |\n\nBakiye yıl boyunca her ay artarak Ocak'taki 523.455 milyon TL'den Aralık'taki 678.970 milyon TL'ye yükselmiş. Kaynak: BDDK Aylık Bülten, Tüketici Kredileri – Konut (Toplam, Sektör), 2025 ayları."
+        },
+        {
+          "soru": "Bunu nasıl indirebilirim?",
+          "beklenen": "indirme cevabı (CSV/XLSX); tablo sorgusu yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Tablo içeren her cevabın altındaki 'tam tablo CSV' ve 'XLSX' bağlantıları tam tabloyu indirir (ekranda ilk 200 satır gösterilse de); 'HTML rapor' cevabı tablo, grafik ve kanıt zinciriyle birlikte açar. Grafiklerin altında 'PNG indir' bağlantısı var."
+        },
+        {
+          "soru": "Peki aynı dönemin konut kredisi faiz oranını da ekle.",
+          "beklenen": "bağlam korunur: 2025 tablosuna faiz kolonu",
+          "ok": true,
+          "sure_s": 11.7,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_query",
+            "lakehouse_describe",
+            "lakehouse_query",
+            "workspace_add_column",
+            "workspace_show"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value",
+            "konut_kredisi_faizi_yuzde"
+          ],
+          "adimlar": [
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_describe",
+              ""
+            ],
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "execute",
+              "workspace_add_column",
+              ""
+            ],
+            [
+              "retrieve",
+              "workspace_show",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_query",
+              "ok": false,
+              "kod": "SQL_FAILED",
+              "detay": "2025 yılı aylık konut kredisi faiz oranlarını getir",
+              "ozet": "HATA[SQL_FAILED]: SQL çalıştırılamadı: Catalog Error: Table with name gold.konut_faizi_aylik does not exist!\nDid you mean \"gold.konut_faizi_aylik\"?\n\nLINE 1: SELECT * FROM (SELECT period_end, value FROM \"gold.konut_faizi_aylik\" WHERE period_"
+            },
+            {
+              "arac": "lakehouse_describe",
+              "ok": true,
+              "kod": null,
+              "detay": "gold.konut_faizi_aylik",
+              "ozet": "### gold.konut_faizi_aylik — Konut kredisi faiz oranı, aylık ortalama (akım, %)\nAçıklama: TCMB EVDS haftalık konut kredisi faiz oranının (evds:TP.KTF12) takvim aylarına indirgenmiş hâli. Oran serisi olduğu için ay değeri haftalık gözlemleri"
+            },
+            {
+              "arac": "lakehouse_query",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 yılı aylık konut kredisi faiz oranlarını getir",
+              "ozet": "Sorgu başarılı: 12 satır, 2 sütun.\nSütunlar: period_end, value\nSatırlar (12, tamamı):\nperiod_end   value\n2025-01-31 40.5360\n2025-02-28 39.9750\n2025-03-31 39.3800\n2025-04-30 39.5625\n2025-05-31 42.1400\n2025-06-30 43.4700\n2025-07-31 42.5625\n20"
+            },
+            {
+              "arac": "workspace_add_column",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 aylık konut kredisi bakiye tablosuna aynı dönemlerin aylık ortalama konut kredisi faiz oranını sütun ola…",
+              "ozet": "'konut_kredisi_faizi_yuzde' sütunu eklendi. Tablo bozulmadı: 12 satır, 3 sütun.\nSütunlar: observation_date, value, konut_kredisi_faizi_yuzde\nBirim: yüzde · ölçüm tipi: rate · kaynak frekansı: monthly · kaynak kapsamı 2016-01-01 → 2026-07-31"
+            },
+            {
+              "arac": "workspace_show",
+              "ok": true,
+              "kod": null,
+              "detay": "",
+              "ozet": "Analiz tablosu: 12 satır, 3 sütun\nobservation_date    value  konut_kredisi_faizi_yuzde\n      2025-01-31 523455.0                    40.5360\n      2025-02-28 535029.0                    39.9750\n      2025-03-31 548385.0                    39"
+            }
+          ],
+          "cevap": "Faiz oranını aynı tabloya yeni sütun olarak ekledim (tablo bozulmadı). 2025 yılı aylık konut kredisi bakiyesi (milyon TL) ve aynı dönemin aylık ortalama konut kredisi faiz oranı (%):\n\n| Ay sonu | Bakiye (milyon TL) | Faiz oranı (%) |\n|---|---|---|\n| Ocak 2025 | 523.455 | 40,54 |\n| Şubat 2025 | 535.029 | 39,98 |\n| Mart 2025 | 548.385 | 39,38 |\n| Nisan 2025 | 561.793 | 39,56 |\n| Mayıs 2025 | 575.453 | 42,14 |\n| Haziran 2025 | 583.265 | 43,47 |\n| Temmuz 2025 | 594.607 | 42,56 |\n| Ağustos 2025 | 608.694 | 40,36 |\n| Eylül 2025 | 623.765 | 38,80 |\n| Ekim 2025 | 642.144 | 37,94 |\n| Kasım 2025 | 658.770 | 37,76 |\n| Aralık 2025 | 678.970 | 37,29 |\n\nKaynak: Bakiye — BDDK Aylık Bülten, Tüketici Kredileri – Konut (Toplam, Sektör), dönem sonu bakiye. Faiz — TCMB EVDS haftalık konut kredisi faiz oranının aylık ortalaması; o ay yeni açılan kredilere uygulanan ağırlıklı ortalama orandır, mevcut stokun o"
+        }
+      ]
+    },
+    {
+      "senaryo": "S2_kullanim_arasi_sonra_takip",
+      "tekrar": 3,
+      "turlar": [
+        {
+          "soru": "2025 yılında aylık konut kredisi bakiyesini göster.",
+          "beklenen": "12 aylık tablo araçla",
+          "ok": true,
+          "sure_s": 9.3,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_describe",
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value"
+          ],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_describe",
+              ""
+            ],
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi bakiyesi aylık”",
+              "ozet": "Bulunan tablolar:\n- gold.konut_faizi_aylik: Konut kredisi faiz oranı, aylık ortalama (akım, %). TCMB EVDS haftalık konut kredisi faiz oranının (evds:TP.KTF12) takvim aylarına indirgenmiş hâli. Oran serisi olduğu için ay değeri haftalık gözl"
+            },
+            {
+              "arac": "lakehouse_describe",
+              "ok": true,
+              "kod": null,
+              "detay": "bddk_monthly:1534_Toplam",
+              "ozet": "### bddk_monthly:1534_Toplam — Tüketici Kredileri - Konut, Toplam (Sektör)\nAçıklama: BDDK Aylık Bülten, Tüketici Kredileri tablosu, \"Tüketici Kredileri - Konut\" kalemi, Toplam sütunu, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (sto"
+            },
+            {
+              "arac": "lakehouse_query",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 yılı aylık konut kredisi bakiyelerini getir",
+              "ozet": "Sorgu başarılı: 12 satır, 2 sütun.\nSütunlar: observation_date, value\nSatırlar (12, tamamı):\nobservation_date    value\n      2025-01-31 523455.0\n      2025-02-28 535029.0\n      2025-03-31 548385.0\n      2025-04-30 561793.0\n      2025-05-31 5"
+            }
+          ],
+          "cevap": "2025 yılı aylık konut kredisi bakiyeleri (BDDK Aylık Bülten, \"Tüketici Kredileri – Konut, Toplam\", dönem sonu stok, milyon TL):\n\n| Ay (dönem sonu) | Bakiye (milyon TL) |\n|---|---|\n| Ocak 2025 | 523.455 |\n| Şubat 2025 | 535.029 |\n| Mart 2025 | 548.385 |\n| Nisan 2025 | 561.793 |\n| Mayıs 2025 | 575.453 |\n| Haziran 2025 | 583.265 |\n| Temmuz 2025 | 594.607 |\n| Ağustos 2025 | 608.694 |\n| Eylül 2025 | 623.765 |\n| Ekim 2025 | 642.144 |\n| Kasım 2025 | 658.770 |\n| Aralık 2025 | 678.970 |\n\nBakiye yıl boyunca her ay artmış; Ocak'tan Aralık'a 523.455 → 678.970 milyon TL'ye yükselmiş.\n\nKaynak: BDDK Aylık Bülten, \"Tüketici Kredileri – Konut, Toplam\" kalemi (sektör tarafı, TL). Değerler dönem sonu bakiyesidir (stok); dönemler toplanmaz."
+        },
+        {
+          "soru": "Bunu nasıl indirebilirim?",
+          "beklenen": "indirme cevabı (CSV/XLSX); tablo sorgusu yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Tablo içeren her cevabın altındaki 'tam tablo CSV' ve 'XLSX' bağlantıları tam tabloyu indirir (ekranda ilk 200 satır gösterilse de); 'HTML rapor' cevabı tablo, grafik ve kanıt zinciriyle birlikte açar. Grafiklerin altında 'PNG indir' bağlantısı var."
+        },
+        {
+          "soru": "Peki aynı dönemin konut kredisi faiz oranını da ekle.",
+          "beklenen": "bağlam korunur: 2025 tablosuna faiz kolonu",
+          "ok": true,
+          "sure_s": 7.3,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "workspace_add_column",
+            "workspace_show"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value",
+            "konut_kredisi_faizi"
+          ],
+          "adimlar": [
+            [
+              "execute",
+              "workspace_add_column",
+              ""
+            ],
+            [
+              "retrieve",
+              "workspace_show",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "workspace_add_column",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 aylık konut kredisi bakiye tablosuna aynı ayların konut kredisi faiz oranını (TCMB EVDS haftalık serisin…",
+              "ozet": "'konut_kredisi_faizi' sütunu eklendi. Tablo bozulmadı: 12 satır, 3 sütun.\nSütunlar: observation_date, value, konut_kredisi_faizi\nBirim: yüzde · ölçüm tipi: rate · kaynak frekansı: monthly · kaynak kapsamı 2016-01-01 → 2026-07-31\nDönem eşleş"
+            },
+            {
+              "arac": "workspace_show",
+              "ok": true,
+              "kod": null,
+              "detay": "",
+              "ozet": "Analiz tablosu: 12 satır, 3 sütun\nobservation_date    value  konut_kredisi_faizi\n      2025-01-31 523455.0              40.5360\n      2025-02-28 535029.0              39.9750\n      2025-03-31 548385.0              39.3800\n      2025-04-30 5"
+            }
+          ],
+          "cevap": "2025 yılı aylık konut kredisi bakiyesi ve aynı ayların konut kredisi faiz oranı:\n\n| Ay (dönem sonu) | Bakiye (milyon TL) | Faiz oranı (%) |\n|---|---|---|\n| Ocak 2025 | 523.455 | 40,54 |\n| Şubat 2025 | 535.029 | 39,98 |\n| Mart 2025 | 548.385 | 39,38 |\n| Nisan 2025 | 561.793 | 39,56 |\n| Mayıs 2025 | 575.453 | 42,14 |\n| Haziran 2025 | 583.265 | 43,47 |\n| Temmuz 2025 | 594.607 | 42,56 |\n| Ağustos 2025 | 608.694 | 40,36 |\n| Eylül 2025 | 623.765 | 38,80 |\n| Ekim 2025 | 642.144 | 37,94 |\n| Kasım 2025 | 658.770 | 37,76 |\n| Aralık 2025 | 678.970 | 37,29 |\n\nFaiz oranı, TCMB EVDS haftalık konut kredisi faiz serisinin (o hafta açılan kredilere uygulanan ağırlıklı ortalama) aylık ortalamasıdır; bakiye BDDK Aylık Bülten'den dönem sonu stokudur. Bakiye yıl boyunca artarken faiz oranı Haziran'daki 43,47% zirvesinden Aralık'ta 37,29%'a gerilemiş."
+        }
+      ]
+    },
+    {
+      "senaryo": "S3_modele_giden_kullanim_sonra_takip",
+      "tekrar": 1,
+      "turlar": [
+        {
+          "soru": "2025 Aralık ayında konut kredisi bakiyesi ne kadar?",
+          "beklenen": "sayı araçla",
+          "ok": true,
+          "sure_s": 6.6,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value"
+          ],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi bakiyesi”",
+              "ozet": "Bulunan tablolar:\n- gold.konut_kredisi_ceyreklik: Konut kredisi bakiyesi, çeyreklik (sektör toplamı). BDDK Aylık Bülten'deki sektör toplam konut kredisi bakiyesi (bddk_monthly:1534_Toplam) takvim çeyreklerine indirgenmiş hâli. Stok seri old"
+            },
+            {
+              "arac": "lakehouse_query",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 Aralık sonu konut kredisi bakiyesini getir",
+              "ozet": "Sorgu başarılı: 1 satır, 2 sütun.\nSütunlar: observation_date, value\nSatırlar (1, tamamı):\nobservation_date    value\n      2025-12-31 678970.0\nBirimler: value = milyon TL\nKaynak: 1 satır | kaynak: bddk_monthly — Tüketici Kredileri - Konut, T"
+            }
+          ],
+          "cevap": "2025 Aralık sonu itibarıyla sektördeki toplam konut kredisi bakiyesi **678.970 milyon TL**'dir.\n\nKaynak: BDDK Aylık Bülten, Tüketici Kredileri tablosu (\"Tüketici Kredileri – Konut\", sektör toplamı), dönem sonu bakiyesi."
+        },
+        {
+          "soru": "Kanıt zincirini nasıl okurum?",
+          "beklenen": "kanıt zinciri anlatılır; bakiye tekrar sorgulanmaz",
+          "ok": true,
+          "sure_s": 3.9,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Kanıt zinciri, bir sayının hangi adımlardan geçtiğini gösteren kayıtların sıralı listesi. Sende şu an tek bir adım var:\n\n1. **Sorgu** — \"2025 Aralık sonu konut kredisi bakiyesini getir\" başlıklı sorgu, BDDK Aylık Bülten'in Tüketici Kredileri tablosundan \"Tüketici Kredileri – Konut\" kaleminin 2025-12-31 tarihli sektör toplamı satırını çekti.\n\nOkuma sırası:\n- **Kaynak tablo** → sayının hangi kurumun, hangi tablosundan geldiği (BDDK Aylık Bülten, Tüketici Kredileri).\n- **Kalem** → hangi kalemin seçildiği (Konut, sektör toplamı; alt kalemlerle karışmaması için tek kalem).\n- **Dönem** → hangi tarihin alındığı (2025-12-31, dönem sonu bakiyesi).\n- **Birim** → sayının birimi (milyon TL).\n\nYeni bir işlem yaptıkça (sütun ekleme, hesap, birleştirme) zincire bir adım daha eklenir; her adım öncekine dayanır. Böylece son sayıya ulaştıran her adımı tek tek görebilir, istediğin adımda durup o adımın gir"
+        },
+        {
+          "soru": "Bir önceki aya göre farkı ne?",
+          "beklenen": "bağlam korunur; tutarlar gerçek (Kasım 658.770, fark 20.200), uydurma sayı yok",
+          "ok": false,
+          "sure_s": 19.9,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "workspace_show",
+            "workspace_add_column",
+            "lakehouse_describe",
+            "workspace_add_column",
+            "workspace_show",
+            "workspace_query",
+            "workspace_add_column"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value",
+            "kasim_2025_bakiye"
+          ],
+          "adimlar": [
+            [
+              "validate",
+              null,
+              "araç çağrılmadan işlem iddiası ya da okunmamış dosya — geri gönderildi"
+            ],
+            [
+              "retrieve",
+              "workspace_show",
+              ""
+            ],
+            [
+              "validate",
+              "workspace_add_column",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_describe",
+              ""
+            ],
+            [
+              "execute",
+              "workspace_add_column",
+              ""
+            ],
+            [
+              "retrieve",
+              "workspace_show",
+              ""
+            ],
+            [
+              "execute",
+              "workspace_query",
+              ""
+            ],
+            [
+              "validate",
+              null,
+              "grounding: MISS:668.970 | CELL:'678.970' satırda 2025-11 ile yan yana; tabloda b"
+            ],
+            [
+              "execute",
+              "workspace_add_column",
+              ""
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "workspace_show",
+              "ok": true,
+              "kod": null,
+              "detay": "",
+              "ozet": "Analiz tablosu: 1 satır, 2 sütun\nobservation_date    value\n      2025-12-31 678970.0\nUygulanan işlemler:\n  1. 2025 Aralık sonu konut kredisi bakiyesini getir"
+            },
+            {
+              "arac": "workspace_add_column",
+              "ok": false,
+              "kod": "COLUMN_NOT_FOUND",
+              "detay": "2025 Kasım sonu konut kredisi bakiyesini aktif tabloya ekleyerek aylık fark hesaplamaya hazırla",
+              "ozet": "HATA[COLUMN_NOT_FOUND]: value_column='bddk_monthly:1534_Toplam@bddk:10001::value' bu seride yok. Mevcut kolonlar: entity_id, observation_date, quality_flag, value\nYAPACAĞIN: Kaynakta var olan bir ölçüm kolonu seç."
+            },
+            {
+              "arac": "lakehouse_describe",
+              "ok": true,
+              "kod": null,
+              "detay": "bddk_monthly:1534_Toplam",
+              "ozet": "### bddk_monthly:1534_Toplam — Tüketici Kredileri - Konut, Toplam (Sektör)\nAçıklama: BDDK Aylık Bülten, Tüketici Kredileri tablosu, \"Tüketici Kredileri - Konut\" kalemi, Toplam sütunu, Sektör tarafı. Dönem sonu konut kredisi bakiyesidir (sto"
+            },
+            {
+              "arac": "workspace_add_column",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 Kasım sonu konut kredisi bakiyesini aktif tabloya ekleyerek aylık fark hesaplamaya hazırla",
+              "ozet": "'kasim_2025_bakiye' sütunu eklendi. Tablo bozulmadı: 1 satır, 3 sütun.\nSütunlar: observation_date, value, kasim_2025_bakiye\nBirim: milyon TL · ölçüm tipi: stock · kaynak frekansı: monthly · kaynak kapsamı 2016-01-31 → 2026-06-30\nDönem eşleş"
+            },
+            {
+              "arac": "workspace_show",
+              "ok": false,
+              "kod": "DUPLICATE_CALL",
+              "detay": "",
+              "ozet": "HATA[DUPLICATE_CALL]: 'workspace_show' aynı argümanlarla zaten çalıştırıldı; sonuç aynı olacak.\nYAPACAĞIN: Argümanları değiştir ya da elindeki sonuçla cevaba geç."
+            },
+            {
+              "arac": "workspace_query",
+              "ok": true,
+              "kod": null,
+              "detay": "Aralık 2025 ve Kasım 2025 konut kredisi bakiyelerini yan yana getirip farkı hesapla",
+              "ozet": "Sorgu başarılı: 1 satır, 4 sütun — AKTİF TABLO DEĞİŞMEDİ (bakış modu; tabloyu buna çevirmek için as_active_table=true).\nSütunlar: observation_date, aralik_2025_bakiye, kasim_2025_bakiye, fark_milyon_tl\nSatırlar (1, tamamı):\nobservation_date"
+            },
+            {
+              "arac": "workspace_add_column",
+              "ok": false,
+              "kod": "DUPLICATE_CALL",
+              "detay": "2025 Kasım sonu konut kredisi bakiyesini aktif tabloya ekleyerek aylık fark hesaplamaya hazırla",
+              "ozet": "HATA[DUPLICATE_CALL]: 'workspace_add_column' aynı argümanlarla zaten çalıştırıldı; sonuç aynı olacak.\nYAPACAĞIN: Argümanları değiştir ya da elindeki sonuçla cevaba geç."
+            }
+          ],
+          "cevap": "Aktif tabloda yalnızca 2025-12-31 dönemi için 678.970 milyon TL değeri var; bir önceki ay (2025-11-30) bakiyesi tabloda bulunmuyor.\n\nFarkı hesaplamak için Kasım 2025 sonu değerini de tabloya eklemem gerekiyor, ancak bu işlem bu turda tamamlanamadı.\n\nKaynak: BDDK Aylık Bülten, Tüketici Kredileri tablosu (\"Tüketici Kredileri – Konut\", sektör toplamı), dönem sonu bakiyesi."
+        }
+      ]
+    },
+    {
+      "senaryo": "S3_modele_giden_kullanim_sonra_takip",
+      "tekrar": 2,
+      "turlar": [
+        {
+          "soru": "2025 Aralık ayında konut kredisi bakiyesi ne kadar?",
+          "beklenen": "sayı araçla",
+          "ok": true,
+          "sure_s": 5.3,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value"
+          ],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi bakiyesi”",
+              "ozet": "Bulunan tablolar:\n- gold.konut_kredisi_ceyreklik: Konut kredisi bakiyesi, çeyreklik (sektör toplamı). BDDK Aylık Bülten'deki sektör toplam konut kredisi bakiyesi (bddk_monthly:1534_Toplam) takvim çeyreklerine indirgenmiş hâli. Stok seri old"
+            },
+            {
+              "arac": "lakehouse_query",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 Aralık sonu konut kredisi bakiyesini getir",
+              "ozet": "Sorgu başarılı: 1 satır, 2 sütun.\nSütunlar: observation_date, value\nSatırlar (1, tamamı):\nobservation_date    value\n      2025-12-31 678970.0\nBirimler: value = milyon TL\nKaynak: 1 satır | kaynak: bddk_monthly — Tüketici Kredileri - Konut, T"
+            }
+          ],
+          "cevap": "2025 Aralık sonu itibarıyla konut kredisi bakiyesi **678.970 milyon TL**'dir.\n\nKaynak: BDDK Aylık Bülten, Tüketici Kredileri tablosu, \"Tüketici Kredileri - Konut\" kalemi (sektör toplamı), 31 Aralık 2025 dönem sonu bakiyesi."
+        },
+        {
+          "soru": "Kanıt zincirini nasıl okurum?",
+          "beklenen": "kanıt zinciri anlatılır; bakiye tekrar sorgulanmaz",
+          "ok": true,
+          "sure_s": 6.2,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Kanıt zinciri, bir sayının hangi adımlardan geçtiğini izlemeni sağlayan kayıtların sıralı listesi. Bu oturumdaki zincir şu şekilde okunur:\n\n**1. Seri kartı (kaynak tanımı)**\nSorgudan önce sistem, kullanacağın serinin kartını gösterir. Kartta şunlar yazar:\n- **Kaynak ve kalem adı**: Hangi kurumun (BDDK Aylık Bülten), hangi tablosundaki (Tüketici Kredileri) hangi kalemin (Konut) kullanıldığı.\n- **Birim**: Sayının cinsi (burada milyon TL).\n- **Kapsam**: Serinin hangi tarih aralığında veri içerdiği.\n- **Kırılım değerleri**: Filtreleyeceğin kategorilerin GERÇEK adları (ör. \"Tüketici Kredileri - Konut\"). Bu değerler kartta listelenmişse tahmin etmeden doğrudan sorguya geçilir.\n\n**2. Sorgu (hesap adımı)**\nKart doğrulandıktan sonra çalıştırılan sorgu, zincire \"ne hesaplandı\" satırı olarak eklenir. Burada:\n- Sorgunun amacı tek cümleyle yazılır (\"2025 Aralık sonu konut kredisi bakiyesini getir\").\n"
+        },
+        {
+          "soru": "Bir önceki aya göre farkı ne?",
+          "beklenen": "bağlam korunur; tutarlar gerçek (Kasım 658.770, fark 20.200), uydurma sayı yok",
+          "ok": true,
+          "sure_s": 4.5,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value",
+            "fark"
+          ],
+          "adimlar": [
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_query",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 Aralık ve Kasım konut kredisi bakiyeleriyle aralarındaki farkı hesapla",
+              "ozet": "Sorgu başarılı: 2 satır, 3 sütun.\nSütunlar: observation_date, value, fark\nSatırlar (2, tamamı):\nobservation_date    value    fark\n      2025-11-30 658770.0     NaN\n      2025-12-31 678970.0 20200.0\nBirimler: value = milyon TL\nKaynak: 2 satı"
+            }
+          ],
+          "cevap": "2025 Aralık sonu konut kredisi bakiyesi, bir önceki aya (Kasım sonu) göre **20.200 milyon TL** artmıştır.\n\n| Dönem | Bakiye (milyon TL) |\n|---|---|\n| 30 Kasım 2025 | 658.770 |\n| 31 Aralık 2025 | 678.970 |\n| **Fark** | **+20.200** |\n\nKaynak: BDDK Aylık Bülten, Tüketici Kredileri – Konut kalemi (sektör toplamı), dönem sonu bakiyeleri."
+        }
+      ]
+    },
+    {
+      "senaryo": "S3_modele_giden_kullanim_sonra_takip",
+      "tekrar": 3,
+      "turlar": [
+        {
+          "soru": "2025 Aralık ayında konut kredisi bakiyesi ne kadar?",
+          "beklenen": "sayı araçla",
+          "ok": true,
+          "sure_s": 4.9,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "observation_date",
+            "value"
+          ],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi bakiyesi”",
+              "ozet": "Bulunan tablolar:\n- gold.konut_kredisi_ceyreklik: Konut kredisi bakiyesi, çeyreklik (sektör toplamı). BDDK Aylık Bülten'deki sektör toplam konut kredisi bakiyesi (bddk_monthly:1534_Toplam) takvim çeyreklerine indirgenmiş hâli. Stok seri old"
+            },
+            {
+              "arac": "lakehouse_query",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 Aralık sonu sektör toplam konut kredisi bakiyesi",
+              "ozet": "Sorgu başarılı: 1 satır, 2 sütun.\nSütunlar: observation_date, value\nSatırlar (1, tamamı):\nobservation_date    value\n      2025-12-31 678970.0\nBirimler: value = milyon TL\nKaynak: 1 satır | kaynak: bddk_monthly — Tüketici Kredileri - Konut, T"
+            }
+          ],
+          "cevap": "2025 Aralık sonu itibarıyla sektör toplam konut kredisi bakiyesi **678.970 milyon TL**'dir.\n\nKaynak: BDDK Aylık Bülten, Tüketici Kredileri tablosu, \"Tüketici Kredileri – Konut\" kalemi (sektör toplamı), dönem sonu bakiyesi."
+        },
+        {
+          "soru": "Kanıt zincirini nasıl okurum?",
+          "beklenen": "kanıt zinciri anlatılır; bakiye tekrar sorgulanmaz",
+          "ok": true,
+          "sure_s": 3.9,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Kanıt zinciri, bir sayının hangi adımlardan geçtiğini gösteren kayıt defteridir. Sırayla okursan:\n\n1. **Kaynak** — Sayının hangi kurumun, hangi tablosundan geldiği (ör. BDDK Aylık Bülten, Tüketici Kredileri tablosu).\n2. **Kalem ve kırılım** — Hangi kalemin, hangi alt kırılımın seçildiği (ör. \"Tüketici Kredileri – Konut\", sektör toplamı).\n3. **Dönem** — Sayının ait olduğu tarih (ör. 2025-12-31, dönem sonu bakiyesi).\n4. **Uygulanan işlemler** — Sayıya dokunulduysa ne yapıldığı: filtre, toplama, birim çevirisi, reel dönüşüm, frekans indirgeme vb. Dokunulmadıysa \"ham değer\" yazar.\n5. **Sonuç** — Ekranda gördüğün sayı ve birimi.\n\nOkuma kuralı: zincirde her adım bir öncekinin çıktısını alır; bir adım eksik ya da \"doğrulanmadı\" etiketliyse (ör. OCR ile okunan sayfa, doğrulanmamış endeks) o sayıya tam güvenme. Zincirde \"uyarı\" satırı varsa (eksik dönem, kısmi yıl, belirsiz birim) sayı o uyarıyla"
+        },
+        {
+          "soru": "Bir önceki aya göre farkı ne?",
+          "beklenen": "bağlam korunur; tutarlar gerçek (Kasım 658.770, fark 20.200), uydurma sayı yok",
+          "ok": true,
+          "sure_s": 4.1,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "period_end",
+            "konut_kredisi",
+            "fark"
+          ],
+          "adimlar": [
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_query",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 Aralık konut kredisi bakiyesinin 2025 Kasım sonuna göre farkını hesapla",
+              "ozet": "Sorgu başarılı: 2 satır, 3 sütun.\nSütunlar: period_end, konut_kredisi, fark\nSatırlar (2, tamamı):\nperiod_end  konut_kredisi    fark\n2025-11-30       658770.0     NaN\n2025-12-31       678970.0 20200.0\nKaynak: 2 satır | kaynak: bddk_monthly —"
+            }
+          ],
+          "cevap": "2025 Aralık sonu konut kredisi bakiyesi bir önceki aya göre **20.200 milyon TL arttı**:\n\n- 2025 Kasım sonu: 658.770 milyon TL\n- 2025 Aralık sonu: 678.970 milyon TL\n\nKaynak: BDDK Aylık Bülten, Tüketici Kredileri – Konut kalemi, sektör toplamı, dönem sonu bakiyesi."
+        }
+      ]
+    },
+    {
+      "senaryo": "S4_tablosuz_kimlik_ve_belirsiz",
+      "tekrar": 1,
+      "turlar": [
+        {
+          "soru": "Sen kimsin?",
+          "beklenen": "kimlik; geri gönderilmez",
+          "ok": true,
+          "sure_s": 2.8,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "BDDK ve TCMB kaynaklı finansal veriler üzerinde çalışan bir veri analisti ajansım. İl bazında BDDK FinTürk, BDDK Aylık ve Haftalık Bülten ile TCMB EVDS verilerini sorgulayıp analiz ediyorum: bakiyeler, akımlar, oranlar, dönemsel değişimler, reel değer hesapları ve frekans dönüşümleri gibi işleri yürütüyorum.\n\nSorunuzu doğal dilde yazmanız yeterli; doğru kaynağı bulup hesabı veriden yapıp sonucu kaynağıyla birlikte sunuyorum."
+        },
+        {
+          "soru": "Bu sistemi kim geliştirdi?",
+          "beklenen": "önceki soruya kaymaz (kimlik cevabını ya da veri listesini tekrarlamaz)",
+          "ok": true,
+          "sure_s": 3.2,
+          "llm": true,
+          "geri_gonderildi": true,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "validate",
+              null,
+              "veri çekilmeden cevap denendi — geri gönderildi"
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Bu konuda elimde bilgi yok. Veri havuzunda ya da kullandığım kaynaklarda sistemin geliştiricisiyle ilgili bir kayıt bulunmuyor.\n\nYardım edebileceğim konu, BDDK ve TCMB verileri üzerindeki analizler: bakiye, akım, oran, dönemsel değişim, reel değer ve frekans dönüşümü hesapları. Bir soru sormak isterseniz başlayabiliriz."
+        },
+        {
+          "soru": "Grafiği nasıl indiririm?",
+          "beklenen": "indirme cevabı (PNG)",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Tablo içeren her cevabın altındaki 'tam tablo CSV' ve 'XLSX' bağlantıları tam tabloyu indirir (ekranda ilk 200 satır gösterilse de); 'HTML rapor' cevabı tablo, grafik ve kanıt zinciriyle birlikte açar. Grafiklerin altında 'PNG indir' bağlantısı var."
+        }
+      ]
+    },
+    {
+      "senaryo": "S4_tablosuz_kimlik_ve_belirsiz",
+      "tekrar": 2,
+      "turlar": [
+        {
+          "soru": "Sen kimsin?",
+          "beklenen": "kimlik; geri gönderilmez",
+          "ok": true,
+          "sure_s": 2.6,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "BDDK ve TCMB kaynaklı finansal veriler üzerinde çalışan bir veri analisti ajansım. İl bazında BDDK FinTürk, BDDK Aylık ve Haftalık Bülten ile TCMB EVDS verilerini sorgulayıp analiz ediyorum: bakiyeler, akımlar, oranlar, dönemsel değişimler, reel değer hesapları ve frekans dönüşümleri gibi işleri yürütüyorum.\n\nSorunuzu doğal dilde yazmanız yeterli; doğru kaynağı bulup hesabı veriden yapıp sonucu kaynağıyla birlikte sunuyorum."
+        },
+        {
+          "soru": "Bu sistemi kim geliştirdi?",
+          "beklenen": "önceki soruya kaymaz (kimlik cevabını ya da veri listesini tekrarlamaz)",
+          "ok": true,
+          "sure_s": 3.2,
+          "llm": true,
+          "geri_gonderildi": true,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "validate",
+              null,
+              "veri çekilmeden cevap denendi — geri gönderildi"
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Bu konuda elimde bilgi yok. Veri havuzunda ya da kullandığım kaynaklarda sistemin geliştiricisiyle ilgili bir kayıt bulunmuyor.\n\nYardım edebileceğim konu, BDDK ve TCMB verileri üzerindeki analizler: bakiye, akım, oran, dönemsel değişim, reel değer ve frekans dönüşümü hesapları. Bir soru sormak isterseniz başlayabiliriz."
+        },
+        {
+          "soru": "Grafiği nasıl indiririm?",
+          "beklenen": "indirme cevabı (PNG)",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Tablo içeren her cevabın altındaki 'tam tablo CSV' ve 'XLSX' bağlantıları tam tabloyu indirir (ekranda ilk 200 satır gösterilse de); 'HTML rapor' cevabı tablo, grafik ve kanıt zinciriyle birlikte açar. Grafiklerin altında 'PNG indir' bağlantısı var."
+        }
+      ]
+    },
+    {
+      "senaryo": "S4_tablosuz_kimlik_ve_belirsiz",
+      "tekrar": 3,
+      "turlar": [
+        {
+          "soru": "Sen kimsin?",
+          "beklenen": "kimlik; geri gönderilmez",
+          "ok": true,
+          "sure_s": 3.1,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "BDDK ve TCMB kaynaklı finansal veriler üzerinde çalışan bir veri analisti asistanıyım.\n\nYanıtlayabildiğim soruların örnekleri:\n\n- **BDDK verileri:** Bankacılık sektörü bakiyeleri, kredi ve mevduat istatistikleri, il bazında dağılımlar, aylık ve haftalık bülten kalemleri\n- **TCMB verileri:** Döviz kurları, enflasyon ve fiyat endeksleri, para ve banka istatistikleri\n- **Analiz işlemleri:** Dönemsel değişim ve büyüme oranları, reel (enflasyondan arındırılmış) değerler, iki seriyi aynı dönemde karşılaştırma, çeyreklik/aylık frekans dönüşümleri, aykırı değer ve kırılma tespiti, grafik oluşturma\n\nBir soru sormak istersen, hangi veri ve hangi dönem hakkında bilgi almak istediğini yazman yeterli."
+        },
+        {
+          "soru": "Bu sistemi kim geliştirdi?",
+          "beklenen": "önceki soruya kaymaz (kimlik cevabını ya da veri listesini tekrarlamaz)",
+          "ok": true,
+          "sure_s": 2.4,
+          "llm": true,
+          "geri_gonderildi": true,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "validate",
+              null,
+              "veri çekilmeden cevap denendi — geri gönderildi"
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Bu konuda elimde bilgi yok."
+        },
+        {
+          "soru": "Grafiği nasıl indiririm?",
+          "beklenen": "indirme cevabı (PNG)",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Tablo içeren her cevabın altındaki 'tam tablo CSV' ve 'XLSX' bağlantıları tam tabloyu indirir (ekranda ilk 200 satır gösterilse de); 'HTML rapor' cevabı tablo, grafik ve kanıt zinciriyle birlikte açar. Grafiklerin altında 'PNG indir' bağlantısı var."
+        }
+      ]
+    },
+    {
+      "senaryo": "S5_veri_listesi_sonrasi_kullanim",
+      "tekrar": 1,
+      "turlar": [
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "veri setleri katalogdan",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var:\n- BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); 81 il × 8 konu: kredi kartı, ihtiyaç kredisi, konut kredisi, kredili mevduat hesabı, takipteki ihtiyaç kredisi, takipteki konut kredisi ve 2 konu daha\n- BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); konular: toplam krediler, yurt içi yerleşik mevduat, toplam mevduat, tüketici kredileri, konut kredisi, taşıt kredisi ve 14 konu daha\n- TCMB EVDS: 12 seri (2016-01 → 2026-07); konular: ağırlıklı ortalama fonlama maliyeti, politika faizi, euro kuru, dolar kuru, TÜFE, para arzı ve 5 konu daha\n- BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06); konu: haftalık konut kredisi"
+        },
+        {
+          "soru": "Oturumu nasıl sıfırlarım?",
+          "beklenen": "sıfırlama cevabı: 'Oturumu sıfırla' düğmesi; veri listesini tekrarlamaz, sorgu yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Sol paneldeki 'Oturumu sıfırla' düğmesi sohbeti, tabloları ve bu oturumda yüklenen dosyaları temizler; veri havuzuna dokunmaz. Veri havuzunu sıfırlamak yalnız Architect profilinde yapılır."
+        },
+        {
+          "soru": "Dosyayı nasıl yüklerim?",
+          "beklenen": "yükleme cevabı (türler, 25 MB)",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Soru kutusunun solundaki Dosya düğmesiyle ya da dosyayı sayfaya sürükleyerek yükleyebilirsin: CSV, TSV, TXT, XLSX, XLSM, JSON, PDF, PNG, JPG, JPEG, WEBP; en çok 25 MB. Dosya bu oturuma özel saklanır; ardından ne yapılacağını yaz (ör. 'bu dosyayı analiz et'). Analyst profilinde dosya okunur ve analiz edilir, kataloğa yazılmaz."
+        }
+      ]
+    },
+    {
+      "senaryo": "S5_veri_listesi_sonrasi_kullanim",
+      "tekrar": 2,
+      "turlar": [
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "veri setleri katalogdan",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var:\n- BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); 81 il × 8 konu: kredi kartı, ihtiyaç kredisi, konut kredisi, kredili mevduat hesabı, takipteki ihtiyaç kredisi, takipteki konut kredisi ve 2 konu daha\n- BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); konular: toplam krediler, yurt içi yerleşik mevduat, toplam mevduat, tüketici kredileri, konut kredisi, taşıt kredisi ve 14 konu daha\n- TCMB EVDS: 12 seri (2016-01 → 2026-07); konular: ağırlıklı ortalama fonlama maliyeti, politika faizi, euro kuru, dolar kuru, TÜFE, para arzı ve 5 konu daha\n- BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06); konu: haftalık konut kredisi"
+        },
+        {
+          "soru": "Oturumu nasıl sıfırlarım?",
+          "beklenen": "sıfırlama cevabı: 'Oturumu sıfırla' düğmesi; veri listesini tekrarlamaz, sorgu yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Sol paneldeki 'Oturumu sıfırla' düğmesi sohbeti, tabloları ve bu oturumda yüklenen dosyaları temizler; veri havuzuna dokunmaz. Veri havuzunu sıfırlamak yalnız Architect profilinde yapılır."
+        },
+        {
+          "soru": "Dosyayı nasıl yüklerim?",
+          "beklenen": "yükleme cevabı (türler, 25 MB)",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Soru kutusunun solundaki Dosya düğmesiyle ya da dosyayı sayfaya sürükleyerek yükleyebilirsin: CSV, TSV, TXT, XLSX, XLSM, JSON, PDF, PNG, JPG, JPEG, WEBP; en çok 25 MB. Dosya bu oturuma özel saklanır; ardından ne yapılacağını yaz (ör. 'bu dosyayı analiz et'). Analyst profilinde dosya okunur ve analiz edilir, kataloğa yazılmaz."
+        }
+      ]
+    },
+    {
+      "senaryo": "S5_veri_listesi_sonrasi_kullanim",
+      "tekrar": 3,
+      "turlar": [
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "veri setleri katalogdan",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var:\n- BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); 81 il × 8 konu: kredi kartı, ihtiyaç kredisi, konut kredisi, kredili mevduat hesabı, takipteki ihtiyaç kredisi, takipteki konut kredisi ve 2 konu daha\n- BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); konular: toplam krediler, yurt içi yerleşik mevduat, toplam mevduat, tüketici kredileri, konut kredisi, taşıt kredisi ve 14 konu daha\n- TCMB EVDS: 12 seri (2016-01 → 2026-07); konular: ağırlıklı ortalama fonlama maliyeti, politika faizi, euro kuru, dolar kuru, TÜFE, para arzı ve 5 konu daha\n- BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06); konu: haftalık konut kredisi"
+        },
+        {
+          "soru": "Oturumu nasıl sıfırlarım?",
+          "beklenen": "sıfırlama cevabı: 'Oturumu sıfırla' düğmesi; veri listesini tekrarlamaz, sorgu yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Sol paneldeki 'Oturumu sıfırla' düğmesi sohbeti, tabloları ve bu oturumda yüklenen dosyaları temizler; veri havuzuna dokunmaz. Veri havuzunu sıfırlamak yalnız Architect profilinde yapılır."
+        },
+        {
+          "soru": "Dosyayı nasıl yüklerim?",
+          "beklenen": "yükleme cevabı (türler, 25 MB)",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Soru kutusunun solundaki Dosya düğmesiyle ya da dosyayı sayfaya sürükleyerek yükleyebilirsin: CSV, TSV, TXT, XLSX, XLSM, JSON, PDF, PNG, JPG, JPEG, WEBP; en çok 25 MB. Dosya bu oturuma özel saklanır; ardından ne yapılacağını yaz (ör. 'bu dosyayı analiz et'). Analyst profilinde dosya okunur ve analiz edilir, kataloğa yazılmaz."
+        }
+      ]
+    },
+    {
+      "senaryo": "S6_ic_adlar_hesaplanmis_tablo",
+      "tekrar": 1,
+      "turlar": [
+        {
+          "soru": "Elinde nasıl veriler var",
+          "beklenen": "veri setleri katalogdan (model çağrılmaz); iç ad yok",
+          "ok": true,
+          "sure_s": 0.2,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var:\n- BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); 81 il × 8 konu: kredi kartı, ihtiyaç kredisi, konut kredisi, kredili mevduat hesabı, takipteki ihtiyaç kredisi, takipteki konut kredisi ve 2 konu daha\n- BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); konular: toplam krediler, yurt içi yerleşik mevduat, toplam mevduat, tüketici kredileri, konut kredisi, taşıt kredisi ve 14 konu daha\n- TCMB EVDS: 12 seri (2016-01 → 2026-07); konular: ağırlıklı ortalama fonlama maliyeti, politika faizi, euro kuru, dolar kuru, TÜFE, para arzı ve 5 konu daha\n- BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06); konu: haftalık konut kredisi"
+        },
+        {
+          "soru": "Konut kredisi faiz oranını 2025 için aylık ortalama olarak göster.",
+          "beklenen": "tablo araçla; cevap ve rapor kaynaklarında iç ad yok",
+          "ok": true,
+          "sure_s": 5.6,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "period_end",
+            "konut_kredisi_faizi_yuzde"
+          ],
+          "adimlar": [
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_query",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 yılı konut kredisi faiz oranının aylık ortalamalarını getir",
+              "ozet": "Sorgu başarılı: 12 satır, 2 sütun.\nSütunlar: period_end, konut_kredisi_faizi_yuzde\nSatırlar (12, tamamı):\nperiod_end  konut_kredisi_faizi_yuzde\n2025-01-31                    40.5360\n2025-02-28                    39.9750\n2025-03-31          "
+            }
+          ],
+          "cevap": "2025 yılı konut kredisi faiz oranı, aylık ortalamalar (yüzde):\n\n| Ay | Faiz Oranı (%) |\n|---|---|\n| Ocak | 40,54 |\n| Şubat | 39,98 |\n| Mart | 39,38 |\n| Nisan | 39,56 |\n| Mayıs | 42,14 |\n| Haziran | 43,47 |\n| Temmuz | 42,56 |\n| Ağustos | 40,36 |\n| Eylül | 38,80 |\n| Ekim | 37,94 |\n| Kasım | 37,76 |\n| Aralık | 37,29 |\n\nKaynak: TCMB EVDS haftalık konut kredisi faiz oranının takvim aylarına indirgenmiş hâli (oran serisi, ay değeri haftalık gözlemlerin ortalaması). Yıl içinde faiz oranı Mayıs–Haziran'da zirve yaptı (Haziran'da %43,47) ve yıl sonuna doğru kademeli olarak %37,29'a geriledi."
+        },
+        {
+          "soru": "Bunu çizgi grafik olarak çiz.",
+          "beklenen": "grafik; cevap, grafik başlığı ve rapor kaynaklarında iç ad yok",
+          "ok": true,
+          "sure_s": 5.2,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "chart"
+          ],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "validate",
+              null,
+              "grafik istendi, araç çağrılmadan cevap denendi — geri gönderildi"
+            ],
+            [
+              "narrate",
+              "chart",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "chart",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 Konut Kredisi Faiz Oranı (Aylık Ortalama)",
+              "ozet": "GRAFİK: 2025 Konut Kredisi Faiz Oranı (Aylık Ortalama) · yüzde · 2025-01-31 → 2025-12-31\ndenetim: 5/5 kural geçti | tür: line | x: period_end | y: konut_kredisi_faizi_yuzde (yüzde) | 12 satır\n  ✓ level_zero: stok/akım serileri sıfırdan başl"
+            }
+          ],
+          "cevap": "2025 yılı konut kredisi faiz oranının aylık ortalamalarını gösteren çizgi grafiği hazır; faiz oranı yıl içinde Mayıs–Haziran'da zirve yaptıktan sonra yıl sonuna doğru kademeli olarak geriliyor."
+        }
+      ]
+    },
+    {
+      "senaryo": "S6_ic_adlar_hesaplanmis_tablo",
+      "tekrar": 2,
+      "turlar": [
+        {
+          "soru": "Elinde nasıl veriler var",
+          "beklenen": "veri setleri katalogdan (model çağrılmaz); iç ad yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var:\n- BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); 81 il × 8 konu: kredi kartı, ihtiyaç kredisi, konut kredisi, kredili mevduat hesabı, takipteki ihtiyaç kredisi, takipteki konut kredisi ve 2 konu daha\n- BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); konular: toplam krediler, yurt içi yerleşik mevduat, toplam mevduat, tüketici kredileri, konut kredisi, taşıt kredisi ve 14 konu daha\n- TCMB EVDS: 12 seri (2016-01 → 2026-07); konular: ağırlıklı ortalama fonlama maliyeti, politika faizi, euro kuru, dolar kuru, TÜFE, para arzı ve 5 konu daha\n- BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06); konu: haftalık konut kredisi"
+        },
+        {
+          "soru": "Konut kredisi faiz oranını 2025 için aylık ortalama olarak göster.",
+          "beklenen": "tablo araçla; cevap ve rapor kaynaklarında iç ad yok",
+          "ok": true,
+          "sure_s": 4.5,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "period_end",
+            "konut_kredisi_faizi_yuzde"
+          ],
+          "adimlar": [
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_query",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 yılı konut kredisi faiz oranı aylık ortalamalarını getir",
+              "ozet": "Sorgu başarılı: 12 satır, 2 sütun.\nSütunlar: period_end, konut_kredisi_faizi_yuzde\nSatırlar (12, tamamı):\nperiod_end  konut_kredisi_faizi_yuzde\n2025-01-31                    40.5360\n2025-02-28                    39.9750\n2025-03-31          "
+            }
+          ],
+          "cevap": "2025 yılı konut kredisi faiz oranı, aylık ortalamalar (yüzde):\n\n| Ay | Faiz Oranı (%) |\n|---|---|\n| Ocak | 40,54 |\n| Şubat | 39,98 |\n| Mart | 39,38 |\n| Nisan | 39,56 |\n| Mayıs | 42,14 |\n| Haziran | 43,47 |\n| Temmuz | 42,56 |\n| Ağustos | 40,36 |\n| Eylül | 38,80 |\n| Ekim | 37,94 |\n| Kasım | 37,76 |\n| Aralık | 37,29 |\n\nKaynak: TCMB EVDS haftalık konut kredisi faiz oranının aylık ortalamaya indirgenmiş hâli (oran serisi, ay değeri haftalık gözlemlerin ortalaması). Yıl içinde faiz Haziran'da 43,47% ile zirve yaptıktan sonra Aralık'ta 37,29%'a geriledi."
+        },
+        {
+          "soru": "Bunu çizgi grafik olarak çiz.",
+          "beklenen": "grafik; cevap, grafik başlığı ve rapor kaynaklarında iç ad yok",
+          "ok": true,
+          "sure_s": 4.0,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "chart"
+          ],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "validate",
+              null,
+              "grafik istendi, araç çağrılmadan cevap denendi — geri gönderildi"
+            ],
+            [
+              "narrate",
+              "chart",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "chart",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 Konut Kredisi Faiz Oranı (Aylık Ortalama)",
+              "ozet": "GRAFİK: 2025 Konut Kredisi Faiz Oranı (Aylık Ortalama) · yüzde · 2025-01-31 → 2025-12-31\ndenetim: 5/5 kural geçti | tür: line | x: period_end | y: konut_kredisi_faizi_yuzde (yüzde) | 12 satır\n  ✓ level_zero: stok/akım serileri sıfırdan başl"
+            }
+          ],
+          "cevap": "2025 yılı konut kredisi faiz oranının aylık ortalamalarını gösteren çizgi grafiği hazır; faiz Haziran'da 43,47% ile zirve yaptıktan sonra Aralık'ta 37,29%'a geriliyor."
+        }
+      ]
+    },
+    {
+      "senaryo": "S6_ic_adlar_hesaplanmis_tablo",
+      "tekrar": 3,
+      "turlar": [
+        {
+          "soru": "Elinde nasıl veriler var",
+          "beklenen": "veri setleri katalogdan (model çağrılmaz); iç ad yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var:\n- BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); 81 il × 8 konu: kredi kartı, ihtiyaç kredisi, konut kredisi, kredili mevduat hesabı, takipteki ihtiyaç kredisi, takipteki konut kredisi ve 2 konu daha\n- BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); konular: toplam krediler, yurt içi yerleşik mevduat, toplam mevduat, tüketici kredileri, konut kredisi, taşıt kredisi ve 14 konu daha\n- TCMB EVDS: 12 seri (2016-01 → 2026-07); konular: ağırlıklı ortalama fonlama maliyeti, politika faizi, euro kuru, dolar kuru, TÜFE, para arzı ve 5 konu daha\n- BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06); konu: haftalık konut kredisi"
+        },
+        {
+          "soru": "Konut kredisi faiz oranını 2025 için aylık ortalama olarak göster.",
+          "beklenen": "tablo araçla; cevap ve rapor kaynaklarında iç ad yok",
+          "ok": true,
+          "sure_s": 8.0,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "lakehouse_query"
+          ],
+          "tablo_kolonlari": [
+            "period_end",
+            "konut_kredisi_faizi_yuzde"
+          ],
+          "adimlar": [
+            [
+              "execute",
+              "lakehouse_query",
+              ""
+            ],
+            [
+              "validate",
+              null,
+              "grounding: MISS:3,25"
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_query",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 yılı konut kredisi faiz oranı aylık ortalamalarını getir",
+              "ozet": "Sorgu başarılı: 12 satır, 2 sütun.\nSütunlar: period_end, konut_kredisi_faizi_yuzde\nSatırlar (12, tamamı):\nperiod_end  konut_kredisi_faizi_yuzde\n2025-01-31                    40.5360\n2025-02-28                    39.9750\n2025-03-31          "
+            }
+          ],
+          "cevap": "2025 yılı konut kredisi faiz oranı, aylık ortalamalar (TCMB EVDS haftalık verisinden aylık ortalama olarak hesaplandı):\n\n| Ay | Faiz Oranı (%) |\n|---|---|\n| Ocak 2025 | 40,54 |\n| Şubat 2025 | 39,98 |\n| Mart 2025 | 39,38 |\n| Nisan 2025 | 39,56 |\n| Mayıs 2025 | 42,14 |\n| Haziran 2025 | 43,47 |\n| Temmuz 2025 | 42,56 |\n| Ağustos 2025 | 40,36 |\n| Eylül 2025 | 38,80 |\n| Ekim 2025 | 37,94 |\n| Kasım 2025 | 37,76 |\n| Aralık 2025 | 37,29 |\n\nYıl içinde faiz oranı Ocak'ta %40,54'ten başlayıp Haziran'da zirve olan %43,47'ye çıktı, ardından Aralık'ta %37,29'a geriledi.\n\nKaynak: TCMB EVDS haftalık konut kredisi faiz oranı serisi, takvim aylarına ortalama kuralıyla indirgendi (2025-01 → 2025-12)."
+        },
+        {
+          "soru": "Bunu çizgi grafik olarak çiz.",
+          "beklenen": "grafik; cevap, grafik başlığı ve rapor kaynaklarında iç ad yok",
+          "ok": true,
+          "sure_s": 3.3,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "chart"
+          ],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              "chart",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "chart",
+              "ok": true,
+              "kod": null,
+              "detay": "Konut Kredisi Faiz Oranı (Aylık Ortalama)",
+              "ozet": "GRAFİK: Konut Kredisi Faiz Oranı (Aylık Ortalama) · yüzde · 2025-01-31 → 2025-12-31\ndenetim: 5/5 kural geçti | tür: line | x: period_end | y: konut_kredisi_faizi_yuzde (yüzde) | 12 satır\n  ✓ level_zero: stok/akım serileri sıfırdan başlıyor\n"
+            }
+          ],
+          "cevap": "2025 yılı konut kredisi faiz oranı aylık ortalamalarını gösteren çizgi grafik hazır; Ocak'ta %40,54'ten başlayıp Haziran'da %43,47'ye yükseldikten sonra Aralık'ta %37,29'a gerileyen seyri izleyebilirsiniz."
+        }
+      ]
+    },
+    {
+      "senaryo": "S8_veri_seti_konulari",
+      "tekrar": 1,
+      "turlar": [
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "katalogdan (model çağrılmaz); kaynak başına sayı, dönem ve konular (81 il, TÜFE); iç ad yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var:\n- BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); 81 il × 8 konu: kredi kartı, ihtiyaç kredisi, konut kredisi, kredili mevduat hesabı, takipteki ihtiyaç kredisi, takipteki konut kredisi ve 2 konu daha\n- BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); konular: toplam krediler, yurt içi yerleşik mevduat, toplam mevduat, tüketici kredileri, konut kredisi, taşıt kredisi ve 14 konu daha\n- TCMB EVDS: 12 seri (2016-01 → 2026-07); konular: ağırlıklı ortalama fonlama maliyeti, politika faizi, euro kuru, dolar kuru, TÜFE, para arzı ve 5 konu daha\n- BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06); konu: haftalık konut kredisi"
+        },
+        {
+          "soru": "Bunlardan konut kredisiyle ilgili hangileri var?",
+          "beklenen": "konut kredisi serileri anlatılır; iç ad yok",
+          "ok": false,
+          "sure_s": 13.5,
+          "llm": true,
+          "geri_gonderildi": true,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_search",
+            "lakehouse_search",
+            "lakehouse_search"
+          ],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "validate",
+              null,
+              "veri çekilmeden cevap denendi — geri gönderildi"
+            ],
+            [
+              "validate",
+              null,
+              "son çıkış: doğrulanamayan 2 ifade cevaptan çıkarıldı"
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi”",
+              "ozet": "Bulunan tablolar:\n- bddk_monthly:1534_Toplam: Tüketici Kredileri - Konut, Toplam (Sektör). BDDK Aylık Bülten, Tüketici Kredileri tablosu, \"Tüketici Kredileri - Konut\" kalemi, Toplam sütunu, Sektör tarafı. Dönem sonu konut kredisi bakiyesidi"
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“takipteki konut kredisi”",
+              "ozet": "Bulunan tablolar:\n- gold.takipteki_tuketici_kirilimi_aylik: Takipteki tüketici kredileri kırılımı, aylık (konut, taşıt, ihtiyaç, kredi kartı). BDDK Aylık Bülten'deki takipteki (tahsili gecikmiş) hanehalkı kredi kalemleri tek ay ekseninde: t"
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“takipteki konut kredisi il”",
+              "ozet": "Bulunan tablolar:\n- gold.takipteki_tuketici_kirilimi_aylik: Takipteki tüketici kredileri kırılımı, aylık (konut, taşıt, ihtiyaç, kredi kartı). BDDK Aylık Bülten'deki takipteki (tahsili gecikmiş) hanehalkı kredi kalemleri tek ay ekseninde: t"
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi haftalık”",
+              "ozet": "Bulunan tablolar:\n- bddk_weekly:5690_3: Konut Kredileri, Toplam (Sektör) - Haftalık. BDDK Haftalık Bülten, Krediler tablosu, \"a) Konut\" kalemi, Toplam sütunu, Sektör tarafı. Haftalık konut kredisi bakiyesidir (stok): dönemler toplanmaz, dah"
+            }
+          ],
+          "cevap": "Konut kredisiyle ilgili elimizdeki veriler:\n\n**BDDK Aylık Bülten (sektör toplamı, 2016-01 → 2026-06)**\n- Konut kredisi bakiyesi, aylık (milyon TL) — dönem sonu stok\n- Takipteki konut kredisi, aylık (milyon TL) — tahsili gecikmiş bakiye\n- Ayrıca bu bakiyenin çeyreklik indirgenmiş hâli (her çeyreğin son ayının bakiyesi)\n\n**BDDK Haftalık Bülten (sektör toplamı, 2016-01 → 2026-06)**\n- Konut kredisi bakiyesi, haftalık (milyon TL)\n\n**BDDK FinTürk (il bazında, 2016-03 → 2026-06, çeyreklik)**\n\n**TCMB EVDS (haftalık, 2016-01 → 2026-07)**\n- Konut kredisi faiz oranı (%) — haftalık, yeni açılan kredilere uygulanan ağırlıklı ortalama faiz\n\nKısaca: bakiye verisi aylık, haftalık ve il bazında çeyreklik olarak; faiz oranı haftalık olarak; takipteki konut kredisi ise aylık ve il bazında çeyreklik olarak mevcut.\n\n(Araç çıktısıyla doğrulanamayan 2 ifade cevaptan çıkarıldı; doğrulanmış değerler tabloda.)"
+        }
+      ]
+    },
+    {
+      "senaryo": "S8_veri_seti_konulari",
+      "tekrar": 2,
+      "turlar": [
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "katalogdan (model çağrılmaz); kaynak başına sayı, dönem ve konular (81 il, TÜFE); iç ad yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var:\n- BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); 81 il × 8 konu: kredi kartı, ihtiyaç kredisi, konut kredisi, kredili mevduat hesabı, takipteki ihtiyaç kredisi, takipteki konut kredisi ve 2 konu daha\n- BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); konular: toplam krediler, yurt içi yerleşik mevduat, toplam mevduat, tüketici kredileri, konut kredisi, taşıt kredisi ve 14 konu daha\n- TCMB EVDS: 12 seri (2016-01 → 2026-07); konular: ağırlıklı ortalama fonlama maliyeti, politika faizi, euro kuru, dolar kuru, TÜFE, para arzı ve 5 konu daha\n- BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06); konu: haftalık konut kredisi"
+        },
+        {
+          "soru": "Bunlardan konut kredisiyle ilgili hangileri var?",
+          "beklenen": "konut kredisi serileri anlatılır; iç ad yok",
+          "ok": false,
+          "sure_s": 16.9,
+          "llm": true,
+          "geri_gonderildi": true,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_search",
+            "lakehouse_search",
+            "lakehouse_search"
+          ],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "validate",
+              null,
+              "veri çekilmeden cevap denendi — geri gönderildi"
+            ],
+            [
+              "validate",
+              null,
+              "son çıkış: doğrulanamayan 2 ifade cevaptan çıkarıldı"
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi”",
+              "ozet": "Bulunan tablolar:\n- bddk_monthly:1534_Toplam: Tüketici Kredileri - Konut, Toplam (Sektör). BDDK Aylık Bülten, Tüketici Kredileri tablosu, \"Tüketici Kredileri - Konut\" kalemi, Toplam sütunu, Sektör tarafı. Dönem sonu konut kredisi bakiyesidi"
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“takipteki konut kredisi”",
+              "ozet": "Bulunan tablolar:\n- gold.takipteki_tuketici_kirilimi_aylik: Takipteki tüketici kredileri kırılımı, aylık (konut, taşıt, ihtiyaç, kredi kartı). BDDK Aylık Bülten'deki takipteki (tahsili gecikmiş) hanehalkı kredi kalemleri tek ay ekseninde: t"
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“takipteki konut kredisi il”",
+              "ozet": "Bulunan tablolar:\n- gold.takipteki_tuketici_kirilimi_aylik: Takipteki tüketici kredileri kırılımı, aylık (konut, taşıt, ihtiyaç, kredi kartı). BDDK Aylık Bülten'deki takipteki (tahsili gecikmiş) hanehalkı kredi kalemleri tek ay ekseninde: t"
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi haftalık”",
+              "ozet": "Bulunan tablolar:\n- bddk_weekly:5690_3: Konut Kredileri, Toplam (Sektör) - Haftalık. BDDK Haftalık Bülten, Krediler tablosu, \"a) Konut\" kalemi, Toplam sütunu, Sektör tarafı. Haftalık konut kredisi bakiyesidir (stok): dönemler toplanmaz, dah"
+            }
+          ],
+          "cevap": "Konut kredisiyle ilgili elimizdeki veriler:\n\n**BDDK Aylık Bülten (sektör toplamı, 2016-01 → 2026-06)**\n- Konut kredisi bakiyesi, aylık (milyon TL) — dönem sonu stok\n- Takipteki konut kredisi, aylık (milyon TL) — tahsili gecikmiş bakiye\n- Aynı bakiyenin çeyreklik indirgenmiş hâli (her çeyreğin son ayının değeri)\n\n**BDDK Haftalık Bülten (sektör toplamı, 2016-01 → 2026-06)**\n- Konut kredisi bakiyesi, haftalık (milyon TL)\n\n**BDDK FinTürk (il bazında, 2016-03 → 2026-06, çeyreklik)**\n\n**TCMB EVDS (haftalık, 2016-01 → 2026-07)**\n- Konut kredisi faiz oranı, ağırlıklı ortalama (%) — haftada yeni açılan kredilere uygulanan oran; mevcut stokun ortalama faizi değil\n\nKısaca: bakiye (stok) verisi aylık, haftalık ve il bazında çeyreklik olarak; faiz oranı haftalık olarak; takipteki konut kredisi ise aylık ve il bazında çeyreklik olarak mevcut.\n\n(Araç çıktısıyla doğrulanamayan 2 ifade cevaptan çıkarıldı"
+        }
+      ]
+    },
+    {
+      "senaryo": "S8_veri_seti_konulari",
+      "tekrar": 3,
+      "turlar": [
+        {
+          "soru": "elimizde hangi veriler var",
+          "beklenen": "katalogdan (model çağrılmaz); kaynak başına sayı, dönem ve konular (81 il, TÜFE); iç ad yok",
+          "ok": true,
+          "sure_s": 0.1,
+          "llm": false,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "yetenek sorusu — LLM çağrılmadı"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Veri havuzunda şu kaynaklardan yüklü seriler var:\n- BDDK FinTürk (il bazında): 648 seri (2016-03 → 2026-06); 81 il × 8 konu: kredi kartı, ihtiyaç kredisi, konut kredisi, kredili mevduat hesabı, takipteki ihtiyaç kredisi, takipteki konut kredisi ve 2 konu daha\n- BDDK Aylık Bülten: 20 seri (2016-01 → 2026-06); konular: toplam krediler, yurt içi yerleşik mevduat, toplam mevduat, tüketici kredileri, konut kredisi, taşıt kredisi ve 14 konu daha\n- TCMB EVDS: 12 seri (2016-01 → 2026-07); konular: ağırlıklı ortalama fonlama maliyeti, politika faizi, euro kuru, dolar kuru, TÜFE, para arzı ve 5 konu daha\n- BDDK Haftalık Bülten: 1 seri (2016-01 → 2026-06); konu: haftalık konut kredisi"
+        },
+        {
+          "soru": "Bunlardan konut kredisiyle ilgili hangileri var?",
+          "beklenen": "konut kredisi serileri anlatılır; iç ad yok",
+          "ok": false,
+          "sure_s": 23.8,
+          "llm": true,
+          "geri_gonderildi": true,
+          "araclar": [
+            "lakehouse_search",
+            "lakehouse_search",
+            "lakehouse_search",
+            "lakehouse_search",
+            "lakehouse_search"
+          ],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "retrieve",
+              "lakehouse_search",
+              ""
+            ],
+            [
+              "validate",
+              null,
+              "veri çekilmeden cevap denendi — geri gönderildi"
+            ],
+            [
+              "validate",
+              null,
+              "son çıkış: doğrulanamayan 2 ifade cevaptan çıkarıldı"
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi”",
+              "ozet": "Bulunan tablolar:\n- bddk_monthly:1534_Toplam: Tüketici Kredileri - Konut, Toplam (Sektör). BDDK Aylık Bülten, Tüketici Kredileri tablosu, \"Tüketici Kredileri - Konut\" kalemi, Toplam sütunu, Sektör tarafı. Dönem sonu konut kredisi bakiyesidi"
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“takipteki konut kredisi”",
+              "ozet": "Bulunan tablolar:\n- gold.takipteki_tuketici_kirilimi_aylik: Takipteki tüketici kredileri kırılımı, aylık (konut, taşıt, ihtiyaç, kredi kartı). BDDK Aylık Bülten'deki takipteki (tahsili gecikmiş) hanehalkı kredi kalemleri tek ay ekseninde: t"
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“takipteki konut kredisi il”",
+              "ozet": "Bulunan tablolar:\n- gold.takipteki_tuketici_kirilimi_aylik: Takipteki tüketici kredileri kırılımı, aylık (konut, taşıt, ihtiyaç, kredi kartı). BDDK Aylık Bülten'deki takipteki (tahsili gecikmiş) hanehalkı kredi kalemleri tek ay ekseninde: t"
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“takipteki konut kredisi il bazında”",
+              "ozet": "Bulunan tablolar:\n- gold.takipteki_tuketici_kirilimi_aylik: Takipteki tüketici kredileri kırılımı, aylık (konut, taşıt, ihtiyaç, kredi kartı). BDDK Aylık Bülten'deki takipteki (tahsili gecikmiş) hanehalkı kredi kalemleri tek ay ekseninde: t"
+            },
+            {
+              "arac": "lakehouse_search",
+              "ok": true,
+              "kod": null,
+              "detay": "“konut kredisi haftalık”",
+              "ozet": "Bulunan tablolar:\n- bddk_weekly:5690_3: Konut Kredileri, Toplam (Sektör) - Haftalık. BDDK Haftalık Bülten, Krediler tablosu, \"a) Konut\" kalemi, Toplam sütunu, Sektör tarafı. Haftalık konut kredisi bakiyesidir (stok): dönemler toplanmaz, dah"
+            }
+          ],
+          "cevap": "Konut kredisiyle ilgili elimizdeki veriler:\n\n**BDDK Aylık Bülten (sektör toplamı, aylık, 2016-01 → 2026-06)**\n- Konut kredisi bakiyesi (dönem sonu, stok) — milyon TL\n- Takipteki konut kredisi bakiyesi (tahsili gecikmiş, stok) — milyon TL\n\n**BDDK Haftalık Bülten (sektör toplamı, haftalık, 2016-01 → 2026-06)**\n- Konut kredisi bakiyesi (haftalık, stok)\n\n**BDDK FinTürk (il bazında, çeyreklik, 2016-03 → 2026-06)**\n\n**TCMB EVDS (haftalık, 2016-01 → 2026-07)**\n- Konut kredisi faiz oranı (yeni açılan kredilere uygulanan ağırlıklı ortalama faiz, %)\n\n**Hesaplanmış tablo**\n- Konut kredisi bakiyesi, çeyreklik (BDDK Aylık Bülten verisinden, her çeyrek son ayın bakiyesi)\n\nNot: TCMB'de konut kredisi faiz oranının TL stok bazlı versiyonu (mevcut kredi stokunun ortalama faizi) katalogda tanımlı ama henüz yüklenmemiş; isterseniz onu da çekebiliriz.\n\n(Araç çıktısıyla doğrulanamayan 2 ifade cevaptan çıkarıl"
+        }
+      ]
+    },
+    {
+      "senaryo": "S7_ic_adlar_yan_yana",
+      "tekrar": 1,
+      "turlar": [
+        {
+          "soru": "2024 ve 2025 için aylık dolar kuru ile politika faizini aynı dönemde yan yana göster.",
+          "beklenen": "iki seri yan yana araçla; cevap ve rapor kaynaklarında iç ad yok",
+          "ok": true,
+          "sure_s": 10.1,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "gold_join",
+            "gold_join"
+          ],
+          "tablo_kolonlari": [
+            "period_start",
+            "period_end",
+            "evds:TP.DK.USD.A.YTL::value",
+            "evds:TP.DK.USD.A.YTL::quality_flag",
+            "evds:TP.DK.USD.A.YTL::observations",
+            "evds:TP.DK.USD.A.YTL::missing_observations",
+            "evds:TP.DK.USD.A.YTL::source_observation_dates",
+            "evds:TP.DK.USD.A.YTL::artifact_sha256_list",
+            "evds:TP.BISPOLFAIZ.TUR::value",
+            "evds:TP.BISPOLFAIZ.TUR::quality_flag",
+            "evds:TP.BISPOLFAIZ.TUR::observations",
+            "evds:TP.BISPOLFAIZ.TUR::missing_observations",
+            "evds:TP.BISPOLFAIZ.TUR::source_observation_dates",
+            "evds:TP.BISPOLFAIZ.TUR::artifact_sha256_list",
+            "contributing_series",
+            "absent_series",
+            "is_complete_period"
+          ],
+          "adimlar": [
+            [
+              "execute",
+              "gold_join",
+              ""
+            ],
+            [
+              "execute",
+              "gold_join",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "gold_join",
+              "ok": true,
+              "kod": null,
+              "detay": "2024-2025 aylık dolar kuru ile TCMB politika faizini aynı dönem ekseninde yan yana getirmek",
+              "ozet": "Gold join: evds:TP.DK.USD.A.YTL + evds:TP.BISPOLFAIZ.TUR → monthly: 126 dönem hesaplandı (2016-01-31 → 2026-06-30); dönem filtresiyle 12 satır\nKural (katalogdan): evds:TP.DK.USD.A.YTL: rate → avg, birim TRY; evds:TP.BISPOLFAIZ.TUR: rate → i"
+            },
+            {
+              "arac": "gold_join",
+              "ok": true,
+              "kod": null,
+              "detay": "2024-2025 aylık dolar kuru ile TCMB politika faizini aynı dönem ekseninde yan yana getirmek",
+              "ozet": "Gold join: evds:TP.DK.USD.A.YTL + evds:TP.BISPOLFAIZ.TUR → monthly: 126 dönem hesaplandı (2016-01-31 → 2026-06-30); dönem filtresiyle 24 satır\nKural (katalogdan): evds:TP.DK.USD.A.YTL: rate → avg, birim TRY; evds:TP.BISPOLFAIZ.TUR: rate → i"
+            }
+          ],
+          "cevap": "2024 ve 2025 aylık dolar kuru ile TCMB politika faizi, aynı dönem ekseninde aşağıda yan yana:\n\n| Dönem | Dolar kuru (ay ort., TL) | Politika faizi (%) |\n|---|---|---|\n| 2024-01 | 29,9997 | 45,0 |\n| 2024-02 | 30,7042 | 45,0 |\n| 2024-03 | 31,9292 | 50,0 |\n| 2024-04 | 32,2713 | 50,0 |\n| 2024-05 | 32,1899 | 50,0 |\n| 2024-06 | 32,4627 | 50,0 |\n| 2024-07 | 32,8353 | 50,0 |\n| 2024-08 | 33,5608 | 50,0 |\n| 2024-09 | 33,9693 | 50,0 |\n| 2024-10 | 34,1710 | 50,0 |\n| 2024-11 | 34,3647 | 50,0 |\n| 2024-12 | 34,9038 | 47,5 |\n| 2025-01 | 35,4560 | 45,0 |\n| 2025-02 | 36,0940 | 45,0 |\n| 2025-03 | 36,9707 | 42,5 |\n| 2025-04 | 38,0218 | 46,0 |\n| 2025-05 | 38,6854 | 46,0 |\n| 2025-06 | 39,3392 | 46,0 |\n| 2025-07 | 40,1061 | 43,0 |\n| 2025-08 | 40,7283 | 43,0 |\n| 2025-09 | 41,2192 | 40,5 |\n| 2025-10 | 41,7303 | 39,5 |\n| 2025-11 | 42,1792 | 39,5 |\n| 2025-12 | 42,5861 | 38,0 |\n\nKaynak: TCMB EVDS — ABD doları göste"
+        },
+        {
+          "soru": "Bu tablo nereden geliyor?",
+          "beklenen": "kaynak kurum adıyla anlatılır; iç ad yok",
+          "ok": true,
+          "sure_s": 3.1,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Bu tablo, TCMB'nin (Türkiye Cumhuriyet Merkez Bankası) EVDS veri havuzundaki iki serinin birleştirilmesiyle oluştu:\n\n1. **ABD doları gösterge alış kuru** — TCMB'nin günlük yayımladığı dolar/TL kuru serisi. Günlük gözlemler, her ay için ortalanarak aylık değere indirgendi.\n2. **TCMB politika faiz oranı** — TCMB'nin haftalık yayımladığı politika faizi serisi. Her ayın son günündeki değer alındı.\n\nİki seri de TCMB'nin kendi verisinden; aylık takvime indirgenip aynı dönem ekseninde yan yana getirildi. Hesaplama kuralı (kuru için ay ortalaması, faiz için ay sonu değeri) veri kataloğundaki seri tanımlarından geldi, elle seçilmedi.\n\nKaynak kurum: Türkiye Cumhuriyet Merkez Bankası (TCMB)."
+        }
+      ]
+    },
+    {
+      "senaryo": "S7_ic_adlar_yan_yana",
+      "tekrar": 2,
+      "turlar": [
+        {
+          "soru": "2024 ve 2025 için aylık dolar kuru ile politika faizini aynı dönemde yan yana göster.",
+          "beklenen": "iki seri yan yana araçla; cevap ve rapor kaynaklarında iç ad yok",
+          "ok": true,
+          "sure_s": 21.1,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "gold_join",
+            "gold_join",
+            "workspace_query"
+          ],
+          "tablo_kolonlari": [
+            "period_start",
+            "period_end",
+            "evds:TP.DK.USD.A.YTL::value",
+            "evds:TP.DK.USD.A.YTL::quality_flag",
+            "evds:TP.DK.USD.A.YTL::observations",
+            "evds:TP.DK.USD.A.YTL::missing_observations",
+            "evds:TP.DK.USD.A.YTL::source_observation_dates",
+            "evds:TP.DK.USD.A.YTL::artifact_sha256_list",
+            "evds:TP.BISPOLFAIZ.TUR::value",
+            "evds:TP.BISPOLFAIZ.TUR::quality_flag",
+            "evds:TP.BISPOLFAIZ.TUR::observations",
+            "evds:TP.BISPOLFAIZ.TUR::missing_observations",
+            "evds:TP.BISPOLFAIZ.TUR::source_observation_dates",
+            "evds:TP.BISPOLFAIZ.TUR::artifact_sha256_list",
+            "contributing_series",
+            "absent_series",
+            "is_complete_period"
+          ],
+          "adimlar": [
+            [
+              "execute",
+              "gold_join",
+              ""
+            ],
+            [
+              "execute",
+              "gold_join",
+              ""
+            ],
+            [
+              "execute",
+              "workspace_query",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "gold_join",
+              "ok": true,
+              "kod": null,
+              "detay": "2024-2025 aylık ortalama dolar kuru ile TCMB politika faizini aynı dönem ekseninde yan yana getirmek",
+              "ozet": "Gold join: evds:TP.DK.USD.A.YTL + evds:TP.BISPOLFAIZ.TUR → monthly: 126 dönem hesaplandı (2016-01-31 → 2026-06-30); dönem filtresiyle 12 satır\nKural (katalogdan): evds:TP.DK.USD.A.YTL: rate → avg, birim TRY; evds:TP.BISPOLFAIZ.TUR: rate → i"
+            },
+            {
+              "arac": "gold_join",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 aylık ortalama dolar kuru ile TCMB politika faizini aynı dönem ekseninde yan yana getirmek",
+              "ozet": "Gold join: evds:TP.DK.USD.A.YTL + evds:TP.BISPOLFAIZ.TUR → monthly: 126 dönem hesaplandı (2016-01-31 → 2026-06-30); dönem filtresiyle 12 satır\nKural (katalogdan): evds:TP.DK.USD.A.YTL: rate → avg, birim TRY; evds:TP.BISPOLFAIZ.TUR: rate → i"
+            },
+            {
+              "arac": "workspace_query",
+              "ok": true,
+              "kod": null,
+              "detay": "2025 tablosunu sadeleştirerek dolar kuru ve politika faizini yan yana göster",
+              "ozet": "Sorgu başarılı: 12 satır, 3 sütun — AKTİF TABLO DEĞİŞMEDİ (bakış modu; tabloyu buna çevirmek için as_active_table=true).\nSütunlar: period_end, dolar_kuru, politika_faizi\nSatırlar (12, tamamı):\nperiod_end  dolar_kuru  politika_faizi\n2025-01-"
+            }
+          ],
+          "cevap": "2024 ve 2025 için aylık ortalama dolar kuru (TL) ile TCMB politika faizini (yüzde) aynı dönem ekseninde yan yana getirdim. Kaynak: TCMB EVDS (dolar alış kuru günlük gözlemlerin aylık ortalaması; politika faizi ay sonu değeri).\n\n**2024**\n\n| Ay | Dolar kuru (TL) | Politika faizi (%) |\n|---|---|---|\n| Oca | 29,9997 | 45,0 |\n| Şub | 30,7042 | 45,0 |\n| Mar | 31,9292 | 50,0 |\n| Nis | 32,2713 | 50,0 |\n| May | 32,1899 | 50,0 |\n| Haz | 32,4627 | 50,0 |\n| Tem | 32,8353 | 50,0 |\n| Ağu | 33,5608 | 50,0 |\n| Eyl | 33,9693 | 50,0 |\n| Eki | 34,1710 | 50,0 |\n| Kas | 34,3647 | 50,0 |\n| Ara | 34,9038 | 47,5 |\n\n**2025**\n\n| Ay | Dolar kuru (TL) | Politika faizi (%) |\n|---|---|---|\n| Oca | 35,4560 | 45,0 |\n| Şub | 36,0940 | 45,0 |\n| Mar | 36,9707 | 42,5 |\n| Nis | 38,0218 | 46,0 |\n| May | 38,6854 | 46,0 |\n| Haz | 39,3392 | 46,0 |\n| Tem | 40,1061 | 43,0 |\n| Ağu | 40,7283 | 43,0 |\n| Eyl | 41,2192 | 40,5 |\n| Eki "
+        },
+        {
+          "soru": "Bu tablo nereden geliyor?",
+          "beklenen": "kaynak kurum adıyla anlatılır; iç ad yok",
+          "ok": true,
+          "sure_s": 10.0,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "validate",
+              null,
+              "araç çağrılmadan işlem iddiası ya da okunmamış dosya — geri gönderildi"
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Bu tablo, TCMB'nin (Türkiye Cumhuriyet Merkez Bankası) EVDS veri havuzundaki iki serinin birleştirilmesiyle oluşturuldu:\n\n1. **Dolar kuru (TL):** TCMB'nin günlük dolar alış kuru serisi. Günlük gözlemler aylık ortalamaya indirgendi (her aydaki tüm iş günü kurlarının ortalaması).\n\n2. **Politika faizi (%):** TCMB'nin haftalık politika faizi serisi. Ay sonu değeri alındı (faiz ay içinde değişmediği için ay sonu değeri o ayın faizini temsil ediyor).\n\nİki seri, aynı aylık dönem ekseninde yan yana getirildi (2024 ve 2025, 12'şer ay).\n\nKaynak kurum: **TCMB (Türkiye Cumhuriyet Merkez Bankası)**, EVDS veri sistemi."
+        }
+      ]
+    },
+    {
+      "senaryo": "S7_ic_adlar_yan_yana",
+      "tekrar": 3,
+      "turlar": [
+        {
+          "soru": "2024 ve 2025 için aylık dolar kuru ile politika faizini aynı dönemde yan yana göster.",
+          "beklenen": "iki seri yan yana araçla; cevap ve rapor kaynaklarında iç ad yok",
+          "ok": true,
+          "sure_s": 15.1,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [
+            "gold_join",
+            "gold_join"
+          ],
+          "tablo_kolonlari": [
+            "period_start",
+            "period_end",
+            "evds:TP.DK.USD.A.YTL::value",
+            "evds:TP.DK.USD.A.YTL::quality_flag",
+            "evds:TP.DK.USD.A.YTL::observations",
+            "evds:TP.DK.USD.A.YTL::missing_observations",
+            "evds:TP.DK.USD.A.YTL::source_observation_dates",
+            "evds:TP.DK.USD.A.YTL::artifact_sha256_list",
+            "evds:TP.BISPOLFAIZ.TUR::value",
+            "evds:TP.BISPOLFAIZ.TUR::quality_flag",
+            "evds:TP.BISPOLFAIZ.TUR::observations",
+            "evds:TP.BISPOLFAIZ.TUR::missing_observations",
+            "evds:TP.BISPOLFAIZ.TUR::source_observation_dates",
+            "evds:TP.BISPOLFAIZ.TUR::artifact_sha256_list",
+            "contributing_series",
+            "absent_series",
+            "is_complete_period"
+          ],
+          "adimlar": [
+            [
+              "execute",
+              "gold_join",
+              ""
+            ],
+            [
+              "execute",
+              "gold_join",
+              ""
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [
+            {
+              "arac": "gold_join",
+              "ok": true,
+              "kod": null,
+              "detay": "2024-2025 aylık dolar kuru ile TCMB politika faizini aynı dönem ekseninde yan yana getirmek",
+              "ozet": "Gold join: evds:TP.DK.USD.A.YTL + evds:TP.BISPOLFAIZ.TUR → monthly: 126 dönem hesaplandı (2016-01-31 → 2026-06-30); dönem filtresiyle 12 satır\nKural (katalogdan): evds:TP.DK.USD.A.YTL: rate → avg, birim TRY; evds:TP.BISPOLFAIZ.TUR: rate → i"
+            },
+            {
+              "arac": "gold_join",
+              "ok": true,
+              "kod": null,
+              "detay": "2024-2025 aylık dolar kuru ile TCMB politika faizini aynı dönem ekseninde yan yana getirmek",
+              "ozet": "Gold join: evds:TP.DK.USD.A.YTL + evds:TP.BISPOLFAIZ.TUR → monthly: 126 dönem hesaplandı (2016-01-31 → 2026-06-30); dönem filtresiyle 12 satır\nKural (katalogdan): evds:TP.DK.USD.A.YTL: rate → avg, birim TRY; evds:TP.BISPOLFAIZ.TUR: rate → i"
+            }
+          ],
+          "cevap": "İki ayrı çağrı yaptım; 2025'in tamamı kaynakta mevcut. Aşağıda iki yılın aylık değerleri yan yana:\n\n**2024 — Aylık ortalama dolar kuru (TL) ve politika faizi (%)**\n\n| Ay | Dolar kuru (TL) | Politika faizi (%) |\n|---|---|---|\n| Ocak | 29,9997 | 45,0 |\n| Şubat | 30,7042 | 45,0 |\n| Mart | 31,9292 | 50,0 |\n| Nisan | 32,2713 | 50,0 |\n| Mayıs | 32,1899 | 50,0 |\n| Haziran | 32,4627 | 50,0 |\n| Temmuz | 32,8353 | 50,0 |\n| Ağustos | 33,5608 | 50,0 |\n| Eylül | 33,9693 | 50,0 |\n| Ekim | 34,1710 | 50,0 |\n| Kasım | 34,3647 | 50,0 |\n| Aralık | 34,9038 | 47,5 |\n\n**2025 — Aylık ortalama dolar kuru (TL) ve politika faizi (%)**\n\n| Ay | Dolar kuru (TL) | Politika faizi (%) |\n|---|---|---|\n| Ocak | 35,4560 | 45,0 |\n| Şubat | 36,0940 | 45,0 |\n| Mart | 36,9707 | 42,5 |\n| Nisan | 38,0218 | 46,0 |\n| Mayıs | 38,6854 | 46,0 |\n| Haziran | 39,3392 | 46,0 |\n| Temmuz | 40,1061 | 43,0 |\n| Ağustos | 40,7283 | 43,0 |\n| E"
+        },
+        {
+          "soru": "Bu tablo nereden geliyor?",
+          "beklenen": "kaynak kurum adıyla anlatılır; iç ad yok",
+          "ok": true,
+          "sure_s": 14.8,
+          "llm": true,
+          "geri_gonderildi": false,
+          "araclar": [],
+          "tablo_kolonlari": [],
+          "adimlar": [
+            [
+              "validate",
+              null,
+              "araç çağrılmadan işlem iddiası ya da okunmamış dosya — geri gönderildi"
+            ],
+            [
+              "narrate",
+              null,
+              "nihai cevap"
+            ]
+          ],
+          "arac_sonuclari": [],
+          "cevap": "Bu tablo, TCMB'nin (Türkiye Cumhuriyet Merkez Bankası) EVDS veri kaynağından gelen iki serinin aynı aylık dönem ekseninde yan yana getirilmesiyle oluşturuldu:\n\n- **Dolar kuru**: TCMB günlük gösterge USD/TL alış kurunun her aydaki ortalama değeri (birim: TL).\n- **Politika faizi**: TCMB bir hafta vadeli repo ihale faiz oranının ay sonu değeri (birim: %).\n\nİki seri de kaynak verilerden, her biri kendi kuralıyla (kuru için aylık ortalama, faiz için dönem sonu değeri) aylık döneme indirgenip Ocak 2024 – Aralık 2025 aralığında aynı ay ekseninde birleştirildi. Yani tablo, TCMB'nin yayımladığı kurlar ve politika faizi verisinin hesaplanmış aylık hâlidir."
+        }
+      ]
+    }
+  ]
+}

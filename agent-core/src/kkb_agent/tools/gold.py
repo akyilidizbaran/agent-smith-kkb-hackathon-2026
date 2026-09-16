@@ -76,7 +76,9 @@ oranı toplamak yanlış sayı üretir. Bunun için:
 Kural (son değer / toplam / ortalama) katalogdan gelir, sen seçemezsin. Araç reddederse \
 sebebini kullanıcıya sade Türkçeyle söyle; sayı üretme, SQL ile aynı işi yapmaya kalkma.
 Hazır Gold tabloları (kimliği gold. ile başlar) lakehouse_search'te görünür; onlar zaten \
-hesaplanmıştır, lakehouse_query ile doğrudan sorgulanır."""
+hesaplanmıştır, lakehouse_query ile doğrudan sorgulanır.
+Kullanıcıya bu tabloları "Gold" diye anma ve kimliklerini yazma: "hesaplanmış tablo" de ve hangi kaynağın verisinden, \
+hangi kuralla (ör. haftalıktan aylık ortalama) hesaplandığını söyle."""
 
 # Hesapta kullanma rızası; kalıcı yayın onayı ("onaylıyorum", "kataloğa al") bu rızayı VERMEZ (D03-T06, ADR-0068).
 _CONSENT = re.compile(
@@ -246,18 +248,16 @@ class _GoldTool(Tool):
         self.workspace.set_table(view, description=params.purpose, provenance=result.provenance)  # type: ignore[attr-defined]
         self.workspace.title = params.purpose  # type: ignore[attr-defined]
 
+        from ..core.preview import preview_table
+
         shown = _preview_columns(view)
-        preview_rows = min(10, len(view))
         lines = [
             self._headline(params) + f": {len(frame)} dönem hesaplandı ({full_span[0]} → {full_span[1]})"
             + (f"; dönem filtresiyle {len(view)} satır" if len(view) != len(frame) else ""),
             self._rule_line(result),
             f"Sütunlar: {', '.join(map(str, view.columns))}",
-            f"İlk {preview_rows} satır:",
-            view[shown].head(preview_rows).to_string(index=False),
+            preview_table(view[shown]),   # ≤24 satır tamamı, üstü baş+son (core/preview, PART 41)
         ]
-        if len(view) > preview_rows:
-            lines.append(f"... ({len(view) - preview_rows} satır daha; tamamı analiz tablosunda)")
         if self._consent() and any("DOĞRULANMAMIŞ" in w for w in result.provenance.warnings):
             lines.append("NOT: seri semantiği doğrulanmamış; kullanıcının açık onayıyla kullanıldı — cevapta söyle.")
         lines.append("Kanıt: her satırda source_observation_dates ve artifact_sha256_list (kaynak gözlem → RAW).")

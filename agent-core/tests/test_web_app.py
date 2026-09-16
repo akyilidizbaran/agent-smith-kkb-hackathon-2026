@@ -81,11 +81,12 @@ def test_tabloya_dokunmayan_cevap_eski_tabloyu_gostermez() -> None:
     assert second["table"] is None and second["table_title"] == "" and second["text"] == "Selam. Sorunu yazabilirsin."
 
 
-def test_statik_dosyalar_ve_three_js_yerelden_servis_edilir() -> None:
+def test_statik_dosyalar_yerelden_servis_edilir_uc_boyut_kutuphanesi_yok() -> None:
     client = TestClient(create_app(FakeAgent))
-    r = client.get("/static/vendor/three.module.min.js")
-    assert r.status_code == 200 and "three.js" in r.text[:200].lower() or "three" in r.text[:300]
-    assert "Yolculuğu izle" in client.get("/").text
+    assert client.get("/static/index.html").status_code == 200
+    assert client.get("/static/vendor/three.module.min.js").status_code == 404   # ADR-0083: 3B gösterim kaldırıldı
+    page = client.get("/").text
+    assert "Yolculuğu izle" in page and "three" not in page.lower()
 
 
 def test_cevaplar_ucu_sayfa_yenilemede_sohbeti_geri_getirir() -> None:
