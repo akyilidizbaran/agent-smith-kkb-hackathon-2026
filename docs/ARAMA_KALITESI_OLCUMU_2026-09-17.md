@@ -1,8 +1,8 @@
 # Katalog büyüyünce arama ne oldu? — 17 Eylül 2026
 
-Dal: `feature/lakehouse-data-breadth` (push edilmedi). İlgili commit'ler: `5079016` (BDDK aylık 22 → 498 seri), `c141a26` (FinTürk 648 → 4.536 seri), `ee39b5e` (FinTürk açıklamalarının sadeleştirilmesi — bu raporun veri ekibi kısmı).
+Dal: `feature/lakehouse-data-breadth` (push edilmedi). İlgili commit'ler: `5079016` (BDDK aylık 22 → 498 seri), `c141a26` (FinTürk 648 → 4.536 seri), `ee39b5e` (FinTürk açıklamalarının sadeleştirilmesi — bu raporun veri ekibi kısmı), `f1521a4` (güncel main'in dala alınması), `d45c53d` (arama hızı düzeltmesi, §4.4).
 
-**Sonuç:** Veri havuzunu 1.940 seriden 6.304 seriye çıkardık. Ajan artık daha çok soruyu cevaplıyor, ama iki sorun çıktı: (1) en önemli sorumuz olan “konut kredisi ne kadar?” kırılganlaştı, (2) **her arama dört kat yavaşladı** (4 sn → 16-26 sn). İkisinin de kök sebebi ölçüldü. Veri ekibinin kendi kısmı uygulandı; ajan kodu ve el yazısı katalog girişleri için Baran'ın onayı gerekiyor. En öncelikli madde arama hızı (§4.4) — bizim PR'ımız bu düzeltme olmadan main'e girerse ajan main'de de yavaşlar.
+**Sonuç:** Veri havuzunu 1.940 seriden 6.304 seriye çıkardık. Ajan artık daha çok soruyu cevaplıyor, ama iki sorun çıktı: (1) en önemli sorumuz olan “konut kredisi ne kadar?” kırılganlaştı, (2) **her arama dört kat yavaşladı** (4 sn → 16-26 sn). İkisinin de kök sebebi ölçüldü. **Arama hızı düzeltildi** (§4.4, `d45c53d`): önbellek zaten yazılmıştı ama tek kelimelik bir karşılaştırma hatası yüzünden hiç tutmuyordu; arama artık ilk çağrıdan sonra 0,02-0,20 sn. Veri ekibinin katalog kısmı da uygulandı. Doğruluk için kalan iki katalog düzeltmesi ve aday havuzu değişikliği Baran'ın onayını bekliyor.
 
 ## 1. Kısa özet
 
@@ -11,7 +11,7 @@ Dal: `feature/lakehouse-data-breadth` (push edilmedi). İlgili commit'ler: `5079
 | Genel doğruluk | **Daha iyi.** Eski havuzla aynı 15 sorudan 9'u bulunuyordu, yeni havuzla 15'i. Yeni veriyle gelen 5 sorunun hepsi cevaplanabiliyor. |
 | Zayıf nokta | Anlam araması çalışmazsa (yedek mod) ulusal konut kredisi serisi arama sonuçlarından tamamen düşüyor. |
 | Doğruluk sebepleri | 3 ayrı: ikisi katalog metninde, biri arama kodunda. Hiçbiri tek başına yetmiyor. |
-| Hız | Arama aracı başına **4,2 sn → 16-26 sn**. Asıl arama 0,17 sn; kalanı her aramada dizinin baştan kurulması. |
+| Hız | Arama aracı başına **4,2 sn → 16-26 sn** idi; asıl arama 0,17 sn, kalanı her aramada dizinin baştan kurulmasıydı. **Düzeltildi:** ilk çağrıdan sonra 0,02-0,20 sn (`d45c53d`). |
 | Düzeltme sonrası (kopyada ölçüldü) | Yedek modda 1. sırada doğru seri 14 → 18, 24 sorunun hepsi bulunuyor. Varsayılan modda 19 → 22. |
 
 ## 2. Önce bilinmesi gereken: arama iki modda çalışıyor
@@ -131,7 +131,7 @@ lexical = split_pool(self._bm25.search(query, k=len(self.records)))
 
 Maliyet: 6.304 seride tüm sıralamayı almak milisaniyeler sürüyor (saf BM25 araması 0,17 sn ölçüldü).
 
-### 4.4 Arama her soruda dizini baştan kuruyor — `agent-core/src/kkb_agent/adapters/silver_lakehouse.py` **(öncelikli)**
+### 4.4 Arama her soruda dizini baştan kuruyordu — `agent-core/src/kkb_agent/adapters/silver_lakehouse.py` **(düzeltildi, `d45c53d`)**
 
 `lakehouse_search` aracının bir çağrısı, 24 soruluk testte:
 
@@ -151,13 +151,27 @@ lakehouse_search aracının toplamı         16,32 sn
       lexical.index → tokenize  25.246 kez, fold içinde 21,7 milyon karakter işlemi
 ```
 
-**Sebep:** `_retriever()` (`silver_lakehouse.py:562`) her çağrıldığında kataloğu veritabanından okuyup arama dizinini sıfırdan kuruyor; sonuç saklanmıyor (iki ardışık çağrı iki ayrı nesne döndürüyor). Bir aramada iki kez çağrılıyor. Küçük katalogda bu birkaç saniyeydi; maliyet katalog boyutu ve metin uzunluğuyla doğrusal büyüyor.
+**Sebep — önbellek vardı ama hiç tutmuyordu.** `_retriever()` dizini yalnız katalog değişince kurmak üzere yazılmış:
 
-**Neden önemli:** ajan tek bir cevap için genelde 1-3 kez arıyor → cevap başına **30-60 saniye** ek bekleme. Anlam aramasında ayrıca katalog değiştikten sonraki **ilk arama 504 saniye** sürdü (6.304 serinin vektörleri yeniden hesaplanıyor; sonra önbellekten okunuyor).
+```python
+if getattr(self, "_retr_for", None) is not id(self._catalog):   # her zaman True
+```
 
-**Öneri:** dizini bir kez kurup saklamak; yalnız katalog değişince (`reload()`, ingest, promote) yeniden kurmak. Beklenen (profilden, ölçülmedi): arama başına ~0,2 sn + anlam aramasında sorgunun tek embedding çağrısı, katalog boyutundan bağımsız.
+`is not` iki değerin *aynı nesne* olup olmadığına bakar, *aynı sayı* olup olmadığına değil. `id()` her çağrıda yeni bir int nesnesi döndürdüğü için koşul hep doğru çıktı ve dizin her aramada (bir aramada iki kez) baştan kuruldu. Aynı kalıp `_uningested_retriever()` ve `DuckDBLakehouse`'ta da vardı. Küçük katalogda bu birkaç saniyeydi; maliyet katalog boyutuyla doğrusal büyüdü.
 
-**Demo öncesi için:** katalog en son değiştikten sonra ajanı bir kez çalıştırıp bir soru sormak (vektör önbelleğini ısıtmak). `agent-core/data/cache/embeddings` klasöründe katalogun her sürümü için ~99 MB dosya birikiyor; eski sürümler silinebilir.
+**Düzeltme (`d45c53d`):** anahtar artık katalog nesnesinin kendisi — `is not self._catalog`, `self._retr_for = self._catalog`. `id() != id()` da yetmezdi: Architect yeni veri ekleyip `reload()` çağırınca eski katalog silinir ve yeni katalog aynı bellek adresini alabilir; o zaman ajan yeni seriyi içermeyen eski dizinle aramaya devam ederdi. Nesnenin kendisi saklandığı için adres başka nesneye geçemiyor. `_catalog` ve `_uningested` her yenilemede yeni sözlük olarak kuruluyor, yerinde değiştirilmiyor; kimlik karşılaştırması bu yüzden doğru sinyal.
+
+**Ölçülen sonuç** (gerçek kod, 6.304 serilik veritabanı, arama aracı başına):
+
+| | 1. arama | sonraki aramalar |
+|---|---:|---:|
+| Kelime araması, önce | 7,5 sn | 7,5 sn |
+| Kelime araması, sonra | 3,8 sn | **0,02-0,17 sn** |
+| Anlam araması, sonra | 7,0 sn | **0,17-0,20 sn** |
+
+Arama sonuçları birebir aynı. Yeni test (`test_arama_dizini_her_aramada_kurulmaz_katalog_yenilenince_kurulur`): dizin art arda aramalarda yeniden kurulmuyor; yeni seri yazılıp adaptör yenilenince dizin yeniden kuruluyor ve yeni seri aramada bulunuyor. Test düzeltme olmadan kırılıyor. `agent-core`: 668 geçti, 11 atlandı, 1 kaldı — `test_evidence` yol ayracı olarak `/` bekliyor, yalnız Windows'ta kırılıyor, düzeltmeden önce de aynı.
+
+**Demo öncesi için:** anlam aramasında katalog değiştikten sonraki ilk arama vektörleri yeniden hesaplar (504 sn ölçüldü; sonra önbellekten okunur). Katalog en son değiştikten sonra ajanı bir kez çalıştırıp bir soru sormak yeterli. `agent-core/data/cache/embeddings` klasöründe katalogun her sürümü için ~99 MB dosya birikiyor; eski sürümler silinebilir.
 
 ## 5. “Eskiden iyi çalışıyordu” — neden?
 
@@ -175,7 +189,7 @@ Eski havuzda aynı sorunun ilk üç sonucu:
 
 | Değişiklik | Nerede | Etki | Durum |
 |---|---|---|---|
-| **Arama dizinini her aramada baştan kurmamak** (önbellek) | `agent-core/…/silver_lakehouse.py` | Arama başına ~16 sn → ~0,2 sn beklenir | **Baran'ın kararı · öncelikli** |
+| **Arama dizini önbelleğinin karşılaştırma hatası** (`is not id(...)` → `is not self._catalog`) | `agent-core/…/silver_lakehouse.py`, `duckdb_lakehouse.py` | Arama başına 7,5 sn → 0,02-0,20 sn (ölçüldü) | **uygulandı · `d45c53d`** |
 | Tablo 1, 2, 4, 6 açıklamalarını sadeleştirmek; il alias'larını ikiye indirmek; Türkçe küçük harf (ŞIRNAK → şırnak) | `generate_bddk_finturk_catalog.py` | Kelime: 1. sırada 14 → 16, kaybolan soru yok. Anlam: 19 → 20; “konut kredisi toplamı” #2 → #1 | **uygulandı · `ee39b5e`** |
 | Tablo 3 açıklamalarındaki iki cümleyi ve ay adlarını belgeye taşımak | `bddk_finturk.yml` (el yazısı bölüm) | 648 seride başka seri adı temizlenir | Baran'ın onayı |
 | 7 ana ulusal seriye alias eklemek | `bddk_monthly.yml`, `bddk_weekly.yml` | “Türkiye'de konut kredisi” yok → #1 | Baran'ın onayı |
@@ -191,4 +205,5 @@ Eski havuzda aynı sorunun ilk üç sonucu:
 - Çalışma veritabanı: `lakehouse-core/data/lakehouse.duckdb.breadth_test` (6.304 seri, 232.217 gözlem); eski durum için 16 Eylül gece yarısı kopyası (1.941 seri).
 - Katalog düzeltmesinin tamamı: `lakehouse.duckdb.search_exp` kopyasında (repoda değişiklik yapılmadan).
 - Arama modu `RETRIEVAL_MODE` ortam değişkeniyle zorlandı (`bm25` / `auto`); anlam araması `kkbhackathon2026/Qwen3-Embedding-8B`.
-- Deney script'i (monkeypatch dahil) şu an yerel; bulgu 7.2 kabul edilirse repoya alınabilir.
+- Deney script'i (monkeypatch dahil) şu an yerel; öneri 7.2 kabul edilirse repoya alınabilir.
+- Arama hızı ölçümü `d45c53d` sonrası gerçek kodla, monkeypatch olmadan tekrarlandı.
