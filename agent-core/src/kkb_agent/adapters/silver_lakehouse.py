@@ -559,13 +559,13 @@ class SilverLakehouse:
 
     def _retriever(self) -> CatalogRetriever:
         """Sorgulanabilir katalog üzerinde retriever; katalog nesnesi değişince (reload) yeniden kurulur."""
-        if getattr(self, "_retr_for", None) is not id(self._catalog):
+        if getattr(self, "_retr_for", None) is not self._catalog:
             self._retr = CatalogRetriever(
                 [record_from_spec(spec) for spec in self._catalog.values()],
                 policy=self.retrieval_policy or RetrievalPolicy(), embedder=self.embedder,
                 embedding_cache=self.embedding_cache,
             )
-            self._retr_for = id(self._catalog)
+            self._retr_for = self._catalog
         return self._retr
 
     @property
@@ -573,13 +573,13 @@ class SilverLakehouse:
         return self._retriever().mode
 
     def _uningested_retriever(self) -> CatalogRetriever:
-        if getattr(self, "_retr_un_for", None) is not id(self._uningested):
+        if getattr(self, "_retr_un_for", None) is not self._uningested:
             self._retr_un = CatalogRetriever(
                 [CatalogRecord(id=sid, name=name, source=sid.split(":", 1)[0], province=province_of(f"{sid} {name}"))
                  for sid, name in self._uningested.items()],
                 policy=RetrievalPolicy(mode="bm25"),
             )
-            self._retr_un_for = id(self._uningested)
+            self._retr_un_for = self._uningested
         return self._retr_un
 
     def search_datasets(self, query: str, limit: int = 5) -> list[DatasetSpec]:

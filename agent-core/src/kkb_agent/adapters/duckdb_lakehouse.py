@@ -204,7 +204,7 @@ class DuckDBLakehouse:
         from ..core.facets import province_of
         from ..core.retriever import CatalogRecord, CatalogRetriever, RetrievalPolicy
 
-        if getattr(self, "_retr_for", None) is not id(self._catalog):
+        if getattr(self, "_retr_for", None) is not self._catalog:
             records = [
                 CatalogRecord(
                     id=spec.dataset_id, name=spec.name, description=spec.description, tags=tuple(spec.tags),
@@ -217,7 +217,7 @@ class DuckDBLakehouse:
                 for spec in self._catalog.values()
             ]
             self._retr = CatalogRetriever(records, policy=getattr(self, "retrieval_policy", None) or RetrievalPolicy())
-            self._retr_for = id(self._catalog)
+            self._retr_for = self._catalog
         self._bm25 = self._retr   # eski ad; testler ve araçlar `search_datasets` üzerinden gelir
         hits = self._retr.search(query, k=limit)
         found = [self._catalog[h.id] for h in hits if h.id in self._catalog]
