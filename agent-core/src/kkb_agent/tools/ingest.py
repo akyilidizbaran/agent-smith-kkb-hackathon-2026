@@ -16,11 +16,14 @@ kalır; yazan, ayrı bir süreçte çalışan veri ekibinin CLI'ıdır ve o da y
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
+from ..adapters.duckdb_lakehouse import release_connections
 from ..builder.ingest import LakehouseCLI
 from ..builder.profile import profile_table, propose
 from ..builder.read import ReadRefused, read_bytes_for_profiling, read_table_for_profiling
@@ -30,14 +33,14 @@ from ..builder.relevance import assess as assess_relevance, catalog_entries, use
 from ..core.fitness import _LOCATOR as _LOCATOR_RE, Lexicon, assess as assess_fitness, signature_of
 from ..builder.unit_guess import guess_unit
 from ..builder.verify import verify_mapping
-from ..adapters.duckdb_lakehouse import release_connections
+from ..builder.web_source import SourceSelection, read_web_source
 from ..contracts.lakehouse import LakehouseClient
 from ..core.access_policy import decide, detect_source_constraint, render_for_model, to_tool_error
+from ..core.errors import ToolError
 from ..core.intent import locator_from_user, write_intent
+from ..core.tool import Tool, ToolResult
 from ..vision.ocr import is_document, ocr_document
 from ..web.html import extract_ocr_page
-from ..core.errors import ToolError
-from ..core.tool import Tool, ToolResult
 
 
 class OcrUnavailable(RuntimeError):
@@ -45,8 +48,10 @@ class OcrUnavailable(RuntimeError):
 
 
 class IngestParams(BaseModel):
-    locator: str = Field(description="Yerel dosya yolu ya da http(s) URL'i (CSV, TSV, XLSX, JSON; PDF/PNG/JPG belgeler OCR ile okunur)")
-    table_index: int | None = Field(default=None, description="PDF/görselde birden çok tablo varsa hangisi (0 tabanlı); boşsa en büyük tablo")
+    locator: str = Field(description="Kullanıcının verdiği yerel dosya veya http(s) URL: veri dosyası ya da rapor ekleri içeren HTML sayfası. Sayfanın #bölüm kısmını koru.")
+    resource_index: int | None = Field(default=None, ge=0, description="HTML sayfasında listelenen indirilebilir eklerden hangisi (0 tabanlı). İlk çağrıda boş bırak; seçeneklerden isteğe uygun raporu seç.")
+    table_index: int | None = Field(default=None, ge=0, description="Listelenen PDF/HTML tablolarından hangisi (0 tabanlı). URL'de birden çok tablo varsa seçenekler döner.")
+    value_row: str | None = Field(default=None, description="Aylık raporda ölçümler satırdaysa kaydedilecek ölçümün tam satır etiketi; seçenekler araç çıktısında verilir.")
     pages: str | None = Field(default=None, description="PDF için hangi sayfalar: '3', '2-4' (varsayılan ilk 5)")
     sheet: str | None = Field(default=None, description="Excel'de sayfa adı ya da 0 tabanlı indeks; birden çok sayfa varsa zorunlu")
     name: str = Field(description="Serinin okunabilir adı, ör. 'İl bazında konut satışları'")
@@ -164,6 +169,7 @@ def _default_agg_from_measure(semantics):
 def _apply_declared(mapping, semantics, params: IngestParams):
     """Kullanıcı beyanı öneriyi tamamlar ya da geçersiz kılar; her alan kanıt satırıyla."""
     from dataclasses import replace
+
     from ..builder.profile import Evidence
 
     sem_updates: dict[str, Any] = {}
@@ -188,11 +194,13 @@ class IngestFromUrlTool(Tool):
     name = "ingest_from_url"
     role = "execute"
     description = (
-        "Kullanıcının getirdiği yeni bir veri dosyasını (yerel yol ya da URL; CSV/TSV/XLSX/JSON) "
+        "Kullanıcının getirdiği veri dosyasını veya rapor sayfasındaki eki (URL; HTML/PDF/CSV/TSV/XLSX/JSON) "
         "veri havuzuna TASLAK seri olarak ekler ve ne yaptığını belgeler. Dosyanın hangi kolonunun "
         "tarih, hangisinin değer olduğunu veriye bakarak kanıtıyla önerir; belirsizse eklemeden "
         "önce kullanıcıya sorar. Kullanıcı 'bu dosyayı ekle', 'şu linkteki veriyi yükle' dediğinde "
-        "BU aracı kullan."
+        "BU aracı kullan. HTML sayfası dosyaları resource_index ile, PDF tabloları table_index ve pages "
+        "ile seçilir; ölçümler satırlardaysa value_row kullanılır. Önceki çağrı seçenek döndürdüyse "
+        "aynı locator ile uygun seçimi yap. Veri okunması kaydedildiği anlamına gelmez: EKLENDİ kartını bekle."
     )
     Params = IngestParams
 
@@ -282,12 +290,23 @@ class IngestFromUrlTool(Tool):
         # 1. erişim + danışma okuması
         doc_note: str | None = None          # PDF/görselse OCR provenance satırı
         cli_locator = params.locator          # CLI'a giden dosya: belgeyse OCR'dan yazılan CSV
+        web_source = None
         try:
-            if is_document("", params.locator.split("?")[0]):
+            if urlparse(params.locator).scheme in ("http", "https"):
+                web_source = read_web_source(
+                    params.locator, allowed_root=self.allowed_root,
+                    resource_index=params.resource_index, table_index=params.table_index,
+                    pages=params.pages, sheet=params.sheet, value_row=params.value_row,
+                    session=self.session, ocr=self.ocr,
+                )
+                frame, outcome = web_source.frame, web_source.outcome
+            elif is_document("", params.locator.split("?")[0]):
                 frame, outcome, doc_note, cli_locator = self._read_document(params)
             else:
                 frame, outcome = read_table_for_profiling(
                     params.locator, allowed_roots=[self.allowed_root], session=self.session, sheet=params.sheet)
+        except SourceSelection as exc:
+            return ToolResult(content=f"EKLENMEDİ — kaynak seçimi veya ek bilgi gerekli:\n{exc}", ok=True)
         except ReadRefused as exc:
             bare = _bare_locator(params.locator)
             return ToolResult.fail(
@@ -311,6 +330,20 @@ class IngestFromUrlTool(Tool):
         series_id = f"adhoc:{key}"
         profile = profile_table(frame)
         mapping, semantics = propose(profile, frame, series_id=series_id)
+        if web_source is not None and mapping is not None and semantics is not None:
+            from ..builder.profile import Evidence
+            if web_source.entity_column:
+                mapping = replace(mapping, entity_id_column=web_source.entity_column,
+                    evidence=tuple(e for e in mapping.evidence if e.field != "entity_id_column") +
+                    (Evidence("entity_id_column", web_source.entity_column, "rapor sütunlarından korunan kurum başlıkları", "strong"),))
+            if web_source.frequency:
+                semantics = replace(semantics, frequency=web_source.frequency,
+                    evidence=tuple(e for e in semantics.evidence if e.field != "frequency") +
+                    (Evidence("frequency", web_source.frequency, "kaynak tablonun açık ay/yıl dönem başlığı", "strong"),))
+            if web_source.turkish_numbers:
+                mapping = replace(mapping, decimal_separator=",", thousands_separator=".",
+                    evidence=tuple(e for e in mapping.evidence if e.field != "decimal_separator") +
+                    (Evidence("decimal_separator", ",", "Türkçe aylık rapor: ondalık virgül, binlik nokta; tüm değerler doğrulanır", "strong"),))
         invented = undeclared(params, self._user_text())
         if invented:
             # Kullanıcının söylemediği beyan yok sayılır; alan boş kalır ve aşağıda sorulur.
@@ -401,6 +434,8 @@ class IngestFromUrlTool(Tool):
                             f"diye sor; onaylarsa aynı çağrıyı unit={unit_hint.unit!r} ile yap")
             else:
                 asks.append("birim: veriden çıkarılamıyor; kaynağın birimi nedir (ör. milyon TL, %, adet)?")
+        if semantics.frequency == "irregular":
+            asks.append("frekans: gözlemlerden düzenli aralık belirlenemedi; kaynak günlük, aylık veya hangi sıklıkta yayımlanıyor?")
         if crosscheck is not None and crosscheck.verdict == "ÇELİŞİYOR":
             asks.append("çapraz kontrol: " + crosscheck.lines()[0] + " — kullanıcıya söyle; dosya mı katalog mu doğru, o karar versin")
         if invented:
@@ -424,6 +459,8 @@ class IngestFromUrlTool(Tool):
         # Ölçüldü: model ikinci koşuda farklı bir 'name' verdi, veri ekibinin sözleşmesi
         # "aynı draft farklı içerikle" diye reddetti (doğru davranış). Kullanıcının verdiği
         # ad karta girer, kataloğa değil; katalog adı dosya ve seri anahtarından türer.
+        if web_source is not None:
+            cli_locator, doc_note = web_source.stage(self.allowed_root)
         catalog_name = f"{key} — {_source_display_name(params.locator)} (taslak)"
         description = (
             f"Kullanıcının getirdiği kaynaktan ({params.locator}) Architect tarafından taslak olarak "
@@ -464,8 +501,8 @@ class IngestFromUrlTool(Tool):
         card = [
             f"EKLENDİ: {series_id} — {params.name}",
             f"katalog adı: {catalog_name}",
-            f"kaynak: {params.locator}" + (f" → OCR tablosu {Path(cli_locator).name}" if doc_note else ""),
-            *([f"OCR: {doc_note}"] if doc_note else []),
+            f"kaynak: {params.locator}" + (f" → çıkarılan tablo {Path(cli_locator).name}" if doc_note else ""),
+            *([f"{'Kaynak işleme' if web_source else 'OCR'}: {doc_note}"] if doc_note else []),
             f"satır: {report.rows_mapped} eşlendi, {report.rows_null_value} boş değer korundu"
             + (f"; yazılan {out.rows_written}, değişmeyen {out.rows_unchanged}" if out.rows_written is not None else ""),
             f"katman: adhoc (taslak) — Silver'a ve Gold'a girmez; bir insan onaylayınca kataloğa alınır",

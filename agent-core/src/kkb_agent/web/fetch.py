@@ -188,6 +188,9 @@ def fetch_url(
 
     started = time.perf_counter()
     parsed = urlparse(url)
+    if len(parsed.scheme) == 1:
+        # Windows drive letters are local paths, as in builder.read.
+        parsed = urlparse("")
     now = datetime.now(timezone.utc)
 
     # Windows sürücü harfi ('C:\...') urlparse'ta şema sanılır; tek harfli şema yerel yoldur (ölçüldü: golden fikstürleri ve

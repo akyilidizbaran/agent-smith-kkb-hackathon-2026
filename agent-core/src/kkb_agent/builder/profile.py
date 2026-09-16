@@ -42,6 +42,7 @@ SEPARATOR_COMBOS: tuple[tuple[str, str | None], ...] = (
 
 #: Başlıktan birim ipucu — kanıt kaynağı "kolon adı", veri değil.
 _UNIT_HINTS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"milyar\s*tl|bn\s*tl|try_bn", re.I), "TRY_bn"),
     (re.compile(r"milyon\s*tl|mn\s*tl|try_mn", re.I), "TRY_mn"),
     (re.compile(r"\bbin\s*tl|thousand\s*tl|try_th", re.I), "TRY_th"),
     (re.compile(r"%|yüzde|yuzde|pct|percent", re.I), "pct"),
@@ -218,9 +219,9 @@ class SemanticsProposal:
 def _infer_frequency(dates: list[date]) -> tuple[str, str, str]:
     """Ardışık tarih farklarının medyanından frekans. (değer, gerekçe, güven)."""
 
-    if len(dates) < 3:
-        return "irregular", f"{len(dates)} tarih; aralık ölçülemez", "none"
     ordered = sorted(set(dates))
+    if len(ordered) < 3:
+        return "irregular", f"{len(ordered)} farklı tarih; aralık ölçülemez", "none"
     gaps = [(b - a).days for a, b in zip(ordered, ordered[1:])]
     med = median(gaps)
     spread = max(gaps) - min(gaps)

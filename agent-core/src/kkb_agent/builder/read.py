@@ -110,19 +110,21 @@ def read_bytes_for_profiling(
         except Exception:  # noqa: BLE001
             return None, "", classify_access(locator, http_status=None, environ=environ)
         chunks, size = [], 0
-        for chunk in resp.iter_content(65536):
-            size += len(chunk)
-            if size > max_bytes:
-                resp.close()
-                raise ReadRefused(f"kaynak {max_bytes} bayt sınırını aşıyor")
-            chunks.append(chunk)
+        try:
+            for chunk in resp.iter_content(65536):
+                size += len(chunk)
+                if size > max_bytes:
+                    raise ReadRefused(f"kaynak {max_bytes} bayt sınırını aşıyor")
+                chunks.append(chunk)
+        finally:
+            resp.close()
         content = b"".join(chunks)
         outcome = classify_access(
             locator, http_status=resp.status_code, final_url=getattr(resp, "url", None),
             body_excerpt=content[:4096].decode("utf-8", errors="ignore"), environ=environ,
         )
-        headers = getattr(resp, "headers", {}) or {}
-        media = str(headers.get("Content-Type") or headers.get("content-type") or "").split(";")[0].strip().lower()
+        headers = {str(k).lower(): v for k, v in (getattr(resp, "headers", {}) or {}).items()}
+        media = str(headers.get("content-type") or "").split(";")[0].strip().lower()
         return (content if outcome.ok else None), media, outcome
     if parsed.scheme not in ("", "file"):
         raise ReadRefused(f"desteklenmeyen şema: {parsed.scheme}")

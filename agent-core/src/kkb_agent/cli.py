@@ -67,6 +67,11 @@ kırpma) as_active_table=true ver. Özet, toplam, "en yüksek hangisi" gibi soru
 ARCHITECT_PROMPT_RULES = """
 
 ARCHITECT AKIŞI (yeni veri):
+Web sayfasından KAYIT istendiğinde doğrudan ingest_from_url kullan; web_url yalnız okur, DB'ye yazmaz.
+Sayfa URL'sinin sorgu ve #bölüm kısmını koru. Araç ekleri listelerse aynı locator ile resource_index,
+tabloları listelerse table_index/pages, ölçüm satırlarını listelerse value_row seç. Kullanıcının
+istediği rapor/ölçüm belliyse seçimi kendin yap; hangisi istendiği belirsizse sor. Farklı ölçümleri
+farklı series_key ile kaydet. EKLENMEDİ bir ara adımdır; yalnız EKLENDİ ve run_id döndüğünde kaydedildi de.
 1) Kullanıcı bir dosya/adres verip 'ekle' derse ingest_from_url → TASLAK seri (adhoc). Araç birim ya da \
 ölçüm tipini soruyorsa kullanıcıya sor; kullanıcı söyleyince aynı aracı unit/measure_type/default_agg \
 alanlarıyla yeniden çağır, uydurma. 2) Taslak sorgulanabilir ama Gold'a giremez. Kullanıcı 'onaylıyorum, \
