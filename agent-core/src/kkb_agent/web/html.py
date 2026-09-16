@@ -451,6 +451,13 @@ def extract_page(content: bytes, media_type: str, url: str, *, ocr: Any = None,
     path = urlparse(url).path.lower()
     from ..vision.ocr import is_document, ocr_document
 
+    # Inspect the response itself before trusting the URL suffix or MIME header.
+    head = content[:1024].lstrip()
+    if head.startswith(b"%PDF-"):
+        kind = "application/pdf"
+    elif head.lower().startswith((b"<html", b"<!doctype html")):
+        kind = "text/html"
+
     if is_document(kind, url):
         # PDF/görsel: tablo yalnız OCR ile çıkar; istemci yoksa "okunamadı" (uydurma yok).
         if ocr is None:
