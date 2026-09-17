@@ -65,6 +65,8 @@ def safe_filename(name: str) -> str:
 
 
 def _json_safe(value: Any) -> Any:
+    if value is pd.NA or value is pd.NaT:
+        return None
     if isinstance(value, datetime):
         return value.date().isoformat() if (value.hour, value.minute, value.second) == (0, 0, 0) else value.isoformat(timespec="minutes")
     if isinstance(value, date):
@@ -91,8 +93,15 @@ def frame_to_dict(frame: pd.DataFrame | None, *, max_rows: int = MAX_ROWS) -> di
     if frame is None or frame.empty:
         return None
     head = frame.head(max_rows)
-    rows = [[_json_safe(v) for v in row] for row in head.itertuples(index=False, name=None)]
-    return {"columns": [str(c) for c in frame.columns], "rows": rows, "row_count": int(len(frame)),
+    # Each cell is keyed by the schema entry that owns it. This prevents a missing value
+    # in one derived column from shifting every following value under another header.
+    columns = [{"key": f"c{index}", "label": str(column)} for index, column in enumerate(frame.columns)]
+    rows = []
+    for row in head.itertuples(index=False, name=None):
+        if len(row) != len(columns):
+            raise ValueError(f"table payload invariant failed: {len(row)} values for {len(columns)} columns")
+        rows.append({column["key"]: _json_safe(value) for column, value in zip(columns, row)})
+    return {"columns": columns, "rows": rows, "row_count": int(len(frame)),
             "truncated": len(frame) > max_rows}
 
 
@@ -142,6 +151,133 @@ def _table_touched(answer: Any, before: Any, after: Any) -> bool:
     return any(s.tool_name and s.ok and s.tool_name.startswith(DATA_TOOLS_PREFIX) for s in getattr(answer, "steps", []))
 
 
+_ALL_COLUMNS_REQUEST = re.compile(r"\b(?:tüm|tum|bütün|butun|all|entire|full)\s+(?:sütun|sutun|kolon|columns?|table|tablo)", re.I)
+_BASE_AND_DERIVED_REQUEST = re.compile(
+    r"(?:hem|both|orijinal|original|baz|base|bakiy(?:e|eleri)|değer(?:leri)?|values?).*"
+    r"(?:ve|and|ile|together|birlikte).*(?:değiş|degis|fark|change|growth|yüzde|yuzde|percent|pct)", re.I,
+)
+_BASE_REQUEST = re.compile(r"orijinal|original|baz değer|baz deger|base value|base metric|ana değer|ana deger", re.I)
+_PERCENT_REQUEST = re.compile(r"yüzde|yuzde|oran|percent|percentage|pct|growth rate|büyüme hızı", re.I)
+_CHANGE_REQUEST = re.compile(r"değiş|degis|fark|change|growth|diff|büyüme", re.I)
+
+
+def _expression_columns(expression: str, columns: list[Any]) -> list[str]:
+    text = str(expression or "")
+    found = []
+    for column in columns:
+        name = str(column)
+        if re.search(rf"(?<![\w]){re.escape(name)}(?![\w])", text, re.I):
+            found.append(name)
+    return found
+
+
+def _derived_operation(expression: str) -> str:
+    text = str(expression or "")
+    if re.search(r"/|\*\s*100|percent|yüzde|yuzde|pct", text, re.I):
+        return "percent_change"
+    if re.search(r"LAG|LEAD|diff|değiş|degis|change|growth|\-", text, re.I):
+        return "change"
+    return "derived"
+
+
+def _identity_columns(frame: pd.DataFrame, expressions: list[str]) -> list[str]:
+    refs = {column for expression in expressions for column in _expression_columns(expression, list(frame.columns))}
+    identity = []
+    for column in frame.columns:
+        series = frame[column]
+        if pd.api.types.is_datetime64_any_dtype(series) or (str(column) in refs and not pd.api.types.is_numeric_dtype(series)):
+            identity.append(str(column))
+    return identity
+
+
+def _existing_derived_projection(frame: pd.DataFrame, workspace: Any, question: str) -> pd.DataFrame | None:
+    derived: list[str] = []
+    expressions: list[str] = []
+    for column in frame.columns:
+        provenance = workspace.column_provenance(str(column)) if hasattr(workspace, "column_provenance") else None
+        sql = str(getattr(provenance, "sql", "") or "")
+        if sql.startswith("türetilmiş:"):
+            derived.append(str(column))
+            expressions.append(sql.removeprefix("türetilmiş:").strip())
+    if not derived:
+        return None
+    identity = _identity_columns(frame, expressions)
+    refs = [
+        str(column) for column in frame.columns
+        if str(column) not in derived and any(str(column) in _expression_columns(expression, list(frame.columns)) for expression in expressions)
+    ]
+    if not refs:
+        return None
+    selected = [*identity, *refs]
+    if re.search(r"ekle|also|together|birlikte", question or "", re.I):
+        selected.extend(derived)
+    return frame.loc[:, list(dict.fromkeys(selected))].copy()
+
+
+def project_result_table(answer: Any, agent: Any, *, question: str = "", table_before: Any = None) -> pd.DataFrame | None:
+    """Choose the answer table without mutating the full workspace.
+
+    Structured tool results are preferred. A compute-column turn projects the
+    newly created outputs plus identity columns; direct query results already
+    carry their own explicit SELECT projection.
+    """
+    workspace = getattr(agent, "workspace", None)
+    current = getattr(workspace, "table", None)
+    if not isinstance(current, pd.DataFrame) or not _table_touched(answer, table_before, current):
+        return None
+    if _ALL_COLUMNS_REQUEST.search(question or ""):
+        return current.copy()
+
+    steps = [s for s in getattr(answer, "steps", []) if getattr(s, "ok", False)]
+    compute_steps = [s for s in steps if getattr(s, "tool_name", None) == "workspace_compute_column"]
+    for step in reversed(steps):
+        if getattr(step, "tool_name", None) != "workspace_query":
+            continue
+        frame = getattr(step, "result_data", None)
+        if isinstance(frame, pd.DataFrame) and (len(frame) != len(current) or list(frame.columns) != list(current.columns)):
+            return frame.copy()
+        break
+    if not compute_steps:
+        for step in reversed(steps):
+            frame = getattr(step, "result_data", None)
+            if isinstance(frame, pd.DataFrame) and getattr(step, "tool_name", None) != "workspace_show":
+                return frame.copy()
+        if _BASE_REQUEST.search(question or ""):
+            base_projection = _existing_derived_projection(current, workspace, question)
+            if base_projection is not None:
+                return base_projection
+        return current.copy()
+
+    added: list[str] = []
+    expressions: list[str] = []
+    operations: dict[str, str] = {}
+    for step in compute_steps:
+        args = getattr(step, "tool_args", {}) or {}
+        name = str(args.get("column_name", ""))
+        expression = str(args.get("expression", ""))
+        if name in current.columns and name not in added:
+            added.append(name)
+            expressions.append(expression)
+            operations[name] = _derived_operation(expression)
+    if not added:
+        return current.copy()
+
+    requested_operation = "percent_change" if _PERCENT_REQUEST.search(question or "") else (
+        "change" if _CHANGE_REQUEST.search(question or "") else None
+    )
+    selected = [name for name in added if requested_operation is None or operations.get(name) == requested_operation]
+    if not selected:
+        selected = added
+    identity = _identity_columns(current, expressions)
+    referenced = [
+        str(column) for column in current.columns
+        if str(column) not in added and any(str(column) in _expression_columns(expression, list(current.columns)) for expression in expressions)
+    ]
+    base = referenced if _BASE_AND_DERIVED_REQUEST.search(question or "") else []
+    columns = list(dict.fromkeys([*identity, *base, *selected]))
+    return current.loc[:, columns].copy() if columns else current.copy()
+
+
 ACCESS_CODES = frozenset({"NEEDS_CREDENTIAL", "ACCESS_BLOCKED", "SOURCE_NOT_FOUND"})
 ACCESS_KINDS = ("upload_file", "use_credential", "alternative_source", "retry_later")
 
@@ -154,7 +290,7 @@ def access_options(answer: Any) -> list[str]:
     return []
 
 
-def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict[str, Any]:
+def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None, question: str = "") -> dict[str, Any]:
     steps = []
     for s in getattr(answer, "steps", []):
         steps.append({
@@ -174,6 +310,7 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict
                            "lint_ok": art.get("lint_ok"), "lint": _json_safe(art.get("lint"))})
     table = getattr(agent.workspace, "table", None)
     show_table = _table_touched(answer, table_before, table)
+    result_table = project_result_table(answer, agent, question=question, table_before=table_before) if show_table else None
     ev = getattr(answer, "evidence", None)
     sources = [str(src) for c in (getattr(ev, "columns", []) or []) for src in (getattr(c, "sources", []) or [])]
     if not sources:
@@ -188,7 +325,7 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None) -> dict
     return {
         "text": answer.text,
         "steps": steps,
-        "table": frame_to_dict(table) if show_table else None,
+        "table": frame_to_dict(result_table) if result_table is not None else None,
         "table_title": (getattr(agent.workspace, "title", "") or "") if show_table else "",
         "table_scope": scope if show_table else None,
         "access_options": access_options(answer),
@@ -611,14 +748,15 @@ class Session:
             table_before = getattr(self.agent.workspace, "table", None)
             with live_hooks(self.agent, on_event) if on_event is not None else nullcontext():
                 answer = self.agent.ask(question)
-            payload = answer_to_dict(answer, self.agent, table_before=table_before)
+            payload = answer_to_dict(answer, self.agent, table_before=table_before, question=question)
             payload["elapsed_s"] = round(time.perf_counter() - started, 1)
             payload["question"] = question
             payload["index"] = len(self.answers)
             self.history.append(_history_row(payload))
             self.answers.append(payload)
-            if payload.get("table") is not None and getattr(self.agent.workspace, "table", None) is not None:
-                self.tables[payload["index"]] = self.agent.workspace.table.copy()
+            answer_table = project_result_table(answer, self.agent, question=question, table_before=table_before)
+            if payload.get("table") is not None and answer_table is not None:
+                self.tables[payload["index"]] = answer_table
             if not self.title:
                 self.title = conversation_title(question)
             self._save()                                   # ADR-0084: cevaptan sonra; kayıt hatası cevabı düşürmez
@@ -665,6 +803,8 @@ class Session:
         for attr in ("_last_context", "last_gate", "last_preflight", "_follow_up_resolution"):
             if hasattr(agent, attr):
                 setattr(agent, attr, None)
+        if hasattr(agent, "_active_table_reuse_allowed"):
+            agent._active_table_reuse_allowed = False
 
     def _fresh(self) -> None:
         self._clear_agent_state()
@@ -1019,4 +1159,4 @@ def build_default_app() -> FastAPI:
 
 
 __all__ = ["AskRequest", "Session", "answer_to_dict", "build_default_app", "create_app", "evidence_to_dict", "frame_to_dict",
-           "report_html", "table_csv_bytes", "table_xlsx_bytes"]
+           "project_result_table", "report_html", "table_csv_bytes", "table_xlsx_bytes"]
