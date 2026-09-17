@@ -392,6 +392,8 @@ class AgentStep:
     duration_ms: float = 0.0
     error_code: str | None = None   # ToolError.error_code; ölçüm ve trace için
     candidates: list[str] = field(default_factory=list)   # hata zarfının adayları (erişim seçenekleri dâhil)
+    # Answer-level projection için bu araç çağrısının tablo snapshot'ı; API trace'ine yazılmaz.
+    result_data: pd.DataFrame | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass
@@ -1128,6 +1130,7 @@ class AnalyticsAgent:
                         duration_ms=elapsed,
                         error_code=result.error.error_code if result.error else None,
                         candidates=list(result.error.candidates or []) if result.error else [],
+                        result_data=result.data.copy() if result.ok and isinstance(result.data, pd.DataFrame) else None,
                     )
                 )
                 if result.error is not None:
