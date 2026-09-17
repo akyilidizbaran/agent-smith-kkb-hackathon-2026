@@ -1004,8 +1004,10 @@ def build_default_app() -> FastAPI:
         import subprocess
         cmd = [*s.lakehouse_cli.split(), "-m", "lakehouse", "bootstrap", "--database", str(s.lakehouse_path), "--data-root", str(s.data_root),
                "--catalog", catalog_mode]
-        proc = subprocess.run(cmd, cwd=str(s.lakehouse_core_dir), capture_output=True, text=True, timeout=600, check=False)
-        return proc.returncode, proc.stdout + proc.stderr
+        # UTF-8 sabit (16 Eyl): Türkçe Windows'ta cp1254 çözümlemesi bootstrap çıktısında düşüyordu.
+        proc = subprocess.run(cmd, cwd=str(s.lakehouse_core_dir), capture_output=True, text=True, timeout=600,
+                              check=False, encoding="utf-8", errors="replace")
+        return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
     return create_app(lambda profile="analyst": build_agent(max_steps=12, profile=profile), profile=s.agent_profile,
                       architect_token=s.architect_token, reset_paths=ResetPaths.from_settings(s), bootstrap=bootstrap,

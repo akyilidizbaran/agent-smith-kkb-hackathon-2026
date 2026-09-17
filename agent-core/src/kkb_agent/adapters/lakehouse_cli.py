@@ -32,9 +32,13 @@ def subprocess_env(source: dict[str, str] | None = None) -> dict[str, str]:
 
 
 def subprocess_runner(command: list[str], cwd: Path, *, timeout: float = 600) -> tuple[int, str, str]:
+    # Kodlama alt süreçte de burada da UTF-8'e sabitlenir (16 Eyl): Türkçe Windows'ta yerel kod
+    # sayfası cp1254 ve lakehouse CLI'ın Türkçe çıktısında çözülemeyen tek bir bayt, aracın
+    # çağrısını UnicodeDecodeError ile düşürüyordu. Gizli sızmaz: yalnız kodlama değişkeni eklenir.
+    env = {**subprocess_env(), "PYTHONIOENCODING": "utf-8"}
     proc = subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False,
-                          timeout=timeout, env=subprocess_env())
-    return proc.returncode, proc.stdout, proc.stderr
+                          timeout=timeout, env=env, encoding="utf-8", errors="replace")
+    return proc.returncode, (proc.stdout or ""), (proc.stderr or "")
 
 
 def parse_kv(text: str) -> dict[str, str]:

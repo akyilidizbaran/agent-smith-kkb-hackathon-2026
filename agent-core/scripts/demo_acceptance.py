@@ -85,9 +85,15 @@ class Report:
 
 
 def _run(cmd: list[str], cwd: Path, *, timeout: float = 1800) -> tuple[int, str]:
+    # Çıktı UTF-8 okunur, yerel kod sayfasıyla değil (16 Eyl): Türkçe Windows'ta varsayılan
+    # cp1254, kaynaktan gelen tek bir çözülemeyen bayt okuma thread'ini düşürüyor, stdout None
+    # kalıyor ve ingest başarıyla bittiği hâlde betik TypeError ile ölüyordu. errors="replace":
+    # bir karakter bozuksa adım raporu kaybolmaz.
     env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
-    proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False, timeout=timeout, env=env)
-    return proc.returncode, (proc.stdout + proc.stderr)
+    env["PYTHONIOENCODING"] = "utf-8"
+    proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False, timeout=timeout, env=env,
+                          encoding="utf-8", errors="replace")
+    return proc.returncode, ((proc.stdout or "") + (proc.stderr or ""))
 
 
 def build_commands(root: Path, core_dir: Path, *, launcher: str = "uv run python",
