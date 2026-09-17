@@ -4,6 +4,8 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 from src.lakehouse.catalog.artifacts import ArtifactRepository
 from src.lakehouse.contracts.models import FetchedAsset
 from src.lakehouse.db.bootstrap import bootstrap_database
@@ -69,6 +71,34 @@ def test_register_is_idempotent_and_tracks_first_and_last_seen(tmp_path: Path) -
         int(last_seen.timestamp() * 1000),
         1,
     )
+    connection.close()
+
+
+def test_same_bytes_under_another_dataset_is_the_same_artifact_not_a_conflict(tmp_path: Path) -> None:
+    """Canlı tam set (17 Eyl 2026): EVDS'in boş pencere yanıtı her seri için aynı baytlardır. İlk seri kaydetti,
+    sonraki 24 seri "different immutable metadata" ile düştü. Kimlik baytlardır; dataset_id istek bağlamıdır."""
+    connection = bootstrap_database(tmp_path / "lakehouse.duckdb")
+    repository = ArtifactRepository(connection)
+    fetched_at = datetime(2026, 9, 17, 3, tzinfo=timezone.utc)
+    first = _asset(tmp_path / "data/raw/fake_source/2026-09-17/data.csv", fetched_at)
+    other = replace(first, dataset_id="other_dataset", locator="fixture://other.csv")
+
+    assert repository.register(first) is True
+    assert repository.register(other) is False           # aynı artifact: yeni satır yok, çatışma yok
+
+    row = connection.execute(
+        "SELECT dataset_id, count(*) OVER () FROM meta.artifact WHERE artifact_sha256 = ?",
+        [first.artifact_sha256],
+    ).fetchone()
+    assert row == ("fake_dataset", 1)                    # ilk kaydedenin bağlamı kalır
+    requests = connection.execute(
+        "SELECT count(*) FROM meta.artifact_request WHERE artifact_sha256 = ?", [first.artifact_sha256]
+    ).fetchone()[0]
+    assert requests == 2                                 # iki istek, ikisinin de izi var
+
+    # Baytlardan türeyen alan çelişirse gerçek kimlik çatışması sürer.
+    with pytest.raises(ValueError, match="different immutable metadata"):
+        repository.register(replace(first, http_status=204))
     connection.close()
 
 

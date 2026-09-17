@@ -123,15 +123,18 @@ class ArtifactRepository:
         ).fetchone()
 
         if existing is not None:
-            expected = (
-                asset.source_id,
-                asset.dataset_id,
+            # Kimlik BAYTLARDIR (17 Eyl, canlı tam set): EVDS'in boş pencere yanıtı ({"totalCount":0,"items":[]})
+            # her seri için bayt bayt aynıdır; 24 seri "already exists with different immutable metadata" ile
+            # düştü ve istek izi bile yazılamadı. source_id / dataset_id / raw_path baytların özelliği değil,
+            # istek bağlamıdır: run başına meta.run_artifact, istek başına meta.artifact_request taşır;
+            # meta.artifact ilk kaydedenin bağlamını saklar. Yalnız baytlardan türeyen alanlar (medya türü,
+            # boyut, HTTP durumu) çelişirse gerçek bir kimlik çatışmasıdır.
+            _source_id, _dataset_id, media_type, byte_size, http_status, _raw_path = existing
+            if (media_type, byte_size, http_status) != (
                 asset.media_type,
                 asset.byte_size,
                 asset.http_status,
-                str(asset.raw_path),
-            )
-            if existing != expected:
+            ):
                 raise ValueError(
                     "artifact_sha256 already exists with different immutable metadata"
                 )

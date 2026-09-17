@@ -91,6 +91,7 @@ class SeriesOutcome:
     new: int = 0
     already: int = 0
     failed: int = 0
+    empty: int = 0              # çok pencereli çekimde gözlemsiz dönen pencere: uyarı, hata değil (17 Eyl)
     rows_out: int = 0
     warnings: int = 0
     error: str | None = None
@@ -309,7 +310,7 @@ def _run_one(
 
     outcome.assets = len(assets)
     errors: list[str] = []
-    for asset in assets:
+    for asset_no, asset in enumerate(assets, start=1):
         try:
             _validate_asset(spec, asset)
             artifact_inserted = artifact_repository.register(asset)
@@ -345,8 +346,9 @@ def _run_one(
             continue
         except ValueError as exc:
             # ArtifactRepository.register() raises a plain ValueError when the same
-            # artifact_sha256 was already registered under different immutable metadata
-            # (e.g. a series moved to a different dataset_id between catalog regenerations).
+            # artifact_sha256 was already registered with different byte-derived metadata
+            # (media type, size, HTTP status). Same bytes under another dataset_id are NOT a
+            # conflict any more (17 Eyl: EVDS's empty-window body is identical for every series).
             # A real identity conflict: flagged distinctly, recorded on the run, but it must
             # not abort every other asset's processing.
             print(f"  FAILED (artifact identity conflict): {exc}")
@@ -355,6 +357,23 @@ def _run_one(
             continue
         except LakehouseError as exc:
             payload = exc.payload
+            if payload.error_code == "EMPTY_DATASET" and len(assets) > 1:
+                # Çok pencereli çekimde gözlemsiz pencere (17 Eyl canlı tam set: 25 EVDS serisinde son pencere
+                # 2026-01..06 boş döndü — kaynak o dönemi henüz yayımlamamış). Hata değil, kayıtlı uyarı: öteki
+                # pencereler iner, Silver yeniden kurulunca uyarı meta.ingest_warning'den geri okunur.
+                # Her pencere boşsa döngüden sonra eskisi gibi EMPTY_DATASET hatasıdır.
+                meta = asset.metadata if isinstance(asset.metadata, dict) else {}
+                # EVDS bağlayıcısı pencere bağlamını metadata'ya yazar; yazmayan bağlayıcıda sıra numarası yeter.
+                window = (f"window {meta.get('window_index', asset_no)}/{meta.get('window_count', len(assets))} "
+                          f"({meta.get('requested_start_date', '?')}..{meta.get('requested_end_date', '?')})")
+                outcome.empty += 1
+                outcome.warnings += 1
+                runs.record_warnings([IngestionWarning(
+                    run_id=run_id, warning_seq=outcome.warnings, source_id=asset.source_id, dataset_id=asset.dataset_id,
+                    artifact_sha256=asset.artifact_sha256, message=f"{window} returned no observations: {payload.message}",
+                )], created_at=clock())
+                print(f"  EMPTY {window}: no observations in this range — recorded as a warning, not a failure")
+                continue
             print(f"  FAILED (asset {asset.locator}, fetched_at={asset.fetched_at})")
             print(f"    error_code : {payload.error_code}")
             print(f"    message    : {payload.message}")
@@ -372,9 +391,13 @@ def _run_one(
         if parsed_batch.warnings:
             print(f"       warnings: {parsed_batch.warnings}")
 
+    if outcome.empty and not (outcome.new or outcome.already):
+        # Her pencere boş: seri bu aralıkta gerçekten gözlemsiz → tek pencereli çekimle aynı sonuç (EMPTY_DATASET).
+        outcome.failed += outcome.empty
+        errors.append(f"EMPTY_DATASET: all {outcome.empty} window(s) returned no observations")
     print(
         f"  -- {row.series_id}: {outcome.new} new, {outcome.already} already in Bronze, "
-        f"{outcome.failed} failed, out of {len(assets)} fetched asset(s) · run {run_id}"
+        f"{outcome.failed} failed, {outcome.empty} empty window(s), out of {len(assets)} fetched asset(s) · run {run_id}"
     )
     if outcome.failed:
         outcome.status = "failed"
