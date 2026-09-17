@@ -27,7 +27,7 @@ from typing import Any, Callable
 from ..domain import DomainProfile
 from ..llm.base import ChatMessage, LLMClient, ToolCall
 from .errors import ToolError
-from .grounding import causal_language, grounding_check, _NUM_RE, _ascii_minus, numbers_in
+from .grounding import causal_language, grounding_check, in_rate_context, token_tolerance, _MATCH_EPS, _NUM_RE, _ascii_minus, numbers_in
 from .claim_check import claim_cell, range_claim   # G5/G6 (Büşra, V3 §3.9): sayı doğru dönemle mi yazılmış
 from .question_preflight import _PREMISE as _PREMISE_ASK
 from .small_talk import capability_reply, strip_filler_opening
@@ -236,18 +236,23 @@ def unverified_numbers(answer: str, table, extra_frames=()) -> list[str]:
     values = np.concatenate(arrays)
     values = values[np.isfinite(values)]
     out: list[str] = []
-    for m in _NUM_RE.finditer(_ascii_minus(answer or "")):
+    masked = _ascii_minus(answer or "")
+    for m in _NUM_RE.finditer(masked):
         raw = m.group(0)
         parsed = numbers_in(raw)
         if not parsed:
             continue
         n = parsed[0]
-        if float(n).is_integer() and (1900 <= abs(n) <= 2100 or (abs(n) <= 31 and len(raw.lstrip("+-")) <= 2)):
+        # Yıl muaf; ≤31 küçük tam sayı muaf ANCAK oran/puan bağlamında değilse (E-4, grounding_check ile aynı kural).
+        if float(n).is_integer() and 1900 <= abs(n) <= 2100:
             continue
-        pairs = [(n, 0.5 * 10 ** -(len(raw.rsplit(",", 1)[1]) if "," in raw else 0))]
+        if float(n).is_integer() and abs(n) <= 31 and len(raw.lstrip("+-")) <= 2 \
+                and not in_rate_context(masked, m.start(), m.end()):
+            continue
+        pairs = [(n, token_tolerance(raw))]
         if re.fullmatch(r"[-+]?\d{1,3}\.\d{3}", raw.strip("+-")) and not float(raw).is_integer():
             pairs.append((float(raw), 0.0005))
-        if not any(np.any(np.abs(values - c) <= tol + 1e-9) or np.any(np.abs(np.abs(values) - abs(c)) <= tol + 1e-9)
+        if not any(np.any(np.abs(values - c) <= tol + _MATCH_EPS) or np.any(np.abs(np.abs(values) - abs(c)) <= tol + _MATCH_EPS)
                    for c, tol in pairs):
             if raw not in out:
                 out.append(raw)

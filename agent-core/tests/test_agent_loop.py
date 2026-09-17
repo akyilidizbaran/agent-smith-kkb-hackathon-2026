@@ -628,11 +628,24 @@ def test_d02_dogru_cumle_kalir_yalniz_yanlis_birim_cikar() -> None:
     assert "doğrulanamayan 2 ifade cevaptan çıkarıldı" in ans.text
 
 
-def test_d02_dogru_ve_yuvarlanmis_cevap_degismez() -> None:
+def test_d02_dogru_yuvarlanmis_tutar_korunur() -> None:
+    # Doğru yuvarlanmış TUTAR ("110,0" → tablo 110) kendi cümlesinde olduğu sürece değişmez.
     agent, _, llm = _months_agent([LLMResponse(content="", tool_calls=[_call(1)]),
-                                    LLMResponse(content="Aralık bakiyesi 110,0 milyon TL; Ocak'a göre %10 arttı.")])
+                                    LLMResponse(content="Aralık bakiyesi 110,0 milyon TL.")])
     ans = agent.ask("2025 aralık bakiyesi?")
     assert ans.rejected_claims == [] and "110,0" in ans.text and len(llm.seen_tool_offers) == 2
+
+
+def test_d02_kafadan_hesaplanan_oran_isaretlenir_tutar_kalir() -> None:
+    # E-4 (ADR-0081 uyarı 6): araçla hesaplanmayan oran ("%10") havuzda ({100,110}) yok → grounding MISS ve çıkarılır;
+    # yeterince uzun ayrı cümledeki doğru tutar korunur. Model oranı workspace_compute_column ile hesaplamalı, kafadan yazmamalı.
+    uzun = ("Aralık ayı sonunda konut kredisi bakiyesi tabloda 110,0 milyon TL olarak görünmektedir ve bu değer "
+            "doğrudan araç çıktısındaki satırdan okunmuştur. Ocak'a göre %10 arttı.")
+    agent, _, _ = _months_agent([LLMResponse(content="", tool_calls=[_call(1)]), LLMResponse(content=uzun)])
+    ans = agent.ask("2025 aralık bakiyesi?")
+    assert ans.grounding.startswith("MISS") and "10" in ans.grounding   # E-4: kafadan oran artık yakalanır
+    assert "110,0" in ans.text                            # doğru tutar korunur (uzun cümle)
+    assert "%10" not in ans.text                          # kafadan oran çıkarıldı
 
 
 def test_d02_adim_limiti_yolunda_da_uygulanir() -> None:
