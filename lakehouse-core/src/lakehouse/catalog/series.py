@@ -36,6 +36,15 @@ from ..contracts.identifiers import validate_dataset_id, validate_series_id, val
 CATALOG_SCHEMA_VERSION = "1.0"
 """Catalog file format version this loader understands."""
 
+_YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+"""Safe YAML loader; libyaml's C implementation when PyYAML was built with it.
+
+Same safe subset as ``yaml.safe_load``. The catalog is ~150k lines, and every database
+bootstrap parses all of it: measured 8,8 s pure Python vs 1,3 s with libyaml on 6.692
+entries. The test suite bootstraps hundreds of databases, so this is what keeps a CI run
+inside its time limit as the catalog grows.
+"""
+
 DEFAULT_CATALOG_ROOT = Path(__file__).resolve().parents[3] / "catalog" / "series"
 """``lakehouse-core/catalog/series`` — the Git-versioned catalog source of truth."""
 
@@ -223,7 +232,7 @@ def parse_catalog_file(path: Path) -> list[SeriesRecord]:
     """Parse and fully validate one catalog file. Raises before producing partial output."""
 
     try:
-        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        document = yaml.load(path.read_text(encoding="utf-8"), Loader=_YAML_LOADER)
     except yaml.YAMLError as exc:
         raise CatalogError(f"{path.name}: file is not valid YAML: {exc}") from exc
     except OSError as exc:
