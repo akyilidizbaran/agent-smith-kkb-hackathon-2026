@@ -383,7 +383,7 @@ class LakehouseQueryTool(Tool):
 
         # Modele TAM tablo değil, özet gider: context window'u koruyoruz. Sınır boyuta bağlı (core/preview, PART 41):
         # ≤24 satır tamamı (12 satırın 10'u gösterilince model kalan ayları "yok" sanıyordu — UEB A15/A06/A24), üstü baş+son.
-        from ..core.preview import preview_table
+        from ..core.preview import preview_table, span_summary
 
         df = result.data
         content = (
@@ -391,6 +391,9 @@ class LakehouseQueryTool(Tool):
             f"Sütunlar: {', '.join(df.columns)}\n"
             + preview_table(df, where="aktif analiz tablosunda" if params.as_active_table else "bu sorgunun sonucunda")
         )
+        span = span_summary(df)      # ilk → son farkı harness hesaplar; model anlatıda hesaplamasın (core/preview)
+        if span:
+            content += "\n" + span
         units = self._units_for(df.columns, result.provenance.dataset_ids)
         if units:
             content += "\nBirimler: " + ", ".join(units)
