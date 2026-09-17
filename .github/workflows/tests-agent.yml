@@ -1,14 +1,18 @@
 # Deterministik testler (M15-T09, ADR-0061). Ağ, MIA, Tavily ve EVDS gerektiren canlı koşular burada YOK:
 # onlar anahtarlı ve bütçeli olarak elle çalıştırılır (make demo-data, scripts/run_golden.py, m02 benchmark).
-name: tests
+#
+# 17 Eyl: tek workflow ikiye bölündü. Aylık Actions kotası tükendi ve açılmayacak; bu yüzden hiçbir iş
+# PR'da otomatik koşmuyor, yalnız elle tetikleniyor. Ajan ve veri testleri PR'dan önce yerelde koşulur,
+# sonuç PR gövdesine yazılır: docs/PR_ONCESI_TEST.md. Kota bir gün açılırsa pull_request bloğu açılır.
+name: tests-agent
 on:
-  push:
-    branches: ["feature/**"]
-  pull_request:
   workflow_dispatch:
-# Aynı dala art arda push'ta eski koşu iptal edilir; lakehouse işi ~13–25 dk sürdüğü için kuyruk birikiyordu.
+  # pull_request:
+  #   paths:
+  #     - "agent-core/**"
+  #     - ".github/workflows/tests-agent.yml"
 concurrency:
-  group: tests-${{ github.ref }}
+  group: tests-agent-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   agent-core:
@@ -23,16 +27,3 @@ jobs:
       - name: Birim ve sözleşme testleri
         working-directory: agent-core
         run: uv run --frozen --extra dev pytest -q -p no:cacheprovider
-  lakehouse-core:
-    runs-on: ubuntu-latest
-    # Ölçüldü 14 Eyl: yerelde 12 dk, GitHub koşucusunda 34 dk; 40 dk sınırı bir koşuyu iptal ettirdi.
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - name: Kilitli kurulum
-        working-directory: lakehouse-core
-        run: uv sync --frozen
-      - name: Testler
-        working-directory: lakehouse-core
-        run: uv run --frozen pytest -q -p no:cacheprovider
