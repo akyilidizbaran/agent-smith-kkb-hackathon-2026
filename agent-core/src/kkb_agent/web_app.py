@@ -803,6 +803,8 @@ class Session:
         for attr in ("_last_context", "last_gate", "last_preflight", "_follow_up_resolution"):
             if hasattr(agent, attr):
                 setattr(agent, attr, None)
+        if hasattr(agent, "_active_table_reuse_allowed"):
+            agent._active_table_reuse_allowed = False
 
     def _fresh(self) -> None:
         self._clear_agent_state()

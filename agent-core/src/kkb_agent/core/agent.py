@@ -41,6 +41,7 @@ from .execution_recovery import (
     needs_truthful_failure_text,
 )
 from .follow_up import FollowUpContext, FollowUpResolution, resolve_follow_up
+from .facets import extract_facets
 
 # Kullanıcının grafik isteği (Türkçe çekimli: grafiği, grafiğini, çiz, çizer misin, görselleştir).
 _CHART_ASK = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
@@ -506,6 +507,13 @@ class AnalyticsAgent:
         }
     )
 
+    # An existing workspace may be used for a follow-up transformation, but it
+    # must never answer a new semantic request by accident.
+    FRESH_DATA_TOOLS = frozenset({
+        "lakehouse_query", "gold_align", "gold_decompose", "gold_join",
+        "web_url", "ingest_source", "ingest_from_url",
+    })
+
     def __init__(
         self,
         llm: LLMClient,
@@ -557,6 +565,7 @@ class AnalyticsAgent:
         self._last_recovery: RecoverySnapshot | None = None
         self._retry_source_question: str | None = None
         self._retry_failed_signatures: set[tuple[str, str]] = set()
+        self._active_table_reuse_allowed = False
 
     def reset(self) -> None:
         self._history.clear()
@@ -569,6 +578,7 @@ class AnalyticsAgent:
         self._last_recovery = None
         self._retry_source_question = None
         self._retry_failed_signatures = set()
+        self._active_table_reuse_allowed = False
 
     @property
     def follow_up_context(self) -> FollowUpContext:
@@ -624,6 +634,7 @@ class AnalyticsAgent:
         if clarify is not None:
             return clarify
         self._prepare_follow_up(question)
+        self._active_table_reuse_allowed = self._active_table_is_compatible(question)
         self._truncated = False
         try:
             answer = self._ask(question)
@@ -699,6 +710,74 @@ class AnalyticsAgent:
             specs = []
         base_question = self._retry_source_question or question
         self._follow_up_resolution = resolve_follow_up(base_question, self._follow_up_context, specs)
+
+    def _active_table_is_compatible(self, question: str) -> bool:
+        """Return whether the current table may be used as this turn's data.
+
+        Follow-up resolution is intentionally conservative here. A table is
+        reusable only for an unambiguous follow-up with no semantic override;
+        explicit geography/source/frequency/date changes require a fresh
+        retrieval or a documented transformation tool.
+        """
+        if not self.workspace.has_table or self._follow_up_resolution is None:
+            return False
+        resolution = self._follow_up_resolution
+        if not resolution.is_follow_up or resolution.clarification_required:
+            return False
+        semantic_fields = {
+            "domain", "source", "metric", "series", "entity", "geography",
+            "date_range", "frequency", "aggregation",
+        }
+        if semantic_fields.intersection(resolution.overridden + resolution.cleared):
+            return False
+
+        # The old table must not answer a national question when it is a
+        # provincial table, even if the natural-language resolver classified
+        # the turn as a short follow-up.
+        facets = extract_facets(question)
+        if re.search(r"\b(?:ulusal|national|türkiye geneli|turkiye geneli|ülke geneli|ulke geneli)\b", question, re.I):
+            current_provinces = self._active_table_provinces()
+            if current_provinces:
+                return False
+        if facets.provinces:
+            current_provinces = self._active_table_provinces()
+            if current_provinces and not set(current_provinces).intersection(facets.provinces):
+                return False
+        current_specs = self._active_table_specs()
+        if facets.sources and current_specs and not any(str(getattr(s, "source", "")) in facets.sources for s in current_specs):
+            return False
+        if facets.frequency and current_specs:
+            current_frequencies = {str(getattr(getattr(s, "frequency", None), "value", getattr(s, "frequency", ""))) for s in current_specs}
+            if current_frequencies and current_frequencies != {facets.frequency}:
+                return False
+        return True
+
+    def _has_confirmed_follow_up_context(self) -> bool:
+        """Return whether this workspace came from a committed semantic query.
+
+        Tests and UI actions can install a table directly without a resolver
+        context. That table still supports local operations such as charts and
+        joins; the stale-table guard is only meaningful after the agent has
+        actually committed a prior data request.
+        """
+        return any(self._follow_up_context.non_empty(field) for field in self._follow_up_context.as_dict())
+
+    def _active_table_specs(self) -> list[Any]:
+        ids: set[str] = set()
+        for column in self.workspace.columns():
+            provenance = self.workspace.column_provenance(str(column))
+            ids.update(str(dataset_id) for dataset_id in (getattr(provenance, "dataset_ids", []) or []))
+        if not ids:
+            return []
+        return [spec for spec in self._catalog_specs() if str(getattr(spec, "dataset_id", "")) in ids]
+
+    def _active_table_provinces(self) -> tuple[str, ...]:
+        from .facets import province_of
+
+        return tuple(dict.fromkeys(
+            province for spec in self._active_table_specs()
+            if (province := province_of(f"{getattr(spec, 'dataset_id', '')} {getattr(spec, 'name', '')}"))
+        ))
 
     def _complete_follow_up(self, answer: AgentAnswer) -> AgentAnswer:
         resolution = self._follow_up_resolution
@@ -970,6 +1049,17 @@ class AnalyticsAgent:
 
                 answer_text = self._strip_reasoning(response.content)
 
+                # If the current question is semantically different from the
+                # active table and no fresh source was queried, never publish
+                # prose based on the stale table.
+                prior_query_context = self._has_confirmed_follow_up_context()
+                if (self.workspace.has_table and prior_query_context
+                        and not any(s.ok and s.tool_name in self.FRESH_DATA_TOOLS for s in steps)):
+                    answer_text = (
+                        "Bu istek mevcut analiz tablosuyla uyumlu değil. Doğru kaynak ve kapsam için "
+                        "yeni veri sorgusu çalıştırılmadığından güvenilir bir sonuç veremiyorum."
+                    )
+
                 # Anlatı denetimi: cevaptaki her sayı bir araç çıktısında var mı?
                 # SQL hesabı yaptırmak modelin anlatıda kendi aritmetiğini yapmasını
                 # engellemiyor — ölçümde "155.515 milyon TL arttı" gibi tabloda
@@ -1184,6 +1274,7 @@ class AnalyticsAgent:
                 recovery_codes = {
                     "SQL_FAILED", "INVALID_ARGS", "GOLD_REQUIRED", "JOIN_MISMATCH",
                     "DATASET_NOT_FOUND", "TOOL_FAILED", "UNKNOWN_TOOL", "EMPTY_RESULT",
+                    "GEOGRAPHY_MISMATCH", "SOURCE_MISMATCH",
                 }
                 if (result.error is not None and not recovery.pending_recovery
                         and (not result.error.is_retryable or result.error.error_code in recovery_codes)
@@ -1362,8 +1453,15 @@ class AnalyticsAgent:
         # Aktif tablo varsa modele durumu hatırlat: "tabloyu bozmadan" akışının anahtarı.
         # TEK system mesajı, en başta: MIA/vLLM ikinci bir system mesajını reddediyor
         # ("System message must be at the beginning"); Ollama tolere ediyordu.
-        if self.workspace.has_table:
+        if self.workspace.has_table and self._active_table_reuse_allowed:
             system += "\n\nMEVCUT ANALİZ DURUMU:\n" + self.workspace.describe_for_llm()
+        elif self.workspace.has_table:
+            system += (
+                "\n\nAKTİF TABLO KULLANIMI YASAK: Mevcut analiz tablosu bu soruyla semantik olarak uyumlu değil. "
+                "Önce doğru kaynak için lakehouse_search/lakehouse_describe, ardından lakehouse_query veya uygun "
+                "Gold aracını kullan. Eski tablodan sayı, kaynak, il ya da frekans devralma; workspace_show veya "
+                "workspace_query ile eski tabloyu cevaplama."
+            )
 
         if self._retry_source_question:
             system += (
@@ -1379,7 +1477,8 @@ class AnalyticsAgent:
                 system += "\n\n" + follow_up_note
 
         msgs = [ChatMessage(role="system", content=system)]
-        msgs += self._history[-8:]  # son turlar — bağlamı korur, pencereyi şişirmez
+        if not self.workspace.has_table or self._active_table_reuse_allowed:
+            msgs += self._history[-8:]  # son turlar — bağlamı korur, pencereyi şişirmez
         # Aynı soru oturumda tekrar sorulduysa model tarihçedeki kendi cevabını kopyalıyor
         # (ölçüldü: T=0,5'te bile birebir aynı). Kopyalamayı harness yasaklar (ADR-0046).
         if self._asked_before(question):
@@ -1401,7 +1500,8 @@ class AnalyticsAgent:
 
             specs = self._catalog_specs()
             report = preflight(question, CatalogFacts.from_specs(specs) if specs else None,
-                               tools=set(self.registry.names()), has_table=self.workspace.has_table)
+                               tools=set(self.registry.names()),
+                               has_table=self.workspace.has_table and self._active_table_reuse_allowed)
         except Exception as exc:  # noqa: BLE001 — ön-koşul cevabı asla düşürmez
             log.warning("soru ön-koşulu hesaplanamadı: %s", exc)
             return ""
