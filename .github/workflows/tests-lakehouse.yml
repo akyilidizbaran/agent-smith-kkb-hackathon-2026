@@ -1,0 +1,30 @@
+# Deterministik testler (M15-T09, ADR-0061). Ağ ve EVDS gerektiren canlı koşular burada YOK.
+#
+# 17 Eyl: tek workflow ikiye bölündü ve yalnız pull_request'te koşuyor (gerekçe: tests-agent.yml).
+# Bu iş yalnız lakehouse-core değişince koşar; ajan PR'ları artık bunu tetiklemez.
+name: tests-lakehouse
+on:
+  pull_request:
+    paths:
+      - "lakehouse-core/**"
+      - ".github/workflows/tests-lakehouse.yml"
+  workflow_dispatch:
+concurrency:
+  group: tests-lakehouse-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  lakehouse-core:
+    runs-on: ubuntu-latest
+    # Ölçüldü 14 Eyl: yerelde 12 dk, GitHub koşucusunda 34 dk; 40 dk sınırı bir koşuyu iptal ettirdi.
+    # 17 Eyl: 1,9k katalogla 36–47 dk. Katalog 6,7k'ya çıkınca (PR #9) süre katalog okuyucuya bağlı;
+    # bkz. lakehouse-core/src/lakehouse/catalog/series.py (_YAML_LOADER).
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Kilitli kurulum
+        working-directory: lakehouse-core
+        run: uv sync --frozen
+      - name: Testler
+        working-directory: lakehouse-core
+        run: uv run --frozen pytest -q -p no:cacheprovider
