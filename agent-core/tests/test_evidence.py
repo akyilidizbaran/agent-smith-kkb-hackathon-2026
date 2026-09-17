@@ -221,6 +221,33 @@ def test_bakis_sorgusu_sayisi_ve_onceki_turun_web_sayfasi_zinciri_tamamlar() -> 
     assert panel.complete, panel.gaps
 
 
+def test_harness_ilk_son_farki_ve_orani_tabloda_yok_ama_dogrulanmis_sayilir() -> None:
+    """Canlı (16 Eyl, "2025'te konut kredisi nasıl değişti?"): kart span_summary ile "+155.515 / %29,71" verdi, model aynen
+    yazdı, guard OK dedi; panel yine de "8/10 sayı tabloda · sayılar ✗" gösterdi. Harness'ın türettiği sayı hücrede
+    değildir ama araç çıktısındandır: eşleşir, kaynağı 'harness hesabı' diye yazılır."""
+    class Silverish:
+        def evidence_for_observations(self, *a, **k): return []
+        def evidence_for_artifacts(self, *a, **k): return {}
+    ws = AnalysisWorkspace()
+    d = pd.date_range("2025-01-31", periods=12, freq="ME").strftime("%Y-%m-%d")
+    value = [523455.0, 535029.0, 548385.0, 561793.0, 575453.0, 583265.0, 594607.0, 608694.0, 623765.0, 642144.0, 658770.0, 678970.0]
+    ws.set_table(pd.DataFrame({"observation_date": d, "value": value}), description="konut 2025",
+                 provenance=QueryProvenance(sql="SELECT observation_date, value FROM silver.fact_observation_current WHERE ...",
+                                            dataset_ids=["bddk_monthly:1534_Toplam"], sources=["BDDK Aylık"], source_urls=[]))
+    panel = EvidenceBuilder(Silverish()).build("2025'te konut kredisi nasıl değişti?",
+                                               "Ocak sonu 523.455 → Aralık sonu 678.970 milyon TL; toplam artış +155.515 milyon TL, yani +%29,71.",
+                                               ws, [], artifacts=[])
+    m = {n.text: n for n in panel.numbers}
+    assert m["523.455"].matched and m["678.970"].matched                       # hücreler
+    assert m["+155.515"].matched and m["+155.515"].row_key.startswith("harness hesabı: 2025-01-31 → 2025-12-31")
+    assert m["+155.515"].column == "value (ilk → son farkı)"
+    assert m["29,71"].matched and m["29,71"].column == "value (ilk → son değişimi %)"
+    assert panel.claims_ok and panel.matched_numbers == len(panel.numbers)
+    # Karşı kontrol: tabloyla tutmayan bir fark yine "tabloda yok".
+    bad = EvidenceBuilder(Silverish()).build("soru", "toplam artış +166.711 milyon TL.", ws, [], artifacts=[])
+    assert not {n.text: n for n in bad.numbers}["+166.711"].matched
+
+
 def test_satir_sayisi_ve_isaret_yazimi_zinciri_kirmaz() -> None:
     """Ölçüldü (G15/G17): "124 hafta" satır sayısıdır; "−2,31" Unicode eksiyle yazılınca işaret düşer."""
     class Silverish:

@@ -29,6 +29,7 @@ from ..contracts.evidence import (
 )
 from ..contracts.lakehouse import LakehouseError
 from .grounding import period_numbers, _NUM_RE, _ascii_minus, numbers_in
+from .preview import span_values
 from .workspace import AnalysisWorkspace
 
 _DATE_PREFERENCE = ("period_end", "observation_date", "donem", "dönem", "tarih", "date")
@@ -290,6 +291,19 @@ class EvidenceBuilder:
                             break
                     if found:
                         break
+            if not ev.matched:
+                # Harness'ın karta yazdığı ilk → son farkı/oranı (core/preview.span_values, 16 Eyl): sayı hücrede değil ama
+                # araç çıktısında; panel "tabloda yok" derse doğru cevap jüri önünde EKSİK görünür (canlı: "+155.515, %29,71").
+                frames = [table, *[f for _, f in (peeks or [])], *(previous or [])]
+                derived = [(s, kind) for frame in frames for s in span_values(frame) for kind in ("diff", "pct")
+                           if s[kind] is not None]
+                for s, kind in derived:
+                    if self._hits(pd.Series([s[kind]]), candidates, decimals).empty:
+                        continue
+                    ev.matched = True
+                    ev.column = f"{s['column']} (ilk → son {'farkı' if kind == 'diff' else 'değişimi %'})"
+                    ev.row_key = f"harness hesabı: {s['d0']} → {s['d1']}"
+                    break
             if not ev.matched and number != 0 and not text.lstrip().startswith(("-", "+")):
                 # Büyüklük yazılmış ("2,31"), tabloda ters işaret. Yön sözcüğü varsa ("düştü", "negatif")
                 # sayı araçtandır; yoksa işaret uyarısı: eşleşti ama iddia doğrulanmış sayılmaz (M13-T03).
