@@ -28,7 +28,7 @@ from ..contracts.evidence import (
     ColumnEvidence, EvidenceCapable, EvidencePanel, NumberEvidence, ObservationEvidence,
 )
 from ..contracts.lakehouse import LakehouseError
-from .grounding import period_numbers, _NUM_RE, _ascii_minus, numbers_in
+from .grounding import period_numbers, token_tolerance, _MATCH_EPS, _NUM_RE, _ascii_minus, numbers_in
 from .workspace import AnalysisWorkspace
 
 _DATE_PREFERENCE = ("period_end", "observation_date", "donem", "dönem", "tarih", "date")
@@ -168,14 +168,17 @@ class EvidenceBuilder:
         self.max_rows = max_rows
 
     # ------------------------------------------------------------------ halkalar
-    def _hits(self, series: pd.Series, candidates: list[float], decimals: int | None = None) -> pd.Series:
+    def _hits(self, series: pd.Series, candidates: list[float], primary_tol: float = 0.5) -> pd.Series:
         """Adaylardan ilki tabloda tolerans içinde bulunursa eşleşen satırlar; yoksa boş seri.
 
-        Tolerans: göreli %0,5 ya da GÖSTERİLEN hassasiyetin yarım birimi, hangisi büyükse (M13-T05). "−0,40" yazılan
-        değer −0,403 ise yuvarlamadır (ölçüldü, M16 dördüncü koşu); "100,6" yazılan değer 100 ise maddi farktır."""
-        half_unit = 0.5 * 10 ** (-decimals) if decimals else 0.0
-        for n in candidates:
-            hits = series[(series - n).abs() <= max(abs(n) * self.tolerance, half_unit if n == candidates[0] else 0.0, 1e-9)]
+        Tolerans: GÖSTERİLEN hassasiyetin yarım birimi — `grounding.token_tolerance` ile hesaplanıp `primary_tol` olarak
+        verilir (E-1, ADR-0081; grounding/unverified_numbers ile TEK ortak kural, panel artık formülü kopyalamıyor:
+        ikinci-göz uyarısı). Göreli %0,5 YOK; büyüklükle büyümez ("100,6" yazılan değer 100'e eşleşmez). Noktalı ondalık
+        da doğru sayılır ("0.263" → 0,0005). İkincil aday (binlik-noktalının ondalık okuması, "18.388" → 18,388) üç
+        ondalık gösterir → 0,0005."""
+        for i, n in enumerate(candidates):
+            tol = primary_tol if i == 0 else 0.0005
+            hits = series[(series - n).abs() <= tol + _MATCH_EPS]   # sınır float payı grounding ile ortak (_MATCH_EPS)
             if not hits.empty:
                 return hits
         return series.iloc[0:0]
@@ -202,8 +205,9 @@ class EvidenceBuilder:
             # "17.985": Türkçe binlik (17985) mi, noktalı ondalık (17,985) mı? Yazım ikisini de taşır; biri tabloda
             # varsa sayı oradadır (M16 üçüncü koşu: faiz 17.985 yazıldı, 17985 aranıp "tabloda yok" dendi).
             candidates = [number] + ([float(text)] if re.fullmatch(r"[-+]?\d{1,3}\.\d{3}", text) else [])
-            # Gösterilen ondalık hane: yalnız virgüllü yazımda kesin ("−0,40" → 2). Noktalı yazım binlik olabilir; hane sayılmaz.
-            decimals = len(text.rsplit(",", 1)[1]) if "," in text else None
+            # Birincil tolerans: yazımın gösterdiği hassasiyetin yarım birimi (grounding ile ortak). Noktalı ondalık
+            # ("0.263" → 0,0005) ve virgüllü ("−0,40" → 0,005) birlikte ele alınır; binlik-noktalı yazım tam sayı → 0,5.
+            primary_tol = token_tolerance(text)
             if number in asked and (number in periods or (float(number).is_integer() and 1900 <= number <= 2100)):
                 ev.matched, ev.column, ev.row_key = True, "(soruda geçiyor)", text   # dönem/yıl filtresi
                 out.append(ev)
@@ -225,7 +229,7 @@ class EvidenceBuilder:
             want_year, want_month = _period_near(answer, text) if time_col is not None else (None, None)
             for col in numeric_cols:
                 series = table[col]
-                hits = self._hits(series, candidates, decimals)
+                hits = self._hits(series, candidates, primary_tol)
                 if not hits.empty:
                     idx = int(hits.index[0])
                     if want_year is not None or want_month is not None:
@@ -242,7 +246,7 @@ class EvidenceBuilder:
                     break
             if not ev.matched:
                 for col, series in text_parsed.items():
-                    hits = self._hits(series, candidates, decimals)
+                    hits = self._hits(series, candidates, primary_tol)
                     if not hits.empty:
                         idx = int(hits.index[0])
                         ev.matched, ev.column, ev.row_index = True, col, idx
@@ -255,7 +259,7 @@ class EvidenceBuilder:
                 for sid, old, prov in (previous_sources or []):
                     found = False
                     for col in [c for c in old.columns if pd.api.types.is_numeric_dtype(old[c])]:
-                        hits = self._hits(old[col], candidates, decimals)
+                        hits = self._hits(old[col], candidates, primary_tol)
                         if not hits.empty:
                             p = prov.get(col) if isinstance(prov, dict) else None
                             origin = (", ".join(p.sources) if p is not None and p.sources else "kaynak kaydı yok")
@@ -270,7 +274,7 @@ class EvidenceBuilder:
                     for depth, old in enumerate(previous or [], start=1):
                         found = False
                         for col in [c for c in old.columns if pd.api.types.is_numeric_dtype(old[c])]:
-                            hits = self._hits(old[col], candidates, decimals)
+                            hits = self._hits(old[col], candidates, primary_tol)
                             if not hits.empty:
                                 ev.matched, ev.column, ev.row_key = True, str(col), f"önceki tablo (-{depth}, kaynak kimliği yok)"
                                 found = True
@@ -283,7 +287,7 @@ class EvidenceBuilder:
                     found = False
                     for col in [c for c in frame.columns if pd.api.types.is_numeric_dtype(frame[c])]:
                         series = frame[col]
-                        hits = self._hits(series, candidates, decimals)
+                        hits = self._hits(series, candidates, primary_tol)
                         if not hits.empty:
                             ev.matched, ev.column, ev.row_key = True, str(col), f"bakış sorgusu: {sql[:80]}"
                             found = True
@@ -299,7 +303,7 @@ class EvidenceBuilder:
                     # Yuvarlama toleransı işaretli eşleşmeyle aynı (M13-T05): "0,06" ↔ −0,062, "0,4" ↔ −0,403 (K03 canlı tekrar bulgusu).
                     hit_col = next(
                         (str(c) for c in frame.columns if pd.api.types.is_numeric_dtype(frame[c])
-                         and not self._hits(-frame[c].astype("float64"), [number], decimals).empty),
+                         and not self._hits(-frame[c].astype("float64"), [number], primary_tol).empty),
                         None,
                     )
                     if hit_col:
