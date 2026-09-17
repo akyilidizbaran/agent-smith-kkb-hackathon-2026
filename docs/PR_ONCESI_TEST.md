@@ -1,13 +1,14 @@
 # PR öncesi test — 17 Eylül 2026'dan itibaren
 
-GitHub Actions'ın aylık kotası tükendi. Bu yüzden:
+GitHub Actions'ın aylık kotası tükendi ve açılmayacak. Bu yüzden **hiçbir test GitHub'da otomatik
+koşmuyor**. Değişikliği yapan kişi PR'dan önce testleri kendi bilgisayarında koşar ve sonucu PR gövdesine
+tek satır yazar; review yapan kişi o satır yoksa merge etmez.
 
-- **Ajan testleri** (`agent-core`, ~1 dk) PR açılınca GitHub'da otomatik koşar.
-- **Veri testleri** (`lakehouse-core`, 30–40 dk) GitHub'da otomatik koşmaz. Değişikliği yapan kişi PR'dan
-  önce kendi bilgisayarında koşar ve sonucu PR gövdesine tek satır yazar.
+- **Ajan testleri** (`agent-core`, ~1 dk): agent-core'a dokunan her PR'da.
+- **Veri testleri** (`lakehouse-core`, 30–40 dk): lakehouse-core'a dokunan her PR'da.
 
-Testlerin kendisi değişmedi; yalnız nerede koştukları değişti. Kota geri gelince
-`.github/workflows/tests-lakehouse.yml` içindeki `pull_request` bloğu açılır.
+Testlerin kendisi değişmedi; yalnız nerede koştukları değişti. Kota bir gün açılırsa
+`.github/workflows/tests-agent.yml` ve `tests-lakehouse.yml` içindeki yorumlu `pull_request` blokları açılır.
 
 ## Kurulum (bir kez)
 
