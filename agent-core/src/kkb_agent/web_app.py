@@ -69,6 +69,8 @@ def _json_safe(value: Any) -> Any:
         return value.date().isoformat() if (value.hour, value.minute, value.second) == (0, 0, 0) else value.isoformat(timespec="minutes")
     if isinstance(value, date):
         return value.isoformat()
+    if value is pd.NA or value is pd.NaT:
+        return None
     if isinstance(value, float) and (value != value or value in (float("inf"), float("-inf"))):
         return None   # NaN ve ±sonsuz: JSON'da yeri yok; "hesaplanamadı" olarak boş (M14-T08)
     if is_dataclass(value) and not isinstance(value, type):
@@ -91,8 +93,15 @@ def frame_to_dict(frame: pd.DataFrame | None, *, max_rows: int = MAX_ROWS) -> di
     if frame is None or frame.empty:
         return None
     head = frame.head(max_rows)
-    rows = [[_json_safe(v) for v in row] for row in head.itertuples(index=False, name=None)]
-    return {"columns": [str(c) for c in frame.columns], "rows": rows, "row_count": int(len(frame)),
+    # Each cell is keyed by the schema entry that owns it. This prevents a missing value
+    # in one derived column from shifting every following value under another header.
+    columns = [{"key": f"c{index}", "label": str(column)} for index, column in enumerate(frame.columns)]
+    rows = []
+    for row in head.itertuples(index=False, name=None):
+        if len(row) != len(columns):
+            raise ValueError(f"table payload invariant failed: {len(row)} values for {len(columns)} columns")
+        rows.append({column["key"]: _json_safe(value) for column, value in zip(columns, row)})
+    return {"columns": columns, "rows": rows, "row_count": int(len(frame)),
             "truncated": len(frame) > max_rows}
 
 

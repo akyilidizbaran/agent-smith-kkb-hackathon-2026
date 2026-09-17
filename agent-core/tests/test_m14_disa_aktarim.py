@@ -8,13 +8,16 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+from pytest import approx
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from kkb_agent.contracts.evidence import ColumnEvidence, EvidencePanel, NumberEvidence  # noqa: E402
 from kkb_agent.core.agent import AgentAnswer, AgentStep  # noqa: E402
-from kkb_agent.web_app import create_app, report_html, table_csv_bytes, table_xlsx_bytes  # noqa: E402
+from kkb_agent.core.workspace import AnalysisWorkspace  # noqa: E402
+from kkb_agent.tools.workspace import ComputeColumnParams, WorkspaceComputeColumnTool  # noqa: E402
+from kkb_agent.web_app import create_app, frame_to_dict, report_html, table_csv_bytes, table_xlsx_bytes  # noqa: E402
 from tests.test_web_app import FakeAgent  # noqa: E402
 
 
@@ -83,6 +86,40 @@ def test_yardimcilar_tarih_ve_sayi_bicimi() -> None:
     assert xb["v"].iloc[0] == 1234.5 and pd.Timestamp(xb["t"].iloc[0]).year == 2025
     html = report_html({"index": 3, "question": "q\n\nDosya: /x/y.csv", "text": "- a\n- b", "evidence": {"states": {"sayılar": True}, "gaps": []}}, None, model="m", version="abc")
     assert "/x/y.csv" not in html and "<li>a</li>" in html and "abc" in html
+
+
+def test_turetilmis_kolonlar_null_hucreyi_atlamadan_eslesir() -> None:
+    base = pd.DataFrame({
+        "observation_date": pd.to_datetime(["2022-01-31", "2022-02-28"]),
+        "ihtiyac_kredisi": [463.792, 467.902],
+        "kredi_karti": [214.776, 221.561],
+    })
+    workspace = AnalysisWorkspace()
+    workspace.set_table(base, description="başlangıç")
+    compute = WorkspaceComputeColumnTool(workspace)
+    for name, expression in (
+        ("ihtiyac_kredisi_degisim", "ihtiyac_kredisi - LAG(ihtiyac_kredisi) OVER (ORDER BY observation_date)"),
+        ("kredi_karti_degisim", "kredi_karti - LAG(kredi_karti) OVER (ORDER BY observation_date)"),
+        ("ihtiyac_kredisi_yuzde_degisim", "(ihtiyac_kredisi - LAG(ihtiyac_kredisi) OVER (ORDER BY observation_date)) / LAG(ihtiyac_kredisi) OVER (ORDER BY observation_date) * 100"),
+        ("kredi_karti_yuzde_degisim", "(kredi_karti - LAG(kredi_karti) OVER (ORDER BY observation_date)) / LAG(kredi_karti) OVER (ORDER BY observation_date) * 100"),
+    ):
+        result = compute.run(ComputeColumnParams(expression=expression, column_name=name, purpose=name))
+        assert result.ok
+    frame = workspace.table
+    assert frame is not None
+    payload = frame_to_dict(frame)
+
+    assert [c["label"] for c in payload["columns"]] == list(frame.columns)
+    assert list(payload["rows"][0]) == [f"c{i}" for i in range(7)]
+    assert list(payload["rows"][1]) == [f"c{i}" for i in range(7)]
+    assert payload["rows"][0]["c3"] is None and payload["rows"][0]["c6"] is None
+    assert payload["rows"][1]["c3"] == approx(4.110) and payload["rows"][1]["c4"] == approx(6.785)
+
+    csv_frame = pd.read_csv(io.BytesIO(table_csv_bytes(frame)), sep=";", decimal=",", encoding="utf-8-sig")
+    xlsx_frame = pd.read_excel(io.BytesIO(table_xlsx_bytes(frame, title="fixture")), sheet_name="tablo", engine="openpyxl")
+    assert list(csv_frame.columns) == list(frame.columns) == list(xlsx_frame.columns)
+    assert pd.isna(csv_frame.loc[0, "ihtiyac_kredisi_degisim"]) and csv_frame.loc[1, "kredi_karti_degisim"] == approx(6.785)
+    assert pd.isna(xlsx_frame.loc[0, "ihtiyac_kredisi_yuzde_degisim"]) and xlsx_frame.loc[1, "kredi_karti_yuzde_degisim"] == approx(3.159105)
 
 
 def test_a26_eski_cevabin_tablosu_ve_a07_grafik_png_indirilir(monkeypatch) -> None:

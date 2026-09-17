@@ -48,7 +48,7 @@ def test_status_ask_reset_dongusu() -> None:
     s = client.get("/api/status").json()
     assert s["model"] == "sahte" and s["tool_gate"] is True and s["history"] == []
     r = client.post("/api/ask", json={"question": "2025 Aralık konut kredisi bakiyesi?"}).json()
-    assert r["text"].startswith("2025 Aralık") and r["table"]["columns"] == ["donem", "bakiye"] and r["table"]["rows"][1][1] == 678970.0
+    assert r["text"].startswith("2025 Aralık") and r["table"]["columns"] == [{"key": "c0", "label": "donem"}, {"key": "c1", "label": "bakiye"}] and r["table"]["rows"][1]["c1"] == 678970.0
     assert r["steps"][0]["tool"] == "lakehouse_query" and r["steps"][0]["ok"] is True and r["steps"][0]["duration_ms"] == 12
     assert r["evidence"]["complete"] is True and r["evidence"]["numbers"][0]["text"] == "678.970"
     assert r["usage"]["prompt"] == 26240 and r["gate"]["closed"] == ["grafik"] and r["elapsed_s"] >= 0
@@ -62,7 +62,7 @@ def test_tablo_serilestirme_nan_sonsuz_ve_kirpma() -> None:
     import json
     frame = pd.DataFrame({"a": [1.0, float("nan"), float("inf")] + [3.0] * 300, "b": ["x", "y", "w"] + ["z"] * 300})
     d = frame_to_dict(frame)
-    assert d["row_count"] == 303 and d["truncated"] and len(d["rows"]) == 200 and d["rows"][1][0] is None and d["rows"][2][0] is None
+    assert d["row_count"] == 303 and d["truncated"] and len(d["rows"]) == 200 and d["rows"][1]["c0"] is None and d["rows"][2]["c0"] is None
     json.dumps(d, allow_nan=False)   # katı JSON: NaN/Infinity kalmadı (A29)
     assert frame_to_dict(None) is None and frame_to_dict(pd.DataFrame()) is None
 
@@ -94,7 +94,7 @@ def test_cevaplar_ucu_sayfa_yenilemede_sohbeti_geri_getirir() -> None:
     assert client.get("/api/answers").json() == []
     client.post("/api/ask", json={"question": "2025 konut"})
     lst = client.get("/api/answers").json()
-    assert len(lst) == 1 and lst[0]["index"] == 0 and lst[0]["question"] == "2025 konut" and lst[0]["table"]["columns"] == ["donem", "bakiye"]
+    assert len(lst) == 1 and lst[0]["index"] == 0 and lst[0]["question"] == "2025 konut" and lst[0]["table"]["columns"] == [{"key": "c0", "label": "donem"}, {"key": "c1", "label": "bakiye"}]
     assert client.get("/api/answers/0").json()["index"] == 0
     assert client.get("/api/answers/5").status_code == 404
     client.post("/api/reset")
