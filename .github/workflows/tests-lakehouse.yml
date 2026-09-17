@@ -1,23 +1,25 @@
 # Deterministik testler (M15-T09, ADR-0061). Ağ ve EVDS gerektiren canlı koşular burada YOK.
 #
-# 17 Eyl: tek workflow ikiye bölündü ve yalnız pull_request'te koşuyor (gerekçe: tests-agent.yml).
-# Bu iş yalnız lakehouse-core değişince koşar; ajan PR'ları artık bunu tetiklemez.
+# 17 Eyl: aylık Actions kotası tükendiği için bu iş PR'da otomatik koşmuyor, yalnız elle tetikleniyor.
+# Veri tarafı testleri PR'dan önce yerelde koşulur ve sonuç PR gövdesine yazılır; komutlar ve Windows'ta
+# bilinen kırıklar docs/PR_ONCESI_TEST.md içinde. Kota geri gelince aşağıdaki pull_request bloğu açılır.
+#
+# Elle tetiklemeden önce: paket 1,9k katalogla GitHub'da 36–47 dk sürdü; 6,7k katalogla (PR #9 sonrası)
+# 60 dk sınırına yakın, iptal olursa kota boşa gider. Süre: lakehouse-core/src/lakehouse/catalog/series.py
+# (_YAML_LOADER) ve testlerin her bootstrap'ta kataloğu baştan yüklemesine bağlı.
 name: tests-lakehouse
 on:
-  pull_request:
-    paths:
-      - "lakehouse-core/**"
-      - ".github/workflows/tests-lakehouse.yml"
   workflow_dispatch:
+  # pull_request:
+  #   paths:
+  #     - "lakehouse-core/**"
+  #     - ".github/workflows/tests-lakehouse.yml"
 concurrency:
   group: tests-lakehouse-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   lakehouse-core:
     runs-on: ubuntu-latest
-    # Ölçüldü 14 Eyl: yerelde 12 dk, GitHub koşucusunda 34 dk; 40 dk sınırı bir koşuyu iptal ettirdi.
-    # 17 Eyl: 1,9k katalogla 36–47 dk. Katalog 6,7k'ya çıkınca (PR #9) süre katalog okuyucuya bağlı;
-    # bkz. lakehouse-core/src/lakehouse/catalog/series.py (_YAML_LOADER).
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
