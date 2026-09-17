@@ -15,7 +15,7 @@ from kkb_agent.contracts.evidence import EvidencePanel, NumberEvidence  # noqa: 
 from kkb_agent.core.agent import AgentAnswer, AgentStep  # noqa: E402
 from kkb_agent.core.registry import ToolRegistry  # noqa: E402
 from kkb_agent.core.workspace import AnalysisWorkspace  # noqa: E402
-from kkb_agent.web_app import create_app, frame_to_dict  # noqa: E402
+from kkb_agent.web_app import _json_safe, create_app, frame_to_dict  # noqa: E402
 
 
 class FakeAgent:
@@ -64,6 +64,7 @@ def test_tablo_serilestirme_nan_sonsuz_ve_kirpma() -> None:
     d = frame_to_dict(frame)
     assert d["row_count"] == 303 and d["truncated"] and len(d["rows"]) == 200 and d["rows"][1]["c0"] is None and d["rows"][2]["c0"] is None
     json.dumps(d, allow_nan=False)   # katı JSON: NaN/Infinity kalmadı (A29)
+    assert _json_safe(pd.NA) is None and _json_safe(pd.NaT) is None
     assert frame_to_dict(None) is None and frame_to_dict(pd.DataFrame()) is None
 
 

@@ -65,12 +65,12 @@ def safe_filename(name: str) -> str:
 
 
 def _json_safe(value: Any) -> Any:
+    if value is pd.NA or value is pd.NaT:
+        return None
     if isinstance(value, datetime):
         return value.date().isoformat() if (value.hour, value.minute, value.second) == (0, 0, 0) else value.isoformat(timespec="minutes")
     if isinstance(value, date):
         return value.isoformat()
-    if value is pd.NA or value is pd.NaT:
-        return None
     if isinstance(value, float) and (value != value or value in (float("inf"), float("-inf"))):
         return None   # NaN ve ±sonsuz: JSON'da yeri yok; "hesaplanamadı" olarak boş (M14-T08)
     if is_dataclass(value) and not isinstance(value, type):
