@@ -35,6 +35,9 @@ ErrorCode = Literal[
     # politika katmanı — izin veriliyor mu
     "UNSAFE_SQL",
     "MISSING_PERIOD_FILTER",
+    # Aylık pencere sorusunda model sonucu anchor yıllarına indirgedi; çıktı
+    # beklenen farklı ay sayısını taşımadığında araç sonucu kabul edilmez.
+    "PERIOD_GRAIN_MISMATCH",
     # Gold katmanının semantik reddi: katalog kuralı bu dönüşümü güvenli bulmuyor
     # (stok seride decompose, doğrulanmamış semantik, üst örnekleme...). Kural
     # kataloğun, seçim modelin değil (ADR-0031).

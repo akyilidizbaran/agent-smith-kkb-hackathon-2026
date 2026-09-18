@@ -127,6 +127,36 @@ def test_direct_query_projection_can_show_base_values_without_deleting_derived_c
     assert "metric_a_change" in agent.workspace.table.columns
 
 
+def test_final_workspace_show_exports_the_post_transform_snapshot() -> None:
+    answer, agent, before = _derived_answer()
+    answer.steps.insert(0, AgentStep(
+        index=0,
+        role="execute",
+        tool_name="workspace_query",
+        result_data=before.copy(),
+        ok=True,
+    ))
+    answer.steps.append(AgentStep(
+        index=99,
+        role="retrieve",
+        tool_name="workspace_show",
+        result_data=agent.workspace.table.copy(),
+        ok=True,
+    ))
+
+    projected = project_result_table(
+        answer,
+        agent,
+        question="bakiye yapısını aylık değişimleri analiz etmeye uygun hale getir",
+        table_before=before,
+    )
+
+    assert projected is not None
+    assert list(projected.columns) == list(agent.workspace.table.columns)
+    assert "metric_a_change" in projected.columns and "metric_b_change" in projected.columns
+    assert frame_to_dict(projected)["columns"][-1]["label"] == "metric_b_change"
+
+
 def test_follow_up_base_request_can_recover_source_columns_from_provenance() -> None:
     _, agent, before = _derived_answer()
     follow_up = AgentAnswer(

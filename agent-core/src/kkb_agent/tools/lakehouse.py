@@ -13,15 +13,17 @@ from __future__ import annotations
 
 import re
 
+import pandas as pd
 from pydantic import BaseModel, Field
 
 from ..contracts.catalog import Frequency, ColumnRole
 from ..contracts.lakehouse import LakehouseClient, LakehouseError
-from ..core.facets import extract_facets, province_of
+from ..core.facets import extract_facets, province_of, source_matches
 from ..domain import kisa_terim
 from ..core.errors import ToolError
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
+from ..core.period_intent import parse_period_intent
 
 
 class SearchParams(BaseModel):
@@ -322,7 +324,7 @@ class LakehouseQueryTool(Tool):
         """
         question = getattr(self._registry, "active_question", "") or ""
         facets = extract_facets(question)
-        national = bool(re.search(r"\b(?:ulusal|national|türkiye geneli|turkiye geneli|ülke geneli|ulke geneli)\b", question, re.I))
+        national = facets.national
         try:
             specs = list(self.lakehouse.list_datasets())
         except Exception:  # noqa: BLE001
@@ -345,12 +347,12 @@ class LakehouseQueryTool(Tool):
                 hint="İstenen il için doğru seriyi lakehouse_search ile bulup sorgula.",
                 candidates=[spec.dataset_id for spec, province in zip(used, used_provinces) if province in facets.provinces],
             )
-        if facets.sources and any(str(getattr(spec, "source", "")) not in facets.sources for spec in used):
+        if facets.sources and any(not source_matches(str(getattr(spec, "source", "")), facets.sources) for spec in used):
             return ToolError(
                 error_code="SOURCE_MISMATCH", layer="policy", retryable=True,
                 message="Sorgudaki kaynak kullanıcının istediği kaynakla uyuşmuyor; başka kaynağın verisi sessizce kullanılamaz.",
                 hint="İstenen kaynak için doğru seriyi lakehouse_search ile bulup sorgula.",
-                candidates=[spec.dataset_id for spec in used if str(getattr(spec, "source", "")) in facets.sources],
+                candidates=[spec.dataset_id for spec in used if source_matches(str(getattr(spec, "source", "")), facets.sources)],
             )
         return None
 
@@ -424,6 +426,27 @@ class LakehouseQueryTool(Tool):
                 artifacts={"availability_status": "RETRIEVAL_FAILED"},
             )
 
+        grain_error = self._period_grain_mismatch(result.data)
+        if grain_error is not None:
+            # Do not install an annual/partial result as the active table.  A
+            # 60-month request that returned two December rows would otherwise
+            # look successful in the UI and the narrator could not recover the
+            # missing months.  Returning a structured, retryable error lets the
+            # model repair the SQL while the source and period decision stay
+            # fixed.
+            return ToolResult.fail(
+                "PERIOD_GRAIN_MISMATCH",
+                grain_error,
+                hint=(
+                    "Aylık pencerenin tamamını döndür: period_end/date kolonunu seç, "
+                    "seçilen başlangıç-bitiş arasında filtrele ve her ayı ayrı satır "
+                    "olarak bırak. EXTRACT(year) ile yalnızca 2022 ve 2023'ü gruplayıp "
+                    "yıllık iki satıra indirgeme; SUM/AVG ile ayları birleştirme."
+                ),
+                layer="policy",
+                retryable=True,
+            )
+
         if params.as_active_table:
             self.workspace.set_table(
                 result.data, description=params.purpose, provenance=result.provenance
@@ -449,6 +472,69 @@ class LakehouseQueryTool(Tool):
             content += "\nBirimler: " + ", ".join(units)
         content += f"\nKaynak: {result.provenance.summary()}"
         return ToolResult(content=content, data=df, provenance=result.provenance)
+
+    def _period_grain_mismatch(self, frame: pd.DataFrame | None) -> str | None:
+        """Reject a coarse result for an explicitly resolved monthly window.
+
+        The check is deliberately result based: SQL text can contain a date
+        filter while still grouping by year.  We only enforce it when the
+        active question has a numeric monthly window, so ordinary single-value
+        and annual questions keep their existing behavior.
+        """
+        if frame is None or frame.empty or self._registry is None:
+            return None
+        question = getattr(self._registry, "active_question", "") or ""
+        intent = parse_period_intent(question)
+        facets = extract_facets(question)
+        expected = intent.effective_window_months
+        if not expected or facets.window_frequency != "monthly":
+            return None
+
+        # Prefer canonical lakehouse date names, then accept common aliases.
+        date_columns = [
+            column for column in frame.columns
+            if str(column).lower() in {
+                "period_end", "period_start", "observation_date", "donem", "dönem",
+                "tarih", "date", "month", "ay",
+            }
+        ]
+        if not date_columns:
+            return None
+
+        parsed = pd.to_datetime(frame[date_columns[0]], errors="coerce")
+        months = {
+            (value.year, value.month)
+            for value in parsed
+            if not pd.isna(value)
+        }
+        if intent.outer_bounds_explicit and intent.outer_start and intent.outer_end:
+            expected_months = {
+                (value.year, value.month)
+                for value in pd.date_range(
+                    start=intent.outer_start.replace(day=1),
+                    end=intent.outer_end.replace(day=1),
+                    freq="MS",
+                )
+            }
+            missing = expected_months - months
+            outside = months - expected_months
+            if not missing and not outside:
+                return None
+            detail = []
+            if missing:
+                detail.append(f"eksik {len(missing)} ay")
+            if outside:
+                detail.append(f"pencere dışı {len(outside)} ay")
+            return (
+                f"Aylık sonuç seçilen dış pencereyle uyuşmuyor: {', '.join(detail)}. "
+                f"Beklenen pencere {intent.outer_start:%Y-%m}–{intent.outer_end:%Y-%m}."
+            )
+        if len(months) >= expected:
+            return None
+        return (
+            f"Aylık {expected} aylık pencere istendi ancak sorgu yalnızca "
+            f"{len(months)} farklı ay döndürdü; sonuç aylık kapsamı taşımıyor."
+        )
 
     def _is_period_aggregation(self, sql: str) -> bool:
         text = sql.lower()
@@ -514,7 +600,14 @@ class LakehouseQueryTool(Tool):
         yıl geçmeyince kapsam kontrolü de tetiklenmiyor.
         """
         soru = getattr(self._registry, "active_question", "") or ""
-        sorulan = set(re.findall(r"\b(19\d{2}|20\d{2})\b", soru))
+        intent = parse_period_intent(soru)
+        if intent.outer_bounds_explicit and intent.outer_start and intent.outer_end:
+            # A contained anchor (e.g. 2022–2023) is a coverage constraint,
+            # not an additional SQL equality. Requiring those years literally
+            # caused a valid 2021–2025 window to be rejected and retried.
+            sorulan = {str(intent.outer_start.year), str(intent.outer_end.year)}
+        else:
+            sorulan = set(re.findall(r"\b(19\d{2}|20\d{2})\b", soru))
         if not sorulan:
             return None
         sorguda = set(re.findall(r"\b(19\d{2}|20\d{2})\b", sql))

@@ -41,12 +41,28 @@ from .execution_recovery import (
     needs_truthful_failure_text,
 )
 from .follow_up import FollowUpContext, FollowUpResolution, resolve_follow_up
-from .facets import extract_facets
+from .facets import extract_facets, province_of, source_matches
+from .period_intent import choose_containing_window, parse_period_intent
+from .token_budget import TokenBudgetPolicy
 
 # Kullanıcının grafik isteği (Türkçe çekimli: grafiği, grafiğini, çiz, çizer misin, görselleştir).
 _CHART_ASK = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
 # Analitik isteği: aykırılık / kırılma / öncülük (ADR-0040). Araç çalışmadan iddia yazılmaz.
 _ANALYTICS_ASK = re.compile(r"anomali|aykır|olağan ?dışı|sıra ?dışı|kırılma|rejim değişi|öncül|önden mi|korelasyon|granger", re.I)
+# A table transformation request is distinct from a new retrieval request.
+# These phrases describe work that must be performed on the verified active
+# table (for example, monthly deltas and a common date axis), even when the
+# user does not say "add a column" explicitly.
+_TRANSFORMATION_ASK = re.compile(
+    r"aylık\s+değiş|aylik\s+degis|değişim|degisim|yüzde\s+değiş|yuzde\s+degis|"
+    r"analiz\s+etmeye\s+uygun|aynı\s+tarih\s+ekseni|aylık\s+bazda\s+hizala|"
+    r"hizala|normalleştir|normalestir|dönüştür|donustur|oran|sütun|kolon",
+    re.I,
+)
+_TRANSFORMATION_TOOL_NAMES = frozenset({
+    "workspace_add_column", "workspace_compute_column", "workspace_query", "workspace_join",
+    "gold_align", "gold_decompose", "gold_join",
+})
 # (ad, soru deseni, yeterli sayılan araçlar, geri gönderme mesajı) — her biri turda bir kez.
 _REQUESTED_CAPABILITIES: tuple[tuple[str, "re.Pattern[str]", frozenset[str], str], ...] = (
     ("grafik", _CHART_ASK, frozenset({"chart"}),
@@ -59,6 +75,11 @@ _REQUESTED_CAPABILITIES: tuple[tuple[str, "re.Pattern[str]", frozenset[str], str
     ("öncül", _PREMISE_ASK, frozenset({"check_premise"}),
      "Soru bir yön varsayıyor ama check_premise ile doğrulamadın. Öncülü araçla sına (seri, kırılım değeri, yıl, "
      "iddia edilen yön); kart ÇELİŞİYOR derse cevabın ilk cümlesi düzeltme olsun. Sonra cevabını yaz."),
+    ("dönüşüm", _TRANSFORMATION_ASK, _TRANSFORMATION_TOOL_NAMES,
+     "Kullanıcı mevcut tablo üzerinde bir dönüşüm/analiz istedi ama dönüşüm aracı çağırmadın. "
+     "Veri hazırsa yeni kaynak arama; aylık değişim veya oran için workspace_compute_column, "
+     "tarih aralığı/hizalama için workspace_query (gerekirse as_active_table=true), "
+     "frekans dönüşümü için uygun Gold aracını çağır ve sonra cevabını yaz."),
 )
 from .registry import ToolRegistry
 from .tool import ToolResult
@@ -127,6 +148,7 @@ tek satırlık sonuçlar da analiz tablosudur.
 alt toplam) kullanıcı istemedikçe aynı sorguya katma; aynı döneme birden çok satır düşerse \
 tablo bozulur.
 - Kullanıcıya Türkçe, net ve kısa cevap ver. Ara adımları anlatma; sonucu ve gerekçesini anlat.
+- Tam doğrulanmış tablo arayüzde ayrı gösterilir ve CSV/XLSX olarak indirilir; nihai metinde uzun Markdown tabloyu tekrar etme. Önemli bulguları ve gerekli uyarıları yaz, tabloyu satır satır kopyalama.
 - YALNIZ sorulana cevap ver. İstenmemiş öneri, seçenek listesi, "başka ne yapabilirim", \
 "ne yapmak istersin" kapanışı ve emoji yazma. Sorunun cevabı bitince dur.
 - Muhatabın bir {audience}, geliştirici DEĞİL. Nihai cevapta SQL, kolon adı, araç adı, \
@@ -139,6 +161,18 @@ kuralla hesaplandığıyla anlat; kaynağı kurumun adıyla an.
 Bir araç hata döndürürse hatayı oku, çağrını düzelt ve tekrar dene. \
 Yeterli bilgiye ulaştığında araç çağırmayı bırak ve nihai cevabını yaz."""
 
+# İlk planlama turu için tam anlatım sözleşmesini ve ön-yükleme kataloğunu
+# göndermek provider tarafında gereksiz bir giriş yükü oluşturuyor. Bu kısa
+# sözleşme yalnız araç seçimini yönlendirir; sayılar ve hesaplar yine araçlar
+# tarafından doğrulanır, sonraki turlarda harness doğrulama kapıları çalışır.
+COMPACT_PLANNING_PROMPT = """Sen {domain} üzerinde çalışan bir veri analisti ajansın.
+
+İlk turda yalnızca doğru veri yolunu keşfet: önce uygun lakehouse arama/şema aracını çağır. \
+Tablo, kolon, kategori, kaynak, il, frekans ve dönem adlarını tahmin etme; araç çıktısına göre ilerle. \
+Kullanıcının istediği kaynak, coğrafya ve dönem sınırlarını koru. Hesapları kendin yapma; SQL veya uygun \
+Gold/workspace aracına yaptır. Araç çıktısı gelmeden sayı veya veri yokluğu iddia etme. \
+Yalnız listelenen araçları kullan; bu turda nihai cevap yerine ilk gerekli aracı çağır."""
+
 def _is_llm_outage(exc: BaseException) -> bool:
     """Model servisine erişim sorunu mu (bağlantı, zaman aşımı, 5xx/429 tükenmiş)? İstek hataları (400) değil."""
     try:
@@ -147,6 +181,9 @@ def _is_llm_outage(exc: BaseException) -> bool:
         return False
     if isinstance(exc, (APIConnectionError, APITimeoutError)):
         return True
+    if isinstance(exc, RuntimeError):
+        message = str(exc).lower()
+        return "llm " in message and ("yanıt vermedi" in message or "timed out" in message or "timeout" in message)
     return isinstance(exc, APIStatusError) and (exc.status_code >= 500 or exc.status_code in (408, 429))
 
 
@@ -424,9 +461,9 @@ class AgentAnswer:
     #: Kanıt paneli (ADR-0033): cevaptaki sayı → hücre → SQL → gözlem → artifact → RAW/URL.
     #: Cevap üretildikten SONRA kurulur; kurulamazsa None, cevap düşmez.
     evidence: Any = None
-    #: LLM çağrılarının toplam token kullanımı {"prompt": …, "completion": …, "calls": …};
-    #: ön-yüklemenin (ADR-0013/0035) bedeli ve kazancı buradan ölçülür.
-    usage: dict[str, int] = field(default_factory=dict)
+    #: LLM çağrılarının toplam token kullanımı ve faz izi; ön-yüklemenin
+    #: (ADR-0013/0035) bedeli ile dinamik token politikasının dağılımı buradan ölçülür.
+    usage: dict[str, Any] = field(default_factory=dict)
     #: Bu soru için kurulan ön-yükleme bağlamının özeti ("ön-yükleme[preloaded]: 3 kart …").
     context: str = ""
 
@@ -519,6 +556,22 @@ class AnalyticsAgent:
         "web_url", "ingest_source", "ingest_from_url",
     })
 
+    # Follow-up requests are often transformations of the already verified
+    # table (monthly deltas, ratios, aligned views, joins).  These operations
+    # do not fetch a new source, but they are still a valid, auditable answer
+    # to the current question.  Keeping them separate from FRESH_DATA_TOOLS
+    # lets the stale-table guard distinguish a real transformation from a
+    # model merely narrating the old table.
+    ACTIVE_TABLE_ACTION_TOOLS = frozenset({
+        "workspace_add_column", "workspace_compute_column", "workspace_real_value",
+        "workspace_join", "workspace_query", "anomaly_detect", "change_points", "lead_lag", "chart",
+    })
+
+    TRANSFORMATION_TOOLS = frozenset({
+        "workspace_add_column", "workspace_compute_column", "workspace_query", "workspace_join",
+        "gold_align", "gold_decompose", "gold_join",
+    })
+
     def __init__(
         self,
         llm: LLMClient,
@@ -535,9 +588,13 @@ class AnalyticsAgent:
         profile_factory: Callable[[], DomainProfile] | None = None,
         max_tokens: int | None = None,
         time_budget_s: float | None = None,
+        token_budget_policy: TokenBudgetPolicy | None = None,
     ) -> None:
         # Bütçeler (M15): çıktı sınırı her çağrıya gider; süre bütçesi aşılınca araç turu durur, kısmi cevap verilir.
         self.max_tokens = max_tokens
+        # Tests/embedders that only provide max_tokens keep the historic
+        # fixed-budget behavior. The CLI opts into phase-aware budgets.
+        self.token_budget_policy = token_budget_policy
         self.time_budget_s = time_budget_s
         self._truncated = False
         # Katalog değişince (Architect: ingest, terfi) alan profili yeniden türetilir (ADR-0048).
@@ -558,7 +615,7 @@ class AnalyticsAgent:
         # model kataloğu araçlarla keşfeder (ADR-0013 öncesi davranış).
         self.preloader = preloader
         self._last_context: Any = None
-        self._usage: dict[str, int] = {}
+        self._usage: dict[str, Any] = {}
         # Alan bilgisi prompt'a koddan değil profilden girer (ADR-0012).
         # Profil verilmezse registry'ninki, o da yoksa nötr varsayılan kullanılır.
         self.profile = profile or registry.profile
@@ -571,6 +628,11 @@ class AnalyticsAgent:
         self._retry_source_question: str | None = None
         self._retry_failed_signatures: set[tuple[str, str]] = set()
         self._active_table_reuse_allowed = False
+        self._period_selection_note: str | None = None
+        self._period_selection_display: str | None = None
+        self._period_resolved_question: str | None = None
+        self._schema_allowed: frozenset[str] | None = None
+        self._ask_deadline: float | None = None
 
     def reset(self) -> None:
         self._history.clear()
@@ -584,6 +646,11 @@ class AnalyticsAgent:
         self._retry_source_question = None
         self._retry_failed_signatures = set()
         self._active_table_reuse_allowed = False
+        self._period_selection_note = None
+        self._period_selection_display = None
+        self._period_resolved_question = None
+        self._schema_allowed = None
+        self._ask_deadline = None
 
     @property
     def follow_up_context(self) -> FollowUpContext:
@@ -605,7 +672,18 @@ class AnalyticsAgent:
 
     def ask(self, question: str) -> AgentAnswer:
         """Bir soruyu uçtan uca cevaplar; cevaba kanıt panelini iliştirir."""
-        self._usage = {"prompt": 0, "completion": 0, "calls": 0}
+        self._usage = {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 0,
+            # Harness metrics: these make phase gating measurable in the UI
+            # and acceptance runners without parsing logs.
+            "initial_tool_schemas": 0,
+            "max_tool_schemas": 0,
+            "phase_switches": 0,
+            "fast_planning_calls": 0,
+            "token_budget_calls": [],
+        }
         self._last_context = None
         self._follow_up_resolution = None
         self._retry_source_question = None
@@ -635,12 +713,14 @@ class AnalyticsAgent:
             self._history.append(ChatMessage(role="assistant", content=cap))
             step = AgentStep(index=1, role="narrate", thought="yetenek sorusu — LLM çağrılmadı", result_summary=cap)
             return AgentAnswer(text=cap, steps=[step], workspace=self.workspace, usage=dict(self._usage))
+        self._resolve_period_window(question)
         clarify = self._vague_clarification(question)
         if clarify is not None:
             return clarify
         self._prepare_follow_up(question)
         self._active_table_reuse_allowed = self._active_table_is_compatible(question)
         self._truncated = False
+        self._ask_deadline = (time.perf_counter() + self.time_budget_s) if self.time_budget_s else None
         try:
             answer = self._ask(question)
         except Exception as exc:  # noqa: BLE001 — yalnız model servisi kesintisi yakalanır, gerisi yükselir
@@ -661,6 +741,12 @@ class AnalyticsAgent:
                 workspace=self.workspace,
                 usage=dict(self._usage),
             ))
+        finally:
+            self._ask_deadline = None
+        if self._period_selection_display:
+            answer.text = self._period_selection_display + "\n\n" + answer.text
+            if self._history and self._history[-1].role == "assistant":
+                self._history[-1] = ChatMessage(role="assistant", content=answer.text)
         if self._truncated:
             answer.text = answer.text.rstrip() + "\n\n(Not: model çıktısı uzunluk sınırında kesildi; tablo ve indirmeler tamdır.)"
         trimmed_text, trimmed = trim_unsolicited_offers(answer.text)
@@ -740,7 +826,7 @@ class AnalyticsAgent:
         # provincial table, even if the natural-language resolver classified
         # the turn as a short follow-up.
         facets = extract_facets(question)
-        if re.search(r"\b(?:ulusal|national|türkiye geneli|turkiye geneli|ülke geneli|ulke geneli)\b", question, re.I):
+        if facets.national:
             current_provinces = self._active_table_provinces()
             if current_provinces:
                 return False
@@ -749,7 +835,7 @@ class AnalyticsAgent:
             if current_provinces and not set(current_provinces).intersection(facets.provinces):
                 return False
         current_specs = self._active_table_specs()
-        if facets.sources and current_specs and not any(str(getattr(s, "source", "")) in facets.sources for s in current_specs):
+        if facets.sources and current_specs and not any(source_matches(str(getattr(s, "source", "")), facets.sources) for s in current_specs):
             return False
         if facets.frequency and current_specs:
             current_frequencies = {str(getattr(getattr(s, "frequency", None), "value", getattr(s, "frequency", ""))) for s in current_specs}
@@ -823,6 +909,40 @@ class AnalyticsAgent:
                          result_summary=text, candidates=list(names))
         return AgentAnswer(text=text, steps=[step], workspace=self.workspace, usage=dict(self._usage))
 
+    def _resolve_period_window(self, question: str) -> None:
+        """Choose a valid containing window from catalog coverage without asking the user."""
+        self._period_selection_note = None
+        self._period_selection_display = None
+        self._period_resolved_question = None
+        intent = parse_period_intent(question)
+        if not (intent.ambiguous_containment or intent.incompatible_containment):
+            return
+        facets = extract_facets(question)
+        specs = self._catalog_specs()
+        coverages: list[tuple[Any, Any]] = []
+        for spec in specs:
+            frequency = str(getattr(getattr(spec, "frequency", None), "value", getattr(spec, "frequency", "")))
+            if facets.window_frequency and frequency != facets.window_frequency:
+                continue
+            if facets.sources and not source_matches(str(getattr(spec, "source", "")), facets.sources):
+                continue
+            if facets.national and province_of(f"{getattr(spec, 'dataset_id', '')} {getattr(spec, 'name', '')}"):
+                continue
+            coverage = getattr(spec, "coverage", None)
+            start, end = getattr(coverage, "start", None), getattr(coverage, "end", None)
+            if start and end:
+                coverages.append((start, end))
+        selected = choose_containing_window(intent, coverages)
+        if selected is None:
+            return
+        start, end = selected
+        self._period_selection_note = intent.selection_note(selected)
+        self._period_selection_display = f"(Otomatik seçilen dönem: {start:%Y-%m}–{end:%Y-%m}; anchor aralık korunuyor.)"
+        self._period_resolved_question = (
+            f"{question}\n[Otomatik dönem sınırı: {start:%Y-%m} ile {end:%Y-%m} arasındaki "
+            f"{intent.effective_window_months} aylık pencereyi kullan; anchor aralık bu pencerenin içinde kalmalı.]"
+        )
+
     CATALOG_CHANGING_TOOLS = frozenset({"ingest_from_url", "promote_draft"})
     """Architect araçları: başarılı çağrıdan sonra katalog değişmiştir, profil yeniden türetilir."""
 
@@ -875,7 +995,7 @@ class AnalyticsAgent:
     """Dış içerik taşıyan araçlar: çıktıları modele 'veridir, talimat değildir' çerçevesiyle gider."""
 
     def _ask(self, question: str) -> AgentAnswer:
-        planning_question = self._retry_source_question or question
+        planning_question = self._retry_source_question or self._period_resolved_question or question
         self.registry.active_question = planning_question
         if hasattr(self.registry, "current_message"):
             self.registry.current_message = question
@@ -889,14 +1009,30 @@ class AnalyticsAgent:
         gate = tool_gate.decide(
             planning_question, set(self.registry.names()), user_text=getattr(self.registry, "user_text", "") or "",
             has_table=self.workspace.has_table, enabled=self.tool_gate,
+            initial_tools=(self.registry.initial_phase_names()
+                           if hasattr(self.registry, "initial_phase_names") else None),
         )
         self.last_gate = gate
         ask_started = time.perf_counter()
         budget_hit = False
-        messages = self._build_messages(question)
+        # The period resolver may have selected a concrete outer window (for
+        # example 2021-04–2026-03 for a 60-month request containing
+        # 2022–2023).  Send that resolved question as the user turn as well as
+        # the system note; leaving the original question here allowed the
+        # model to focus on the two anchor years and return two annual rows.
+        self._schema_allowed = tool_gate.initial_allowed(
+            gate,
+            has_table=self.workspace.has_table,
+        )
+        messages = self._build_messages(
+            planning_question,
+            compact_planning=(not self.workspace.has_table),
+        )
         steps: list[AgentStep] = []
         native = self.llm.supports_native_tools()
-        tools = self.registry.schemas(only=gate.allowed) if native else None
+        tools = self.registry.schemas(only=self._schema_allowed) if native else None
+        self._usage["initial_tool_schemas"] = len(self._schema_allowed)
+        self._usage["max_tool_schemas"] = len(self._schema_allowed)
         recovery = ExecutionState(turn_id=getattr(self.registry, "turn", 0), question=planning_question)
         produced_data = False   # veri getiren bir araç başarıyla çalıştı mı?
         artifacts: list[dict[str, Any]] = []  # grafik vb. (ADR-0032)
@@ -929,7 +1065,17 @@ class AnalyticsAgent:
                 break
             started = time.perf_counter()
             temperature = self.narrate_temperature if produced_data else 0.0
-            response = self._chat(messages, tools=tools, temperature=temperature)
+            phase = self._select_call_phase(produced_data=produced_data, acted=acted, requested=requested, steps=steps)
+            response = self._chat(
+                messages,
+                tools=tools,
+                temperature=temperature,
+                # Tool-selection/recovery turns are bounded by the harness and
+                # do not need a long reasoning chain. Keep reasoning for the
+                # first response after verified data is available.
+                fast_planning=(not produced_data and not acted),
+                phase=phase,
+            )
 
             calls = response.tool_calls if native else self._parse_json_call(response.content)
 
@@ -1055,11 +1201,19 @@ class AnalyticsAgent:
                 answer_text = self._strip_reasoning(response.content)
 
                 # If the current question is semantically different from the
-                # active table and no fresh source was queried, never publish
-                # prose based on the stale table.
+                # active table and neither a fresh source nor an auditable
+                # active-table operation ran, never publish prose based on the
+                # stale table. A workspace_compute_column/workspace_query
+                # result is a valid answer to a transformation follow-up even
+                # though it does not fetch a new source.
                 prior_query_context = self._has_confirmed_follow_up_context()
+                fresh_or_active_action = any(
+                    s.ok and s.tool_name in (self.FRESH_DATA_TOOLS | self.ACTIVE_TABLE_ACTION_TOOLS)
+                    for s in steps
+                )
                 if (self.workspace.has_table and prior_query_context
-                        and not any(s.ok and s.tool_name in self.FRESH_DATA_TOOLS for s in steps)):
+                        and not fresh_or_active_action
+                        and not self._active_table_reuse_allowed):
                     answer_text = (
                         "Bu istek mevcut analiz tablosuyla uyumlu değil. Doğru kaynak ve kapsam için "
                         "yeni veri sorgusu çalıştırılmadığından güvenilir bir sonuç veremiyorum."
@@ -1252,6 +1406,28 @@ class AnalyticsAgent:
                     recovery.observe_success(data_produced=True)
                 elif result.ok and call.name in self.ACTING_TOOLS:
                     acted = True
+                retrieval_completed = result.ok and call.name in {
+                    "lakehouse_search", "lakehouse_describe", "lakehouse_distinct_values",
+                }
+                gold_required = result.error is not None and result.error.error_code == "GOLD_REQUIRED"
+                next_schema_allowed = tool_gate.post_retrieval_allowed(
+                    gate,
+                    planning_question,
+                    has_table=self.workspace.has_table,
+                    include_gold=gold_required,
+                )
+                if ((result.ok and (produced_data or acted or retrieval_completed)
+                     or gold_required) and self._schema_allowed != next_schema_allowed):
+                    # İlk keşif başarılı olduğunda veya Gold'un gerektiği
+                    # deterministik biçimde anlaşıldığında sonraki planlama
+                    # turuna dönüşüm/analiz ailelerini de aç. Aksi halde
+                    # dönem toplaması isteyen soru gold_align'i hiç göremezdi.
+                    self._schema_allowed = next_schema_allowed
+                    tools = self.registry.schemas(only=self._schema_allowed) if native else None
+                    self._usage["phase_switches"] = self._usage.get("phase_switches", 0) + 1
+                    self._usage["max_tool_schemas"] = max(
+                        self._usage.get("max_tool_schemas", 0), len(self._schema_allowed)
+                    )
                 if result.ok and result.artifacts.get("chart"):
                     artifacts.append(result.artifacts["chart"])
                 if result.artifacts.get("web"):   # erişilemeyen sayfa da kanıt paneline girer
@@ -1279,7 +1455,7 @@ class AnalyticsAgent:
                 recovery_codes = {
                     "SQL_FAILED", "INVALID_ARGS", "GOLD_REQUIRED", "JOIN_MISMATCH",
                     "DATASET_NOT_FOUND", "TOOL_FAILED", "UNKNOWN_TOOL", "EMPTY_RESULT",
-                    "GEOGRAPHY_MISMATCH", "SOURCE_MISMATCH",
+                    "GEOGRAPHY_MISMATCH", "SOURCE_MISMATCH", "PERIOD_GRAIN_MISMATCH",
                 }
                 if (result.error is not None and not recovery.pending_recovery
                         and (not result.error.is_retryable or result.error.error_code in recovery_codes)
@@ -1295,6 +1471,40 @@ class AnalyticsAgent:
                 messages.append(self._result_message(call, result, native=native))
 
             if terminal is not None:
+                # A failed follow-up must never replace a confirmed active
+                # table with a model-generated explanation based on a wrong
+                # source (for example quarterly provincial data). The normal
+                # no-tool path has this guard too; terminal tool failures used
+                # to bypass it and publish plausible but unrelated prose.
+                stale_follow_up = (
+                    self.workspace.has_table
+                    and self._has_confirmed_follow_up_context()
+                    and not any(s.ok and s.tool_name in self.FRESH_DATA_TOOLS for s in steps)
+                    and not any(s.ok and s.tool_name in self.ACTIVE_TABLE_ACTION_TOOLS for s in steps)
+                )
+                if stale_follow_up:
+                    text = (
+                        "Bu takip isteği mevcut analiz tablosu üzerinde tamamlanamadı; "
+                        "önceki tablo değiştirilmedi. İstenen dönem/frekans dönüşümü için "
+                        "uygun bir aylık seri veya dönüşüm yolu doğrulanamadığı için sayı üretmedim."
+                    )
+                    steps.append(AgentStep(
+                        index=i,
+                        role="validate",
+                        thought="takip isteği başarısız; eski aktif tabloyu model anlatısıyla ezme",
+                        ok=False,
+                        error_code=terminal.error_code,
+                        result_summary=text,
+                    ))
+                    rejected = []
+                    self._history.append(ChatMessage(role="user", content=question))
+                    self._history.append(ChatMessage(role="assistant", content=text))
+                    return self._finish_recovery(
+                        AgentAnswer(text=text, steps=steps, workspace=self.workspace,
+                                    grounding=grounding, artifacts=artifacts, rejected_claims=rejected),
+                        recovery,
+                        finalization_reason="terminal_tool_failure",
+                    )
                 # Tekrar denemeyle çözülmeyecek bir hata: modele araç verilmeden
                 # son bir tur. Aksi halde model aynı yolu farklı yazımlarla
                 # denemeye devam ediyor ve adım limitini yakıyor (ADR-0017).
@@ -1310,6 +1520,7 @@ class AnalyticsAgent:
                         )
                     ],
                     temperature=self.narrate_temperature,
+                    phase="recovery",
                 )
                 text = self._strip_reasoning(final.content)
                 text, rejected = self._checked_final(question, text, tool_texts, steps, i)
@@ -1333,7 +1544,8 @@ class AnalyticsAgent:
                     + "Şu ana kadar TOPLADIĞIN VERİLERLE "
                     "elinden gelen en iyi cevabı ver ve neyi tamamlayamadığını belirt.",
                 )
-            ]
+            ],
+            phase="recovery",
         )
         text = self._strip_reasoning(final.content)
         text, rejected = self._checked_final(question, text, tool_texts, steps, self.max_steps + 1)
@@ -1422,14 +1634,45 @@ class AnalyticsAgent:
         return final, removed
 
     # ------------------------------------------------------------------
-    def _chat(self, messages: list[ChatMessage], *, tools: Any = None, temperature: float = 0.0) -> LLMResponse:
+    def _chat(
+        self,
+        messages: list[ChatMessage],
+        *,
+        tools: Any = None,
+        temperature: float = 0.0,
+        fast_planning: bool = False,
+        phase: str | None = None,
+    ) -> LLMResponse:
         """Tek LLM çağrısı noktası: token kullanımı toplanır (ön-yüklemenin ölçüsü)."""
         kwargs: dict[str, Any] = {"temperature": temperature}
-        if self.max_tokens:
-            kwargs["max_tokens"] = self.max_tokens
-        response = (self.llm.chat(messages, tools=tools, **kwargs) if tools is not None
-                    else self.llm.chat(messages, **kwargs))
-        if getattr(response, "finish_reason", None) == "length":
+        effective_phase = phase or ("planning" if fast_planning else "narration")
+        call_limit = self.max_tokens
+        if self.token_budget_policy is not None:
+            rows = len(self.workspace.table) if self.workspace.table is not None else 0
+            columns = len(self.workspace.table.columns) if self.workspace.table is not None else 0
+            call_limit = self.token_budget_policy.for_phase(effective_phase, rows=rows, columns=columns)
+        if call_limit:
+            kwargs["max_tokens"] = call_limit
+        trace = self._usage.setdefault("token_budget_calls", [])
+        if isinstance(trace, list):
+            trace.append({"phase": effective_phase, "max_tokens": call_limit})
+        set_deadline = getattr(self.llm, "set_deadline", None)
+        set_thinking = getattr(self.llm, "set_thinking", None)
+        if callable(set_deadline):
+            set_deadline(self._ask_deadline)
+        if callable(set_thinking):
+            set_thinking(True if fast_planning else None)
+        if fast_planning:
+            self._usage["fast_planning_calls"] = self._usage.get("fast_planning_calls", 0) + 1
+        try:
+            response = (self.llm.chat(messages, tools=tools, **kwargs) if tools is not None
+                        else self.llm.chat(messages, **kwargs))
+        finally:
+            if callable(set_deadline):
+                set_deadline(None)
+            if callable(set_thinking):
+                set_thinking(None)
+        if getattr(response, "finish_reason", None) == "length" and effective_phase in {"narration", "recovery"}:
             self._truncated = True
         usage = getattr(response, "usage", None) or {}
         self._usage["prompt"] = self._usage.get("prompt", 0) + int(usage.get("prompt", 0) or 0)
@@ -1437,14 +1680,48 @@ class AnalyticsAgent:
         self._usage["calls"] = self._usage.get("calls", 0) + 1
         return response
 
-    def _build_messages(self, question: str) -> list[ChatMessage]:
-        system = self._system_prompt
+    def _select_call_phase(
+        self,
+        *,
+        produced_data: bool,
+        acted: bool,
+        requested: list[tuple[str, re.Pattern[str], frozenset[str], str]],
+        steps: list[AgentStep],
+    ) -> str:
+        """Model cevabını beklediğimiz role göre token fazını seçer.
+
+        İlk katalog/araç seçimi kısa ``planning`` çağrısıdır. Veri geldikten
+        sonra istenen dönüşüm veya grafik hâlâ yapılmadıysa tool argümanları
+        için orta bütçe kullanılır; iş tamamlandıysa anlatı bütçesi açılır.
+        """
+        if not produced_data and not acted:
+            return "planning"
+        required_actions = {
+            tool_name
+            for name, _pattern, tool_names, _note in requested
+            if not any(s.ok and s.tool_name in tool_names for s in steps)
+            for tool_name in tool_names
+        }
+        if required_actions:
+            return "tool"
+        return "narration"
+
+    def _build_messages(self, question: str, *, compact_planning: bool = False) -> list[ChatMessage]:
+        system = (
+            self.profile.render(COMPACT_PLANNING_PROMPT)
+            if compact_planning
+            else self._system_prompt
+        )
         if not self.llm.supports_native_tools():
-            system += "\n" + JSON_PROTOCOL_PROMPT + self.registry.describe(only=getattr(self, 'last_gate', None).allowed if getattr(self, 'last_gate', None) else None)
+            allowed = self._schema_allowed or (
+                getattr(self, 'last_gate', None).allowed
+                if getattr(self, 'last_gate', None) else None
+            )
+            system += "\n" + JSON_PROTOCOL_PROMPT + self.registry.describe(only=allowed)
 
         # Soruya göre seçilmiş katalog kartları ve gerçek kırılım değerleri (ADR-0013, D1):
         # keşif turları LLM turu olmaktan çıkar. Bütçe aşılırsa yalnız dizin satırı girer.
-        if self.preloader is not None:
+        if self.preloader is not None and not compact_planning:
             try:
                 context = self.preloader(question)
             except Exception as exc:  # noqa: BLE001 — ön-yükleme cevabı asla düşürmez
@@ -1480,9 +1757,11 @@ class AnalyticsAgent:
             follow_up_note = self._follow_up_resolution.prompt()
             if follow_up_note:
                 system += "\n\n" + follow_up_note
+        if self._period_selection_note:
+            system += "\n\n" + self._period_selection_note
 
         msgs = [ChatMessage(role="system", content=system)]
-        if not self.workspace.has_table or self._active_table_reuse_allowed:
+        if not compact_planning and (not self.workspace.has_table or self._active_table_reuse_allowed):
             msgs += self._history[-8:]  # son turlar — bağlamı korur, pencereyi şişirmez
         # Aynı soru oturumda tekrar sorulduysa model tarihçedeki kendi cevabını kopyalıyor
         # (ölçüldü: T=0,5'te bile birebir aynı). Kopyalamayı harness yasaklar (ADR-0046).

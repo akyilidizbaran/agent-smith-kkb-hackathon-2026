@@ -1,6 +1,9 @@
 {
   "_note": "Kaynağa özel ipuçları (M03-T04, ADR-0060). Çekirdek kod bu dosyayı okur; kaynak adı kodda yazılı değildir. Başka bir alan için bu dosya değiştirilir ya da SOURCE_HINTS_FILE ile başka dosya verilir; boş dosyada motor yine çalışır, yalnız kaynak yüzü ve kurum sabitleme ipucu olmaz. source_names/derived_sources alan tanımında (Gold ve kullanıcı yüklemesi kaynak sayılmaz), official_hosts ve url_patterns web aracında kullanılır (ADR-0078).",
   "source_words": {
+    "bddk": [
+      "bddk"
+    ],
     "bddk_finturk": [
       "finturk",
       "illere gore",

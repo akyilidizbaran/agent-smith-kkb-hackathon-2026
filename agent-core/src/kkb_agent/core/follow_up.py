@@ -49,10 +49,13 @@ _FREQUENCY = (
     ("daily", re.compile(r"\bgünlük|gunluk|daily\b", re.IGNORECASE)),
 )
 _AGGREGATION = (
-    ("average", re.compile(r"ortalama|average|mean", re.IGNORECASE)),
-    ("sum", re.compile(r"toplam|sum", re.IGNORECASE)),
-    ("minimum", re.compile(r"en düşük|en dusuk|minimum|min", re.IGNORECASE)),
-    ("maximum", re.compile(r"en yüksek|en yuksek|maksimum|max", re.IGNORECASE)),
+    ("average", re.compile(r"(?:ortalama|average|mean)\b", re.IGNORECASE)),
+    ("sum", re.compile(r"(?:toplam|sum)\b", re.IGNORECASE)),
+    # `min`/`max` must be whole words: an unbounded `min` matched the
+    # `min` in Turkish words such as `döneminde`, turning a plain follow-up
+    # into a false minimum request.
+    ("minimum", re.compile(r"(?:en düşük|en dusuk|minimum|min)\b", re.IGNORECASE)),
+    ("maximum", re.compile(r"(?:en yüksek|en yuksek|maksimum|max)\b", re.IGNORECASE)),
 )
 _DOMAIN_TERMS = {
     "finance": ("finans", "finansal", "kredi", "banka", "döviz", "doviz", "kur", "faiz"),
@@ -73,6 +76,21 @@ _GENERIC_METRICS = (
     "kredi",
 )
 _GEO_COLUMN = re.compile(r"il|şehir|sehir|province|district|location|region|bölge|bolge", re.IGNORECASE)
+
+# Catalog tags and column aliases often contain standalone frequency/schema
+# words. They are useful facets, but never identify a concrete series by
+# themselves; allowing them into `_best_match` makes a follow-up containing
+# "aylık" bind to the first monthly Gold table in catalog order.
+_GENERIC_SERIES_TERMS = frozenset({
+    "ay", "aylik", "monthly", "hafta", "haftalik", "weekly", "ceyrek", "ceyreklik", "quarterly",
+    "yil", "yillik", "yearly", "donem", "tarih", "date", "veri", "veriler", "seri", "seriler",
+    "degisim", "degisimleri", "bakiye", "bakiyeler", "analiz", "tablo", "tablolar",
+})
+
+
+def _specific_series_term(value: object) -> bool:
+    folded = _fold(str(value or "")).strip()
+    return bool(folded) and folded not in _GENERIC_SERIES_TERMS
 
 
 def _fold(text: str) -> str:
@@ -211,19 +229,26 @@ def _catalog_hints(catalog: Iterable[object]) -> tuple[list[tuple[str, str]], li
         dataset_id = str(_spec_attr(spec, "dataset_id", ""))
         tags = list(_spec_attr(spec, "tags", []) or [])
         for raw in (_spec_attr(spec, "name", ""), dataset_id, *tags):
-            if raw:
+            if _specific_series_term(raw):
                 series.append((str(raw), dataset_id or str(raw)))
         for raw in (_spec_attr(spec, "source", ""), _spec_attr(spec, "source_detail", "")):
             if raw:
                 sources.append((str(raw), str(raw)))
         for column in _spec_attr(spec, "columns", []) or []:
             role = str(_spec_attr(column, "role", "")).casefold()
+            # Time/metadata aliases describe the schema (`dönem`, `tarih`,
+            # `ay`); they are not series names. Treating them as candidates
+            # made any follow-up containing "döneminde" bind to the first
+            # catalog series (often an Adana FinTürk series).
+            is_time_or_metadata = "time" in role or "metadata" in role
             is_geo = bool(_GEO_COLUMN.search(str(_spec_attr(column, "name", ""))))
             values = list(_spec_attr(column, "example_values", []) or [])
+            if is_time_or_metadata:
+                continue
             for value in values:
                 if is_geo:
                     dimensions.append(str(value))
-                else:
+                elif _specific_series_term(value):
                     series.append((str(value), dataset_id or str(value)))
             if is_geo:
                 dimensions.extend(str(v) for v in values)
@@ -231,7 +256,8 @@ def _catalog_hints(catalog: Iterable[object]) -> tuple[list[tuple[str, str]], li
                 # Entity examples are useful only when explicitly mentioned.
                 series.extend((str(v), dataset_id or str(v)) for v in values)
             for alias in _spec_attr(column, "aliases", []) or []:
-                series.append((str(alias), dataset_id or str(alias)))
+                if _specific_series_term(alias):
+                    series.append((str(alias), dataset_id or str(alias)))
     return series, sources, list(_unique(dimensions))
 
 

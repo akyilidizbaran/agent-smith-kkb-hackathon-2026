@@ -8,7 +8,9 @@ tekrarlamak, veri çekmeden cevap yazmak, çözülmeyecek bir hatada ısrar etme
 from __future__ import annotations
 
 import sys
+from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -17,7 +19,9 @@ from pydantic import BaseModel
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from kkb_agent.core.agent import AnalyticsAgent  # noqa: E402
+from kkb_agent.core.follow_up import FollowUpContext  # noqa: E402
 from kkb_agent.core.registry import ToolRegistry  # noqa: E402
+from kkb_agent.core import tool_gate  # noqa: E402
 from kkb_agent.core.tool import Tool, ToolResult  # noqa: E402
 from kkb_agent.core.workspace import AnalysisWorkspace  # noqa: E402
 from kkb_agent.llm.base import ChatMessage, LLMResponse, ToolCall  # noqa: E402
@@ -53,12 +57,14 @@ class _ScriptedLLM:
     def __init__(self, turns: list[LLMResponse]) -> None:
         self._turns = turns
         self.seen_tool_offers: list[bool] = []
+        self.seen_tool_counts: list[int] = []
 
     def supports_native_tools(self) -> bool:
         return True
 
     def chat(self, messages, *, tools=None, temperature=0.0, max_tokens=None) -> LLMResponse:
         self.seen_tool_offers.append(tools is not None)
+        self.seen_tool_counts.append(len(tools or []))
         turn = self._turns[min(len(self.seen_tool_offers) - 1, len(self._turns) - 1)]
         return turn
 
@@ -121,6 +127,33 @@ def test_veri_cekmeden_cevap_bir_kez_geri_gonderilir() -> None:
 
     assert any(s.thought and "veri" in s.thought.lower() for s in answer.steps)
     assert answer.text
+
+
+def test_ic_ice_donem_katalog_kapsamindan_otomatik_pencere_secer() -> None:
+    agent, _ = _agent(_ScriptedLLM([LLMResponse(content="cevap")]))
+    agent._catalog_specs = lambda: [SimpleNamespace(
+        dataset_id="bddk_monthly:1536_Toplam", name="İhtiyaç", source="bddk_monthly",
+        frequency=SimpleNamespace(value="monthly"),
+        coverage=SimpleNamespace(start=date(2021, 1, 1), end=date(2026, 6, 30)),
+    )]
+    agent._resolve_period_window("2023-2024 aralığını kapsayan 60 aylık örnek pencerede BDDK verilerini getir")
+
+    assert agent._period_selection_display and "Otomatik seçilen dönem" in agent._period_selection_display
+    assert agent._period_resolved_question and "Otomatik dönem sınırı" in agent._period_resolved_question
+
+
+def test_cozulmus_donem_modelin_kullanici_mesajina_gider() -> None:
+    agent, _ = _agent(_ScriptedLLM([LLMResponse(content="cevap")]))
+    agent._catalog_specs = lambda: [SimpleNamespace(
+        dataset_id="bddk_monthly:1536_Toplam", name="İhtiyaç", source="bddk_monthly",
+        frequency=SimpleNamespace(value="monthly"),
+        coverage=SimpleNamespace(start=date(2021, 1, 1), end=date(2026, 6, 30)),
+    )]
+    agent._resolve_period_window("2023-2024 aralığını kapsayan 60 aylık örnek pencerede BDDK verilerini getir")
+
+    messages = agent._build_messages(agent._period_resolved_question or "")
+    assert "Otomatik dönem sınırı" in messages[-1].content
+    assert "2021-" in messages[-1].content and "aylık pencereyi kullan" in messages[-1].content
 
 
 class _NoToolTool(Tool):
@@ -271,6 +304,93 @@ class _FakeChart(Tool):
     def run(self, params: _ChartParams) -> ToolResult:
         self.calls += 1
         return ToolResult(content="GRAFİK: çizildi", artifacts={"chart": {"png_path": "/tmp/x.png", "kind": "chart"}})
+
+
+class _FakeSearch(Tool):
+    name = "lakehouse_search"
+    role = "retrieve"
+    description = "sahte katalog araması"
+    Params = _Params
+
+    def run(self, params: _Params) -> ToolResult:
+        return ToolResult(content="Bulunan tablolar: test_tablo")
+
+
+class _FakeJoin(Tool):
+    name = "workspace_join"
+    description = "sahte birleştirme"
+    Params = _Params
+
+    def run(self, params: _Params) -> ToolResult:
+        return ToolResult(content="Birleştirme")
+
+
+class _TransformParams(BaseModel):
+    column_name: str = "aylik_degis"
+
+
+class _FakeTransform(Tool):
+    """Active-table transformation used to guard follow-up analysis flow."""
+
+    name = "workspace_compute_column"
+    description = "sahte dönüşüm"
+    Params = _TransformParams
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def run(self, params: _TransformParams) -> ToolResult:
+        self.calls += 1
+        return ToolResult(
+            content="Aylık değişim sütunu hesaplandı: 2 satır.",
+            data=pd.DataFrame({"ay": ["2022-01", "2022-02"], "aylik_degis": [None, 10.0]}),
+        )
+
+
+def test_aktif_tablo_donusumu_stale_guard_tarafindan_bastirilmaz() -> None:
+    """Aylık analiz isteği, yeni kaynak çekmeden workspace dönüşümüyle tamamlanır."""
+
+    transform = _FakeTransform()
+    registry = ToolRegistry()
+    registry.register(transform)
+    llm = _ScriptedLLM([
+        # Model ilk turda araçsız anlatıya kaçarsa dönüşüm capability kapısı geri gönderir.
+        LLMResponse(content="Aylık değişimler hazır."),
+        LLMResponse(content="", tool_calls=[ToolCall(id="t", name="workspace_compute_column", arguments={})]),
+        LLMResponse(content="Aylık değişim sütunu oluşturuldu."),
+    ])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=6)
+    agent._catalog_specs = lambda: []
+    agent._follow_up_context = FollowUpContext(metric="bakiye", series="test:seri", frequency="monthly")
+    agent.workspace.set_table(pd.DataFrame({"ay": ["2022-01", "2022-02"], "bakiye": [100.0, 110.0]}), description="aktif aylık tablo")
+
+    answer = agent.ask("Mevcut aylık tabloyu değişim analizine hazırla")
+
+    assert transform.calls == 1
+    assert "mevcut analiz tablosuyla uyumlu değil" not in answer.text
+    assert "Aylık değişim" in answer.text
+
+
+def test_basariyla_katalog_kesfedilince_ikinci_turda_gerekli_faz_acilir() -> None:
+    search = _FakeSearch()
+    query = _CountingTool()
+    registry = ToolRegistry()
+    registry.register(search)
+    registry.register(query)
+    registry.register(_FakeJoin())
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[ToolCall(id="s", name="lakehouse_search", arguments={"year": 2025})]),
+        LLMResponse(content="", tool_calls=[_call(1)]),
+        LLMResponse(content="Değer 100.", tool_calls=[]),
+    ])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=5)
+
+    answer = agent.ask("2025 değeri kaç, tabloyu göster")
+
+    assert answer.text == "Değer 100."
+    assert llm.seen_tool_counts[0] == len(tool_gate.RETRIEVAL_PHASE & set(registry.names()))
+    assert llm.seen_tool_counts[1] == len(tool_gate.RETRIEVAL_PHASE & set(registry.names())) + 1
+    assert answer.usage["phase_switches"] == 1
 
 
 def test_grafik_istendi_chart_cagrilmadan_cevap_bir_kez_geri_gonderilir() -> None:

@@ -20,6 +20,7 @@ class ToolRegistry:
         validator: BoundaryValidator | None = None,
     ) -> None:
         self._tools: dict[str, Tool] = {}
+        self._schema_cache: dict[tuple[int, tuple[str, ...] | None], list[dict[str, Any]]] = {}
         # Araç açıklamaları modele gönderilmeden önce bu profille doldurulur.
         self.profile = profile or DomainProfile.generic()
         # Her çağrı aynı boru hattından: şema → SQL guard → referans → politika → run.
@@ -42,6 +43,7 @@ class ToolRegistry:
         if tool.name in self._tools:
             raise ValueError(f"'{tool.name}' adlı araç zaten kayıtlı.")
         self._tools[tool.name] = tool
+        self._schema_cache.clear()
 
     def register_all(self, tools: list[Tool]) -> None:
         for t in tools:
@@ -53,10 +55,25 @@ class ToolRegistry:
     def names(self) -> list[str]:
         return list(self._tools)
 
+    def initial_phase_names(self) -> frozenset[str]:
+        """Names explicitly marked as safe for the first planning phase."""
+        return frozenset(
+            tool.name for tool in self._tools.values()
+            if bool(getattr(tool, "initial_phase", False))
+        )
+
     def schemas(self, only: Iterable[str] | None = None) -> list[dict[str, Any]]:
         """Modele sunulan şemalar; `only` verilirse araç kapısının alt kümesi (ADR-0043)."""
-        names = set(only) if only is not None else None
-        return [t.openai_schema(self.profile) for t in self._tools.values() if names is None or t.name in names]
+        names = None if only is None else tuple(sorted(set(only)))
+        key = (id(self.profile), names)
+        cached = self._schema_cache.get(key)
+        if cached is not None:
+            return cached
+        allowed = set(names) if names is not None else None
+        schemas = [t.openai_schema(self.profile) for t in self._tools.values()
+                   if allowed is None or t.name in allowed]
+        self._schema_cache[key] = schemas
+        return schemas
 
     def describe(self, only: Iterable[str] | None = None) -> str:
         """Native tool-calling desteklemeyen modeller için metin katalog."""

@@ -181,21 +181,34 @@ def _bddk_weekly_spec(row: SeriesRow, start: date, end: date) -> FetchSpec:
 
 
 # --------------------------------------------------------------------- BDDK FinTürk
-# Partially derivable, same shape as weekly's sutun derivation: this catalog's own
-# native_code convention is "<SEHIR>_<ColumnSlug>" (see catalog/series/bddk_finturk.yml),
-# so sehir splits back out of it. tabloNo is a source-wide constant for now (only
-# tabloNo=3, Bireysel Bankacılık, is verified to carry a Konut Kredisi column — see
-# docs/sources/bddk_finturk.md).
+# Partially derivable. Existing table-3 entries use ``<SEHIR>_<ColumnSlug>`` and
+# therefore retain their historical one-province request. The breadth catalog uses
+# ``<tabloNo>|<SEHIR>`` (the city is retained for provenance, while the request uses
+# the endpoint's efficient ``HEPSİ`` mode so one response covers all 81 provinces).
 
 def _bddk_finturk_spec(row: SeriesRow, start: date, end: date) -> FetchSpec:
-    try:
-        sehir = row.native_code.rsplit("_", 1)[0]
-    except IndexError as exc:
-        raise ValueError(
-            f"{row.series_id}: bddk_finturk native_code must be '<SEHIR>_<column>'"
-        ) from exc
-    if not sehir:
-        raise ValueError(f"{row.series_id}: could not derive sehir from native_code")
+    native = row.native_code.strip()
+    if "|" in native:
+        table_no, city = native.split("|", 1)
+        table_no = table_no.strip()
+        city = city.strip()
+        if not table_no or not city:
+            raise ValueError(
+                f"{row.series_id}: bddk_finturk bulk native_code must be '<tabloNo>|<SEHIR>'"
+            )
+        # The city component identifies the catalog row, but the source can return
+        # every province in one call.  The parser drops the out-of-scope YURT DIŞI
+        # row and emits the 81 province series for this table/period.
+        sehir = "HEPSİ"
+    else:
+        table_no = BDDK_FINTURK_TABLO_BIREYSEL
+        # Table-3 entries predate the breadth catalog and keep their historical
+        # ``<SEHIR>_<ColumnSlug>`` native code.  They now use the same all-province
+        # request path as the broader tables; the parser emits the 81 catalogued
+        # provinces and ignores the optional YURT DIŞI row.
+        if not native:
+            raise ValueError(f"{row.series_id}: native_code must not be empty")
+        sehir = "HEPSİ"
 
     return FetchSpec(
         source_id=row.source_id,
@@ -206,7 +219,7 @@ def _bddk_finturk_spec(row: SeriesRow, start: date, end: date) -> FetchSpec:
         parameters={
             "sehir": sehir,
             "tarafKodu": "10001",
-            "tabloNo": BDDK_FINTURK_TABLO_BIREYSEL,
+            "tabloNo": table_no,
         },
     )
 

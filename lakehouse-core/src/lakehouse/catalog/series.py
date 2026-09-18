@@ -25,12 +25,13 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import duckdb
 import yaml
 
 from ..contracts.identifiers import validate_dataset_id, validate_series_id, validate_source_id
+from .relations import SeriesRelationRecord, infer_series_relations
 
 
 CATALOG_SCHEMA_VERSION = "1.0"
@@ -484,12 +485,56 @@ def load_series_catalog(
             else:
                 _update(connection, record)
                 updated += 1
+        _upsert_series_relations(connection, records)
         connection.execute("COMMIT")
     except Exception:
         connection.execute("ROLLBACK")
         raise
 
     return CatalogLoadResult(inserted, updated, unchanged)
+
+
+_RELATION_WRITE_COLUMNS = (
+    "series_id",
+    "concept_id",
+    "parent_series_id",
+    "relation_type",
+    "dimension_path",
+    "additivity",
+    "relation_confidence",
+    "relation_source",
+    "relation_content_sha256",
+)
+
+
+def _upsert_series_relations(
+    connection: duckdb.DuckDBPyConnection,
+    rows: list[SeriesRecord] | list[Mapping[str, Any]],
+) -> int:
+    """Synchronize the relation graph after the semantic catalog transaction is prepared."""
+
+    relations = infer_series_relations(rows)
+    if not relations:
+        return 0
+    placeholders = ", ".join("?" for _ in _RELATION_WRITE_COLUMNS)
+    for relation in relations:
+        values = [
+            relation.series_id,
+            relation.concept_id,
+            relation.parent_series_id,
+            relation.relation_type,
+            list(relation.dimension_path),
+            relation.additivity,
+            relation.relation_confidence,
+            relation.relation_source,
+            relation.content_sha256,
+        ]
+        connection.execute(
+            f"INSERT OR REPLACE INTO meta.series_relation ({', '.join(_RELATION_WRITE_COLUMNS)}, updated_at) "
+            f"VALUES ({placeholders}, current_timestamp)",
+            values,
+        )
+    return len(relations)
 
 
 _WRITE_COLUMNS = (
@@ -555,6 +600,7 @@ __all__ = [
     "SEMANTIC_SOURCES",
     "STATUSES",
     "SeriesRecord",
+    "_upsert_series_relations",
     "WEEK_ANCHORS",
     "load_catalog_files",
     "load_series_catalog",

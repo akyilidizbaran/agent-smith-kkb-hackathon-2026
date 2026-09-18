@@ -359,6 +359,7 @@ def test_recovery_metadata_is_exposed_without_raw_tool_arguments() -> None:
         ("SQL_FAILED", "query_execution"),
         ("INVALID_ARGS", "invalid_arguments"),
         ("GOLD_REQUIRED", "semantic_guard"),
+        ("PERIOD_GRAIN_MISMATCH", "semantic_guard"),
         ("JOIN_MISMATCH", "join_alignment"),
         ("DATASET_NOT_FOUND", "reference_resolution"),
         ("TOOL_FAILED", "transient_provider"),

@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from ..contracts.lakehouse import GoldCapable, GoldRefused, LakehouseError, QueryResult
 from ..core.errors import ToolError
+from ..core.period_intent import parse_period_intent
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
 from .lakehouse import _dataset_missing
@@ -175,6 +176,28 @@ class _GoldTool(Tool):
         reg = self._registry
         return unverified_consent(getattr(reg, "user_text", None) or getattr(reg, "active_question", "") or "")
 
+    def _canonical_month_window(self, params: BaseModel) -> tuple[date, date] | None:
+        """Return the resolved outer month window for an ambiguous containment request.
+
+        The model may correctly notice the anchor years but still pass those years as
+        ``period_from``/``period_to`` to Gold.  Gold otherwise treats those arguments as
+        an ordinary display filter and silently installs a 24-row table for a 60-month
+        request.  The agent's resolved question is the canonical period decision, so the
+        harness applies it consistently across lakehouse_query and all Gold tools.
+        """
+        if getattr(params, "target_frequency", None) != "monthly":
+            return None
+        question = getattr(self._registry, "active_question", "") if self._registry is not None else ""
+        intent = parse_period_intent(question or "")
+        if not (
+            intent.window_months
+            and intent.outer_bounds_explicit
+            and intent.outer_start is not None
+            and intent.outer_end is not None
+        ):
+            return None
+        return intent.outer_start, intent.outer_end
+
     # ---- sınır doğrulayıcı kancaları
     def _series_ids(self, params: BaseModel) -> list[str]:
         return list(getattr(params, "series_ids", None) or [getattr(params, "series_id")])
@@ -227,6 +250,11 @@ class _GoldTool(Tool):
         frame = result.data
         start = parse_period(getattr(params, "period_from", None), end=False)
         end = parse_period(getattr(params, "period_to", None), end=True)
+        canonical_window = self._canonical_month_window(params)
+        if canonical_window is not None:
+            # The selected outer window wins over an anchor-only model argument.  This
+            # keeps the active table and the period note on the same 60-month contract.
+            start, end = canonical_window
         full_span = (frame["period_end"].min(), frame["period_end"].max()) if len(frame) else (None, None)
         filtered = frame
         if start is not None:

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import sys
+import random
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,6 +15,7 @@ from kkb_agent.adapters.mia_embedder import EmbeddingCache  # noqa: E402
 from kkb_agent.contracts.retrieval import Candidate  # noqa: E402
 from kkb_agent.core import tool_gate  # noqa: E402
 from kkb_agent.core.facets import extract_facets, province_of  # noqa: E402
+from kkb_agent.core.period_intent import choose_containing_window, containing_windows, parse_period_intent  # noqa: E402
 from kkb_agent.core.registry import ToolRegistry  # noqa: E402
 from kkb_agent.core.retriever import CatalogRecord, CatalogRetriever, RetrievalPolicy, apply_facets  # noqa: E402
 
@@ -42,6 +45,29 @@ def test_yuzler_il_frekans_kaynak_ve_ekler() -> None:
     assert province_of("Tüketici Kredileri - Taşıt, Toplam (Sektör)") is None
 
 
+def test_ulusal_bddk_ve_aylik_pencere_yuzu() -> None:
+    f = extract_facets("2020-2021 aralığını kapsayan 60 aylık örnek pencerede ulusal BDDK verileri")
+    assert f.national and f.sources == ("bddk",) and f.window_frequency == "monthly"
+
+
+def test_ic_ice_donem_dis_sinir_verilmezse_belirsiz_kalir() -> None:
+    intent = parse_period_intent("2023-2024 aralığını kapsayan 60 aylık örnek penceredeki verileri getir")
+    assert intent.window_months == 60
+    assert intent.anchor_months == 24
+    assert intent.ambiguous_containment
+
+    impossible = parse_period_intent("2023-2024 aralığını kapsayan 12 aylık örnek penceredeki verileri getir")
+    assert impossible.incompatible_containment
+    windows = containing_windows(impossible, [(date(2021, 1, 1), date(2026, 6, 30))])
+    assert windows and all((end.year - start.year) * 12 + end.month - start.month + 1 == 24 for start, end in windows)
+    valid_60 = containing_windows(intent, [(date(2021, 1, 1), date(2026, 6, 30))])
+    chosen = choose_containing_window(intent, [(date(2021, 1, 1), date(2026, 6, 30))], rng=random.Random(0))
+    assert chosen in valid_60
+
+    explicit = parse_period_intent("2021-01 ile 2025-12 arasındaki 60 aylık dönem")
+    assert explicit.outer_bounds_explicit and not explicit.ambiguous_containment
+
+
 def test_il_sorulmadiysa_ulusal_seri_one_il_sorulduysa_yalniz_o_il() -> None:
     r = CatalogRetriever(CATALOG, policy=RetrievalPolicy(mode="bm25"))
     national = [h.id for h in r.search("konut kredisi bakiyesi", k=4)]
@@ -54,11 +80,91 @@ def test_il_sorulmadiysa_ulusal_seri_one_il_sorulduysa_yalniz_o_il() -> None:
     assert plain[0] != "bddk_finturk:IZMIR_KonutKredisi"
 
 
+def test_buyuk_soguk_hibrit_katalog_bm25e_duser_ve_coklu_kavrami_korur() -> None:
+    """İlk soru embedding migration'ına takılmamalı; parent çocuk tekrarlarında kaybolmamalı."""
+
+    class _NoColdEmbedding:
+        model = "test"
+        dimension = 4
+
+        def embed(self, texts):  # pragma: no cover - çağrılırsa test zaten hata verir
+            raise AssertionError("soğuk büyük katalogda embedding çağrısı yapılmamalı")
+
+    records = [
+        _rec("bddk_monthly:need", "Tüketici Kredileri - İhtiyaç, Toplam (Sektör)", aliases=("ihtiyaç kredisi",)),
+        _rec("bddk_monthly:card_parent", "Bireysel Kredi Kartları, Toplam (Sektör)", aliases=("bireysel kredi kartları",)),
+    ]
+    records.extend(
+        _rec(f"bddk_finturk:{i}_child", f"Bireysel Kredi Kartları, ADANA {i}", freq="quarterly",
+             source="bddk_finturk", aliases=("bireysel kredi kartları",), province="Adana")
+        for i in range(1200)
+    )
+    retriever = CatalogRetriever(
+        records, policy=RetrievalPolicy(mode="hybrid"), embedder=_NoColdEmbedding()
+    )
+    question = (
+        "60 aylık örnek pencerede Türkiye'deki ihtiyaç ve kart serilerini BDDK kaynağından getir."
+    )
+
+    hits = [candidate.id for candidate in retriever.search(question, k=4)]
+
+    assert retriever.last_error == "embedding cache cold-start; BM25 fallback"
+    assert hits[:2] == ["bddk_monthly:need", "bddk_monthly:card_parent"]
+
+
+def test_series_relation_parent_child_secimini_genel_kilar() -> None:
+    records = [
+        CatalogRecord(
+            id="bddk_monthly:1539_Toplam", name="Bireysel Kredi Kartları, Toplam",
+            aliases=("bireysel kredi kartı",), source="bddk_monthly",
+            concept_id="bddk_monthly:bireysel_kredi_kartlari", relation_type="parent_total",
+            additivity="additive",
+        ),
+        CatalogRecord(
+            id="bddk_monthly:1541_Toplam", name="Bireysel Kredi Kartları - Taksitli",
+            aliases=("bireysel kredi kartı", "taksitli"), source="bddk_monthly",
+            concept_id="bddk_monthly:bireysel_kredi_kartlari",
+            parent_series_id="bddk_monthly:1539_Toplam", relation_type="child_breakdown",
+        ),
+        CatalogRecord(
+            id="bddk_monthly:1542_Toplam", name="Bireysel Kredi Kartları - Taksitsiz",
+            aliases=("bireysel kredi kartı", "taksitsiz"), source="bddk_monthly",
+            concept_id="bddk_monthly:bireysel_kredi_kartlari",
+            parent_series_id="bddk_monthly:1539_Toplam", relation_type="child_breakdown",
+        ),
+    ]
+    retriever = CatalogRetriever(records, policy=RetrievalPolicy(mode="bm25"))
+
+    broad = [hit.id for hit in retriever.search("bireysel kredi kartı bakiyesi", k=3)]
+    assert broad[0] == "bddk_monthly:1539_Toplam"
+
+    breakdown = [hit.id for hit in retriever.search("bireysel kredi kartı alt kalemleri", k=3)]
+    assert breakdown[:3] == [
+        "bddk_monthly:1539_Toplam",
+        "bddk_monthly:1541_Toplam",
+        "bddk_monthly:1542_Toplam",
+    ]
+
+
 def test_frekans_yuzu_ayni_frekansi_one_ince_olani_ortaya_kabayi_sona_koyar() -> None:
     r = CatalogRetriever(CATALOG, policy=RetrievalPolicy(mode="bm25"))
     hits = [h.id for h in r.search("aylık konut kredisi", k=4)]
     assert hits[0] == "bddk_monthly:1534_Toplam"
     assert hits.index("bddk_weekly:5690_3") < hits.index("gold.konut_kredisi_ceyreklik")   # haftalık (ince) çeyreklikten (kaba) önce
+
+
+def test_bddk_turkiye_geneli_aylik_pencere_il_serilerini_eleme_ile_ayirir() -> None:
+    catalog = [
+        _rec("bddk_monthly:1536_Toplam", "İhtiyaç Kredileri, Toplam (Sektör)", aliases=("ihtiyaç kredisi",)),
+        _rec("bddk_monthly:1539_Toplam", "Bireysel Kredi Kartları, Toplam (Sektör)", aliases=("bireysel kredi kartı",)),
+        _rec("bddk_weekly:5690_3", "İhtiyaç Kredileri, Toplam (Sektör) - Haftalık", freq="weekly", source="bddk_weekly",
+             aliases=("ihtiyaç kredisi",)),
+        _rec("bddk_finturk:ADANA_Ihtiyac", "İhtiyaç Kredisi, ADANA", source="bddk_finturk", aliases=("ihtiyaç kredisi",), province="Adana"),
+    ]
+    r = CatalogRetriever(catalog, policy=RetrievalPolicy(mode="bm25"))
+    hits = [h.id for h in r.search("60 aylık örnek pencerede Türkiye'deki BDDK ihtiyaç kredisi", k=3)]
+    assert hits[:2] == ["bddk_monthly:1536_Toplam", "bddk_monthly:1539_Toplam"]
+    assert "bddk_finturk:ADANA_Ihtiyac" not in hits
 
 
 def test_politika_kademeleri() -> None:
@@ -137,11 +243,55 @@ def test_arac_kapisi_sinyalle_acar_yetkiyi_daraltmaz() -> None:
     assert off.allowed == registered and off.closed == ()
 
 
+def test_ilk_faz_sadece_retrieval_semasini_sunar() -> None:
+    registered = tool_gate.ALWAYS | tool_gate.CHART | tool_gate.ANALYTICS | tool_gate.WEB
+    plain = tool_gate.decide("2025 konut kredisi bakiyesini getir", registered)
+    first = tool_gate.initial_allowed(plain)
+    assert first == tool_gate.RETRIEVAL_PHASE
+    chart = tool_gate.decide("2025 konut kredisi grafiğini çiz", registered)
+    assert "chart" in tool_gate.initial_allowed(chart)
+    assert "workspace_join" not in tool_gate.initial_allowed(plain)
+    assert tool_gate.initial_allowed(plain, has_table=True) == plain.allowed
+
+
+def test_ilk_faz_yeni_retrieve_toolu_isim_eklemeden_acar() -> None:
+    """Faz kapısı yeni plugin araçlarını özel isim listesine eklenmeden görür."""
+    registered = frozenset({"lakehouse_search", "lakehouse_query", "catalog_preview", "workspace_join"})
+    plain = tool_gate.decide(
+        "2025 konut kredisi bakiyesini getir",
+        registered,
+        initial_tools={"catalog_preview"},
+    )
+    first = tool_gate.initial_allowed(
+        plain,
+    )
+    assert first == {"lakehouse_search", "lakehouse_query", "catalog_preview"}
+
+
+def test_gold_sadece_gold_required_sonucunda_ikinci_faza_girer() -> None:
+    registered = tool_gate.ALWAYS
+    decision = tool_gate.decide("aylık konut kredisi getir", registered)
+    plain = tool_gate.post_retrieval_allowed(decision, "aylık konut kredisi getir")
+    gold = tool_gate.post_retrieval_allowed(decision, "aylık konut kredisi getir", include_gold=True)
+    assert not (plain & tool_gate.GOLD_PHASE)
+    assert tool_gate.GOLD_PHASE <= gold
+
+
 def test_kayit_defteri_alt_kume_semasi_verir() -> None:
     from tests.test_agent_loop import _CountingTool, _FakeChart
     reg = ToolRegistry(); reg.register(_CountingTool()); reg.register(_FakeChart())
     assert len(reg.schemas()) == 2 and len(reg.schemas(only={"lakehouse_query"})) == 1
     assert "chart" not in reg.describe(only={"lakehouse_query"})
+
+
+def test_kayit_defteri_sema_cache_register_ile_gecersizlesir() -> None:
+    from tests.test_agent_loop import _CountingTool, _FakeChart
+    reg = ToolRegistry(); reg.register(_CountingTool())
+    first = reg.schemas(only={"lakehouse_query"})
+    second = reg.schemas(only={"lakehouse_query"})
+    assert first is second
+    reg.register(_FakeChart())
+    assert reg.schemas(only={"lakehouse_query"}) is not first
 
 
 def test_sayili_vade_frekans_yuzu_degildir_ve_embedding_dusunce_bm25_kalir() -> None:

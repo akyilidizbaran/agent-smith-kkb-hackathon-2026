@@ -656,14 +656,37 @@ async function askStream(question, live) {   // NDJSON: {type: step|ping|answer|
   return payload;
 }
 
+// A model may echo a shortened markdown table while the verified table card
+// below contains all rows. Keep the narrative, but use the canonical card for
+// tabular values so an omitted cell cannot look like missing data.
+function stripMarkdownTables(md) {
+  const lines = String(md || "").split("\n");
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const next = lines[i + 1] || "";
+    const header = /^\s*\|.*\|\s*$/.test(line);
+    const separator = /^\s*\|?\s*:?-{3,}(?:\s*\|\s*:?-{3,})+\s*\|?\s*$/.test(next);
+    if (header && separator) {
+      i += 2;
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) i++;
+      i--;
+      continue;
+    }
+    out.push(line);
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function renderAnswer(p, opts = {}) {
   const thread = $("thread");
   const q = document.createElement("div"); q.className = "q"; q.id = "ans-" + p.index;
   q.textContent = (p.question || "").replace(/\n\nDosya: (\S+)/g, (m, path) => "\n📎 " + path.split("/").pop().replace(/^[0-9a-f]{8}_/, "")); thread.appendChild(q);
   const a = document.createElement("div"); a.className = "a"; a.dataset.i = p.index;
-  let html = `<div class="text">${mdToHtml(p.text)}</div>`;
   const hasTable = p.table && p.table.rows && p.table.rows.length;
   const hasChart = p.charts && p.charts.length && p.charts.some((c) => c.png);
+  const displayText = hasTable ? stripMarkdownTables(p.text) : p.text;
+  let html = `<div class="text">${mdToHtml(displayText)}</div>`;
   if (hasTable || hasChart) {
     html += `<div class="${hasTable && hasChart ? "grid2" : ""}">`;
     if (hasTable) {

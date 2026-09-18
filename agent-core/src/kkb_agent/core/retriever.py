@@ -4,7 +4,7 @@ Tek sınıf, üç kademe; adaptörler ve ölçüm koşucusu aynı nesneyi kullan
 üretimde çalışan şey olsun:
 
 * `preload_all`  — katalog bütçeye sığıyorsa arama yok, hepsi kart (küçük katalog).
-* `bm25`         — BM25 + yüzler (il / frekans / kaynak). Aday havuzu `k`'nın 10 katı,
+* `bm25`         — BM25 + yüzler (il / frekans / kaynak). Aday havuzu `k`'nın 50 katı,
                    yüzler önce eler ve sıralar, sonra ilk `k`.
 * `hybrid`       — BM25 ∪ embedding (kosinüs) → RRF → yüzler → ilk `k`. Embedder verilmemişse
                    bm25'e düşer ve bunu söyler.
@@ -18,16 +18,24 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
+import re
 from typing import Iterable, Sequence
 
 from ..contracts.retrieval import Candidate, Embedder, reciprocal_rank_fusion
-from .facets import Facets, extract_facets, frequency_rank, province_of
-from .lexical import Bm25Index, candidate_text
+from .facets import Facets, extract_facets, frequency_rank, province_of, source_matches
+from .lexical import Bm25Index, candidate_text, tokenize
 
 MODES = ("auto", "preload_all", "bm25", "hybrid")
 DEFAULT_SMALL_MAX = 60        # bu sayıya kadar katalog kart olarak sığar (≈ 6.000 token bütçesi)
 DEFAULT_HYBRID_MIN = 5000     # bu sayıdan sonra BM25 tek başına yetmez (ölçülecek)
-CANDIDATE_MULTIPLIER = 10     # yüz filtrelerinden önce aday havuzu k × bu
+CANDIDATE_MULTIPLIER = 50     # yüz filtrelerinden önce aday havuzu; il serileri filtrelenmeden önce kaybolmasın
+_QUERY_SPLIT = re.compile(r"\b(?:ve|ile|veya)\b|[,;]", re.IGNORECASE)
+_BREAKDOWN_INTENT = re.compile(
+    r"\b(?:alt\s+kalem(?:ler)?(?:i|ı)?|kırılım(?:lar)?(?:ı|i)?|kirilim(?:lar)?(?:i|ı)?|detay(?:lar)?(?:ı|i)?|"
+    r"dağılım(?:ı|i)?|dagilim(?:i)?|bileşen(?:ler)?|bilesen(?:ler)?|"
+    r"taksitli|taksitsiz|ayrıştır|ayristir)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -41,6 +49,13 @@ class CatalogRecord:
     frequency: str | None = None
     source: str | None = None
     province: str | None = None    # None → ulusal/il-dışı
+    concept_id: str | None = None
+    parent_series_id: str | None = None
+    relation_type: str = "standalone"
+    dimension_path: tuple[str, ...] = ()
+    additivity: str = "unknown"
+    relation_confidence: str | None = None
+    relation_source: str | None = None
 
     @property
     def text(self) -> str:
@@ -53,7 +68,14 @@ def record_from_spec(spec) -> CatalogRecord:
     freq = getattr(spec.frequency, "value", spec.frequency)
     return CatalogRecord(id=spec.dataset_id, name=spec.name, description=spec.description, aliases=aliases,
                          tags=tuple(spec.tags), frequency=str(freq) if freq else None, source=spec.source,
-                         province=province_of(f"{spec.dataset_id} {spec.name}"))
+                         province=province_of(f"{spec.dataset_id} {spec.name}"),
+                         concept_id=getattr(spec, "concept_id", None),
+                         parent_series_id=getattr(spec, "parent_series_id", None),
+                         relation_type=getattr(spec, "relation_type", "standalone"),
+                         dimension_path=tuple(getattr(spec, "dimension_path", ()) or ()),
+                         additivity=getattr(spec, "additivity", "unknown"),
+                         relation_confidence=getattr(spec, "relation_confidence", None),
+                         relation_source=getattr(spec, "relation_source", None))
 
 
 @dataclass
@@ -83,7 +105,11 @@ def apply_facets(records: Sequence[CatalogRecord], ranked: Sequence[Candidate], 
         rec = by_id.get(cand.id)
         if rec is None:
             continue
-        if facets.provinces:
+        if facets.national:
+            if rec.province is not None:
+                continue
+            prov_key = 0
+        elif facets.provinces:
             if rec.province is None or rec.province not in facets.provinces:
                 # il soruldu: başka ilin serisi elenir; ulusal seri geride kalır ama düşmez
                 if rec.province is not None:
@@ -93,8 +119,9 @@ def apply_facets(records: Sequence[CatalogRecord], ranked: Sequence[Candidate], 
                 prov_key = 0
         else:
             prov_key = 1 if rec.province is not None else 0
-        if facets.frequency:
-            want, have = frequency_rank(facets.frequency), frequency_rank(rec.frequency)
+        wanted_frequency = facets.frequency or facets.window_frequency
+        if wanted_frequency:
+            want, have = frequency_rank(wanted_frequency), frequency_rank(rec.frequency)
             if want is None or have is None:
                 freq_key = 1
             elif have == want:
@@ -105,7 +132,7 @@ def apply_facets(records: Sequence[CatalogRecord], ranked: Sequence[Candidate], 
                 freq_key = 2       # daha kaba: istenen frekans üretilemez
         else:
             freq_key = 0
-        src_key = 0 if (not facets.sources or rec.source in facets.sources) else 1
+        src_key = 0 if (not facets.sources or source_matches(rec.source, facets.sources)) else 1
         kept.append(((prov_key, freq_key, src_key, pos), cand))
     kept.sort(key=lambda t: t[0])
     out = []
@@ -145,6 +172,25 @@ class CatalogRetriever:
             cached = vectors
         self._vectors = cached
 
+    def _load_cached_vectors(self) -> bool:
+        """Load a complete catalog vector cache without making a network call.
+
+        A catalog refresh must never turn the first user question into an
+        unbounded embedding migration. Large catalogs can be queried with the
+        deterministic lexical index while a cache warmer is run separately.
+        The explicit ``_ensure_vectors`` path remains available for warm-up.
+        """
+        if self._vectors is not None:
+            return True
+        if self.embedder is None or self._cache is None:
+            return False
+        texts = [f"{r.name}. {' '.join(r.aliases)}".strip() for r in self.records]
+        cached = self._cache.get(self.embedder.model, [r.id for r in self.records], texts)
+        if cached is None:
+            return False
+        self._vectors = cached
+        return True
+
     def embed_queries(self, queries: Sequence[str]) -> list[list[float]]:
         """Ölçüm koşucusu için: binlerce sorgunun vektörü tek tek değil 64'lük dilimlerle."""
         assert self.embedder is not None
@@ -170,6 +216,86 @@ class CatalogRetriever:
         return [Candidate(id=self.records[i].id, text=self.records[i].text, score=float(sims[i]), source="embedding")
                 for i in top]
 
+    def _relation_adjust(self, query: str, ranked: Sequence[Candidate]) -> list[Candidate]:
+        """Apply the canonical relation graph before the final top-k cut.
+
+        A broad concept resolves to its verified/derived parent total.  A query that asks
+        for a breakdown or names a child explicitly keeps the children and expands a parent
+        hit to its direct children.  This is source-independent; BDDK/FinTürk/EVDS only
+        provide the metadata graph.
+        """
+
+        by_id = self._by_id
+        if not any(record.relation_type != "standalone" for record in self.records):
+            return list(ranked)
+        explicit_breakdown = bool(_BREAKDOWN_INTENT.search(query or ""))
+        children: dict[str, list[CatalogRecord]] = {}
+        for record in self.records:
+            if record.parent_series_id and record.parent_series_id in by_id:
+                children.setdefault(record.parent_series_id, []).append(record)
+
+        by_candidate = {candidate.id: candidate for candidate in ranked}
+        output: dict[str, Candidate] = dict(by_candidate)
+        query_tokens = set(tokenize(query or "", prefixes=False))
+        for candidate in ranked:
+            record = by_id.get(candidate.id)
+            if record is None:
+                continue
+            if record.relation_type == "child_breakdown" and record.parent_series_id in by_id:
+                parent = by_id[record.parent_series_id]
+                if not explicit_breakdown:
+                    # A child found by a shared token must not hide the parent total.  Keep
+                    # the child available for explicit follow-up/breakdown queries, but rank
+                    # it below the parent for a broad concept.
+                    parent_candidate = output.get(parent.id)
+                    parent_score = max(candidate.score + 0.001, parent_candidate.score if parent_candidate else float("-inf"))
+                    output[parent.id] = Candidate(
+                        id=parent.id, text=parent.text, score=parent_score,
+                        source=parent.source,
+                        meta={"relation_promoted_from": candidate.id, "relation_type": parent.relation_type},
+                    )
+                continue
+            if explicit_breakdown and record.relation_type == "parent_total":
+                siblings = children.get(record.id, [])
+                # If the user names one child dimension (for example ``taksitli``),
+                # keep the parent as context but demote unrelated siblings.  A generic
+                # token comparison avoids a source-specific list of child labels.
+                # ``record.text`` also carries inherited catalog aliases, which may
+                # contain the child labels themselves (for example ``taksitli`` and
+                # ``taksitsiz`` on the card parent).  Use the canonical parent name
+                # here so an explicitly named dimension remains distinguishable.
+                parent_tokens = set(tokenize(record.name, prefixes=False))
+                specific_tokens = query_tokens - parent_tokens
+                targeted = [
+                    child for child in siblings
+                    if specific_tokens.intersection(set(tokenize(child.text, prefixes=False)))
+                ]
+                # If a child dimension is named explicitly, expand only that child.
+                # This avoids re-introducing an unrelated sibling merely because the
+                # parent was selected first.  With no named dimension ("alt kalemler"
+                # / "kırılım"), retain the complete direct breakdown.
+                expansion_children = targeted or siblings
+                for sibling in siblings:
+                    if targeted and sibling not in targeted and sibling.id in output:
+                        current = output[sibling.id]
+                        output[sibling.id] = Candidate(
+                            id=current.id, text=current.text, score=current.score - 0.25,
+                            source=current.source, meta={**current.meta, "relation_sibling_demoted": record.id},
+                        )
+                for child in expansion_children:
+                    expanded_score = candidate.score - 0.002
+                    existing = output.get(child.id)
+                    if existing is None or existing.score < expanded_score:
+                        output[child.id] = Candidate(
+                            id=child.id, text=child.text,
+                            # Keep parent relevance as a tie-breaker; lexical ranking inside
+                            # the child is still performed by the caller on a later query.
+                            score=expanded_score,
+                            source=child.source,
+                            meta={"relation_expanded_from": record.id, "relation_type": child.relation_type},
+                        )
+        return sorted(output.values(), key=lambda value: (-value.score, value.id))
+
     # ---------- arama ----------
     def search(self, query: str, *, k: int = 8, mode: str | None = None, use_facets: bool = True,
                query_vector: Sequence[float] | None = None) -> list[Candidate]:
@@ -177,10 +303,45 @@ class CatalogRetriever:
         facets = extract_facets(query) if use_facets else Facets()
         self.last_facets = facets
         pool = max(k * CANDIDATE_MULTIPLIER, 50)
-        lexical = self._bm25.search(query, k=pool)
+        # A question can contain several requested concepts joined by "ve".
+        # Ranking the complete sentence lets the first concept fill the whole
+        # pool (for example, provincial child series hide a national parent).
+        # Search each clause as well and union the hits before applying the
+        # source/geography/frequency facets. This is domain independent.
+        variants = [query]
+        variants.extend(part.strip() for part in _QUERY_SPLIT.split(query)
+                        if len(part.strip().split()) >= 2)
+        lexical_by_id: dict[str, Candidate] = {}
+        for variant in dict.fromkeys(variants):
+            # Apply the user's hard facets before taking the clause pool. A
+            # large family of provincial children must not consume all 400
+            # lexical slots and hide the national parent that the next clause
+            # identifies.
+            # Repeated variants (e.g. 81 provinces) can still occupy the
+            # lexical top-k before filtering. With any hard facet, scanning
+            # the in-memory BM25 result set is cheaper and safer than losing
+            # the only national/target-frequency candidate.
+            raw_k = len(self.records) if use_facets and not facets.empty else pool
+            clause_hits = self._bm25.search(variant, k=raw_k)
+            if use_facets:
+                clause_hits = apply_facets(self.records, clause_hits, facets, k=pool)
+            for cand in clause_hits:
+                previous = lexical_by_id.get(cand.id)
+                if previous is None or cand.score > previous.score:
+                    lexical_by_id[cand.id] = cand
+        lexical = sorted(lexical_by_id.values(), key=lambda c: (-c.score, c.id))
         if mode == "hybrid" and self.embedder is not None:
             try:
-                dense = self._dense(query, k=pool, query_vector=query_vector)
+                # A cold full-catalog embedding pass is expensive (6k+ series
+                # means roughly a hundred remote batches). It is not allowed
+                # on the interactive request path for large catalogs. A warm
+                # cache remains fully hybrid; small seed/test catalogs retain
+                # the eager behaviour used by the retrieval tests.
+                if len(self.records) > 1000 and not self._load_cached_vectors():
+                    self.last_error = "embedding cache cold-start; BM25 fallback"
+                    dense = []
+                else:
+                    dense = self._dense(query, k=pool, query_vector=query_vector)
             except Exception as exc:  # noqa: BLE001 — embedding ucu düşerse BM25 ile devam, sessiz değil
                 self.last_error = f"embedding: {exc}"
                 dense = []
@@ -188,6 +349,7 @@ class CatalogRetriever:
             ranked = reciprocal_rank_fusion(lexical, dense) if dense else list(lexical)
         else:
             ranked = list(lexical)
+        ranked = self._relation_adjust(query, ranked)
         return apply_facets(self.records, ranked, facets, k=k)
 
     def __len__(self) -> int:

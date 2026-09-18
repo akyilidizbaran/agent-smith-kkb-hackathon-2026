@@ -11,7 +11,7 @@ from pydantic import BaseModel
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from kkb_agent.core.agent import AnalyticsAgent
-from kkb_agent.core.follow_up import resolve_follow_up
+from kkb_agent.core.follow_up import FollowUpContext, _extract, resolve_follow_up
 from kkb_agent.core.registry import ToolRegistry
 from kkb_agent.core.tool import Tool, ToolResult
 from kkb_agent.core.workspace import AnalysisWorkspace
@@ -186,6 +186,38 @@ def test_frequency_without_a_series_fails_closed() -> None:
 
     assert result.clarification_required
     assert "series" in result.ambiguous
+
+
+def test_time_aliases_do_not_bind_follow_up_to_first_catalog_series() -> None:
+    catalog = [
+        SimpleNamespace(
+            dataset_id="bddk_finturk:ADANA_BireyselKrediKartlari",
+            name="Bireysel kredi kartları, ADANA",
+            source="bddk_finturk",
+            tags=["aylık"],
+            columns=[
+                SimpleNamespace(name="observation_date", role="time", example_values=[],
+                                 aliases=["dönem", "tarih", "ay"]),
+                SimpleNamespace(name="value", role="measure", example_values=[], aliases=["bireysel kredi kartları"]),
+            ],
+        ),
+    ]
+    question = (
+        "Aktif tabloyu aylık değişim analizine hazırlayıp tüm serileri "
+        "202001–202112 döneminde ortak ay eksenine hizala."
+    )
+    explicit = _extract(question, catalog)
+    assert explicit.series is None
+    assert explicit.aggregation is None
+
+    previous = FollowUpContext(
+        domain="finance", metric="kredi", series="bddk_monthly:1536_Toplam",
+        date_range="2022-2023", frequency="monthly",
+    )
+    resolved = resolve_follow_up(question, previous, catalog=catalog)
+    assert resolved.is_follow_up
+    assert resolved.context.series == previous.series
+    assert "series" not in resolved.overridden
 
 
 def _agent(llm: _ScriptedLLM, *, fail_after: int | None = None) -> tuple[AnalyticsAgent, _QueryTool]:

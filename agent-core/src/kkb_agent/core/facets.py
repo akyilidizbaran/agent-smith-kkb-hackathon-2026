@@ -47,12 +47,14 @@ def source_words() -> dict[str, tuple[str, ...]]:
 class Facets:
     provinces: tuple[str, ...] = ()       # resmî ad(lar), soruda geçtiği gibi
     frequency: str | None = None          # tek frekans sözcüğü geçiyorsa
+    window_frequency: str | None = None   # "60 aylık dönem": pencere granülaritesi
     sources: tuple[str, ...] = ()         # kaynak ipuçları
     negatives: tuple[str, ...] = field(default_factory=tuple)
+    national: bool = False                # Türkiye geneli/ülke geneli gibi açık ulusal istek
 
     @property
     def empty(self) -> bool:
-        return not (self.provinces or self.frequency or self.sources)
+        return not (self.provinces or self.frequency or self.window_frequency or self.sources or self.national)
 
 
 def extract_facets(question: str) -> Facets:
@@ -63,7 +65,26 @@ def extract_facets(question: str) -> Facets:
     freqs = [f for f, words in FREQUENCY_WORDS.items() if any(re.search(rf"(?<!\d)(?<!\d )\b{w}", q) for w in words)]
     frequency = freqs[0] if len(freqs) == 1 else None      # iki frekans sözcüğü: karar yok (guard'la aynı kural)
     sources = tuple(s for s, words in source_words().items() if any(w in q for w in words))
-    return Facets(provinces=provinces, frequency=frequency, sources=sources)
+    # A numeric month window is not a publication-frequency word by itself.
+    # When it is explicitly a data period, monthly records are the natural
+    # retrieval target. Maturity phrases ("3 aylık mevduat") stay excluded.
+    window_frequency = None
+    if re.search(r"(?<!\d)\d{1,3}\s*aylik\b", q) and re.search(r"donem|pencere|veri|gozlem|seri|cek|getir", q):
+        if not re.search(r"vade|mevduat|repo", q):
+            window_frequency = "monthly"
+    national = bool(re.search(
+        r"\bturkiye(?:['’ ]?(?:deki|geneli|genelindeki))?\b|"
+        r"\bulke(?:['’ ]?(?:deki|geneli|genelindeki))?\b|\bulusal\b|\bnational\b",
+        q,
+    ))
+    return Facets(provinces=provinces, frequency=frequency, window_frequency=window_frequency,
+                  sources=sources, national=national)
+
+
+def source_matches(actual: str | None, requested: tuple[str, ...]) -> bool:
+    """Match exact sources and configured source families (e.g. ``bddk``)."""
+    value = str(actual or "")
+    return any(value == source or value.startswith(source + "_") for source in requested)
 
 
 def province_of(text: str) -> str | None:
@@ -77,4 +98,4 @@ def frequency_rank(freq: str | None) -> int | None:
     return _FREQ_RANK.get(str(freq or "").lower())
 
 
-__all__ = ["Facets", "PROVINCES", "extract_facets", "frequency_rank", "province_of"]
+__all__ = ["Facets", "PROVINCES", "extract_facets", "frequency_rank", "province_of", "source_matches"]

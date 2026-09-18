@@ -154,6 +154,33 @@ class DatasetSpec(BaseModel):
         "Doğrulanmamış endekste baz yılı güvenilmez; reel dönüşüm açık rıza ister (ADR-0075).",
     )
 
+    # ---- Ortak seri ilişki grafiği -----------------------------------------------
+    # Bu alanlar source-specific parser bilgisini tek bir parent/child/dimension
+    # sözleşmesine çevirir. Eski lakehouse'lar ilişki tablosu olmadan da açılabilsin diye
+    # tamamı varsayılanlıdır; yeni bootstrap'lar meta.series_relation'dan doldurur.
+    concept_id: str | None = Field(
+        default=None, description="Aynı ekonomik kavramın kanonik kimliği"
+    )
+    parent_series_id: str | None = Field(
+        default=None, description="Bu seri bir alt kırılımsa kapsayıcı parent seri"
+    )
+    relation_type: str = Field(
+        default="standalone",
+        description="standalone | parent_total | child_breakdown | dimension_member | variant | derived",
+    )
+    dimension_path: list[str] = Field(
+        default_factory=list, description="Örn. ['province=ankara'] veya ['region=TR10']"
+    )
+    additivity: str = Field(
+        default="unknown", description="additive | non_additive | unknown"
+    )
+    relation_confidence: str | None = Field(
+        default=None, description="İlişkinin güven seviyesi: verified | derived | unknown"
+    )
+    relation_source: str | None = Field(
+        default=None, description="catalog | source_adapter | manual"
+    )
+
     # ---- yardımcılar ----
     def measures(self) -> list[ColumnSpec]:
         return [c for c in self.columns if c.role == ColumnRole.MEASURE]
@@ -182,6 +209,15 @@ class DatasetSpec(BaseModel):
             f"Grain: {', '.join(self.grain)}",
             "Kolonlar:",
         ]
+        if self.concept_id or self.relation_type != "standalone":
+            relation = [f"Kavram: {self.concept_id or 'belirsiz'}", f"İlişki rolü: {self.relation_type}"]
+            if self.parent_series_id:
+                relation.append(f"Parent seri: {self.parent_series_id}")
+            if self.dimension_path:
+                relation.append(f"Boyut yolu: {', '.join(self.dimension_path)}")
+            if self.additivity != "unknown":
+                relation.append(f"Toplanabilirlik: {self.additivity}")
+            lines.append("İlişki: " + " | ".join(relation))
         for c in self.columns:
             bits = [f"  - {c.name} ({c.dtype}, {c.role.value})"]
             if c.semantic_type:

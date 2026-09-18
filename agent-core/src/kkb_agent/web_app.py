@@ -230,13 +230,28 @@ def project_result_table(answer: Any, agent: Any, *, question: str = "", table_b
 
     steps = [s for s in getattr(answer, "steps", []) if getattr(s, "ok", False)]
     compute_steps = [s for s in steps if getattr(s, "tool_name", None) == "workspace_compute_column"]
-    for step in reversed(steps):
-        if getattr(step, "tool_name", None) != "workspace_query":
-            continue
-        frame = getattr(step, "result_data", None)
+    last_compute = max((i for i, s in enumerate(steps)
+                        if getattr(s, "tool_name", None) == "workspace_compute_column"), default=-1)
+    last_query = max((i for i, s in enumerate(steps)
+                      if getattr(s, "tool_name", None) == "workspace_query"), default=-1)
+    # A query before compute_column is only the input slice. Returning it here
+    # used to discard every derived column from CSV/XLSX even though the final
+    # workspace_show and the narrative contained them. A query after the
+    # calculations remains a legitimate final projection.
+    if last_query > last_compute:
+        frame = getattr(steps[last_query], "result_data", None)
         if isinstance(frame, pd.DataFrame) and (len(frame) != len(current) or list(frame.columns) != list(current.columns)):
             return frame.copy()
-        break
+
+    # workspace_show is an explicit final verification of the table the user
+    # asked to inspect. When it occurs after transformations, export that full
+    # snapshot so the downloadable table matches the verified table.
+    last_show = max((i for i, s in enumerate(steps)
+                     if getattr(s, "tool_name", None) == "workspace_show"), default=-1)
+    if max(last_compute, last_query) >= 0 and last_show > max(last_compute, last_query):
+        frame = getattr(steps[last_show], "result_data", None)
+        if isinstance(frame, pd.DataFrame) and len(frame) == len(current):
+            return frame.copy()
     if not compute_steps:
         for step in reversed(steps):
             frame = getattr(step, "result_data", None)
@@ -290,6 +305,27 @@ def access_options(answer: Any) -> list[str]:
     return []
 
 
+def _strip_markdown_tables(text: str) -> str:
+    """Drop model-echoed pipe tables when a canonical table artifact exists."""
+    lines = str(text or "").splitlines()
+    out: list[str] = []
+    i = 0
+    # Markdown alignment may be written as :---, ---: or :---:. The old
+    # expression only accepted the first form.
+    separator = re.compile(r"^\s*\|?\s*:?-{3,}:?(?:\s*\|\s*:?-{3,}:?)+\s*\|?\s*$")
+    pipe = re.compile(r"^\s*\|.*\|\s*$")
+    while i < len(lines):
+        line = lines[i]
+        if pipe.match(line) and i + 1 < len(lines) and separator.match(lines[i + 1]):
+            i += 2
+            while i < len(lines) and pipe.match(lines[i]):
+                i += 1
+            continue
+        out.append(line)
+        i += 1
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
+
+
 def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None, question: str = "") -> dict[str, Any]:
     steps = []
     for s in getattr(answer, "steps", []):
@@ -311,6 +347,12 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None, questio
     table = getattr(agent.workspace, "table", None)
     show_table = _table_touched(answer, table_before, table)
     result_table = project_result_table(answer, agent, question=question, table_before=table_before) if show_table else None
+    display_text = answer.text
+    if result_table is not None:
+        # The verified table is rendered separately below. Remove a model-echoed
+        # markdown table from the narrative so omitted cells in a shortened
+        # model preview cannot contradict the canonical artifact/export.
+        display_text = _strip_markdown_tables(display_text)
     ev = getattr(answer, "evidence", None)
     sources = [str(src) for c in (getattr(ev, "columns", []) or []) for src in (getattr(c, "sources", []) or [])]
     if not sources:
@@ -323,7 +365,7 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None, questio
     search = getattr(getattr(agent.registry.get("web_search"), "search", None), "remaining", None) if agent.registry.get("web_search") else None
     follow_up = getattr(agent, "follow_up_resolution", None)
     return {
-        "text": answer.text,
+        "text": display_text,
         "steps": steps,
         "table": frame_to_dict(result_table) if result_table is not None else None,
         "table_title": (getattr(agent.workspace, "title", "") or "") if show_table else "",

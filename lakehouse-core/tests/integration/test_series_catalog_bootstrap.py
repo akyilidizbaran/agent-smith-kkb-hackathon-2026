@@ -115,6 +115,12 @@ def test_bootstrap_loads_the_repository_catalog(tmp_path: Path) -> None:
         "semantic_confidence, status FROM meta.series WHERE series_id = 'evds:TP.KTF12'"
     ).fetchone()
     assert row == ("weekly", "friday", "pct", "rate", "avg", "verified", "active")
+    relation = connection.execute(
+        "SELECT relation_type, parent_series_id FROM meta.series_relation "
+        "WHERE series_id = 'bddk_monthly:1534_Toplam'"
+    ).fetchone()
+    assert relation[0] == "child_breakdown"
+    assert relation[1] == "bddk_monthly:1533_Toplam"
     connection.close()
 
 

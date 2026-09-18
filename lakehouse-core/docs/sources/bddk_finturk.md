@@ -219,10 +219,39 @@ measures matter is a catalog decision, not a parsing one.
 
 ## Not implemented in this track
 
-- Any `tabloNo` other than `3`.
 - Any party other than Sektör (`10001`).
 - Any Bronze/Silver/Gold semantics beyond raw pass-through: no unit conversion, no `date_key`,
   no cross-province aggregation.
+
+## Geniş kapsam kurulumu (2026-09-18)
+
+The demo baseline now uses the five FinTürk tables that produce the requested
+`56 kolon × 81 il = 4.536 seri` breadth. The live table selector and a 2025-09
+response were checked before ingestion:
+
+| tabloNo | source label | measure columns | in-scope series |
+|---:|---|---:|---:|
+| 1 | Krediler (Bin TL) | 4 | 324 |
+| 2 | Mevduat (Bin TL) | 7 | 567 |
+| 3 | Bireysel Bankacılık (Bin TL) | 8 | 648 |
+| 4 | Seçilmiş Sektörel Krediler (Bin TL) | 31 | 2,511 |
+| 6 | Şubeler (Adet) ve Nüfusa Göre Dağılım (TL) | 6 | 486 |
+| **Toplam** |  | **56** | **4,536** |
+
+`tabloNo=5` (Oranlar) and `tabloNo=7` (Altın Kredileri ve Altın Mevduatı) are
+deliberately outside this demo baseline, matching the agreed 56-column scope.
+All requests use the Sektör party (`tarafKodu=10001`). The endpoint's `HEPSİ`
+province selection returns all provinces in one response; tables 1–4 also return
+an extra `YURT DIŞI` row, which is excluded from the 81-province catalog.
+
+The catalog and database were expanded to 4,536 active FinTürk series. A full
+quarterly backfill from 2016-03 through 2026-06 landed 210 immutable RAW/Bronze
+artifacts (42 quarters × 5 tables) and 190,512 Silver observations. Existing
+table-3 series IDs are preserved; their dataset identity is now the shared
+`bddk_finturk_table3`, which makes all five bulk table datasets consistent.
+New table-1/2/4/6 records carry `semantic_confidence: derived` until their
+table-specific units and measure semantics receive the same independent
+cross-check as table 3.
 
 ## Genişletme (2026-09-13): tabloNo=3 yanıtının diğer 7 ölçüm sütunu kataloğa alındı
 
