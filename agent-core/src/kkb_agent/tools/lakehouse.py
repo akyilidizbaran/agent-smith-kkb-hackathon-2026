@@ -12,6 +12,7 @@ Bu sıra, modelin var olmayan kolon adı uydurmasını büyük ölçüde engelle
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -20,6 +21,7 @@ from ..contracts.lakehouse import LakehouseClient, LakehouseError
 from ..core.facets import extract_facets, province_of
 from ..domain import kisa_terim
 from ..core.errors import ToolError
+from ..core.sql_identifiers import quote_known_identifiers
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
 
@@ -256,6 +258,22 @@ class LakehouseQueryTool(Tool):
         self._registry = registry
         # Gold araçları kayıtlıysa ay/çeyrek toplaması SQL'de yapılmaz (ADR-0039).
         self.gold_available = gold_available
+
+    def normalize_args(self, raw_args: dict[str, Any]) -> dict[str, Any]:
+        """Quote schema-backed complex column names before the shared SQL guard."""
+        sql = raw_args.get("sql")
+        if not isinstance(sql, str):
+            return raw_args
+        list_datasets = getattr(self.lakehouse, "list_datasets", None)
+        if not callable(list_datasets):
+            return raw_args
+        columns = [
+            column.name
+            for spec in list_datasets()
+            for column in getattr(spec, "columns", [])
+        ]
+        normalized = quote_known_identifiers(sql, columns)
+        return raw_args if normalized == sql else {**raw_args, "sql": normalized}
 
     def check_policy(self, params: QueryParams) -> ToolError | None:
         """Sorgu çalışmadan önce reddet: uyarı olarak eklendiğinde model onu okuyup

@@ -14,12 +14,12 @@ from __future__ import annotations
 
 import re
 
-import pandas as pd
 from pydantic import BaseModel, Field
 
 from ..adapters.duckdb_lakehouse import guard_sql, hardened_connection
 from ..contracts.lakehouse import LakehouseError, QueryProvenance
 from ..core.errors import ToolError
+from ..core.sql_identifiers import quote_known_identifiers
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
 
@@ -49,6 +49,14 @@ class WorkspaceQueryTool(Tool):
 
     def __init__(self, workspace: AnalysisWorkspace) -> None:
         self.workspace = workspace
+
+    def normalize_args(self, raw_args: dict[str, object]) -> dict[str, object]:
+        """Quote complex columns from the active workspace before validation."""
+        sql = raw_args.get("sql")
+        if not isinstance(sql, str):
+            return raw_args
+        normalized = quote_known_identifiers(sql, self.workspace.columns())
+        return raw_args if normalized == sql else {**raw_args, "sql": normalized}
 
     def validate_refs(self, params: WorkspaceQueryParams) -> ToolError | None:
         if not self.workspace.has_table:
