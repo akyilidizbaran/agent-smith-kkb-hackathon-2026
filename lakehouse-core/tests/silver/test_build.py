@@ -79,7 +79,7 @@ def _finturk(data_root: Path) -> Path:
         data_root,
         fixture=FIXTURE_ROOT / "bddk_finturk/bddk_finturk_yalova_2025_9.json",
         source_id="bddk_finturk",
-        dataset_id="bddk_finturk_table3",
+        dataset_id="bddk_finturk_yalova_housing_loans",
         parser=BddkFinTurkParser(),
         metadata={"requested_sehir": "YALOVA"},
     )

@@ -456,3 +456,28 @@ def test_arama_bm25_ile_ekli_sozcugu_bulur_ve_yuklenmemis_seriyi_ayri_soyler(lak
     assert lake.search_datasets("ihtiyaç kredileri") == []   # 'kredileri' tam sözcük olarak yok, 'ihtiyaç' yok
     assert lake.search_uningested("taşıt kredisi bakiyesi") == [("evds:TP.HENUZ.CEKILMEDI", "Taşıt Kredisi (henüz çekilmedi)")]
     assert lake.search_uningested("enflasyon") == []
+
+
+def test_arama_dizini_her_aramada_kurulmaz_katalog_yenilenince_kurulur(lake: SilverLakehouse) -> None:
+    """Dizin katalog nesnesine bağlı önbellekte durur; reload yeni nesne kurunca yenilenir.
+
+    Önbellek anahtarı `id(self._catalog)` idi ve `is not` ile karşılaştırılıyordu: iki ayrı int
+    nesnesi hiç aynı nesne olmadığından önbellek hiç tutmadı, dizin her aramada (bir aramada iki
+    kez) baştan kuruldu. 6.304 serilik katalogda arama aracı başına 7-16 sn ölçüldü, asıl BM25
+    araması 0,17 sn. Anahtar artık katalog nesnesinin kendisi: referans tutulduğu için bellek
+    adresi başka bir nesneye geçemez, ve Architect'in eklediği seri reload sonrası aramada görünür.
+    """
+    first, un_first = lake._retriever(), lake._uningested_retriever()
+    assert lake._retriever() is first
+    assert lake._uningested_retriever() is un_first
+
+    lake.close()
+    con = duckdb.connect(str(lake.db_path))
+    _series(con, "evds:TP.YENI.SERI", source_id="evds", aliases=["yepyeni gösterge"],
+            name_tr="Yepyeni Gösterge")
+    _obs(con, "evds:TP.YENI.SERI", date(2025, 1, 31), 5.0)
+    con.close()
+    lake.reload()
+
+    assert lake._retriever() is not first
+    assert "evds:TP.YENI.SERI" in {s.dataset_id for s in lake.search_datasets("yepyeni gösterge")}

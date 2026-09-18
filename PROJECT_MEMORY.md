@@ -844,3 +844,10 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
 - PR kapsamından `.claude/` ve `docs/experiments/` altındaki yerel UI/benchmark artefaktları dışarıda tutulacak; çalışma ağacında bırakıldılar, silinmediler. PR9 kapsamındaki 4.536 aktif FinTürk serisini taşıyan katalog değişikliği kaynak katalog olarak dahil edilecek.
 - Exact demo sorusu fixture'dan çıkarıldı; Gold anchor testi sentetik bir soru ifadesi kullanıyor. `test_gold_tools.py` **16 geçti**.
 - CI ile aynı agent komutu `uv run --frozen --extra dev pytest -q -p no:cacheprovider`: **801 geçti**, 1 uyarı, 6,71 s. Lakehouse hızlı hedefli kapsam **55 geçti**, 142,58 s. 6.304 serilik tam lakehouse paketi yerelde katalog bootstrap maliyeti nedeniyle yaklaşık 14 dakika sonra %6 ilerlemede durduruldu; assertion hatası görülmedi ve tam sonuç PR Actions job'ına bırakıldı.
+
+### 2.77 PR #18 main conflict çözümü (18 Eylül)
+- `origin/main` PR #9 sonrası `14740e6` seviyesine ilerlediği için `feature/agent-engine` ile merge sırasında beş dosya conflict verdi: iki Actions workflow'u, `docs/PR_ONCESI_TEST.md`, `bddk_finturk.yml` ve `scripts/ingestion_registry.py`.
+- Çözümde PR #9'un 4.536 serilik FinTürk kataloğu, BDDK aylık/haftalık geniş katalogları ve üç paralel lakehouse Actions shard'ı kanonik kabul edildi. `ingestion_registry.py`, PR9'un tablo eşleme/haftalık pozisyon JSON'larını korurken gelecekteki `<tabloNo>|<SEHIR>` bulk adreslerini de destekliyor.
+- PR9 katalog dataset kimlikleriyle uyum için `tests/silver/test_build.py` FinTürk fixture'ı `bddk_finturk_yalova_housing_loans` dataset kimliğine güncellendi; veri veya fixture kimliği uydurulmadı.
+- Conflict sonrası doğrulama: `agent-core` tam paket **802 geçti**, 1 deprecation uyarısı, **6,77 s**; lakehouse hedefli kapsam **131 geçti**, **261,69 s**; `git diff --check` başarılı. Tam lakehouse paketi üç paralel Actions shard'ında merge kapısı olarak çalışacak.
+- Merge commit'i henüz oluşturulup push edilmedi; çalışma ağacında yalnız `.claude/` ve `docs/experiments/` kapsam dışı yerel artefaktlar untracked tutuluyor. `.env` değişmedi.

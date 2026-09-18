@@ -275,3 +275,63 @@ satırlara o asset'in `dataset_id`'sini yazar; Silver'ın staging denetimi katal
 `bddk_finturk:ADANA_DigerTuketiciKredileri` için "invalid catalog semantics" ile düştü). Ad
 tarihsel bir yanlış adlandırmadır: dataset "tabloNo=3, Bireysel Bankacılık, il" çekilişidir,
 yalnız konut değil; mevcut Bronze artifact'lerini yetim bırakmamak için değiştirilmedi.
+
+## Genişletme (2026-09-16): tablo 1, 2, 4 ve 6
+
+Kapsam: `tabloNo` 1 (Krediler), 2 (Mevduat), 4 (Seçilmiş Sektörel Krediler) ve 6 (Şubeler ve
+Nüfusa Göre Dağılım), yalnız Sektör tarafı (`tarafKodu=10001`). Tablo 5 (Oranlar) 1-4'ten
+hesaplanabildiği, tablo 7 (Altın) konu dışı olduğu için alınmadı. Girdiler
+`scripts/generate_bddk_finturk_catalog.py` ile canlı kaynaktan üretilir: 48 ölçü sütunu × 81 il
+= 3.888 seri (sütun sayıları: 4 / 7 / 31 / 6).
+
+### Birimler — kaynağın kendi tablo seçicisinden
+
+| tabloNo | Seçicideki etiket | Katalog birimi |
+|---|---|---|
+| 1 | Krediler (Bin TL) | `TRY_th` |
+| 2 | Mevduat (Bin TL) | `TRY_th` |
+| 4 | Seçilmiş Sektörel Krediler (Bin TL) | `TRY_th` |
+| 6 | Şubeler (Adet) ve Nüfusa Göre Dağılım (TL) | sütuna göre: `SubeSayisi`, `SubeyeDusenNufus` → `adet`; `KisiBasi*` → `TRY` |
+
+Tablo 6'nın karışık birimi aritmetikle doğrulandı (ANKARA, 2025-09): 982 şube × 4.867 kişi/şube
+= 4,78 milyon kişi; 595.699,42 TL/kişi × 4,78 milyon = 2,85 trilyon TL, tablo 1'in aynı il ve
+çeyrek için verdiği toplam nakdi kredi 2.892.401.068 bin TL. ADANA 2025-09'da kişi başı toplam
+mevduat × nüfus / 1000 = 354.980.410, tablo 2'nin toplamı 355.009.176 bin TL (%99,99).
+
+### Kimlik ve dataset
+
+- `series_id` ASCII'dir ve parser'ın kendi harf haritasıyla üretilir (`ÇORUM` → `CORUM`);
+  `native_code` kaynağın yazımını korur.
+- `dataset_id` il × tablo başına tektir (`bddk_finturk_<il>_krediler`, `_mevduat`,
+  `_sektorel_krediler`, `_subeler_nufus`). Bu, yukarıdaki 13 Eylül notunda kayda geçmiş olan
+  kuralın aynısıdır; ilk üretimde gözden kaçtı ve tek illik denemede aynı "invalid catalog
+  semantics" hatasıyla yakalandı.
+- Endpoint sütunu değil tablo numarasını aldığı için sütun → `tabloNo` eşlemesi
+  `scripts/bddk_finturk_table_map.json` içinde üretilmiş olarak tutulur ve
+  `scripts/ingestion_registry.py` tarafından okunur.
+
+### Çekim ve doğrulama (2026-09-16)
+
+`run_catalog_ingestion.py`: 3.840/3.840 seri, 0 hata (320 gerçek çekim, 3.520 paylaşılan) + ADANA
+denemesi 48/48. Silver'da 4.536 FinTürk serisi × 22 çeyrek = 99.792 gözlem, 81 il, eksik çeyreği
+olan seri yok.
+
+Aylık bültenle ulusal uzlaşma, 2025-12:
+
+| Ölçü | 81 il toplamı | Aylık bülten | Not |
+|---|---|---|---|
+| Toplam mevduat (milyon TL) | 25.549.895 | 25.549.894 (`1344?Toplam`, yurt içi yerleşik) | Toplam mevduat (`1357`) 27.223.190; fark yurt dışı yerleşiklerin, hiçbir ile ait olmayan mevduatı |
+| Konut kredisi (milyon TL) | 678.975 | 678.970 (`1534?Toplam`) | |
+| Toplam nakdi kredi (milyon TL) | 23.451.862 | 23.127.970 (`1160?Toplam`, bilanço) | ~%1,4; tanımlar birebir aynı değil |
+| İnşaat sektörü kredisi (bin TL) | 1.446.597.282 | 1.516.423.663 (`1452?ToplamNakdi`) | ~%4,6; "seçilmiş sektörel" ile sektörel dağılım tanımı farklı |
+
+### Arama hijyeni: katalog açıklaması neden kısa
+
+Katalog açıklamaları ajanın aramasında dizinlenir. Bu tabloların ilk üretiminde açıklamalar kanıt
+metnini de taşıyordu: tablo 6'nın 486 serisinde yukarıdaki ANKARA aritmetiği ("…toplam nakdi
+krediyle örtüşüyor"), 3.888 serinin hepsinde "Mart/Haziran/Eylül/Aralık". 2026-09-16 ölçümünde bu
+tür başka seri adları ve tarih kelimeleri, il belirtilmeyen ulusal sorularda il serilerinin ulusal
+serilerin önüne geçmesine katkı verdi (24 soruluk arama testi; "Konut kredisi toplamı" sorusunda
+ulusal seri kelime aramasında ilk 50 adayın dışına düştü). Bu yüzden açıklama artık yalnız seriyi
+anlatır — tablo, ölçü, il, taraf, stok/sayım niteliği, çeyreklik yayın ve birim — ve kanıtlar bu
+belgede durur.
