@@ -75,6 +75,23 @@ _GENERIC_METRICS = (
 )
 _GEO_COLUMN = re.compile(r"il|şehir|sehir|province|district|location|region|bölge|bolge", re.IGNORECASE)
 _PERCENT_CHANGE = re.compile(r"%|yüzde|yuzde|percent(?:age)?|pct|growth\s+rate|büyüme\s+hızı|buyume\s+hizi", re.IGNORECASE)
+_NON_SERIES_TERMS = frozenset({
+    "daily",
+    "günlük",
+    "gunluk",
+    "monthly",
+    "aylık",
+    "aylik",
+    "quarterly",
+    "çeyreklik",
+    "ceyreklik",
+    "weekly",
+    "haftalık",
+    "haftalik",
+    "yearly",
+    "yıllık",
+    "yillik",
+})
 _PERIOD_CHANGE = re.compile(
     r"bir\s+önceki\s+(?:aya|döneme|doneme|haftaya|çeyreğe|ceyrege|yıla|yila)\s+göre|"
     r"önceki\s+(?:aya|döneme|doneme|haftaya|çeyreğe|ceyrege|yıla|yila)|"
@@ -258,7 +275,11 @@ def _catalog_hints(catalog: Iterable[object]) -> tuple[list[tuple[str, str]], li
 
 
 def _best_match(question: str, candidates: Iterable[tuple[str, str]]) -> tuple[str, str] | None:
-    matches = [(term, value) for term, value in candidates if _has_term(question, term)]
+    matches = [
+        (term, value)
+        for term, value in candidates
+        if term.casefold() not in _NON_SERIES_TERMS and _has_term(question, term)
+    ]
     if not matches:
         return None
     return max(matches, key=lambda item: len(_fold(item[0])))
@@ -322,7 +343,7 @@ def _extract(question: str, catalog: Iterable[object]) -> FollowUpContext:
 
 def _looks_like_follow_up(question: str, explicit: FollowUpContext, previous: FollowUpContext) -> bool:
     words = _fold(question).split()
-    if _FOLLOW_UP.search(question):
+    if _FOLLOW_UP.search(question) or _PERIOD_CHANGE.search(question) or _PERCENT_CHANGE.search(question):
         return True
     if len(words) <= 6 and previous.non_empty("series") and not any(
         explicit.value(field) for field in ("domain", "source", "metric", "series")

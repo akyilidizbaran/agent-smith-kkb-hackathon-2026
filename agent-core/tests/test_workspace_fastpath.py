@@ -141,6 +141,28 @@ def test_explicit_geography_source_and_frequency_conflicts_fall_back() -> None:
         is None
     )
 
+    metric_resolution = _resolution("Konut kredilerini de ek")
+    assert (
+        plan_verified_workspace_transform(
+            metric_resolution.question,
+            metric_resolution,
+            workspace,
+            active_specs=[_spec()],
+        )
+        is None
+    )
+
+
+def test_all_verified_series_follow_up_reuses_the_workspace() -> None:
+    workspace = _workspace()
+    resolution = _resolution("Tüm serilerin değişimini göster")
+    plan = plan_verified_workspace_transform(
+        resolution.question, resolution, workspace, active_specs=[_spec()]
+    )
+
+    assert plan is not None
+    assert plan.value_columns == ("metric_a", "metric_b")
+
 
 def test_no_workspace_is_not_eligible() -> None:
     resolution = _resolution("Bunların aylık değişimini göster")
@@ -186,3 +208,62 @@ def test_generic_transport_follow_up_skips_llm() -> None:
     assert answer.steps[0].tool_name == "workspace_compute_column"
     assert answer.steps[0].ok
     assert "passengers_change" in workspace.columns()
+
+
+def test_referential_monthly_follow_up_keeps_verified_series_and_skips_retrieval() -> None:
+    class NeverCalledLLM:
+        model = "test"
+
+        def supports_native_tools(self) -> bool:
+            return True
+
+        def chat(self, *args, **kwargs):
+            raise AssertionError("referential follow-up must not invoke the planner")
+
+    workspace = _workspace()
+    agent = AnalyticsAgent(NeverCalledLLM(), ToolRegistry(), workspace=workspace)
+    agent._follow_up_context = FollowUpContext(
+        domain="finance",
+        source="BDDK Aylık Bülten",
+        metric="kredi",
+        series="bddk_monthly:1536_Toplam",
+        date_range="2022-2023",
+        frequency="monthly",
+    )
+    agent._catalog_specs = lambda: [
+        _spec(source="BDDK Aylık Bülten", name="Verified credit balances")
+    ]
+
+    answer = agent.ask("Bu verilerin bir önceki aya göre aylık değişimlerini göster.")
+
+    assert answer.usage == {"prompt": 0, "completion": 0, "calls": 0}
+    assert answer.steps[0].tool_name == "workspace_compute_column"
+    assert "gold.net_kar_aylik" not in workspace.columns()
+    assert workspace.table is not None
+    assert workspace.table.iloc[1]["metric_a_change"] == approx(4.110)
+    assert workspace.table.iloc[1]["metric_b_change"] == approx(6.785)
+    assert workspace.table.iloc[2]["metric_a_change"] == approx(9.784)
+    assert workspace.table.iloc[2]["metric_b_change"] == approx(12.350)
+
+
+def test_referential_percentage_follow_up_uses_all_verified_metrics() -> None:
+    workspace = _workspace()
+    previous = FollowUpContext(
+        domain="finance",
+        metric="kredi",
+        series="bddk_monthly:1536_Toplam",
+        date_range="2022-2023",
+        frequency="monthly",
+    )
+    resolution = resolve_follow_up("Bunların aylık yüzde değişimlerini göster.", previous)
+    plan = plan_verified_workspace_transform(
+        resolution.question, resolution, workspace, active_specs=[_spec()]
+    )
+
+    assert resolution.context.series == previous.series
+    assert plan is not None and plan.operation == "percent_change"
+    result = execute_verified_workspace_transform(workspace, plan)
+    assert result is not None
+    assert pd.isna(result.frame.iloc[0]["metric_a_pct_change"])
+    assert result.frame.iloc[1]["metric_a_pct_change"] == approx(0.8861731121)
+    assert result.frame.iloc[1]["metric_b_pct_change"] == approx(3.1591053004)
