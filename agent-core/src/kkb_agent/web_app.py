@@ -268,12 +268,19 @@ def project_result_table(answer: Any, agent: Any, *, question: str = "", table_b
     operations: dict[str, str] = {}
     for step in compute_steps:
         args = getattr(step, "tool_args", {}) or {}
-        name = str(args.get("column_name", ""))
-        expression = str(args.get("expression", ""))
-        if name in current.columns and name not in added:
-            added.append(name)
-            expressions.append(expression)
-            operations[name] = _derived_operation(expression)
+        names = args.get("column_names")
+        expressions_for_step = args.get("expressions")
+        if isinstance(names, list) and isinstance(expressions_for_step, list):
+            pairs = zip(names, expressions_for_step)
+        else:
+            pairs = [(args.get("column_name", ""), args.get("expression", ""))]
+        for raw_name, raw_expression in pairs:
+            name = str(raw_name)
+            expression = str(raw_expression)
+            if name in current.columns and name not in added:
+                added.append(name)
+                expressions.append(expression)
+                operations[name] = _derived_operation(expression)
     if not added:
         return current.copy()
 

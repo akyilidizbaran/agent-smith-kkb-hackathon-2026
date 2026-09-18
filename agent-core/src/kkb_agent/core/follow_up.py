@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Iterable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 CONTEXT_FIELDS = (
@@ -36,7 +36,8 @@ _COMPARISON = re.compile(r"karşılaştır|karsilastir|kıyasla|kiyasla|\bvs\b|\
 _FOLLOW_UP = re.compile(
     r"\b(peki|aynı|ayni|bunu|buna|onu|şunu|sunu|diğeri|digeri|ikisini|önceki|onceki|"
     r"burada|böyle|boyle|yap|çevir|cevir|değiştir|degistir)\b|"
-    r"karşılaştır|karsilastir|kıyasla|kiyasla|\bhaftalık\b|\baylık\b|\bçeyreklik\b|\byıllık\b",
+    r"karşılaştır|karsilastir|kıyasla|kiyasla|\bhaftalık\b|\baylık\b|\bçeyreklik\b|\byıllık\b|"
+    r"\bweekly\b|\bmonthly\b|\bquarterly\b|\byearly\b|\bchanges?\b|\bdiffs?\b",
     re.IGNORECASE,
 )
 _REFERENCE = re.compile(r"\b(onu|bunu|şunu|sunu|diğerini|digerini|diğerine|digerine|"
@@ -76,6 +77,16 @@ _GENERIC_METRICS = (
     "kredi",
 )
 _GEO_COLUMN = re.compile(r"il|şehir|sehir|province|district|location|region|bölge|bolge", re.IGNORECASE)
+_PERCENT_CHANGE = re.compile(r"%|yüzde|yuzde|percent(?:age)?|pct|growth\s+rate|büyüme\s+hızı|buyume\s+hizi", re.IGNORECASE)
+_PERIOD_CHANGE = re.compile(
+    r"bir\s+önceki\s+(?:aya|döneme|doneme|haftaya|çeyreğe|ceyrege|yıla|yila)\s+göre|"
+    r"önceki\s+(?:aya|döneme|doneme|haftaya|çeyreğe|ceyrege|yıla|yila)|"
+    r"aylık\s+(?:değişim|degisim)|period[-\s]+over[-\s]+period|"
+    r"(?:monthly|weekly|quarterly|yearly)\s+changes?|"
+    r"değişim(?:i|ini|leri|lerini)?|degisim(?:i|ini|leri|lerini)?|"
+    r"fark(?:ı|i|ını|ini)?|\bchanges?\b|\bdiffs?\b|\bgrowth\b",
+    re.IGNORECASE,
+)
 
 # Catalog tags and column aliases often contain standalone frequency/schema
 # words. They are useful facets, but never identify a concrete series by
@@ -151,6 +162,13 @@ class FollowUpResolution:
     question: str
     is_follow_up: bool
     context: FollowUpContext
+    #: Deterministic operation hint for safe workspace-local transformations.
+    #: It is intentionally not part of FollowUpContext: an operation belongs to
+    #: the current request, not to the semantic identity of the active data.
+    operation: str | None = None
+    #: Explicit fields extracted from the current question. Keeping this
+    #: structured avoids making a second LLM call just to detect conflicts.
+    explicit: FollowUpContext = field(default_factory=FollowUpContext)
     inherited: tuple[str, ...] = ()
     overridden: tuple[str, ...] = ()
     cleared: tuple[str, ...] = ()
@@ -167,6 +185,8 @@ class FollowUpResolution:
             "question": self.question,
             "is_follow_up": self.is_follow_up,
             "context": self.context.as_dict(),
+            "operation": self.operation,
+            "explicit": self.explicit.as_dict(),
             "inherited": list(self.inherited),
             "overridden": list(self.overridden),
             "cleared": list(self.cleared),
@@ -205,6 +225,8 @@ class FollowUpResolution:
         )
         if current:
             lines.append(f"- Güvenli çalışma ipuçları: {current}")
+        if self.operation:
+            lines.append(f"- Deterministik işlem ipucu: {self.operation}")
         if self.ambiguous:
             lines.append("- Belirsiz alanlar: " + ", ".join(self.ambiguous))
             lines.append("- Bu alanları tahmin etme; uygun netleştirme yolunu kullan veya açıkça eksik olduğunu söyle.")
@@ -429,6 +451,9 @@ def resolve_follow_up(
         question=question,
         is_follow_up=is_follow_up,
         context=context,
+        operation=("percent_change" if _PERCENT_CHANGE.search(question) else
+                   "period_change" if _PERIOD_CHANGE.search(question) else None),
+        explicit=explicit,
         inherited=_unique(inherited),
         overridden=_unique(overridden),
         cleared=_unique(cleared),
