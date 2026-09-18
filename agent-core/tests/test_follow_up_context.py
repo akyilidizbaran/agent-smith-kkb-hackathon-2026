@@ -134,6 +134,37 @@ def test_frequency_change_is_an_override_not_a_resampling_implementation() -> No
     assert "Gold" in second.prompt()
 
 
+def test_referential_monthly_word_is_not_a_series_selection() -> None:
+    catalog = [
+        SimpleNamespace(
+            dataset_id="gold.net_kar_aylik",
+            name="Bankacılık sektörü aylık net kârı",
+            source="BDDK",
+            source_detail=None,
+            tags=["aylik"],
+            columns=[],
+        )
+    ]
+    previous = FollowUpContext(
+        domain="finance",
+        source="BDDK",
+        metric="kredi",
+        series="bddk_monthly:1536_Toplam",
+        entity=None,
+        date_range="2022-2023",
+        frequency="monthly",
+        aggregation=None,
+    )
+
+    result = resolve_follow_up(
+        "Bu verilerin bir önceki aya göre aylık değişimlerini göster.", previous, catalog
+    )
+
+    assert result.explicit.series is None
+    assert result.context.series == previous.series
+    assert "series" not in result.overridden
+
+
 def test_buying_series_is_replaced_by_selling_series() -> None:
     first = resolve_follow_up("USD alış kurunu getir", catalog=_catalog())
     second = resolve_follow_up("Peki satış?", first.context, catalog=_catalog())
