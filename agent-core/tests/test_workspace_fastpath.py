@@ -203,7 +203,9 @@ def test_generic_transport_follow_up_skips_llm() -> None:
 
     answer = agent.ask("show monthly passenger changes")
 
-    assert answer.usage == {"prompt": 0, "completion": 0, "calls": 0}
+    assert answer.usage["prompt"] == 0
+    assert answer.usage["completion"] == 0
+    assert answer.usage["calls"] == 0
     assert len(answer.steps) == 1
     assert answer.steps[0].tool_name == "workspace_compute_column"
     assert answer.steps[0].ok
@@ -236,7 +238,9 @@ def test_referential_monthly_follow_up_keeps_verified_series_and_skips_retrieval
 
     answer = agent.ask("Bu verilerin bir önceki aya göre aylık değişimlerini göster.")
 
-    assert answer.usage == {"prompt": 0, "completion": 0, "calls": 0}
+    assert answer.usage["prompt"] == 0
+    assert answer.usage["completion"] == 0
+    assert answer.usage["calls"] == 0
     assert answer.steps[0].tool_name == "workspace_compute_column"
     assert "gold.net_kar_aylik" not in workspace.columns()
     assert workspace.table is not None
