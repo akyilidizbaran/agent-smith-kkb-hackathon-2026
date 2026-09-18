@@ -27,14 +27,21 @@ from typing import Any, Callable
 from ..domain import DomainProfile
 from ..llm.base import ChatMessage, LLMClient, ToolCall
 from .errors import ToolError
-from .grounding import causal_language, grounding_check, _NUM_RE, _ascii_minus, numbers_in
+from .grounding import causal_language, grounding_check, in_rate_context, token_tolerance, _MATCH_EPS, _NUM_RE, _ascii_minus, numbers_in
 from .claim_check import claim_cell, range_claim   # G5/G6 (Büşra, V3 §3.9): sayı doğru dönemle mi yazılmış
 from .question_preflight import _PREMISE as _PREMISE_ASK
 from .small_talk import capability_reply, strip_filler_opening
 from .small_talk import is_identity_question, is_small_talk, is_usage_question, small_talk_reply, trim_unsolicited_offers
 from ..labels import humanize_internal
 from . import tool_gate
+from .execution_recovery import (
+    ExecutionState,
+    RecoverySnapshot,
+    is_explicit_retry,
+    needs_truthful_failure_text,
+)
 from .follow_up import FollowUpContext, FollowUpResolution, resolve_follow_up
+from .facets import extract_facets
 
 # Kullanıcının grafik isteği (Türkçe çekimli: grafiği, grafiğini, çiz, çizer misin, görselleştir).
 _CHART_ASK = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
@@ -230,18 +237,23 @@ def unverified_numbers(answer: str, table, extra_frames=()) -> list[str]:
     values = np.concatenate(arrays)
     values = values[np.isfinite(values)]
     out: list[str] = []
-    for m in _NUM_RE.finditer(_ascii_minus(answer or "")):
+    masked = _ascii_minus(answer or "")
+    for m in _NUM_RE.finditer(masked):
         raw = m.group(0)
         parsed = numbers_in(raw)
         if not parsed:
             continue
         n = parsed[0]
-        if float(n).is_integer() and (1900 <= abs(n) <= 2100 or (abs(n) <= 31 and len(raw.lstrip("+-")) <= 2)):
+        # Yıl muaf; ≤31 küçük tam sayı muaf ANCAK oran/puan bağlamında değilse (E-4, grounding_check ile aynı kural).
+        if float(n).is_integer() and 1900 <= abs(n) <= 2100:
             continue
-        pairs = [(n, 0.5 * 10 ** -(len(raw.rsplit(",", 1)[1]) if "," in raw else 0))]
+        if float(n).is_integer() and abs(n) <= 31 and len(raw.lstrip("+-")) <= 2 \
+                and not in_rate_context(masked, m.start(), m.end()):
+            continue
+        pairs = [(n, token_tolerance(raw))]
         if re.fullmatch(r"[-+]?\d{1,3}\.\d{3}", raw.strip("+-")) and not float(raw).is_integer():
             pairs.append((float(raw), 0.0005))
-        if not any(np.any(np.abs(values - c) <= tol + 1e-9) or np.any(np.abs(np.abs(values) - abs(c)) <= tol + 1e-9)
+        if not any(np.any(np.abs(values - c) <= tol + _MATCH_EPS) or np.any(np.abs(np.abs(values) - abs(c)) <= tol + _MATCH_EPS)
                    for c, tol in pairs):
             if raw not in out:
                 out.append(raw)
@@ -317,6 +329,10 @@ def table_digest(frame, max_rows: int = 12) -> str:
 NO_TOOL_NUMBERS_NOTE = ("Bu turda HİÇBİR ARAÇ ÇALIŞMADI ve cevabındaki şu sayılar aktif tabloda yok: {nums}. Sayı uydurma ve "
                         "kafadan hesaplama yapma: fark, oran ya da filtre gerekiyorsa workspace_query ile tabloda hesaplat, "
                         "sonra yalnız araç çıktısındaki sayılarla cevabını yaz.")
+RECOVERY_NOTE = ("Bu turda bir araç yürütme hatası oluştu. Hata, verinin bulunmadığını kanıtlamaz. "
+                 "Kullanıcının güncel isteği için yeni bir plan kur: aynı araç+aynı argüman çağrısını tekrarlama; "
+                 "gerekirse katalog araması, doğru şema/kolon incelemesi veya Gold uyumlu yolu kullan. "
+                 "Yeni bir doğrulama yolu da yoksa, verinin yok olduğunu iddia etme; bu turda doğrulanamadığını açıkça söyle.")
 # Geri gönderme notlarının ortak başı (ADR-0081): son soru açıkça yazılır. "Sayıları çek / tablodaki sayılarla yaz" denince model
 # geçmişteki başka bir veri sorusuna dönüyordu (arayüzde rol sorusu → veri seti tablosu; canlı S3'te "Kanıt zincirini nasıl okurum?"
 # → önceki Aralık bakiyesi).
@@ -382,6 +398,8 @@ class AgentStep:
     duration_ms: float = 0.0
     error_code: str | None = None   # ToolError.error_code; ölçüm ve trace için
     candidates: list[str] = field(default_factory=list)   # hata zarfının adayları (erişim seçenekleri dâhil)
+    # Answer-level projection için bu araç çağrısının tablo snapshot'ı; API trace'ine yazılmaz.
+    result_data: pd.DataFrame | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass
@@ -393,6 +411,9 @@ class AgentAnswer:
     #: "OK" ya da "MISS:<sayılar>" (+ "| CAUSAL:<ifadeler>"). Boş: veri çekilmediği
     #: için ölçülmedi. Koşucular bunu rapor eder; anlatı doğrulaması görünür olmalı.
     grounding: str = ""
+    #: FOUND / CONFIRMED_ABSENT / RETRIEVAL_FAILED / ACCESS_BLOCKED / UNKNOWN.
+    #: A failed retrieval never silently becomes absence.
+    availability_status: str = "UNKNOWN"
 
     #: Araçların ürettiği çıktı dosyaları (grafik belirtimi/PNG; ADR-0032). CLI yolu basar,
     #: koşucular varlığını denetler. Metnin içine gömülmez: dosya yolu cevabın parçası değil.
@@ -491,6 +512,13 @@ class AnalyticsAgent:
         }
     )
 
+    # An existing workspace may be used for a follow-up transformation, but it
+    # must never answer a new semantic request by accident.
+    FRESH_DATA_TOOLS = frozenset({
+        "lakehouse_query", "gold_align", "gold_decompose", "gold_join",
+        "web_url", "ingest_source", "ingest_from_url",
+    })
+
     def __init__(
         self,
         llm: LLMClient,
@@ -539,6 +567,10 @@ class AnalyticsAgent:
         self._history: list[ChatMessage] = []  # turlar arası konuşma hafızası
         self._follow_up_context = FollowUpContext()
         self._follow_up_resolution: FollowUpResolution | None = None
+        self._last_recovery: RecoverySnapshot | None = None
+        self._retry_source_question: str | None = None
+        self._retry_failed_signatures: set[tuple[str, str]] = set()
+        self._active_table_reuse_allowed = False
 
     def reset(self) -> None:
         self._history.clear()
@@ -548,6 +580,10 @@ class AnalyticsAgent:
         self.workspace = AnalysisWorkspace()
         self._follow_up_context = FollowUpContext()
         self._follow_up_resolution = None
+        self._last_recovery = None
+        self._retry_source_question = None
+        self._retry_failed_signatures = set()
+        self._active_table_reuse_allowed = False
 
     @property
     def follow_up_context(self) -> FollowUpContext:
@@ -572,7 +608,18 @@ class AnalyticsAgent:
         self._usage = {"prompt": 0, "completion": 0, "calls": 0}
         self._last_context = None
         self._follow_up_resolution = None
-        if is_small_talk(question):
+        self._retry_source_question = None
+        self._retry_failed_signatures = set()
+        small_talk = is_small_talk(question)
+        retry = bool(self._last_recovery and is_explicit_retry(question))
+        if retry:
+            self._retry_source_question = self._last_recovery.question
+            self._retry_failed_signatures = set(self._last_recovery.failed_signatures)
+        elif not small_talk:
+            # A new substantive question closes the old recovery affordance. A
+            # greeting intentionally leaves it available for an explicit retry.
+            self._last_recovery = None
+        if small_talk:
             # Harness kuralı: selamlaşma LLM'e gitmez; tablo ve kanıt paneli yok (ADR-0045).
             text = small_talk_reply(question, has_table=self.workspace.has_table)
             self.last_gate = None  # kapı çalışmadı; iz eski kararı göstermesin
@@ -592,6 +639,7 @@ class AnalyticsAgent:
         if clarify is not None:
             return clarify
         self._prepare_follow_up(question)
+        self._active_table_reuse_allowed = self._active_table_is_compatible(question)
         self._truncated = False
         try:
             answer = self._ask(question)
@@ -665,7 +713,76 @@ class AnalyticsAgent:
             specs = self._catalog_specs()
         except Exception:  # noqa: BLE001 — resolver cevabı asla düşürmez
             specs = []
-        self._follow_up_resolution = resolve_follow_up(question, self._follow_up_context, specs)
+        base_question = self._retry_source_question or question
+        self._follow_up_resolution = resolve_follow_up(base_question, self._follow_up_context, specs)
+
+    def _active_table_is_compatible(self, question: str) -> bool:
+        """Return whether the current table may be used as this turn's data.
+
+        Follow-up resolution is intentionally conservative here. A table is
+        reusable only for an unambiguous follow-up with no semantic override;
+        explicit geography/source/frequency/date changes require a fresh
+        retrieval or a documented transformation tool.
+        """
+        if not self.workspace.has_table or self._follow_up_resolution is None:
+            return False
+        resolution = self._follow_up_resolution
+        if not resolution.is_follow_up or resolution.clarification_required:
+            return False
+        semantic_fields = {
+            "domain", "source", "metric", "series", "entity", "geography",
+            "date_range", "frequency", "aggregation",
+        }
+        if semantic_fields.intersection(resolution.overridden + resolution.cleared):
+            return False
+
+        # The old table must not answer a national question when it is a
+        # provincial table, even if the natural-language resolver classified
+        # the turn as a short follow-up.
+        facets = extract_facets(question)
+        if re.search(r"\b(?:ulusal|national|türkiye geneli|turkiye geneli|ülke geneli|ulke geneli)\b", question, re.I):
+            current_provinces = self._active_table_provinces()
+            if current_provinces:
+                return False
+        if facets.provinces:
+            current_provinces = self._active_table_provinces()
+            if current_provinces and not set(current_provinces).intersection(facets.provinces):
+                return False
+        current_specs = self._active_table_specs()
+        if facets.sources and current_specs and not any(str(getattr(s, "source", "")) in facets.sources for s in current_specs):
+            return False
+        if facets.frequency and current_specs:
+            current_frequencies = {str(getattr(getattr(s, "frequency", None), "value", getattr(s, "frequency", ""))) for s in current_specs}
+            if current_frequencies and current_frequencies != {facets.frequency}:
+                return False
+        return True
+
+    def _has_confirmed_follow_up_context(self) -> bool:
+        """Return whether this workspace came from a committed semantic query.
+
+        Tests and UI actions can install a table directly without a resolver
+        context. That table still supports local operations such as charts and
+        joins; the stale-table guard is only meaningful after the agent has
+        actually committed a prior data request.
+        """
+        return any(self._follow_up_context.non_empty(field) for field in self._follow_up_context.as_dict())
+
+    def _active_table_specs(self) -> list[Any]:
+        ids: set[str] = set()
+        for column in self.workspace.columns():
+            provenance = self.workspace.column_provenance(str(column))
+            ids.update(str(dataset_id) for dataset_id in (getattr(provenance, "dataset_ids", []) or []))
+        if not ids:
+            return []
+        return [spec for spec in self._catalog_specs() if str(getattr(spec, "dataset_id", "")) in ids]
+
+    def _active_table_provinces(self) -> tuple[str, ...]:
+        from .facets import province_of
+
+        return tuple(dict.fromkeys(
+            province for spec in self._active_table_specs()
+            if (province := province_of(f"{getattr(spec, 'dataset_id', '')} {getattr(spec, 'name', '')}"))
+        ))
 
     def _complete_follow_up(self, answer: AgentAnswer) -> AgentAnswer:
         resolution = self._follow_up_resolution
@@ -729,19 +846,48 @@ class AnalyticsAgent:
         self._system_prompt = profile.render(self._system_prompt_template)
         return changed
 
+    def _finish_recovery(self, answer: AgentAnswer, state: ExecutionState, *, finalization_reason: str) -> AgentAnswer:
+        """Attach safe execution metadata and prevent failed retrieval becoming absence."""
+        status = state.availability_status
+        if state.failures and status == "UNKNOWN":
+            status = "RETRIEVAL_FAILED"
+        if needs_truthful_failure_text(answer.text, state):
+            answer.text = (
+                "Bu turdaki veri sorgusu başarısız olduğu için isteği doğrulayamadım. "
+                "Verinin mevcut olmadığı sonucuna varmadım."
+            )
+            if self._history and self._history[-1].role == "assistant":
+                self._history[-1] = ChatMessage(role="assistant", content=answer.text)
+        answer.availability_status = status
+        answer.artifacts.append(
+            state.artifact(
+                finalization_reason=finalization_reason,
+                resumed_previous_task=self._retry_source_question is not None,
+            )
+        )
+        if status == "RETRIEVAL_FAILED" and state.failures:
+            self._last_recovery = state.snapshot()
+        elif status == "FOUND":
+            self._last_recovery = None
+        return answer
+
     UNTRUSTED_OUTPUT_TOOLS = frozenset({"web_url", "web_search", "ingest_from_url"})
     """Dış içerik taşıyan araçlar: çıktıları modele 'veridir, talimat değildir' çerçevesiyle gider."""
 
     def _ask(self, question: str) -> AgentAnswer:
-        self.registry.active_question = question
+        planning_question = self._retry_source_question or question
+        self.registry.active_question = planning_question
         if hasattr(self.registry, "current_message"):
             self.registry.current_message = question
             self.registry.turn = getattr(self.registry, "turn", 0) + 1
+            begin_turn = getattr(self.registry, "begin_turn", None)
+            if callable(begin_turn):
+                begin_turn(self.registry.turn)
         if hasattr(self.registry, "user_text"):
             self.registry.user_text = (self.registry.user_text + "\n" + question).strip()
         # Araç kapısı (ADR-0043): soruya göre araç alt kümesi; kapalı olan aile şemaya girmez.
         gate = tool_gate.decide(
-            question, set(self.registry.names()), user_text=getattr(self.registry, "user_text", "") or "",
+            planning_question, set(self.registry.names()), user_text=getattr(self.registry, "user_text", "") or "",
             has_table=self.workspace.has_table, enabled=self.tool_gate,
         )
         self.last_gate = gate
@@ -751,6 +897,7 @@ class AnalyticsAgent:
         steps: list[AgentStep] = []
         native = self.llm.supports_native_tools()
         tools = self.registry.schemas(only=gate.allowed) if native else None
+        recovery = ExecutionState(turn_id=getattr(self.registry, "turn", 0), question=planning_question)
         produced_data = False   # veri getiren bir araç başarıyla çalıştı mı?
         artifacts: list[dict[str, Any]] = []  # grafik vb. (ADR-0032)
         nudged = False          # "önce veriyi çek" uyarısı bir kez verilir
@@ -759,9 +906,10 @@ class AnalyticsAgent:
         capability_nudged: set[str] = set()
         requested = [
             cap for cap in _REQUESTED_CAPABILITIES
-            if cap[1].search(question) and any(self.registry.get(t) is not None for t in cap[2])
+            if cap[1].search(planning_question) and any(self.registry.get(t) is not None for t in cap[2])
         ]
         seen: set[tuple[str, str]] = set()   # (araç, argüman) — döngü kilidi
+        seen.update(self._retry_failed_signatures)
         duplicates = 0                       # kilidin kaç kez devreye girdiği
         terminal: ToolError | None = None    # tekrar denemeyle çözülmeyen hata
         stuck_note: str | None = None        # son tura verilecek özel yönerge
@@ -787,6 +935,22 @@ class AnalyticsAgent:
 
             # --- Araç çağrısı yoksa: nihai cevap ---
             if not calls:
+                if recovery.should_prompt_recovery():
+                    recovery.mark_recovery_prompted()
+                    latest = recovery.failures[-1]
+                    steps.append(
+                        AgentStep(
+                            index=i,
+                            role="validate",
+                            thought=(f"{latest.error_code} sonrası aynı turda yeni plan istendi; "
+                                     "veri yokluğu varsayılmadı"),
+                            ok=False,
+                            duration_ms=(time.perf_counter() - started) * 1000,
+                        )
+                    )
+                    messages.append(ChatMessage(role="assistant", content=response.content))
+                    messages.append(ChatMessage(role="user", content=RECOVERY_NOTE))
+                    continue
                 # Model bazen kataloğu okuyup veriyi hiç çekmeden cevap yazmaya
                 # kalkıyor; ölçümde G5 her denemede 3 adımda burada duruyordu.
                 # Cevabı reddetmiyoruz, bir kez geri gönderip veriyi çektiriyoruz.
@@ -796,7 +960,7 @@ class AnalyticsAgent:
                 # Kimlik sorusu ("Sen kimsin?") veri istemez: geri gönderilince doğru taslak bozuluyordu (kimlik deneyi, 15 Eyl).
                 # Ürün kullanım sorusu ("architect rolüne nasıl geçebilirim") da: geri gönderilen model geçmişteki son veri
                 # sorusuna dönüp onu cevapladı (arayüz denemesi, 15 Eyl).
-                if (not produced_data and not nudged and not acted and not self.workspace.has_table
+                if (not produced_data and not nudged and not recovery.failures and not acted and not self.workspace.has_table
                         and not is_identity_question(question) and not is_usage_question(question)):
                     nudged = True
                     steps.append(
@@ -889,6 +1053,17 @@ class AnalyticsAgent:
                     continue
 
                 answer_text = self._strip_reasoning(response.content)
+
+                # If the current question is semantically different from the
+                # active table and no fresh source was queried, never publish
+                # prose based on the stale table.
+                prior_query_context = self._has_confirmed_follow_up_context()
+                if (self.workspace.has_table and prior_query_context
+                        and not any(s.ok and s.tool_name in self.FRESH_DATA_TOOLS for s in steps)):
+                    answer_text = (
+                        "Bu istek mevcut analiz tablosuyla uyumlu değil. Doğru kaynak ve kapsam için "
+                        "yeni veri sorgusu çalıştırılmadığından güvenilir bir sonuç veremiyorum."
+                    )
 
                 # Anlatı denetimi: cevaptaki her sayı bir araç çıktısında var mı?
                 # SQL hesabı yaptırmak modelin anlatıda kendi aritmetiğini yapmasını
@@ -987,8 +1162,12 @@ class AnalyticsAgent:
                 answer_text = self._coverage_note(self._source_note(answer_text, steps, artifacts), artifacts)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=answer_text))
-                return AgentAnswer(text=answer_text, steps=steps, workspace=self.workspace,
-                                   grounding=grounding, artifacts=artifacts, rejected_claims=rejected)
+                return self._finish_recovery(
+                    AgentAnswer(text=answer_text, steps=steps, workspace=self.workspace,
+                                grounding=grounding, artifacts=artifacts, rejected_claims=rejected),
+                    recovery,
+                    finalization_reason=("recovery_failed" if recovery.failures else "model_finalized"),
+                )
 
             # --- Araçları çalıştır ---
             messages.append(
@@ -1002,7 +1181,9 @@ class AnalyticsAgent:
                 # Döngü kilidi: model aynı çağrıyı tekrarlıyorsa sonuç değişmez.
                 # Ölçülmüş hata modu: aynı sorgunun art arda 7 kez çalıştırılması.
                 signature = (call.name, json.dumps(call.arguments, sort_keys=True, default=str))
+                repeated = False
                 if signature in seen:
+                    repeated = True
                     duplicates += 1
                     result = ToolResult.fail(
                         "DUPLICATE_CALL",
@@ -1044,8 +1225,23 @@ class AnalyticsAgent:
                         duration_ms=elapsed,
                         error_code=result.error.error_code if result.error else None,
                         candidates=list(result.error.candidates or []) if result.error else [],
+                        result_data=result.data.copy() if result.ok and isinstance(result.data, pd.DataFrame) else None,
                     )
                 )
+                if result.error is not None:
+                    recovery.observe_failure(
+                        call.name,
+                        result.error,
+                        signature=signature,
+                        repeated=repeated,
+                        content=result.content,
+                    )
+                if result.ok:
+                    recovery.observe_availability(
+                        result.artifacts.get("availability_status"),
+                        call.name,
+                        signature,
+                    )
                 if result.ok:
                     tool_texts.append(result.content)
                 if result.ok and call.name in self.CATALOG_CHANGING_TOOLS and self.refresh_profile():
@@ -1053,6 +1249,7 @@ class AnalyticsAgent:
                         messages[0].content.split("\n", 1)[0], self._system_prompt.split("\n", 1)[0], 1))
                 if result.ok and call.name in self.DATA_PRODUCING_TOOLS:
                     produced_data = True
+                    recovery.observe_success(data_produced=True)
                 elif result.ok and call.name in self.ACTING_TOOLS:
                     acted = True
                 if result.ok and result.artifacts.get("chart"):
@@ -1074,9 +1271,26 @@ class AnalyticsAgent:
                     self._history.append(ChatMessage(role="user", content=question))
                     self._history.append(ChatMessage(role="assistant", content=text))
                     log.info("adım %d: clarify — tur netleştirme sorusuyla bitti", i)
-                    return AgentAnswer(text=text, steps=steps, workspace=self.workspace, artifacts=artifacts)
-                if result.error is not None and not result.error.is_retryable and getattr(result.error, "terminal", None) is not False:
+                    return self._finish_recovery(
+                        AgentAnswer(text=text, steps=steps, workspace=self.workspace, artifacts=artifacts),
+                        recovery,
+                        finalization_reason="clarification",
+                    )
+                recovery_codes = {
+                    "SQL_FAILED", "INVALID_ARGS", "GOLD_REQUIRED", "JOIN_MISMATCH",
+                    "DATASET_NOT_FOUND", "TOOL_FAILED", "UNKNOWN_TOOL", "EMPTY_RESULT",
+                    "GEOGRAPHY_MISMATCH", "SOURCE_MISMATCH",
+                }
+                if (result.error is not None and not recovery.pending_recovery
+                        and (not result.error.is_retryable or result.error.error_code in recovery_codes)
+                        and getattr(result.error, "terminal", None) is not False):
                     terminal = result.error
+                    if result.error.error_code in recovery_codes:
+                        stuck_note = (
+                            "Bu turdaki sınırlı recovery denemeleri tamamlandı. ARAÇ ÇAĞIRMA; "
+                            "verinin mevcut olmadığını varsayma. Kullanıcıya isteğin bu turda doğrulanamadığını, "
+                            "elde doğrulanmış veri varsa onu ve eksik kalan kısmı kısaca anlat."
+                        )
                 log.info("adım %d: %s -> %s", i, call.name, "ok" if result.ok else "HATA")
                 messages.append(self._result_message(call, result, native=native))
 
@@ -1102,8 +1316,12 @@ class AnalyticsAgent:
                 text = self._coverage_note(self._source_note(text, steps, artifacts), artifacts)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=text))
-                return AgentAnswer(text=text, steps=steps, workspace=self.workspace,
-                                   grounding=grounding, artifacts=artifacts, rejected_claims=rejected)
+                return self._finish_recovery(
+                    AgentAnswer(text=text, steps=steps, workspace=self.workspace,
+                                grounding=grounding, artifacts=artifacts, rejected_claims=rejected),
+                    recovery,
+                    finalization_reason="terminal_tool_failure",
+                )
 
         # --- Adım limiti ---
         final = self._chat(
@@ -1126,8 +1344,12 @@ class AnalyticsAgent:
                                     "toplanan verilerle sınırlı, tamamlanmayan adımlar yapılmadı.)")
         self._history.append(ChatMessage(role="user", content=question))
         self._history.append(ChatMessage(role="assistant", content=text))
-        return AgentAnswer(text=text, steps=steps, workspace=self.workspace,
-                           hit_step_limit=True, grounding=grounding, artifacts=artifacts, rejected_claims=rejected)
+        return self._finish_recovery(
+            AgentAnswer(text=text, steps=steps, workspace=self.workspace,
+                        hit_step_limit=True, grounding=grounding, artifacts=artifacts, rejected_claims=rejected),
+            recovery,
+            finalization_reason="step_limit" if not budget_hit else "time_budget",
+        )
 
     # ------------------------------------------------------------------ K02-T07: kullanılan alternatif kaynak adlandırılır
     _ACCESS_ERRORS = frozenset({"NEEDS_CREDENTIAL", "ACCESS_BLOCKED", "SOURCE_NOT_FOUND"})
@@ -1236,8 +1458,23 @@ class AnalyticsAgent:
         # Aktif tablo varsa modele durumu hatırlat: "tabloyu bozmadan" akışının anahtarı.
         # TEK system mesajı, en başta: MIA/vLLM ikinci bir system mesajını reddediyor
         # ("System message must be at the beginning"); Ollama tolere ediyordu.
-        if self.workspace.has_table:
+        if self.workspace.has_table and self._active_table_reuse_allowed:
             system += "\n\nMEVCUT ANALİZ DURUMU:\n" + self.workspace.describe_for_llm()
+        elif self.workspace.has_table:
+            system += (
+                "\n\nAKTİF TABLO KULLANIMI YASAK: Mevcut analiz tablosu bu soruyla semantik olarak uyumlu değil. "
+                "Önce doğru kaynak için lakehouse_search/lakehouse_describe, ardından lakehouse_query veya uygun "
+                "Gold aracını kullan. Eski tablodan sayı, kaynak, il ya da frekans devralma; workspace_show veya "
+                "workspace_query ile eski tabloyu cevaplama."
+            )
+
+        if self._retry_source_question:
+            system += (
+                "\n\nAÇIK RETRY İSTEĞİ: Kullanıcı önceki başarısız isteği yeniden denemeni istiyor. "
+                "Önceki semantik istek aşağıdadır; bunu yalnız bağlam olarak kullan, eski araç çağrısını veya "
+                "başarısız SQL'i kopyalama ve yeni bir plan kur:\n"
+                f"- Önceki istek: «{self._retry_source_question[:300]}»"
+            )
 
         if self._follow_up_resolution is not None:
             follow_up_note = self._follow_up_resolution.prompt()
@@ -1245,7 +1482,8 @@ class AnalyticsAgent:
                 system += "\n\n" + follow_up_note
 
         msgs = [ChatMessage(role="system", content=system)]
-        msgs += self._history[-8:]  # son turlar — bağlamı korur, pencereyi şişirmez
+        if not self.workspace.has_table or self._active_table_reuse_allowed:
+            msgs += self._history[-8:]  # son turlar — bağlamı korur, pencereyi şişirmez
         # Aynı soru oturumda tekrar sorulduysa model tarihçedeki kendi cevabını kopyalıyor
         # (ölçüldü: T=0,5'te bile birebir aynı). Kopyalamayı harness yasaklar (ADR-0046).
         if self._asked_before(question):
@@ -1267,7 +1505,8 @@ class AnalyticsAgent:
 
             specs = self._catalog_specs()
             report = preflight(question, CatalogFacts.from_specs(specs) if specs else None,
-                               tools=set(self.registry.names()), has_table=self.workspace.has_table)
+                               tools=set(self.registry.names()),
+                               has_table=self.workspace.has_table and self._active_table_reuse_allowed)
         except Exception as exc:  # noqa: BLE001 — ön-koşul cevabı asla düşürmez
             log.warning("soru ön-koşulu hesaplanamadı: %s", exc)
             return ""

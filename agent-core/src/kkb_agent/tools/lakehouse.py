@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from ..contracts.catalog import Frequency, ColumnRole
 from ..contracts.lakehouse import LakehouseClient, LakehouseError
+from ..core.facets import extract_facets, province_of
 from ..domain import kisa_terim
 from ..core.errors import ToolError
 from ..core.tool import Tool, ToolResult
@@ -50,6 +51,12 @@ class LakehouseSearchTool(Tool):
 
     def __init__(self, lakehouse: LakehouseClient) -> None:
         self.lakehouse = lakehouse
+        self._empty_streak = 0
+        self._pending_streak = 0
+
+    def begin_turn(self, turn_id: int) -> None:
+        """Search limits apply inside one turn, never to a later user intent."""
+        del turn_id
         self._empty_streak = 0
         self._pending_streak = 0
 
@@ -291,6 +298,9 @@ class LakehouseQueryTool(Tool):
         uyusmazlik = self._frekans_uyusmazligi(params.sql)
         if uyusmazlik:
             return uyusmazlik
+        uyusmazlik = self._boyut_uyusmazligi(params.sql)
+        if uyusmazlik:
+            return uyusmazlik
         eksik_donem = self._atlanmis_donem_filtresi(params.sql)
         if eksik_donem:
             yil = eksik_donem.split(",")[0].strip()
@@ -300,6 +310,47 @@ class LakehouseQueryTool(Tool):
                         f"sorgun tablonun tamamını getiriyor.",
                 hint=f"Sorguya dönem kısıtını ekleyip tekrar çalıştır, ör. {self._donem_ipucu(yil)}",
                 layer="policy",
+            )
+        return None
+
+    def _boyut_uyusmazligi(self, sql: str) -> ToolError | None:
+        """Reject silent geography/source substitutions during recovery.
+
+        Frequency validation alone is insufficient: a provincial quarterly
+        table can still be selected while a national monthly BDDK table was
+        requested. Such a semantic substitution is never a valid fallback.
+        """
+        question = getattr(self._registry, "active_question", "") or ""
+        facets = extract_facets(question)
+        national = bool(re.search(r"\b(?:ulusal|national|türkiye geneli|turkiye geneli|ülke geneli|ulke geneli)\b", question, re.I))
+        try:
+            specs = list(self.lakehouse.list_datasets())
+        except Exception:  # noqa: BLE001
+            return None
+        used = [spec for spec in specs if re.search(rf"(?<![\w.]){re.escape(spec.dataset_id)}(?![\w])", sql, re.I)]
+        if not used:
+            return None
+        used_provinces = [province_of(f"{spec.dataset_id} {spec.name}") for spec in used]
+        if national and any(used_provinces):
+            return ToolError(
+                error_code="GEOGRAPHY_MISMATCH", layer="policy", retryable=True,
+                message="Ulusal veri istendi ancak sorgu il bazlı bir seri okuyor; il verisi ulusal verinin yerine kullanılamaz.",
+                hint="Ulusal ve istenen frekanstaki doğru seriyi lakehouse_search ile bulup sorgula.",
+                candidates=[spec.dataset_id for spec, province in zip(used, used_provinces) if not province],
+            )
+        if facets.provinces and any(province not in facets.provinces for province in used_provinces):
+            return ToolError(
+                error_code="GEOGRAPHY_MISMATCH", layer="policy", retryable=True,
+                message="Sorgudaki seri kullanıcının istediği il ile uyuşmuyor; başka ilin ya da ulusal serinin verisi yerine kullanılamaz.",
+                hint="İstenen il için doğru seriyi lakehouse_search ile bulup sorgula.",
+                candidates=[spec.dataset_id for spec, province in zip(used, used_provinces) if province in facets.provinces],
+            )
+        if facets.sources and any(str(getattr(spec, "source", "")) not in facets.sources for spec in used):
+            return ToolError(
+                error_code="SOURCE_MISMATCH", layer="policy", retryable=True,
+                message="Sorgudaki kaynak kullanıcının istediği kaynakla uyuşmuyor; başka kaynağın verisi sessizce kullanılamaz.",
+                hint="İstenen kaynak için doğru seriyi lakehouse_search ile bulup sorgula.",
+                candidates=[spec.dataset_id for spec in used if str(getattr(spec, "source", "")) in facets.sources],
             )
         return None
 
@@ -362,6 +413,7 @@ class LakehouseQueryTool(Tool):
                     ),
                     ok=True,
                     provenance=result.provenance,
+                    artifacts={"availability_status": "CONFIRMED_ABSENT"},
                 )
             return ToolResult(
                 content="Sorgu çalıştı ancak hiç satır dönmedi. Dönem aralığı kapsam içinde, "
@@ -369,6 +421,7 @@ class LakehouseQueryTool(Tool):
                 "lakehouse_distinct_values ile doğrula.",
                 ok=True,
                 provenance=result.provenance,
+                artifacts={"availability_status": "RETRIEVAL_FAILED"},
             )
 
         if params.as_active_table:

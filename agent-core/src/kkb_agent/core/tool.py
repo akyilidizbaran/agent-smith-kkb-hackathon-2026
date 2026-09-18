@@ -87,6 +87,14 @@ class Tool(ABC):
         """Politika katmanı: referansı sağlam çağrı yine de çalışmamalı mı? Varsayılan: yok."""
         return None
 
+    def begin_turn(self, turn_id: int) -> None:
+        """Reset turn-local tool state before a new user request.
+
+        Most tools are stateless. Stateful tools can override this hook while
+        keeping their state within one bounded execution turn.
+        """
+        del turn_id
+
     # ---- harness tarafından kullanılır ----
     def openai_schema(self, profile: DomainProfile | None = None) -> dict[str, Any]:
         """Pydantic modelinden OpenAI function-calling şeması üretir.

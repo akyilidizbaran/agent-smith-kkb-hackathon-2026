@@ -28,6 +28,9 @@ import yaml
 from ..contracts.identifiers import validate_series_id
 from .periods import TARGET_FREQUENCIES
 
+_YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+"""Safe YAML loader, libyaml-backed when available; same choice as the series catalog."""
+
 GOLD_CATALOG_SCHEMA_VERSION: Final[str] = "1.0"
 """Metric catalog file format version this loader understands."""
 
@@ -191,7 +194,7 @@ def parse_gold_catalog_file(path: Path) -> list[GoldMetricRecord]:
 
     where = str(path)
     try:
-        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        document = yaml.load(path.read_text(encoding="utf-8"), Loader=_YAML_LOADER)
     except yaml.YAMLError as exc:
         raise GoldCatalogError(f"{where}: invalid YAML: {exc}") from exc
     if not isinstance(document, dict):
