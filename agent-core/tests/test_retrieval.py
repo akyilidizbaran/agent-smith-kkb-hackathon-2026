@@ -67,6 +67,12 @@ def test_ic_ice_donem_dis_sinir_verilmezse_belirsiz_kalir() -> None:
     explicit = parse_period_intent("2021-01 ile 2025-12 arasındaki 60 aylık dönem")
     assert explicit.outer_bounds_explicit and not explicit.ambiguous_containment
 
+    compact = parse_period_intent("202201–202312 döneminde aylık serileri hizala")
+    assert compact.outer_bounds_explicit
+    assert compact.effective_window_months == 24
+    assert compact.outer_start == date(2022, 1, 1)
+    assert compact.outer_end == date(2023, 12, 31)
+
 
 def test_il_sorulmadiysa_ulusal_seri_one_il_sorulduysa_yalniz_o_il() -> None:
     r = CatalogRetriever(CATALOG, policy=RetrievalPolicy(mode="bm25"))

@@ -23,6 +23,15 @@ _MONTH_PAIR = re.compile(
     r"(19\d{2}|20\d{2})[-/.](0?[1-9]|1[0-2])\b",
     re.IGNORECASE,
 )
+# Compact month ranges are common in catalog requests and UI copy
+# (``202201–202312``).  Keep this separate from ``_MONTH_PAIR`` so a six-digit
+# token can never be mistaken for a bare year.
+_COMPACT_MONTH_PAIR = re.compile(
+    r"\b(19\d{2}|20\d{2})(0[1-9]|1[0-2])\s*"
+    r"(?:ile|ve|–|—|-|/|→|->)\s*"
+    r"(19\d{2}|20\d{2})(0[1-9]|1[0-2])\b",
+    re.IGNORECASE,
+)
 _YEAR_PAIR_SIMPLE = re.compile(
     r"\b(19\d{2}|20\d{2})\s*(?:[-–—]|ile|ve)\s*(19\d{2}|20\d{2})\b",
     re.IGNORECASE,
@@ -102,6 +111,11 @@ class PeriodIntent:
     def effective_window_months(self) -> int | None:
         """Minimum valid window; an anchor can widen a too-short request."""
         if self.window_months is None:
+            # An explicit YYYY-MM (or compact YYYYMM) range still has a
+            # deterministic monthly cardinality.  Exposing it here lets the
+            # result guard reject a query that silently widens that range.
+            if self.outer_bounds_explicit and self.outer_start and self.outer_end:
+                return _month_delta(self.outer_start, self.outer_end)
             return None
         return max(self.window_months, self.anchor_months or 0)
 
@@ -197,9 +211,11 @@ def parse_period_intent(question: str) -> PeriodIntent:
     window_months = int(window_match.group(1)) if window_match else None
 
     month_pairs = list(_MONTH_PAIR.finditer(q))
+    compact_pairs = list(_COMPACT_MONTH_PAIR.finditer(q))
     anchor_start = anchor_end = outer_start = outer_end = None
-    if month_pairs:
-        m = month_pairs[0]
+    month_matches = sorted([*month_pairs, *compact_pairs], key=lambda match: match.start())
+    if month_matches:
+        m = month_matches[0]
         y1, mo1, y2, mo2 = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
         start, end = _month_start(y1, mo1), _month_end(y2, mo2)
         if start > end:

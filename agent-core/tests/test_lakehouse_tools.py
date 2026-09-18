@@ -224,6 +224,26 @@ def test_aylik_pencere_tam_ay_sayisini_kabul_eder() -> None:
     assert result.error is None
 
 
+def test_compact_ay_araligi_disina_tasan_sonuc_reddedilir() -> None:
+    class SahteRegistry:
+        active_question = "Tüm serileri 202201–202312 döneminde aylık bazda aynı eksende hizala"
+
+    dates = pd.date_range("2022-01-31", periods=24, freq="ME")
+    # One extra month makes the result violate the explicit compact range.
+    dates = dates.append(pd.DatetimeIndex([pd.Timestamp("2024-01-31")]))
+    df = pd.DataFrame({"period_end": dates, "deger": range(len(dates))})
+    tool = LakehouseQueryTool(StubLakehouse(df), AnalysisWorkspace(), SahteRegistry())
+    result = tool.validate_and_run({
+        "sql": ("SELECT period_end, deger FROM test_tablo "
+                "WHERE period_end BETWEEN '2022-01-01' AND '2023-12-31'"),
+        "purpose": "2022-01–2023-12 aylık sonuç",
+    })
+
+    assert not result.ok
+    assert result.error is not None and result.error.error_code == "PERIOD_GRAIN_MISMATCH"
+    assert "pencere dışı" in result.content
+
+
 def test_aylik_pencere_60_sayiya_ulasip_ay_atlarsa_reddedilir() -> None:
     class SahteRegistry:
         active_question = (

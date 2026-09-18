@@ -32,6 +32,14 @@ _YEAR = re.compile(
     r"yılı|yili|den|dan|ten|tan|de|da|te|ta))?\b",
     re.IGNORECASE,
 )
+# Compact month ranges (for example ``202201–202312``) are an explicit
+# current-turn scope.  They must override a previous workspace's date range;
+# otherwise the verified-workspace fast path would reuse the stale table.
+_COMPACT_MONTH_RANGE = re.compile(
+    r"\b((?:19|20)\d{2})(0[1-9]|1[0-2])\s*(?:[-–—→]|->|ile|ve)\s*"
+    r"((?:19|20)\d{2})(0[1-9]|1[0-2])\b",
+    re.IGNORECASE,
+)
 _COMPARISON = re.compile(r"karşılaştır|karsilastir|kıyasla|kiyasla|\bvs\b|\bgöre\b|gore", re.IGNORECASE)
 _FOLLOW_UP = re.compile(
     r"\b(peki|aynı|ayni|bunu|buna|onu|şunu|sunu|diğeri|digeri|ikisini|önceki|onceki|"
@@ -338,9 +346,13 @@ def _extract(question: str, catalog: Iterable[object]) -> FollowUpContext:
     if geography:
         entity = geography[0]
 
+    compact_range = _COMPACT_MONTH_RANGE.search(question or "")
     years = _YEAR.findall(question)
     date_range = None
-    if years:
+    if compact_range:
+        y1, m1, y2, m2 = compact_range.groups()
+        date_range = f"{int(y1):04d}-{int(m1):02d}–{int(y2):04d}-{int(m2):02d}"
+    elif years:
         date_range = years[0] if len(set(years)) == 1 else "-".join(dict.fromkeys(years))
     elif re.search(r"son\s+\d+\s+ay", _fold(question)):
         match = re.search(r"son\s+(\d+)\s+ay", _fold(question))

@@ -505,7 +505,10 @@ class LakehouseQueryTool(Tool):
         intent = parse_period_intent(question)
         facets = extract_facets(question)
         expected = intent.effective_window_months
-        if not expected or facets.window_frequency != "monthly":
+        monthly_scope = facets.window_frequency == "monthly" or (
+            intent.outer_bounds_explicit and facets.frequency == "monthly"
+        )
+        if not expected or not monthly_scope:
             return None
 
         # Prefer canonical lakehouse date names, then accept common aliases.

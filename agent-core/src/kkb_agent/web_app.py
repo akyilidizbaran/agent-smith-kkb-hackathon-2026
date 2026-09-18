@@ -239,9 +239,20 @@ def project_result_table(answer: Any, agent: Any, *, question: str = "", table_b
     # workspace_show and the narrative contained them. A query after the
     # calculations remains a legitimate final projection.
     if last_query > last_compute:
-        frame = getattr(steps[last_query], "result_data", None)
-        if isinstance(frame, pd.DataFrame) and (len(frame) != len(current) or list(frame.columns) != list(current.columns)):
-            return frame.copy()
+        query_step = steps[last_query]
+        frame = getattr(query_step, "result_data", None)
+        if isinstance(frame, pd.DataFrame):
+            # ``workspace_query(as_active_table=false)`` is a read-only peek.
+            # Narration commonly uses it to verify a few example rows after a
+            # full retrieval. It must never replace the canonical active table
+            # in the UI/export payload; only an explicit base-value request may
+            # project that peek.
+            query_args = getattr(query_step, "tool_args", {}) or {}
+            is_peek = query_args.get("as_active_table") is False
+            if is_peek and not _BASE_REQUEST.search(question or ""):
+                return current.copy()
+            if len(frame) != len(current) or list(frame.columns) != list(current.columns):
+                return frame.copy()
 
     # workspace_show is an explicit final verification of the table the user
     # asked to inspect. When it occurs after transformations, export that full

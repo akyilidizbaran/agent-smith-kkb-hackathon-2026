@@ -127,6 +127,25 @@ def test_direct_query_projection_can_show_base_values_without_deleting_derived_c
     assert "metric_a_change" in agent.workspace.table.columns
 
 
+def test_read_only_peek_does_not_replace_full_active_table() -> None:
+    """Narration's four-row verification query must not shrink a 60-row export."""
+    answer, agent, before = _derived_answer()
+    answer.steps.append(AgentStep(
+        index=3,
+        role="execute",
+        tool_name="workspace_query",
+        tool_args={"as_active_table": False},
+        result_data=agent.workspace.table.iloc[[0, 1]].copy(),
+        ok=True,
+    ))
+
+    projected = project_result_table(answer, agent, question="60 aylık veriyi getir", table_before=before)
+
+    assert projected is not None
+    assert len(projected) == len(agent.workspace.table)
+    assert list(projected.columns) == list(agent.workspace.table.columns)
+
+
 def test_final_workspace_show_exports_the_post_transform_snapshot() -> None:
     answer, agent, before = _derived_answer()
     answer.steps.insert(0, AgentStep(

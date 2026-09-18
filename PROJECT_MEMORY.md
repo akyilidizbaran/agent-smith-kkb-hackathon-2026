@@ -218,6 +218,13 @@ Kullanıcı uyurken tüm milestone'ları sırayla kapatma görevi. Kod dalı yal
 - **Bulgu:** M14 arayüz dışa aktarım bağlantıları önceki commit'te yazılmamıştı (API uçları vardı) → eklendi ve doğrulandı.
 - Testler: ajan 360 → 377; lakehouse 1.085 (+EVDS pencere testi).
 
+### 2.34 — Dönem kapsamı ve cevap tablosu regresyonu (18 Eylül 2026)
+- **Kök neden 1:** 60 aylık `lakehouse_query` tam 60 satır üretmesine rağmen model anlatıyı doğrulamak için `workspace_query(as_active_table=false)` ile dört örnek tarih seçiyordu. `web_app.project_result_table` bu salt-okunur bakışı son sorgu sanıp UI/CSV/XLSX tablosuna geçiriyordu.
+- **Düzeltme:** salt-okunur peek, soru açıkça baz/orijinal değerleri istemiyorsa aktif çalışma tablosunu değiştiremez; dışa aktarım ve ekrandaki tablo kanonik aktif tabloyu korur. Baz değer isteği için eski dar projeksiyon davranışı tutuldu.
+- **Kök neden 2:** `202201–202312` kompakt ay aralığı takip çözümleyicisinde ve dönem niyetinde tanınmıyordu. Tarih kısıtı devralınan `2022-2023` aralığının arkasında kalıyor, verified-workspace fast path eski 60 satırı aynen kullanıyordu.
+- **Düzeltme:** `YYYYMM–YYYYMM` aralıkları açık mevcut-tur `date_range` olarak çözümleniyor; hızlı yol güvenli biçimde devreden çıkıyor, model yeni kapsamı sorguluyor. Dönem guard'ı açık aylık aralığın dışına taşan/eksik ayları `PERIOD_GRAIN_MISMATCH` ile reddediyor. `PeriodIntent.effective_window_months` açık aralığın gerçek ay sayısını taşıyor.
+- **Doğrulama:** 820 agent-core testi geçti (1 Starlette deprecation uyarısı). Canlı demo akışı yeniden başlatıldı: ilk sorgu 60 satır, ikinci `202201–202312` sorgusu 24 satır döndürdü. İlk canlı yanıt 162,7 s; ikinci 359,1 s (LLM fallback/retry nedeniyle) — kapsam doğruluğu korunuyor.
+
 ### 2.34 M16 ilk kabul koşusu bulguları ve düzeltmeler (14 Eylül gece)
 İlk canlı `scripts/acceptance_m16.py` koşusu 10/14 tur (rapor `docs/experiments/acceptance_m16_2026-09-14_0118.json`, başarısızlar rapordan çıkarılmadı). Dört kusur, dördü de harness'te kapatıldı:
 - **Kanıt zinciri ✗:** veri kökü `data_build_2016/` → `data/` taşınınca artifact'teki mutlak RAW yolları bayatladı. Adaptör RAW yolunu bulamazsa aynı `raw/…` kuyruğunu güncel DB kökünde arıyor (`_resolve_raw`).

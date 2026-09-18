@@ -153,6 +153,30 @@ def test_explicit_geography_source_and_frequency_conflicts_fall_back() -> None:
     )
 
 
+def test_compact_explicit_period_conflict_falls_back_from_full_workspace() -> None:
+    """A compact YYYYMM range is a new scope, so a stale table is unsafe."""
+    workspace = _workspace()
+    resolution = resolve_follow_up(
+        "Verilerin bakiye yapısını dikkate alarak aylık değişimleri analiz etmeye uygun hale getir "
+        "ve tüm serileri 202201–202312 döneminde aylık bazda aynı tarih ekseninde hizala.",
+        FollowUpContext(
+            domain="transport", source="transport", metric="passengers",
+            series="transport:passengers", date_range="2021-04–2026-03", frequency="monthly",
+        ),
+    )
+    assert resolution.explicit.date_range == "2022-01–2023-12"
+    assert "date_range" in resolution.overridden
+    assert (
+        plan_verified_workspace_transform(
+            resolution.question,
+            resolution,
+            workspace,
+            active_specs=[_spec()],
+        )
+        is None
+    )
+
+
 def test_all_verified_series_follow_up_reuses_the_workspace() -> None:
     workspace = _workspace()
     resolution = _resolution("Tüm serilerin değişimini göster")

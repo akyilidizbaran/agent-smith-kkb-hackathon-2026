@@ -248,6 +248,8 @@ def test_time_aliases_do_not_bind_follow_up_to_first_catalog_series() -> None:
     resolved = resolve_follow_up(question, previous, catalog=catalog)
     assert resolved.is_follow_up
     assert resolved.context.series == previous.series
+    assert resolved.context.date_range == "2020-01–2021-12"
+    assert "date_range" in resolved.overridden
     assert "series" not in resolved.overridden
 
 
