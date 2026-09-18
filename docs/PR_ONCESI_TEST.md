@@ -1,20 +1,21 @@
-# PR öncesi test — 17 Eylül 2026'dan itibaren
+# PR öncesi test — 18 Eylül 2026'dan itibaren
 
-GitHub Actions'ın aylık kotası tükendi ve açılmayacak. Bu yüzden **hiçbir test GitHub'da otomatik
-koşmuyor**. Değişikliği yapan kişi PR'dan önce testleri kendi bilgisayarında koşar ve sonucu PR gövdesine
-tek satır yazar; review yapan kişi o satır yoksa merge etmez.
+Repo 18 Eylül'de Pro hesaba taşındı; GitHub Actions yeniden açık (3.000 dk/ay). Testler PR açılınca ve
+main'e merge sonrası **otomatik koşar**; bir PR ancak yeşilse merge edilir.
 
-- **Ajan testleri** (`agent-core`, ~1 dk): agent-core'a dokunan her PR'da.
-- **Veri testleri** (`lakehouse-core`, 30–40 dk): lakehouse-core'a dokunan her PR'da.
+Kotayı korumak için koşu yalnız değişen pakette yapılır:
 
-Testlerin kendisi değişmedi; yalnız nerede koştukları değişti. Kota bir gün açılırsa
-`.github/workflows/tests-agent.yml` ve `tests-lakehouse.yml` içindeki yorumlu `pull_request` blokları açılır.
+- **Ajan testleri** (`tests-agent`, ~1 dk): PR `agent-core/` içinde bir şey değiştirdiyse.
+- **Veri testleri** (`tests-lakehouse`, 3 paralel parça, her biri ~15–25 dk): PR `lakehouse-core/` içinde bir
+  şey değiştirdiyse. Toplam dakika tek işle aynı; parçalama 60 dk sınırına takılmamak için.
+- Feature dalına push tek başına koşu başlatmaz; PR açık olmalı. Aynı dala yeni push eskisini iptal eder.
 
-## Kurulum (bir kez)
+Bir dakika hesabı: veri PR'ı ≈ 45–70 dk, ajan PR'ı ≈ 1 dk. Ay sonuna kadar rahat; yine de deneme push'larını
+azaltın, büyük veri değişikliklerini önce yerelde koşun.
+
+## Yerelde koşmak (isteğe bağlı, veri tarafında tavsiye edilir)
 
 `uv` kurulu olsun (CI de bunu kullanır; Python'u kendisi indirir): https://docs.astral.sh/uv/
-
-## Her PR'dan önce
 
 Ajan tarafı, ~1 dk:
 
@@ -24,7 +25,7 @@ uv sync --frozen --extra dev
 uv run --frozen --extra dev pytest -q -p no:cacheprovider
 ```
 
-Veri tarafı, tam paket, 30–40 dk (lakehouse-core'a dokunan her PR'da):
+Veri tarafı, tam paket, 30–70 dk (bilgisayara göre):
 
 ```
 cd lakehouse-core
@@ -39,15 +40,10 @@ cd lakehouse-core
 uv run --frozen pytest -q -p no:cacheprovider tests/catalog tests/scripts tests/contract tests/security tests/parsers
 ```
 
-## PR gövdesine yazılacak satır
+## Windows'ta bilinen kırıklar (main'de de aynı, Linux CI'da geçiyor)
 
-```
-Testler (Windows, 17 Eyl): agent-core 690 geçti / 11 kaldı (bilinen); lakehouse-core 1.122 geçti / 4 kaldı (bilinen). Komut: tam paket.
-```
-
-## Windows'ta bilinen kırıklar (main'de de aynı, Linux'ta geçiyor)
-
-Bunlar sizin değişikliğinizden değildir. Bunların dışında kalan her kırık değişiklikten kaynaklıdır.
+Yerelde Windows'ta koşarken bunlar sizin değişikliğinizden değildir. Bunların dışında kalan her kırık
+değişiklikten kaynaklıdır.
 
 | Paket | Test | Sebep |
 |---|---|---|
@@ -60,3 +56,8 @@ Bunlar sizin değişikliğinizden değildir. Bunların dışında kalan her kır
 
 Beklenen Windows sonucu: agent-core **690 geçti, 11 kaldı**; lakehouse-core **1.122 geçti, 4 kaldı** (17 Eyl,
 PR #9 dahil ağaçta ölçüldü).
+
+## Yeni test dizini eklerken
+
+`lakehouse-core/tests/` altına yeni bir dizin açılırsa `.github/workflows/tests-lakehouse.yml` içindeki
+`SHARD_A/B/C` listelerinden birine yazılmalı; yoksa "Parça kapsamı" adımı kırılır ve PR kırmızı olur.

@@ -1,32 +1,65 @@
 # Deterministik testler (M15-T09, ADR-0061). Ağ ve EVDS gerektiren canlı koşular burada YOK.
 #
-# 17 Eyl: aylık Actions kotası tükendiği için bu iş PR'da otomatik koşmuyor, yalnız elle tetikleniyor.
-# Veri tarafı testleri PR'dan önce yerelde koşulur ve sonuç PR gövdesine yazılır; komutlar ve Windows'ta
-# bilinen kırıklar docs/PR_ONCESI_TEST.md içinde. Kota geri gelince aşağıdaki pull_request bloğu açılır.
-#
-# Elle tetiklemeden önce: paket 1,9k katalogla GitHub'da 36–47 dk sürdü; 6,7k katalogla (PR #9 sonrası)
-# 60 dk sınırına yakın, iptal olursa kota boşa gider. Süre: lakehouse-core/src/lakehouse/catalog/series.py
-# (_YAML_LOADER) ve testlerin her bootstrap'ta kataloğu baştan yüklemesine bağlı.
+# 18 Eyl: repo Pro hesaba taşındı (3.000 dk/ay). Koşu yalnız lakehouse-core değişince: PR'da ve main'e merge
+# sonrası. Paket tek işte 1,9k katalogla 36–47 dk sürüyordu; 6,7k katalogla (PR #9) 60 dk sınırını aşıp iptal
+# oldu. Üç parçaya bölündü: parçalar paralel koşar, her biri sınırın çok altında kalır; toplam dakika aynı
+# (+ 2 kurulum). Parçalar 17 Eyl CI ölçümüne göre dengelendi (~14 dk/parça, 1,9k katalog).
+# Yeni bir tests/<dizin> eklenirse "Parça kapsamı" adımı kırılır: dizin bir parçaya yazılmalı.
 name: tests-lakehouse
 on:
+  pull_request:
+    paths:
+      - "lakehouse-core/**"
+      - ".github/workflows/tests-lakehouse.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "lakehouse-core/**"
+      - ".github/workflows/tests-lakehouse.yml"
   workflow_dispatch:
-  # pull_request:
-  #   paths:
-  #     - "lakehouse-core/**"
-  #     - ".github/workflows/tests-lakehouse.yml"
 concurrency:
   group: tests-lakehouse-${{ github.ref }}
   cancel-in-progress: true
+env:
+  SHARD_A: tests/acceptance tests/adhoc tests/catalog tests/cli
+  SHARD_B: tests/connectors tests/contract tests/generic tests/gold
+  SHARD_C: tests/infrastructure tests/ingestion tests/integration tests/parsers tests/scripts tests/security tests/silver
 jobs:
   lakehouse-core:
+    name: lakehouse-core (${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [A, B, C]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+      - name: Parça kapsamı (her tests/<dizin> tam bir parçada)
+        working-directory: lakehouse-core
+        shell: bash
+        run: |
+          all="$SHARD_A $SHARD_B $SHARD_C"
+          missing=""
+          for d in tests/*/; do
+            d="${d%/}"
+            case "$d" in tests/__pycache__) continue;; esac
+            ls "$d"/test_*.py "$d"/*/test_*.py >/dev/null 2>&1 || continue
+            case " $all " in *" $d "*) ;; *) missing="$missing $d";; esac
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Hiçbir parçada olmayan test dizini:$missing — tests-lakehouse.yml içindeki SHARD_* listesine ekleyin"
+            exit 1
+          fi
       - name: Kilitli kurulum
         working-directory: lakehouse-core
         run: uv sync --frozen
       - name: Testler
         working-directory: lakehouse-core
-        run: uv run --frozen pytest -q -p no:cacheprovider
+        shell: bash
+        run: |
+          case "${{ matrix.shard }}" in
+            A) dirs="$SHARD_A";; B) dirs="$SHARD_B";; C) dirs="$SHARD_C";;
+          esac
+          uv run --frozen pytest -q -p no:cacheprovider $dirs
