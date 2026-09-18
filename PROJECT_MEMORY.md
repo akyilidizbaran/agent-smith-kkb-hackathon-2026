@@ -4,7 +4,7 @@
 > yapıldı, neden, ne ölçüldü, hangi ADR ve commit. Gerekçelerin tamamı `docs/adr/` altında;
 > burası harita, oradaki kayıtlar bölge.
 >
-> Son güncelleme: 12 Eylül 2026 (D1 sonrası) · Dal: `feature/agent-engine` · Veri bacağı:
+> Son güncelleme: 18 Eylül 2026 · Dal: `feature/agent-engine` · Veri bacağı:
 > `feature/lakehouse-integration-r3` (`4802ba4`)
 
 ---
@@ -555,6 +555,46 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
     gösterdi; birleştirme yeni koşunun sonucu beklenerek yapıldı.
   - feature/agent-engine main'e ileri sarıldı.
 
+### 2.36 MIA yanıt gecikmesi teşhisi (17 Eylül)
+- Canlı sohbet `ca17151aa4e3`: ilk veri sorusu 199,5 s; `lakehouse_query` 23,2 s, son anlatım LLM çağrısı 174,8 s; toplam iki LLM çağrısı ve prompt kullanımı 24.261 token.
+- Aynı sohbette alakasız `Machine learning nedir` sorusu 49,2 s ve 10.448 prompt token kullandı. Aktif tablo, son sekiz mesaj ve finans takip bağlamı modele taşındı.
+- `core/agent.py` her turda izinli araç şemalarını (~15.934 karakter, yaklaşık 5.000 token) gönderiyor; son anlatım turunda araç çağrısı gerekmese de şemalar tekrar gönderiliyor. Sistem + ön-yükleme bağlamı da yaklaşık 6.000 token.
+- `core/follow_up.py` kısa ve yeni alan belirtmeyen soruları önceki bağlama takip sorusu sayabiliyor; bu, bağımsız kullanım/genel bilgi sorularında gereksiz tablo ve finans bağlamı taşıyor.
+- `LLM_DISABLE_THINKING=true` kısa kontrollü çağrıda çalışıyor (reasoning token 0); bu vakadaki ana neden düşünme modu değil, büyük prompt + uzun anlatım üretimi ve MIA değişken gecikmesi.
+- Öncelikli optimizasyon adayları: alakasız yeni soruda takip bağlamını temizlemek; nihai yeniden yazım çağrılarında tool schema göndermemek; basit/genel soruları LLM'e gitmeden ayırmak; LLM çağrısı başına prompt/completion/HTTP retry sürelerini ayrı ölçmek.
+
+### 2.37 origin/main ile karşılaştırma (17 Eylül)
+- `origin/main` güncellendi: `573f4a6`; `feature/agent-engine` (`69a0aaa`) ile ortak ata `4f65310`; feature dalı 1 commit önde (PROJECT_MEMORY), main 10 commit ileride.
+- Üst seviye dizinler aynı (`agent-core`, `lakehouse-core`, `docs`, `scripts`, `tests`); main'in eklediği yapısal dosyalar bounded execution recovery modülü, iki recovery/numeric-grounding test dosyası, iki workflow ve iki inceleme dokümanı.
+- Main çalışma zamanı ilerlemeleri: araç hatalarında en fazla 3 yeniden planlama ve `availability_status` kanıtı; sayısal grounding/evidence toleransının gösterilen hassasiyete göre sıkılaştırılması; libyaml ile katalog yükleme hızlandırması.
+- Bu main değişiklikleri mevcut başarılı akışın LLM prompt boyutunu küçültmüyor. Recovery, yalnız hatalı araç çağrılarında ek LLM turları açtığı için o senaryolarda gecikmeyi artırabilir; mevcut MIA gecikmesi için tek başına çözüm değildir.
+- Çalışma ağacında commit edilmemiş `PROJECT_MEMORY.md`, `.claude/launch.json` ve üç UI kabul deney dizini ile bir JSON var; doğrudan `git pull` yapılmayacak, önce temiz bir benchmark/inceleme dalında main değişiklikleri doğrulanacak.
+
+### 2.38 origin/main birleşimi (17 Eylül)
+- `origin/main` (`573f4a6`) `feature/agent-engine` dalına `957176c` merge commit'iyle alındı; mevcut yerel bellek ve kabul çıktıları stash ile korunup geri yüklendi.
+- Birleşen kapsam: bounded execution recovery, sayısal grounding/evidence toleransı, libyaml katalog yükleme hızlandırması, yeni agent/lakehouse CI workflow'ları ve ilgili test/dokümanlar.
+- Doğrulama: agent-core tam test paketi 759 geçti (1 deprecation warning); lakehouse-core katalog testleri 57 geçti; diff check temiz.
+- `.env` değiştirilmedi; birleşim öncesi ve sonrası SHA-256 `326ac678ad0242b1a62a79aaf0d08775a6243c42241847c847ec1fb986e46075` aynı.
+- Dal, `origin/feature/agent-engine` karşısında 11 commit önde; paylaşmak için ayrıca push gerektirir.
+- Merge sonrası çalışan demo süreci yeni kodla yeniden başlatıldı; `127.0.0.1:8765` dinliyor.
+
+### 2.39 Lakehouse kurulum doğrulaması (17 Eylül)
+- `lakehouse-core` kilitli ortamı `uv sync --frozen` ile senkron; `.venv` Python 3.12.13 ve lakehouse importu çalışıyor.
+- CLI komut grubu (`bootstrap`, `ingest`, `silver`, `gold`, `promote-draft`, `gold-run`, `ingest-file`) yardım çıktısında doğrulandı.
+- Lakehouse-core tam test paketi: 1126 geçti (380,03 s); agent-core testleri: 759 geçti.
+- Kök veri tabanı `data/lakehouse.duckdb` salt-okunur açıldı: `meta.series` 2214, `silver.fact_observation` 43830, `gold.konut_faizi_aylik` 127 ve `gold.kur_ve_faiz_aylik` 127 satır.
+
+### 2.40 Kick-off kapsamı ile veri envanteri karşılaştırması (17 Eylül)
+- Kick-off transkripti belirli dosya adları vermiyor; zorunlu açık kaynak başlıkları BDDK haftalık bülten, BDDK aylık bülten, BDDK FinTürk il verileri ve TCMB EVDS (5 yıllık derinlik ve frekans hizalama).
+- Katalogda bunlara karşılık `bddk_finturk` 648 (81 il × 8 seri), `bddk_monthly` 22, `bddk_weekly` 1 ve EVDS 1545 seri var. Kök DB bootstrap'ında 2 aylık seri (`194_Toplam`, `158_Toplam`) henüz meta.series'e alınmamış; katalog ve DB sayıları bu yüzden 2216/2214.
+- `data/incoming` altında konut_test, TÜFE HTML'leri, M16 sağlık/web CSV'leri, PDF'ler ve kullanıcı yüklemeleri bulunuyor; bunlar transkriptte adı geçen zorunlu dosyalar değil, jenerik ingest/demo/test girdileri.
+- `data/charts`, `data/conversations`, rapor JSON'ları ve `agent-core/data` altındaki fixture/alternatif DB çalışma çıktıları kaynak veri değil; mevcut demo `LAKEHOUSE_PATH=data/lakehouse.duckdb` ile kök DB'yi kullanıyor.
+
+### 2.41 FinTürk kapsam karşılaştırması (17 Eylül)
+- Mevcut FinTürk kataloğu 81 il × 8 doğrulanmış ölçüm = 648 seri; kök Silver'da 27.216 satır, seri başına 42 gözlem (2016-03–2026-06) bulunuyor.
+- Arkadaşın ekranındaki 56 kolon × 81 il = 4.536 hesabı aynı kaynağın daha fazla tablo/kolon kapsamını ölçüyor; bizim 648 seriyle doğrudan kıyaslanabilir bir dosya boyutu değil, katalog genişliği ölçüsüdür.
+- Mevcut connector yalnız `tabloNo=3` Bireysel Bankacılık sözleşmesini canlı doğruluyor. Diğer FinTürk tabloları/parti grupları eklenmeden 56 kolona çıkmak semantik, birim, frekans ve erişim doğrulaması yapılmamış kapsam olur.
+
 ### 2.35 Kanıt yolculuğu tek gösterim, sohbet kaydı ve PR #7 birleştirmesi (15–16 Eylül)
 - **Kanıt yolculuğu (ADR-0083):**
   - 3B three.js ve yürüyen karakter kaldırıldı; tıklanabilir tasarım prototipi gerçek kayıtla (Adana konut kredisi) hazırlanıp onaylandı.
@@ -584,3 +624,223 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
     satır araç izi) ve son arayüz kabul raporu.
   - CI bu commit'in kendi koşularında yeşil: agent-core 37-39 s, lakehouse-core 28 ve 47 dk.
   - feature/agent-engine main'e ileri sarıldı.
+
+### 2.42 FinTürk 56×81 demo veri kapsamı (18 Eylül)
+- Kullanıcı kararı: Demo, FinTürk'te 56 ölçüm kolonu × 81 il = **4.536 aktif seri** üzerinden ilerleyecek. `tabloNo=5` (Oranlar) ve `7` (Altın) kapsam dışı; tüm istekler Sektör (`tarafKodu=10001`).
+- Canlı kaynak doğrulaması: tablo 1/2/3/4/6 ölçü sayıları sırasıyla 4/7/8/31/6; `sehirList[0]=HEPSİ` tek yanıtta illeri döndürüyor. Tablo 1–4'teki ek `YURT DIŞI` satırı parser tarafından atılıyor.
+- `BddkFinTurkParser` artık tek şehir ve `HEPSİ` çoklu şehir yanıtlarını destekliyor; tek şehirdeki birden fazla satır için eski fail-closed denetimi korunuyor.
+- `scripts/ingestion_registry.py` FinTürk seri kayıtlarını tablo bazlı bulk FetchSpec'lere eşliyor. Tablo 3'ün mevcut seri kimlikleri korunarak dataset kimliği `bddk_finturk_table3` altında ortaklaştırıldı; yeni tablo 1/2/4/6 kayıtları da tablo bazlı dataset kullanıyor.
+- `lakehouse-core/catalog/series/bddk_finturk.yml` 3.888 kayıt eklenerek 4.536'ya çıkarıldı. Bootstrap sonrası DB'de `meta.series` FinTürk sayısı 4.536.
+- Canlı backfill: 2016-03–2026-06, 5 tablo × 42 çeyrek = 210 RAW/Bronze artifact; 0 fetch failure. Silver yeniden kuruldu: 190.512 satır, 4.536 distinct seri, 0 boundary duplicate.
+- Kök demo veri kökünde önceki il-başı tablo-3 Bronze temsilleri (3.402 dosya) silinmedi; kimlik çakışmasını önlemek için `data/bronze_legacy_finturk_20260918` altına taşındı. Kök `data/lakehouse.duckdb` ve `data/bronze` artık çalışan baseline'dır.
+- Doğrulama: FinTürk parser/connector/catalog/ingestion testleri 106 geçti. `.env` dosyasına dokunulmadı.
+- Semantik sınır: yeni tablo 1/2/4/6 kayıtları kaynak tablo etiketlerinden türetilen unit/measure_type ile `semantic_confidence: derived`; tablo 3'ün önceki bağımsız birim doğrulaması korunuyor. Tablo bazlı ek çapraz doğrulama demo öncesi backlog'da.
+
+### 2.43 BDDK/EVDS veri kullanılabilirliği kontrolü (18 Eylül)
+- Kök demo DB kaynak özeti: `bddk_finturk` 4.536 seri / 190.512 gözlem; `bddk_weekly` 1 seri / 547 gözlem; `bddk_monthly` 20 seri / 2.417 gözlem; EVDS 12 seri / 13.650 gözlem.
+- BDDK aylık kataloğunda 22 aktif seri bulunuyor; `bddk_monthly:194_Toplam` ve `bddk_monthly:158_Toplam` henüz Silver'da yok.
+- EVDS kataloğu 1.545 kayıt (1.236 active, 309 deprecated) içeriyor; bunun yalnız 12 aktif/curated serisi mevcut Silver'a alınmış. Katalog genişliği ile fiziksel veri yüklemesi aynı şey değil; tüm EVDS kataloğu şu an tam backfill edilmiş sayılmayacak.
+- BDDK haftalık ve FinTürk kapsamı demo için dolu; aylık iki seri ve EVDS'in katalogda olup henüz indirilmeyen serileri demo öncesi açık backlog olarak tutuluyor.
+
+### 2.44 BDDK aylık eksik serilerin tamamlanması (18 Eylül)
+- Toplantı kapsamındaki dönem (2021-01–2026-06) kullanılarak `bddk_monthly:158_Toplam` ve `bddk_monthly:194_Toplam` yeniden indirildi; her biri 66 gözlem ve Bronze'a birer artifact olarak yazıldı.
+- Silver yeniden kuruldu: BDDK aylık **22 seri / 2.549 gözlem**, tüm seriler için üst dönem Haziran 2026. Kümülatif seriler kaynak semantiği korunarak kaydedildi; sıfır görünen boş hücre uyarıları provenance'a işlendi.
+- Kök demo DB preflight: katalog 6.104 seri, yüklü 4.571 seri, 207.258 gözlem; Gold 6 tablo; servis `127.0.0.1:8765` üzerinde HTTP 200 ile çalışıyor.
+- `.env` değiştirilmedi. EVDS'in 1.545 kayıtlık kataloğundan yalnızca 12 küratörlü seri fiziksel olarak yüklü olma durumu devam ediyor ve ayrı kapsam kararı gerektiriyor.
+
+### 2.45 Zorunlu dönem kapsamı doğrulaması (18 Eylül)
+- 2021-01–2026-06 aralığında seçilmiş demo kapsamı seri başına eksiksiz: FinTürk 4.536/4.536 seri × 22 çeyrek; BDDK aylık 22/22 seri × 66 ay; BDDK haftalık katalogdaki 1/1 seri × 286 hafta.
+- EVDS tarafında aynı aralıkta 12 küratörlü seri yüklü (7.141 gözlem); katalogdaki 1.236 aktif serinin tamamı fiziksel olarak backfill edilmiş değil. Bu nedenle “zorunlu seçilmiş demo kapsamı tamam”, “tüm katalog tamam” sonucu birlikte korunur.
+
+### 2.46 origin/main senkronizasyonu (18 Eylül)
+- `origin/main` `84d9355` commit'ine ilerledi; `feature/agent-engine` üzerine `ae87333` merge commit'iyle alındı. Yeni kapsam: sonuç tablosu projection, workspace uyumsuzluk kontrolü, eksik timestamp normalizasyonu, hücre hizalama düzeltmesi ve web/UI regresyon testleri.
+- Doğrulama: agent-core ilgili yeni testler 23/23, tam test paketi 773/773 geçti. Servis birleşmiş kodla `127.0.0.1:8765` üzerinde HTTP 200 ve preflight “hazır” durumunda.
+- Yerel FinTürk/lakehouse değişiklikleri ve kabul çıktıları stash ile korunup geri yüklendi; merge sırasında conflict oluşmadı. `.env` SHA-256 `3d9edab0b35a33c3c0b99c4e1dec457f54d8cc8abe03ba160ddcced59d74e516` olarak değişmeden kaldı.
+
+### 2.47 Reasoning ayarı denetimi (18 Eylül)
+- Çalışan demo `.env` içindeki `LLM_DISABLE_THINKING=false` ile başladı; üretim istemcisinde açık bir `reasoning_effort` seviyesi gönderilmiyor, sağlayıcının varsayılanı kullanılıyor.
+- `LLM_DISABLE_THINKING=true` olduğunda istemci `reasoning_effort=none` ve `enable_thinking=false` göndererek düşünmeyi kapatıyor. Ana agent yolunda `low` gibi ara seviye ayarı yok; değişiklik sonrası servis yeniden başlatılmalı.
+
+### 2.48 Çoklu BDDK aylık sorusunda timeout teşhisi (18 Eylül)
+- Canlı sunucu çıktısında istek için LLM çağrısı 1/3 ve 2/3 `Request timed out` uyarıları görüldü; herhangi bir `adım ... lakehouse_*` kaydı oluşmadan timeout'a girdi. Bu vaka ilk planlama LLM çağrısında kesiliyor, DuckDB sorgusunun yavaşlığından kaynaklandığına dair kanıt yok.
+- İstek metnindeki “2022–2023” ile “60 aylık” birbiriyle uyumsuz: 2022-01–2023-12 **24 ay**. Aynı soru deterministik bir tarih netleştirmesi olmadan modele gönderiliyor.
+- Mevcut facet çıkarımı `60 aylık` ifadesini frekans değil pencere sayıyor; bare `BDDK` ve `Türkiye’deki` kaynak/ulusal facet'i açmıyor. 4.577 sorgulanabilir seri üzerinde `bm25` aramasının `limit=8` sonucu doğru aylık seriler yerine bayat `gold.tuketici_kredisi_kirilimi_aylik` ve yedi il bazlı FinTürk “Diğer Tüketici Kredileri” kartı döndürüyor. `limit=30` çağrısında doğru `bddk_monthly:1536_Toplam` ve `bddk_monthly:1539_Toplam` sonuçları mevcut.
+- Veri mevcut ve hızlı: kök Silver'da 1536 ve 1539 serilerinin her biri 2022-01–2023-12 arasında 24 gözleme sahip. Yeni Silver backfill'inden sonra altı Gold tablosu bayat; doğru hesaplanmış tablo yeniden oluşturulmadı.
+- İlk çağrı için yaklaşık yük: sistem 11.031 karakter, izinli 14 araç şeması 15.934 karakter, ön-yükleme 6.375 karakter (~1.993 token); reasoning açıkken bu yanlış kartlar ve belirsiz tarih isteğiyle birlikte Kloudeks'in 90 saniyelik çağrı sınırını aşabiliyor. Aynı timeout isteğinin 3 kez değiştirilmeden tekrarlanması toplam beklemeyi uzatıyor.
+- Öncelikli düzeltme sırası: (1) tarih çelişkisini LLM'den önce netleştirme, (2) kaynak/frekans/ulusal facet'lerini generic katalog ipuçlarıyla düzeltip il-serisi çoğalmasını engelleme, (3) Silver değişiminden sonra Gold'u yenileme, (4) son anlatım çağrısında araç şemalarını göndermeme, (5) timeout'ta aynı isteği körlemesine üç kez tekrarlamak yerine kısaltılmış bağlamla tek yeniden deneme, (6) planlama reasoning'ini açık bırakıp final anlatım için ayrı düşük/kapalı thinking seçeneğini ölçme.
+
+### 2.49 İç içe dönem niyeti, retrieval düzeltmesi ve Gold yenilemesi (18 Eylül)
+- Kullanıcı kararı: “60 ay çek ama 2022–2023 arasındaki 24 ayı içersin” ifadesi çelişki olarak reddedilmeyecek; 24 aylık aralık, 60 aylık sonuç penceresi için **dahil edilmesi gereken anchor** olarak yorumlanacak.
+- `agent-core/src/kkb_agent/core/period_intent.py` eklendi. Yıl/ay aralıklarını, ay penceresini ve `kapsayan/içersin/içeren` gibi containment ifadelerini deterministik çıkarıyor. Dış başlangıç/bitiş verilmemişse birden fazla 60 aylık pencere mümkün olduğundan LLM çağrılmadan tek netleştirme sorusu dönüyor; sistem tarih uydurmuyor. `2021-01–2025-12` gibi dış sınır açık olduğunda kapı çalışmıyor.
+- Retrieval facet'leri generic hale getirildi: bare `BDDK` kaynak ailesi, `Türkiye’deki/Türkiye geneli/ülke geneli` ulusal kapsamı, `60 aylık dönem` aylık pencere frekansı olarak işleniyor. Ulusal isteklerde il serileri eleniyor; kaynak ailesi (`bddk_*`) eşleşiyor. BM25 facet öncesi aday havuzu `k×10` yerine `k×50`/en az 500'e çıkarıldı; doğru aylık seriler il tekrarları arasında kaybolmuyor.
+- Gerçek katalog doğrulaması: yeni aramada `bddk_monthly:1536_Toplam` 1. sırada, `bddk_monthly:1539_Toplam` ilk 8 içinde; FinTürk il serileri ulusal istekte elendi. Gold stale listesi boş.
+- Yeni Silver'dan Gold yeniden üretildi: build id `c87a15b9-e3ef-4d73-aef1-3de904f5fd15`, 207.258 Silver gözlemi, 7/7 metrik tablo, 0 refused. Servis yeniden başlatıldı; `/api/status` HTTP 200, `gold_tables=7`, `silver_rows=207258`.
+- Testler: period/facet/retrieval/agent odaklı 48 geçti; canlı belirsiz soru 0 LLM çağrısıyla dış pencereyi istedi. `.env` değiştirilmedi.
+
+### 2.50 İç içe dönem kapısının kenar durumları (18 Eylül)
+- Netleştirme cevabı soru işaretiyle bitiyor; kısa kullanıcı yanıtı (`2021-01–2025-12`) mevcut pending-question akışıyla asıl isteğe bağlanabiliyor.
+- 24 aylık anchor'dan kısa bir pencere (ör. 12 ay) artık ayrı bir uyumsuzluk olarak yakalanıyor; sistem sayı üretmeden en az anchor kadar pencere istiyor.
+- Ay düzeyinde açık dış aralık (`2021-01–2025-12`) ile aynı uzunluktaki `60 aylık` ifadesi exact window kabul ediliyor; 24 aylık aralık + 60 ay ise anchor olarak korunuyor.
+
+### 2.51 Dönem guard'ında anchor yılları (18 Eylül)
+- Canlı dış pencere denemesinde model `2021–2025` filtresini kurduğu halde guard, soruda geçen anchor `2022–2023` yıllarını da SQL'de aradı ve `MISSING_PERIOD_FILTER` üretti; bu gereksiz LLM retry'larına ve 120 saniyelik beklemeye yol açtı.
+- `_atlanmis_donem_filtresi` artık `period_intent` ile aynı sözleşmeyi kullanıyor: dış pencere açıkken yalnız dış sınır yıllarını zorunlu kılıyor, anchor yıllarını ikinci filtre olarak istemiyor. Regresyon testi eklendi; agent-core tam paket **778** geçti.
+
+### 2.52 Açık dış pencere canlı kontrolü (18 Eylül)
+- `2021-01–2025-12` dış penceresi + `2022–2023` anchor'ı ile canlı akışta `MISSING_PERIOD_FILTER` tekrarı ortadan kalktı; modelin ilk dönem sorgusu başarıyla çalıştı.
+- Kloudeks'in reasoning açık ilk planlama çağrısı bu koşuda yaklaşık 74 saniye sürdü; bu kalan sağlayıcı gecikmesidir, dönem guard'ının yeni retry döngüsü değildir. Bu kayıt, dönem düzeltmesinin doğruluğu ile LLM latency problemini ayrı izlemek için tutuldu.
+
+### 2.53 Temiz demo oturumu (18 Eylül)
+- Güncel kod ve yeniden oluşturulmuş Gold ile servis yeniden başlatıldı; önceki yarım canlı istek temizlendi.
+- `/api/reset` ile yalnız aktif sohbet/agent çalışma durumu sıfırlandı; veri kökü, Silver, Gold ve `.env` korunuyor.
+- Temiz durum: sohbet geçmişi 0, Gold tablo 7, Silver gözlemi 207.258, katalog 5.795, servis `127.0.0.1:8765`.
+
+### 2.54 Demo sorusu korunuyor (18 Eylül)
+- Kullanıcının verdiği demo sorgusu değiştirilmedi ve sistem yeni bir “net soru örneği” önermiyor; dönem belirsizliğinde yalnız gerekli başlangıç/bitiş aylarını istiyor.
+
+### 2.55 Demo bağlantı süreci (18 Eylül)
+- `Failed to fetch` kontrolünde 8765 portunda servis süreci yoktu; veri/API hatası değildi. Güncel servis yeniden başlatıldı.
+- UI, static dosya ve `/api/status` uçları HTTP 200 dönüyor; demo yeniden erişilebilir.
+
+### 2.56 İç içe dönem için otomatik pencere seçimi (18 Eylül)
+- Kullanıcı kararı önceki netleştirme politikasını değiştirdi: anchor aralığını içeren daha büyük pencere için kullanıcıdan dış tarih istenmeyecek.
+- `period_intent` artık seçili katalog kapsamının ortak aralığındaki tüm geçerli pencereleri çıkarıp `SystemRandom` ile birini seçiyor. Anchor'dan kısa isteklerde minimum pencere anchor uzunluğuna genişletiliyor.
+- Seçilen pencere modelin aktif sorusuna ve sistem notuna ekleniyor; SQL guard yalnız seçilen dış sınır yıllarını zorunlu tutuyor. Cevap başına `(Otomatik seçilen dönem: …)` kanıt satırı ekleniyor.
+- Eski “dış pencereyi kullanıcıdan iste” akışı kaldırıldı; demo sorusu değiştirilmeden otomatik seçim yapılıyor.
+
+### 2.57 Localhost yeniden başlatma (18 Eylül)
+- Servis kapalı olduğu için `127.0.0.1:8765` güncel kodla yeniden başlatıldı.
+- `/api/status` HTTP 200: Analyst profili, BM25 retrieval, 207.258 Silver gözlemi ve 7 Gold tablo doğrulandı.
+
+### 2.58 60 aylık sonuçta aylık grain koruması ve model bağlamı düzeltmesi (18 Eylül)
+- Ekran denemesinde otomatik seçilen `2021-04–2026-03` penceresine rağmen sonuç yalnızca `2022-12-31` ve `2023-12-31` olmak üzere iki satıra indi. Kök neden, seçilen pencerenin yalnızca sistem notunda kalması ve modelin anchor yıllarını dış pencerenin yerine koyabilmesiydi; DuckDB sorgu süresine dair kanıt yoktu.
+- `_ask` artık `_period_resolved_question` değerini hem sistem notuna hem de gerçek kullanıcı mesajına gönderiyor. Böylece seçilen başlangıç/bitiş ayları SQL planında görünür.
+- Dönem seçim notu aylık isteklerde beklenen farklı ay sayısını ve “anchor yıllarını gruplayıp iki satıra indirme” yasağını açıkça söylüyor.
+- `LakehouseQueryTool` sorgu sonrası date/period kolonundan farklı `YYYY-MM` sayısını deterministik kontrol ediyor. Sayı beklenen pencere ayından azsa sonuç aktif tabloya yazılmadan `PERIOD_GRAIN_MISMATCH` (retryable) döndürülüyor; modelden aylık period satırlarını onarması isteniyor. Böylece yanlış iki satır başarılı tablo gibi gösterilmiyor.
+- Yeni hata kodu agent recovery kümesine eklendi; iki satırlı regresyon ve tam 60 aylık başarılı sonuç testleri yazıldı.
+- Doğrulama: `agent-core/tests` **782 geçti**, `compileall` ve `git diff --check` başarılı. `.env` değiştirilmedi.
+- Performans kararı: 300 saniyelik bütçeyi artırmak yerine yanlış sonucu erken ve deterministik reddetmek seçildi. Sağlayıcı reasoning açıkken tek LLM çağrısının 90 saniyeye yaklaşması ayrı bir latency riski olarak izleniyor; aynı timeout'u körlemesine uzatmak bu tür isteklerde toplam beklemeyi artırabilir.
+- Test tekrarı için eski başarısız sohbet silinmeden yeni boş sohbet (`87d4d6842ad2`) aktif edildi; API status'ta history boş.
+- `PERIOD_GRAIN_MISMATCH`, bounded execution recovery kümesine de eklendi; ilk redden sonra en fazla üç sınırlı planlama/onarım denemesi yapılabiliyor. Aynı yanlış sonuç aktif tabloya alınmıyor.
+
+### 2.59 LLM dışı harness gecikme denetimi ve genel ölçekleme planı (18 Eylül)
+- Aynı sorunun canlı logunda araç adımı oluşmadan LLM istemcisi üç kez timeout oldu; mevcut istemci aynı tam payload'ı 90 saniyelik timeout ile 3 kez deniyor ve aralarda 2/4 saniye bekliyor. Bu, DuckDB sorgusunun yavaşladığına dair kanıt değil; ilk planlama çağrısı provider/context aşamasında kesiliyor.
+- Güncel basit BDDK sorusu için model çağrısı ölçümü: araç kapısı 14 şema sunuyor (yaklaşık 15.934 karakter / 4.980 tahmini token); sistem + ön-yükleme yaklaşık 17.465 karakter / 5.458 token; ilk istek yaklaşık 10,4 bin tokenlık bağlamla başlıyor.
+- Genel çözüm planı: (1) faz bazlı tool şeması (`retrieve → query → transform → narrate`), (2) katalog ve dönemden typed `PlanSpec` üreten deterministik soru derleyici, (3) SQL yerine katalog doğrulamalı query builder, (4) sonuç sözleşmesiyle kaynak/frekans/coğrafya/dönem/anahtar/birim doğrulaması, (5) aynı payload'ı tekrarlamayan deadline-aware retry merdiveni, (6) soru/katalog sürümü/SQL sonuç önbellekleri, (7) doğrudan veri getir sorularında deterministik anlatım, (8) p50/p95 latency, token, tool-round ve recovery metrikleri.
+- Mimari kırmızı çizgi: domain davranışı finans koduna gömülmeyecek; derleyici katalog metadata'sı ve tool capability sözleşmeleriyle jenerik kalacak. Daha fazla aracı tek LLM çağrısına eklemek yerine faza göre sunulan seçenekler daraltılacak.
+
+### 2.60 Fazlı şema, deadline ve doğrulama paketinin uygulanması (18 Eylül)
+- İlk LLM planlama turunda yeni veri sorularına yalnız retrieval yüzü sunuluyor; veri/işlem sonucu alındığında gate tam tool ailesine geçiyor. Grafik/web/analitik/Architect sinyali varsa ilgili aile ilk turda korunuyor. `initial_phase` sözleşmesi yeni plugin araçlarının isim listesine dokunmadan ilk faza katılmasını sağlıyor.
+- Güncel demo registry ölçümü: plain BDDK veri sorusunda ilk tur **5/14 tool**, şema karakteri **3.837/15.906**; ilk çağrı için yaklaşık %76 daha küçük native tool yüzü. İkinci fazda tam 14 araç gerektiğinde açılıyor.
+- Katalog araması/şema incelemesi başarıyla bittiğinde faz geçişi artık veri sorgusunu beklemiyor; ikinci LLM turunda Gold, workspace ve analiz araçları açılıyor. `GOLD_REQUIRED` hatası da aynı geçişi tetikliyor; dönem toplaması isteyen bir soru Gold şemasını gizli tutup kilitlenemiyor.
+- `ToolRegistry.schemas()` profil + seçili araç kümesi anahtarıyla şema önbellekliyor; kayıt veya profil değişince önbellek geçersizleşiyor. Aynı turdaki dönüşlerde Pydantic şeması yeniden üretilmiyor.
+- Her cevapta `usage` içine `initial_tool_schemas`, `max_tool_schemas`, `phase_switches` metrikleri eklendi; UI/acceptance koşucusu log ayrıştırmadan faz etkisini ölçebilir.
+- OpenAI uyumlu istemcide varsayılan provider denemesi 3'ten 2'ye indirildi (`LLM_MAX_RETRIES` ile ayarlanabilir). Agent soru bütçesini istemciye deadline olarak geçiriyor; her retry kalan süreye kırpılıyor, backoff deadline'ı aşmıyor. Sarmalanmış timeout RuntimeError'ları da LLM kesintisi olarak güvenli biçimde raporlanıyor.
+- Aylık iç içe dönem sonuçları için tam ay kümesi denetimi güçlendirildi: açık dış pencerede eksik veya pencere dışı aylar `PERIOD_GRAIN_MISMATCH` ile aktif tabloya yazılmadan reddediliyor.
+- Doğrulama: `agent-core` **789/789**, `lakehouse-core` **1126/1126** test geçti; `compileall` ve `git diff --check` başarılı. Bir Starlette deprecation uyarısı dışında hata yok. `.env` SHA-256 `3d9edab0b35a33c3c0b99c4e1dec457f54d8cc8abe03ba160ddcced59d74e516` olarak aynı kaldı.
+- Sonraki ölçüm noktası: canlı sağlayıcıda aynı demo sorusunu tekrar tekrar bekletmek yerine `usage` faz sayaçları, p50/p95 süre ve gerçek provider timeout oranı ayrı raporlanacak; typed PlanSpec/SQL builder deterministikleştirmesi bir sonraki kapasite paketi.
+
+### 2.61 MIA health-check ve embedding doğrulaması (18 Eylül)
+- UI’daki “Model servisine ulaşılamıyor” metni agent’ın LLM çağrısında `Request timed out` ile oluşuyor; embedding çağrısından kaynaklanmıyor. MIA endpoint’i ve anahtar erişilebilir.
+- Eski `--preflight --live` kontrolü reasoning açık modelde yalnız 5 token istediği için görünür cevap üretmeden `finish=length` alıyor ve yanlış negatif veriyordu. Health ping reasoning’i yalnız kontrol çağrısında kapatıp 32 token kullanacak şekilde düzeltildi; uygulamanın `LLM_DISABLE_THINKING=false` ayarı değişmedi.
+- Düzeltme sonrası canlı preflight: `MIA canlı ✓ cevap: 'hazır' · finish=stop`.
+- Aynı MIA anahtarıyla `Qwen3-Embedding-8B` endpoint’i doğrulandı: 4096 boyut, tek istek 0,49 s. `RETRIEVAL_MODE=auto` ve 4.571 sorgulanabilir seri (`hybrid_min=5000` altında) nedeniyle üretimde BM25 seçiliyor. Embedding’i timeout çözümü olarak zorlamak yerine cache’li A/B ölçümüyle devreye almak öneriliyor; ilk katalog vektörleme 4.571 seri için çoklu embedding çağrısı gerektirir.
+
+### 2.62 Compact planner ve faz şeması daraltması (18 Eylül)
+- Yeni veri sorusunun ilk LLM turunda tam sistem promptu + ön-yükleme kataloğu gönderilmiyor; 1.575 karakterlik compact planner sözleşmesi ve 5 retrieval şeması kullanılıyor. Aynı soru provider’a doğrudan testte reasoning geçici kapalıyken 7,28 saniyede doğru `lakehouse_search` çağrısı verdi; önceki yaklaşık 18 bin karakterlik yük 30 saniyelik testte timeout olmuştu.
+- İlk tool planlama ve recovery çağrılarında reasoning geçici olarak kapatılıyor; doğrulanmış veri geldikten sonraki SQL/Gold/anlatım turlarında `.env` içindeki reasoning ayarı korunuyor.
+- Retrieval/describe/distinct turlarında şema yüzü 5 araçta kalıyor. Yalnız `GOLD_REQUIRED` hatası Gold şemalarını açıyor; birleştirme/sütun/tablo istekleri workspace ailesini, grafik/analitik/web/Architect ise kendi sinyalini açıyor.
+- Canlı uçtan uca denemede MIA’nın değişken provider gecikmesi ikinci geniş promptta yeniden timeout verdi; bu nedenle compact planner ölçümü güvenilir, provider’ın her anda cevap vereceği garanti değil. Bir sonraki sağlamlaştırma adımı, katalogdan deterministik retrieval + query planı çıkarıp ilk tool seçim LLM çağrısını tamamen opsiyonel hale getirmek.
+- Doğrulama: `agent-core` **791/791**, `lakehouse-core` **1126/1126** (önceki tam koşu) geçti; `.env` değişmedi.
+
+### 2.63 Exact demo sorusu canlı yeniden denemesi (18 Eylül)
+- Güncel compact planner, fazlı tool gate ve planlama/recovery reasoning kapatma değişiklikleriyle exact demo sorusu temiz sohbette tekrar denendi. İstemci 180 saniyeye kadar bekledi; yanıt dosyası oluşmadan timeout oldu.
+- Bu sonuç, testlerin ve doğrudan compact provider çağrısının başarılı olmasına rağmen sağlayıcı gecikmesinin canlı uçtan uca koşuda hâlâ değişken olduğunu gösteriyor. Sunucu ayakta kaldı; `/api/status` HTTP 200 ve `retrieval_mode=bm25`, `silver_rows=207258`, `gold_tables=7` değerleri korundu.
+- Sonraki güvenilirlik paketi: soru metninden katalog facet'leri ve typed `PlanSpec` üretip retrieval/query tool çağrısını deterministik başlatmak; LLM'yi yalnız plan doğrulama ve anlatım için opsiyonel kullanmak. Böylece ilk model timeout'u veri getirme akışını bloke etmeyecek.
+
+### 2.64 Demo soru bütçesi 600 saniye (18 Eylül)
+- Kullanıcının canlı denemeyi tamamlayabilmesi için `AGENT_TIME_BUDGET_S` varsayılanı 300 saniyeden 600 saniyeye çıkarıldı (`agent-core/src/kkb_agent/config.py`). Ortam değişkeni verilirse açık değer önceliklidir.
+- Tek MIA çağrısının timeout'u 90 saniye ve provider retry sayısı 2 olarak bırakıldı; yalnız toplam soru bütçesi genişletildi. `.env` değiştirilmedi.
+- Servis yeni ayarla yeniden başlatıldı ve `127.0.0.1:8765` üzerinde çalışıyor. `agent-core` harness/web odak testleri **62/62** geçti; `git diff --check` başarılı.
+
+### 2.65 Demo oturumunda reasoning kapatma (18 Eylül)
+- Kullanıcının canlı ekranında 60 satırlık tablo kurulmasına rağmen son anlatım/doğrulama LLM turu `RuntimeError` ile kesildi. Demo denemesi için servis `LLM_DISABLE_THINKING=true AGENT_TIME_BUDGET_S=600` ortamıyla yeniden başlatıldı.
+- Reasoning yalnız bu çalışan süreçte kapalıdır; `.env` değiştirilmedi ve SHA-256 aynı kaldı. Planlama, veri sorgusu ve son anlatım turları aynı hızlı provider ayarını kullanır.
+- `/api/reset` sonrası temiz Analyst oturumu doğrulandı: retrieval `bm25`, Silver 207.258 gözlem, Gold 7 tablo.
+
+### 2.66 Takip sorusu ve tablo önizleme düzeltmeleri (18 Eylül)
+- Takip çözümleyicide zaman kolonu takma adları (`dönem`, `tarih`, `ay`) ve tek başına frekans etiketleri (`aylık`) seri adayı sayılmıyor. Ayrıca `min`/`max` eşleşmeleri kelime sınırına alındı; `döneminde` artık yanlışlıkla minimum agregasyon üretmiyor.
+- Terminal tool hatasında modelin yanlış kaynağı açıklayan son paragrafı yayınlaması engellendi; doğrulanmış aktif tablo varsa takip isteği başarısızlığı deterministik ve tabloyu koruyan metinle sonuçlanıyor.
+- API/UI katmanları, doğrulanmış `table` artifact'i varken modelin kısaltılmış markdown tablosunu metin bölümünde ikinci kez göstermiyor. Böylece üst metindeki eksik hücreler ile CSV/XLSX arasındaki görünür çelişki ortadan kalkıyor; canonical tablo kartı ve rapor tablosu tek gösterim oluyor.
+- Gerçek exact soru yeni kodla **206,2 s**, 60 satır ve JSON tablosunda **0 boş hücre** ile tamamlandı. Resolver regresyonu ve ilgili workspace testleri geçti; agent tam paket **792/792**, statik JS `node --check`, `git diff --check` başarılı.
+- Hatalı eski sohbet silindi; servis temiz Analyst oturumunda çalışıyor. `.env` SHA-256 değişmedi.
+- Son doğrulama: agent-core **792/792**, web/follow-up odak testleri **19/19**, statik JavaScript syntax kontrolü ve `git diff --check` başarılı.
+
+### 2.67 Aktif tablo dönüşümlerinin stale guard tarafından bastırılmaması (18 Eylül)
+- Takip isteği aylık değişim ve ortak tarih ekseni dönüşümü için aktif 24 aylık tablo doğru olsa da son cevap, yalnız dış kaynaktan veri getiren `FRESH_DATA_TOOLS` kümesi aranarak yanlışlıkla “mevcut analiz tablosuyla uyumlu değil” metnine eziliyordu.
+- `workspace_compute_column`, `workspace_query`, `workspace_join`, `workspace_add_column` ve analitik/Gold dönüşüm araçları ayrı `ACTIVE_TABLE_ACTION_TOOLS`/`TRANSFORMATION_TOOLS` sözleşmeleriyle tanımlandı. Stale guard artık geçerli aktif tablo işlemini yeni retrieval yok diye reddetmiyor; ulusal/il/frekans uyumsuzluğunda eski tabloyu kullanmama koruması sürüyor.
+- “aylık değişim”, “aynı tarih ekseni”, “hizala”, “normalleştir”, “dönüşüm” gibi istekler araçsız anlatıya kaçarsa deterministik dönüşüm capability geri gönderimiyle `workspace_compute_column`/`workspace_query`/Gold aracı çağrısı isteniyor.
+- Doğrulama: yeni aktif tablo regresyonu dahil agent-core **793/793** geçti; sunucu güncel kodla yeniden başlatıldı, `/api/status` ve UI HTTP 200, geçmiş temiz; `.env` SHA-256 değişmedi.
+
+### 2.68 PR9 veri tabanının kanonik köke alınması (18 Eylül)
+- Kullanıcı kararıyla veri baseline'ı `bushushow/AgentSmithler_WorkSpace` PR #9 kapsamı olarak kabul edildi. PR9 ağacında `.duckdb`, Parquet ve Bronze/RAW dosyaları Git'e alınmadığı için binary doğrudan pull edilmedi; PR9 katalogları ve kabul kapsamı kullanılarak veritabanı yeniden oluşturuldu.
+- Kök `data/lakehouse.duckdb` artık PR9 kapsamıyla çalışıyor. Aktif katalog: `bddk_finturk` 4.536, `bddk_monthly` 498, `bddk_weekly` 34, `evds` 1.236; toplam **6.304 aktif seri**. Deprecated kayıtlar: BDDK aylık 76, BDDK haftalık 3, EVDS 309.
+- Silver gözlemleri: FinTürk **99.792** (56 ölçüm × 81 il × 22 çeyrek), BDDK aylık **32.817**, BDDK haftalık **9.807**, EVDS **89.579**; toplam **231.995** gözlem. FinTürk zorunlu aralığı 2021-03–2026-06 arasındaki 22 çeyrek uç noktasıyla dolu; diğer kaynaklarda 2021-01–2026-06 dönemi kapsanıyor. Mevcut eski serilerin daha uzun geçmişi varsa kaynak kanıtı korunarak silinmedi.
+- Yedi Gold tablosu yeniden üretildi; güncel Silver parmak iziyle eşleşiyor ve reddedilmiş metrik yok. BDDK `1536?Toplam` doğrulaması: 2022-12 **674.803**, 2023-12 **983.284** milyon TL; demo sorusundaki değerlerle uyumlu.
+- PR9 anlatısındaki 232.217 gözlem sayısı yerine canlı kaynaklardan yeniden kurulan kökte 231.995 gözlem var. Fark, kaynak dönem/tekrar sınırı ve mevcut dosyalardaki gerçek gözlem bulunabilirliğinden kaynaklanıyor; eksik değer uydurulmadı. Tüm 6.304 aktif seri yüklü olduğu için bu fark veri kapsamının eksik olduğu anlamına gelmiyor.
+- Eski kök verisi geri dönüş için `data/lakehouse_pre_pr9_20260918.duckdb` ve `data/bronze_pre_pr9_20260918/` altında saklandı. `.env` SHA-256 değişmeden `3d9edab0b35a33c3c0b99c4e1dec457f54d8cc8abe03ba160ddcced59d74e516` kaldı.
+- Hedefli doğrulama testleri: `tests/catalog tests/parsers tests/silver tests/gold` **393 geçti**; tam yeniden oluşturma sırasında Bronze 16.812 dosya olarak köke alındı. Servis güncel kök DB ile `127.0.0.1:8765` üzerinde yeniden başlatıldı; `/api/status` HTTP 200, Silver 231.995 ve Gold 7 görünüyor.
+
+### 2.69 Büyük katalogda soğuk embedding ve parent–child retrieval düzeltmesi (18 Eylül)
+- 6.311 seriyle aynı demo sorusunun ölçümü: toplam **345,7 s**; ilk `lakehouse_search` adımı **218,2 s** sürdü. Sebep DuckDB değil, katalog önbelleği eşleşmediği için 64'lük yaklaşık 99 uzak embedding isteğinin interaktif soruda senkron çalışmasıydı. Aynı Silver SQL'i doğrudan **0,15 s** sürdü.
+- Retriever artık 1.000'den büyük soğuk katalogda embedding migration'ı başlatmıyor; tam embedding önbelleği yoksa açık durum iziyle BM25'e düşüyor. Küçük kataloglar ve açık warm-up yolu mevcut hibrit davranışı koruyor.
+- Çok kavramlı sorular artık özgün cümleye ek olarak `ve/ile/veya` ve noktalama ile ayrılan kavram parçalarıyla aranıyor. Sert kaynak/frekans/coğrafya yüzleri clause havuzundan önce uygulanıyor; böylece tekrar eden il-alt seri ailesi ulusal parent seriyi aday havuzundan silemiyor.
+- Dönem çözümleyici, yalnızca anchor aralığını ve istenen dış pencereyi tek başına taşıyabilen serilerin kapsamını ortaklaştırıyor. İlgisiz, geç başlayan bir aylık seri 60 aylık pencereyi artık yok edemiyor.
+- Güncel kodla aynı soru temiz oturumda **62,6 s**, 60 satır/5 kolon ve 0 başarısız araç çağrısıyla tamamlandı. Adımlar: arama 10,1 s, üç describe toplam 12,0 s, sorgu turu 22,9 s, anlatım 14,3 s; kalan süre model turlarının sağlayıcı gecikmesi.
+- Bu gözlem parent–child semantiğinin yalnız isimlerden modele bırakılmaması gerektiğini doğruladı. Kalıcı çözüm için sonraki veri sözleşmesi: `concept_id`, `parent_series_id`, `relation_type`, `dimension_path`, `additivity`, `semantic_confidence` ve kanıt artifact'iyle `meta.series_relation`; geniş kavramda parent varsayılan, alt kalem isteğinde child, toplama yalnız `additivity=additive` kanıtlıysa yapılacak.
+- BDDK örneği: `1539` bireysel kredi kartları toplamı; `1541` taksitli ve `1542` taksitsiz alt kalemler. Kullanıcı geniş kavramı sorduğunda parent seçilmeli; alt kırılım istenirse üçü birlikte gösterilmeli ve parent = child toplamı deterministik uzlaştırılmalıdır.
+- Doğrulama: retrieval/period/agent odak testleri **53 geçti**; `LLM_DISABLE_THINKING=true AGENT_TIME_BUDGET_S=600` ile servis yeniden başlatıldı ve `/api/reset` sonrası temiz Analyst oturumu hazır.
+
+### 2.70 `meta.series_relation` ortak ilişki katmanı (18 Eylül)
+- Kaynak parserlarının ürettiği `series_id` kimliği korunarak, BDDK aylık/haftalık, FinTürk ve EVDS serilerini tek bir source-independent ilişki modeline bağlayan `meta.series_relation` tablosu eklendi. Parser gözlemlerinin fiziksel sözleşmesi değişmedi; ilişki, katalog yükleme/migration aşamasında aynı kimlikler üzerinde üretiliyor.
+- Ortak kayıt alanları: `concept_id`, `parent_series_id`, `relation_type`, `dimension_path`, `additivity`, `relation_confidence`, `relation_source`, `relation_content_sha256`. Bilinmeyen ilişki tahmin edilmiyor ve `standalone` olarak kalıyor.
+- BDDK item-tree eşlemeleri parent/child olarak; FinTürk il boyutu `dimension_member`; EVDS bölge boyutu `dimension_path` olarak kaydediliyor. Üretim kökünde **6.304** aktif seri için relation satırı oluşturuldu: `dimension_member=5.587`, `child_breakdown=192`, `parent_total=16`, `standalone=509`.
+- Silver adaptörü relation satırlarını `DatasetSpec` ve retriever `CatalogRecord` içine taşıyor. Geniş kavram sorgusu doğrulanmış parent'ı öne alıyor; açık child/breakdown sorgusu doğrudan child'ları genişletiyor. Açıkça adlandırılmış bir child boyutunda ilgisiz sibling yeniden eklenmiyor.
+- Migration komutu: `cd lakehouse-core && uv run python scripts/sync_series_relations.py ../data/lakehouse.duckdb`. Bootstrap yolu `005_series_relation.sql` ile aynı tabloyu otomatik oluşturuyor; eski relation'sız DuckDB'ler adaptör tarafında geriye dönük varsayılanlarla okunabiliyor.
+- Doğrulama: relation/catalog/integration/infrastructure odak paketi **79 geçti** (EVDS ortak dataset bölge regresyonu dahil); agent-core tam paket **795 geçti**; lakehouse-core tam suite yeniden üretim ağırlıklı olduğu için 14:28'de **148 test geçtikten sonra** manuel demo hazırlığını bloklamaması için durduruldu. `.env` değişmedi.
+
+### 2.71 Relation katmanı sonrası demo hazır (18 Eylül)
+- `data/lakehouse.duckdb` relation migration'ı son kodla tekrar çalıştırıldı ve 6.304 relation satırı doğrulandı.
+- Güncel servis `LLM_DISABLE_THINKING=true AGENT_TIME_BUDGET_S=600` ile `127.0.0.1:8765` üzerinde çalışıyor. `/` ve `/api/status` HTTP 200; status'ta katalog 6.304, yüklenmiş seri 6.304, Silver 231.995 gözlem ve Gold 7 görünüyor.
+- `.env` SHA-256: `3d9edab0b35a33c3c0b99c4e1dec457f54d8cc8abe03ba160ddcced59d74e516`.
+
+### 2.72 Gold dönem filtresinde anchor daralması düzeltmesi (18 Eylül)
+- Canlı ekran incelemesinde otomatik dış pencere metni 60 ayı gösterirken aktif Gold tablosu modelin `period_from=2022-01`, `period_to=2023-12` argümanlarıyla 24 satıra daralıyordu. `lakehouse_query` grain guard'ı bunu kapsamadı çünkü sonuç `gold_align/gold_join` üzerinden kurulmuştu.
+- `_GoldTool` artık aktif resolved question içindeki canonical dış aylık pencereyi (`outer_bounds_explicit`) okuyor ve modelin yalnız anchor yıllarını verdiği Gold filtrelerini bu pencereyle tutarlı biçimde uyguluyor. Böylece seçilen 60 ay aktif tabloya 60 satır olarak geçiyor; kullanıcı sorusuna özel fixture eklenmedi.
+- Yeni regresyon: `test_gold_ambiguous_anchor_donemini_ust_pencereye_tasiyor`; Gold/lakehouse/retrieval/agent odak paketi **89 geçti**. Exact kullanıcı sorusu test kaynağına eklenmedi ve önceki kalıcı sohbet `/api/reset` ile temizlendi.
+- Servis güncel kodla `127.0.0.1:8765` üzerinde çalışıyor; katalog 6.304, Silver 231.995, Gold 7, sohbet geçmişi boş.
+
+### 2.73 PR9 artifact provenance backfill ve kanıt zinciri onarımı (18 Eylül)
+- UI kanıt yolculuğunda BDDK aylık sonuçları `Kaynak URL / adres kaydı yok` ile kırılıyordu. İncelemede sayısal veri, RAW JSON ve Bronze Parquet dosyaları mevcutken PR9 kök veritabanında BDDK aylık **498**, BDDK haftalık **34**, FinTürk **110** ve EVDS **35** `meta.artifact` satırının eksik olduğu bulundu. Bu bir localhost çökmesi değildi: aynı sırada `/`, `/api/status`, `/api/answers` ve `/api/ask/stream` uçları HTTP 200 dönüyordu.
+- `lakehouse-core/scripts/repair_artifact_metadata.py` eklendi. Script yalnız Silver'daki gerçek artifact SHA/fetched_at, mevcut content-addressed RAW dosyasının boyutu/yolu ve `meta.series.metadata_url` üzerinden eksik kayıtları tamamlar; indirme yapmaz ve timestamp uydurmaz. `meta.artifact_request` satırları da aynı kaynak açıklamasıyla yazılır. Aynı SHA için FinTürk'teki 81 il serisi tek source-level artifact olarak deterministik temsil edilir; Silver gözlem eşlemesi değişmez.
+- Canlı backfill sonucu: **677** `meta.artifact` ve **677** request-provenance satırı eklendi; eksik RAW **0**, eksik locator **0**. Silver → `meta.artifact` eşleşmesi BDDK aylık 498/498, haftalık 34/34, FinTürk 110/110, EVDS 7.354/7.354 oldu. Önceki DB `data/lakehouse_pre_artifact_repair_20260918.duckdb` olarak saklandı.
+- Adaptör doğrulaması: BDDK ihtiyaç kredisi gözlemi `locator=https://www.bddk.org.tr/BultenAylik`, `raw_present=true`, `bronze_present=true`, `raw_digest_ok=true`, `complete=true`, `chain_state='tam'` döndü. Böylece kanıt panelindeki URL halkası gerçek kaynak URL'siyle yeşile dönebilecek.
+- Servis `LLM_DISABLE_THINKING=true AGENT_TIME_BUDGET_S=600` ile yeniden başlatıldı; `/api/status` HTTP 200, katalog 6.304, Silver 231.995, Gold 7. `/api/reset` sonrası manuel test geçmişi boş temiz Analyst oturumu hazır. `.env` SHA-256 değişmedi.
+
+### 2.74 Uzun çıktı ve dönüşüm dışa aktarımı düzeltmesi (18 Eylül)
+- Son manuel takip cevabında model 24×7 dönüşüm tablosunu araçla üretmiş ve son `workspace_show` ile doğrulamıştı; ancak dışa aktarım seçicisi önceki 24×3 `workspace_query` snapshot'ını seçtiği için CSV/XLSX yalnız bakiyeleri içeriyordu. `project_result_table` artık sorguyu dönüşümden önceki ara girdi olarak ayırıyor; dönüşümden sonra gelen sorguyu son projeksiyon, son `workspace_show` snapshot'ını ise tam cevap artifact'i olarak seçiyor.
+- Markdown tablo ayırıcısı `---:`, `:---` ve `:---:` hizalama biçimlerini tanıyacak şekilde düzeltildi. Yapılandırılmış tablo artifact'i varken modelin uzun Markdown tablosu anlatıda tekrar edilmiyor; böylece önizleme ile indirme arasında kolon çelişkisi oluşmuyor.
+- Varsayılan `LLM_MAX_TOKENS` **1500 → 4000** yapıldı; `.env` değeri varsa önceliği sürüyor. Sistem promptu tam tablonun UI/CSV/XLSX artifact'inde bulunduğunu, nihai anlatının uzun satır satır Markdown tabloyu kopyalamaması gerektiğini söylüyor. Bu hem 24/60 aylık çıktılarda `finish_reason=length` riskini azaltıyor hem de doğrulanmış tabloyu koruyor.
+- Yeni dönüşüm→`workspace_show`→dışa aktarım regresyon testi eklendi. Projection/web/follow-up odak paketi **26 geçti**; `py_compile`, `git diff --check` başarılı. Servis `LLM_DISABLE_THINKING=true AGENT_TIME_BUDGET_S=600 LLM_MAX_TOKENS=4000` ile yeniden başlatıldı; `/api/reset` sonrası geçmiş boş, `/api/status` HTTP 200. `.env` SHA-256 değişmedi.
+
+### 2.75 Çağrı türüne göre dinamik token bütçesi (18 Eylül)
+- Global `LLM_MAX_TOKENS=4000` artık her çağrının hedefi değil, geriye dönük uyumluluk üst sınırı olarak kullanılıyor. `TokenBudgetPolicy` katalog/ilk araç seçimi (`planning=1000`), dönüşüm veya özel araç argümanı (`tool=1800`), normal anlatı (`narration=2800`), 48+ satır veya 6+ kolonlu uzun anlatı (`long_narration=3400`) ve kurtarma/adım sınırı (`recovery=1400`) fazlarını seçiyor. Her değer global tavanla kırpılıyor.
+- `AnalyticsAgent` eski doğrudan kullanımını koruyor: `token_budget_policy` verilmezse testlerdeki ve gömülü kullanımlardaki sabit `max_tokens` davranışı değişmiyor. CLI sunucusu politikayı ayarlardan kuruyor. Çağrıların seçilen fazı ve uygulanan tavanı `usage.token_budget_calls` izinde yayınlanıyor; `finish_reason=length` yalnız kullanıcıya görünen anlatı/kurtarma fazlarında kesinti sayılıyor.
+- Ayarlanabilir ortam değişkenleri: `LLM_PLAN_MAX_TOKENS`, `LLM_TOOL_MAX_TOKENS`, `LLM_NARRATE_MAX_TOKENS`, `LLM_LONG_NARRATE_MAX_TOKENS`, `LLM_RECOVERY_MAX_TOKENS`. `.env` değiştirilmedi; canlı süreç `LLM_DISABLE_THINKING=true AGENT_TIME_BUDGET_S=600 LLM_MAX_TOKENS=4000` ile yeni koddan yeniden başlatıldı, `/api/reset` sonrası geçmiş temiz.
+- Doğrulama: dinamik politika dahil `agent-core` **800 geçti**, `py_compile` ve önceki statik kontroller başarılı. Canlı `/api/status`: katalog **6.304**, Silver **231.995**, Gold **7**, `retrieval_mode=hybrid`, Analyst profili; servis `127.0.0.1:8765` üzerinde HTTP 200.
+
+### 2.76 PR CI ve çalışma ağacı temizliği (18 Eylül)
+- GitHub Actions kotası yeniden kullanılabilir olduğu için `.github/workflows/tests-agent.yml` ve `tests-lakehouse.yml` içindeki `pull_request` tetikleri yeniden açıldı; `workflow_dispatch` da korunuyor. `docs/PR_ONCESI_TEST.md` artık eski “Actions yok” prosedürü yerine CI komutlarını ve yerel doğrulama durumunu belgeliyor.
+- PR kapsamından `.claude/` ve `docs/experiments/` altındaki yerel UI/benchmark artefaktları dışarıda tutulacak; çalışma ağacında bırakıldılar, silinmediler. PR9 kapsamındaki 4.536 aktif FinTürk serisini taşıyan katalog değişikliği kaynak katalog olarak dahil edilecek.
+- Exact demo sorusu fixture'dan çıkarıldı; Gold anchor testi sentetik bir soru ifadesi kullanıyor. `test_gold_tools.py` **16 geçti**.
+- CI ile aynı agent komutu `uv run --frozen --extra dev pytest -q -p no:cacheprovider`: **801 geçti**, 1 uyarı, 6,71 s. Lakehouse hızlı hedefli kapsam **55 geçti**, 142,58 s. 6.304 serilik tam lakehouse paketi yerelde katalog bootstrap maliyeti nedeniyle yaklaşık 14 dakika sonra %6 ilerlemede durduruldu; assertion hatası görülmedi ve tam sonuç PR Actions job'ına bırakıldı.

@@ -1,62 +1,34 @@
-# PR öncesi test — 17 Eylül 2026'dan itibaren
+# PR test doğrulaması
 
-GitHub Actions'ın aylık kotası tükendi ve açılmayacak. Bu yüzden **hiçbir test GitHub'da otomatik
-koşmuyor**. Değişikliği yapan kişi PR'dan önce testleri kendi bilgisayarında koşar ve sonucu PR gövdesine
-tek satır yazar; review yapan kişi o satır yoksa merge etmez.
+GitHub Actions yeniden kullanılabilir durumda. Aşağıdaki iki workflow hem `pull_request` açıldığında hem de `workflow_dispatch` ile elle çalışır:
 
-- **Ajan testleri** (`agent-core`, ~1 dk): agent-core'a dokunan her PR'da.
-- **Veri testleri** (`lakehouse-core`, 30–40 dk): lakehouse-core'a dokunan her PR'da.
+- `.github/workflows/tests-agent.yml`: `agent-core` birim ve sözleşme testleri
+- `.github/workflows/tests-lakehouse.yml`: `lakehouse-core` tam test paketi
 
-Testlerin kendisi değişmedi; yalnız nerede koştukları değişti. Kota bir gün açılırsa
-`.github/workflows/tests-agent.yml` ve `tests-lakehouse.yml` içindeki yorumlu `pull_request` blokları açılır.
+Merge kararı GitHub Actions sonucuna dayanır. Yerel sonuçlar bu dosyada yalnızca iz bırakmak ve PR gövdesine ölçüm koymak için tutulur.
 
-## Kurulum (bir kez)
+## CI ile aynı yerel komutlar
 
-`uv` kurulu olsun (CI de bunu kullanır; Python'u kendisi indirir): https://docs.astral.sh/uv/
-
-## Her PR'dan önce
-
-Ajan tarafı, ~1 dk:
-
-```
+```bash
 cd agent-core
 uv sync --frozen --extra dev
 uv run --frozen --extra dev pytest -q -p no:cacheprovider
-```
 
-Veri tarafı, tam paket, 30–40 dk (lakehouse-core'a dokunan her PR'da):
-
-```
-cd lakehouse-core
+cd ../lakehouse-core
 uv sync --frozen
 uv run --frozen pytest -q -p no:cacheprovider
 ```
 
-Veri tarafı, yalnız hızlı kısım, ~3 dk (katalog, script, sözleşme, güvenlik, parser; ara kontrol için):
+## 18 Eylül 2026 yerel doğrulama
 
+- `agent-core`: **801 geçti**, 1 Starlette deprecation uyarısı, **6,71 s**.
+- `lakehouse-core` hızlı hedefli kapsam (katalog ilişkileri, FinTürk parser, Silver build, DB altyapısı ve catalog bootstrap): **55 geçti**, **142,58 s**.
+- `lakehouse-core` tam paket: CI ile aynı komut yerelde başlatıldı; 6.304 serilik katalog bootstrap maliyeti nedeniyle yaklaşık 14 dakika sonra %6 ilerlemede durduruldu. Bu koşuda assertion/test hatası görülmedi; tam paket sonucu PR açıldıktan sonra `tests-lakehouse` Actions job’ının otoritatif sonucudur.
+- `git diff --check`: başarılı.
+- `.env`: değiştirilmedi; SHA-256 `3d9edab0b35a33c3c0b99c4e1dec457f54d8cc8abe03ba160ddcced59d74e516`.
+
+PR gövdesine yazılacak kısa satır:
+
+```text
+Tests: agent-core 801 passed locally; lakehouse targeted 55 passed. Full lakehouse suite is enabled in GitHub Actions and is the merge gate because the 6,304-series catalog bootstrap is too slow for the local quick loop.
 ```
-cd lakehouse-core
-uv run --frozen pytest -q -p no:cacheprovider tests/catalog tests/scripts tests/contract tests/security tests/parsers
-```
-
-## PR gövdesine yazılacak satır
-
-```
-Testler (Windows, 17 Eyl): agent-core 690 geçti / 11 kaldı (bilinen); lakehouse-core 1.122 geçti / 4 kaldı (bilinen). Komut: tam paket.
-```
-
-## Windows'ta bilinen kırıklar (main'de de aynı, Linux'ta geçiyor)
-
-Bunlar sizin değişikliğinizden değildir. Bunların dışında kalan her kırık değişiklikten kaynaklıdır.
-
-| Paket | Test | Sebep |
-|---|---|---|
-| agent-core | `test_adim_yolculugu` (3), `test_kanit_yolculugu` (7) | `node -e` komut satırı Windows sınırını aşıyor (WinError 206) |
-| agent-core | `test_evidence.py::test_adaptor_gozlemden_artifact_ve_raw_a_iner` | yol ayracı `/` bekleniyor |
-| lakehouse-core | `tests/adhoc/test_end_to_end.py::test_local_csv_reaches_the_agent_through_the_adhoc_table` | `write_text` satır sonunu `\r\n` yapıyor, sha256 uyuşmuyor |
-| lakehouse-core | `tests/contract/test_contracts.py::test_raw_path_is_deterministic_and_uses_the_contract` | yol ayracı |
-| lakehouse-core | `tests/generic/test_connector.py::test_a_symlink_pointing_outside_the_root_is_refused` | Windows'ta symlink yetkisi |
-| lakehouse-core | `tests/generic/test_connector.py::test_a_fifo_is_not_a_regular_file` | Windows'ta FIFO yok |
-
-Beklenen Windows sonucu: agent-core **690 geçti, 11 kaldı**; lakehouse-core **1.122 geçti, 4 kaldı** (17 Eyl,
-PR #9 dahil ağaçta ölçüldü).

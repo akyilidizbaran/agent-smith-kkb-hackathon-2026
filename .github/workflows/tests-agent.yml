@@ -1,16 +1,15 @@
 # Deterministik testler (M15-T09, ADR-0061). Ağ, MIA, Tavily ve EVDS gerektiren canlı koşular burada YOK:
 # onlar anahtarlı ve bütçeli olarak elle çalıştırılır (make demo-data, scripts/run_golden.py, m02 benchmark).
 #
-# 17 Eyl: tek workflow ikiye bölündü. Aylık Actions kotası tükendi ve açılmayacak; bu yüzden hiçbir iş
-# PR'da otomatik koşmuyor, yalnız elle tetikleniyor. Ajan ve veri testleri PR'dan önce yerelde koşulur,
-# sonuç PR gövdesine yazılır: docs/PR_ONCESI_TEST.md. Kota bir gün açılırsa pull_request bloğu açılır.
+# 18 Eyl: GitHub Actions kotası yeniden kullanılabilir durumda; ajan testi PR açılınca ve elle çalışır.
+# Yerel sonuçlar yine docs/PR_ONCESI_TEST.md içinde tutulur, ancak merge kararı CI sonucuna dayanır.
 name: tests-agent
 on:
   workflow_dispatch:
-  # pull_request:
-  #   paths:
-  #     - "agent-core/**"
-  #     - ".github/workflows/tests-agent.yml"
+  pull_request:
+    paths:
+      - "agent-core/**"
+      - ".github/workflows/tests-agent.yml"
 concurrency:
   group: tests-agent-${{ github.ref }}
   cancel-in-progress: true
