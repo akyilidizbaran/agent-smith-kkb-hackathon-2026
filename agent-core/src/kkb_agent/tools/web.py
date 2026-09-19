@@ -61,6 +61,14 @@ WEB_URL_MAX_BYTES = 32 * 1024 * 1024
 robots ayrı sınırda. Gerçek kamu rapor PDF'leri (BDDK 2024/2025 ~10,8 MB) 8 MiB'ı meşru şekilde aşıyor; builder tarafı
 zaten 25 MiB okuyor (builder/read.py). Sınırlı ve bellek-güvenli; sınır aşılırsa dürüst CONTENT_TOO_LARGE döner."""
 
+# Doğrudan okunabilir dosya uzantıları: JS-SPA sayfası boş gelse de bu adayları web_url birebir okur.
+_FILE_SUFFIXES = (".pdf", ".xlsx", ".xls", ".csv", ".tsv", ".json", ".png", ".jpg", ".jpeg", ".webp")
+
+
+def _is_file_url(url: str) -> bool:
+    from urllib.parse import urlparse
+    return urlparse(url).path.lower().endswith(_FILE_SUFFIXES)
+
 
 def official_source_rules() -> str:
     """Resmi kamu veri adresleri ve bilinen adres kalıpları (kaynak adı kodda değil, `source_hints.json`'da; ADR-0078)."""
@@ -164,6 +172,7 @@ class WebUrlTool(Tool):
         self.environ = environ
         self.allow_private = allow_private
         self._last: CrawlResult | None = None
+        self._last_sig: tuple | None = None   # (url, pages, max_pages, max_depth) — çift-okuma cache anahtarı
 
     def _question(self) -> str:
         return getattr(self._registry, "active_question", "") or ""
@@ -223,27 +232,35 @@ class WebUrlTool(Tool):
         question = self._question()
         constraint = detect_source_constraint(question or params.url)
         keywords = keywords_of(f"{params.purpose} {question}")
-        budget = CrawlBudget(max_pages=params.max_pages, max_depth=params.max_depth, max_bytes_per_page=WEB_URL_MAX_BYTES)
-        try:
-            result = crawl(
-                params.url, budget=budget, keywords=keywords, session=self.session, robots=self.robots,
-                allowed_local_roots=[self.allowed_local_root] if self.allowed_local_root else [],
-                environ=self.environ, allow_private=self.allow_private, ocr=self.ocr,
-                ocr_options={"pages": params.pages} if params.pages else None,
-            )
-        except FetchTooLarge as exc:
-            return self._too_large(params.url, exc.limit)
-        except FetchRefused as exc:
-            return ToolResult.fail(
-                "ACCESS_BLOCKED", f"Adres okunmadı: {exc}",
-                hint="http(s) bir adres ver ya da dosyayı izinli klasöre koy.", layer="access",
-            )
-        scope = source_domains(question) or (getattr(self._registry, "public_web_fallback", None) or {}).get("include_domains", [])
-        if scope and any(not within_domains(p.fetch.final_url or p.url, scope)
-                         for p in result.pages if not p.fetch.from_local_file):
-            return ToolResult.fail("SOURCE_MISMATCH", "Sayfa belirtilen domain dışında bir kaynağa yönlendi; içerik kullanılmadı.",
-                                   layer="policy", retryable=False)
-        self._last = result
+        # ÇİFT-OKUMA ÖNLEME: model önce tabloları listeler, sonra AYNI adresi table_index ile yükletir. Fetch'i
+        # belirleyen parametreler (url/pages/max_*) değişmediyse son crawl sonucunu yeniden kullan — büyük PDF'i
+        # ikinci kez indirip OCR/çıkarım yapmayız (Q3'te ~44s → yarı). table_index fetch'i etkilemez.
+        sig = (params.url, params.pages, params.max_pages, params.max_depth)
+        if params.table_index is not None and self._last is not None and self._last_sig == sig:
+            result = self._last
+        else:
+            budget = CrawlBudget(max_pages=params.max_pages, max_depth=params.max_depth, max_bytes_per_page=WEB_URL_MAX_BYTES)
+            try:
+                result = crawl(
+                    params.url, budget=budget, keywords=keywords, session=self.session, robots=self.robots,
+                    allowed_local_roots=[self.allowed_local_root] if self.allowed_local_root else [],
+                    environ=self.environ, allow_private=self.allow_private, ocr=self.ocr,
+                    ocr_options={"pages": params.pages} if params.pages else None,
+                )
+            except FetchTooLarge as exc:
+                return self._too_large(params.url, exc.limit)
+            except FetchRefused as exc:
+                return ToolResult.fail(
+                    "ACCESS_BLOCKED", f"Adres okunmadı: {exc}",
+                    hint="http(s) bir adres ver ya da dosyayı izinli klasöre koy.", layer="access",
+                )
+            scope = source_domains(question) or (getattr(self._registry, "public_web_fallback", None) or {}).get("include_domains", [])
+            if scope and any(not within_domains(p.fetch.final_url or p.url, scope)
+                             for p in result.pages if not p.fetch.from_local_file):
+                return ToolResult.fail("SOURCE_MISMATCH", "Sayfa belirtilen domain dışında bir kaynağa yönlendi; içerik kullanılmadı.",
+                                       layer="policy", retryable=False)
+            self._last = result
+            self._last_sig = sig
         web_artifact = {
             "start_url": params.url,
             "used": None,
@@ -271,6 +288,10 @@ class WebUrlTool(Tool):
             if discovery_requested(question) and outcome.reason in ("gone", "unreachable", "js_required"):
                 err.terminal = False
                 err.hint = "Aynı domain içinde web_search ile ilgili alt sayfa veya belgeyi keşfet; kaynak değiştirme."
+            elif outcome.reason == "not_found":
+                # B2: model el ile URL tahmin edip 404 alıyor (Q2: KurumHakkinda/Faaliyet uydurdu). Tahmini caydır.
+                err.hint = ("Bu adres bulunamadı. URL TAHMİN ETME/UYDURMA; web_search sonuçlarındaki ya da okunan "
+                            "sayfada LİSTELENEN gerçek linkleri kullan.")
             return ToolResult(content=err.render(), ok=False, error=err, artifacts={"web": web_artifact})
 
         if first.page and first.page.extraction_error:
@@ -478,6 +499,15 @@ class WebSearchTool(Tool):
     def __init__(self, search: TavilySearch, registry: object | None = None) -> None:
         self.search = search
         self._registry = registry
+        self._turn_q: str | None = None   # bu turda kaç arama yapıldı (B3: reworded arama caydırma)
+        self._turn_searches = 0
+
+    def _turn_count(self) -> int:
+        q = getattr(self._registry, "active_question", "") or ""
+        if q != self._turn_q:
+            self._turn_q, self._turn_searches = q, 0
+        self._turn_searches += 1
+        return self._turn_searches
 
     def check_policy(self, params: WebSearchParams) -> ToolError | None:
         if web_forbidden(getattr(self._registry, "active_question", "") or ""):
@@ -487,6 +517,7 @@ class WebSearchTool(Tool):
 
     def run(self, params: WebSearchParams) -> ToolResult:
         question = getattr(self._registry, "active_question", "") or ""
+        n_search = self._turn_count()   # B3: bu turdaki kaçıncı arama
         fallback = getattr(self._registry, "public_web_fallback", None) or {}
         scope = source_domains(question) or fallback.get("include_domains", [])
         if fallback:
@@ -509,16 +540,27 @@ class WebSearchTool(Tool):
             err = to_tool_error(outcome, decide(outcome, constraint))
             return ToolResult(content=err.render(), ok=False, error=err)
         if not hits:
-            return ToolResult(content="Arama kaynak kısıtları içinde sonuç vermedi. Veri bulunmuş gibi cevaplama.",
+            more = (" Bu turda birden çok arama denendi; farklı kelimelerle tekrar arama — veri gerçekten yoksa "
+                    "dürüstçe 'yok' de." if n_search >= 2 else "")
+            return ToolResult(content="Arama kaynak kısıtları içinde sonuç vermedi. Veri bulunmuş gibi cevaplama." + more,
                               artifacts={"web_search": {"query": params.query, "hits": [],
                                          "include_domains": domains, "results": []}})
         sanctioned = getattr(self._registry, "sanctioned_locators", None)
         if isinstance(sanctioned, set):
             sanctioned.update(h.url for h in hits)   # kullanıcının istediği aramanın sonuçları açılabilir
+        # Doğrudan dosya adayları (.pdf/.xlsx/.csv…) üste alınır ve işaretlenir: JS ile yüklenen (boş gelen) landing
+        # sayfaları yerine bunlar birebir okunabilir. Tavily göreli sırası grup içinde korunur (kararlı sıralama).
+        hits = sorted(hits, key=lambda h: 0 if _is_file_url(h.url) else 1)
         lines = [f"ARAMA: {params.query} — {len(hits)} sonuç (kalan arama bütçesi: {getattr(self.search, 'remaining', '?')})"]
         for i, h in enumerate(hits, start=1):
-            lines.append(f"{i}. {h.title} — {h.url}\n   {h.snippet}")
-        lines.append("YAPACAĞIN: sayı okuma; uygun adresi web_url ile aç ve tabloyu yükle.")
+            tag = "   ⟵ DOĞRUDAN DOSYA (web_url ile aç, birebir okunur)" if _is_file_url(h.url) else ""
+            lines.append(f"{i}. {h.title} — {h.url}{tag}\n   {h.snippet}")
+        lines.append("YAPACAĞIN: sayı okuma; uygun adresi web_url ile aç ve tabloyu yükle. Bir sayfa boş/az içerikli "
+                     "geliyorsa (JavaScript ile yükleniyor olabilir) ya da EXTRACTION_FAILED alıyorsan, yukarıdaki "
+                     "DOĞRUDAN DOSYA (.pdf/.xlsx/.csv) adayını web_url ile aç; aynı sayfayı tekrar tekrar deneme.")
+        if n_search >= 3:
+            lines.append("NOT: Bu turda 3+ arama yaptın. Yeni kelime kombinasyonu DENEME — yukarıdaki en uygun adayı "
+                         "web_url ile aç; kaynakta veri gerçekten yoksa dürüstçe 'bulunamadı' de.")
         return ToolResult(content="\n".join(lines), artifacts={"web_search": {"query": params.query, "include_domains": domains, "hits": [h.url for h in hits],
                                                                         "results": [{"url": h.url, "title": h.title} for h in hits]}})
 

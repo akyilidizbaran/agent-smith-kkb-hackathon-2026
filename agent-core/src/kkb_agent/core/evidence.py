@@ -117,6 +117,16 @@ def _word_near_unsigned(answer: str, token: str, pattern: re.Pattern, window: in
     return False
 
 
+def _incidental_number(answer: str, text: str, number: float) -> bool:
+    """Tarih/kimlik/küçük sayı — veri iddiası DEĞİL: bir büyüklük birimine komşu olmayan yıl (1900–2100) ya da ≤31
+    küçük tam sayı. Metin cevaplarında (Path A) 'öneri' cümlesindeki yıl 'tabloda yok' yanlış-pozitifi vermesin (Q9)."""
+    if not float(number).is_integer():
+        return False
+    if 1900 <= number <= 2100 and not _word_near_unsigned(answer, text, _MAGNITUDE):
+        return True
+    return 1 <= number <= 31 and len(str(text)) <= 2
+
+
 _AYLAR = {"ocak": 1, "şubat": 2, "subat": 2, "mart": 3, "nisan": 4, "mayıs": 5, "mayis": 5, "haziran": 6, "temmuz": 7,
           "ağustos": 8, "agustos": 8, "eylül": 9, "eylul": 9, "ekim": 10, "kasım": 11, "kasim": 11, "aralık": 12, "aralik": 12}
 _YEAR_RE = re.compile(r"(?<!\d)(19\d{2}|20\d{2})(?!\d)")
@@ -494,7 +504,9 @@ class EvidenceBuilder:
             texts = [a["read_text"]["text"] for a in artifacts or []
                      if a.get("kind") == "web" and a.get("used_text") and a.get("read_text")]
             known = {n for text in texts for _, n in _number_texts(text)}
-            panel.numbers = [NumberEvidence(number=n, text=t, matched=any(abs(n - value) <= token_tolerance(t) for value in known))
+            panel.numbers = [NumberEvidence(number=n, text=t,
+                             matched=any(abs(n - value) <= token_tolerance(t) for value in known)
+                                     or _incidental_number(answer, t, n))
                              for t, n in _number_texts(answer)]
             if not panel.web_sources:
                 panel.gaps.append("analiz tablosu yok")

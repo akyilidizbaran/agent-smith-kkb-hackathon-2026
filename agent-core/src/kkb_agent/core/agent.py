@@ -1428,7 +1428,7 @@ class AnalyticsAgent:
                 recovery_codes = {
                     "SQL_FAILED", "INVALID_ARGS", "GOLD_REQUIRED", "JOIN_MISMATCH",
                     "DATASET_NOT_FOUND", "TOOL_FAILED", "UNKNOWN_TOOL", "EMPTY_RESULT",
-                    "GEOGRAPHY_MISMATCH", "SOURCE_MISMATCH",
+                    "GEOGRAPHY_MISMATCH", "SOURCE_MISMATCH", "EXTRACTION_FAILED",
                 }
                 if (result.error is not None and not fallback_now and not recovery.pending_recovery
                         and (not result.error.is_retryable or result.error.error_code in recovery_codes)

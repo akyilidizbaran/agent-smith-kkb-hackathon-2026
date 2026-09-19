@@ -109,6 +109,9 @@ def test_web_url_pdf_tablosunu_yukler_provenance_ocr_notu_tasir() -> None:
     prov = ws.column_provenance(ws.columns()[0])
     assert prov.sources[0].startswith("web") and any("OCR" in w for w in prov.warnings)
     assert loaded.artifacts["web"]["visited"][0]["ocr"]["model"] == "ocr"
+    # ÇİFT-OKUMA CACHE: table_index takip çağrısı aynı adresi yeniden İNDİRMEZ ve yeniden OCR YAPMAZ.
+    assert client.calls == 1, "table_index yeniden OCR yapmamalı (son fetch yeniden kullanılır)"
+    assert s.calls.count("https://site.example/ith_au.pdf") == 1, "table_index aynı adresi yeniden indirmemeli"
 
 
 def test_ingest_pdf_ocr_tablosunu_csv_yazip_cli_ya_verir(tmp_path: Path) -> None:

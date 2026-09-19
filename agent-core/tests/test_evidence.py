@@ -376,3 +376,14 @@ def test_time_col_suz_tabloda_tarih_yili_yanlis_pozitif_vermez() -> None:
     # Büyüklük birimine komşu uydurma yıl-benzeri sayı hâlâ yakalanır (muafiyet birim komşuluğunda geçmez).
     bad = EvidenceBuilder(Silverish()).build("USD kuru?", "Bakiye 2015 milyon TL oldu.", ws, [])
     assert not bad.numbers[0].matched, "büyüklük birimine komşu '2015 milyon TL' muaf tutulmamalı"
+
+
+def test_metin_cevabinda_oneri_yili_yanlis_pozitif_vermez_q9() -> None:
+    """Q9: kaynaksız dürüst-başarısız cevaptaki 'öneri' cümlesinde geçen yıl (2024/2025) 'tabloda bulunmayan
+    sayı' diye işaretlenmemeli (Path A, tablo yok). Büyüklük birimine komşu uydurma sayı yine yakalanır."""
+    ans = "Raporu bu turda bulamadım. Elinde doğrulanmış URL veya rapor yılı varsa (ör. 2024/2025) paylaş."
+    panel = EvidenceBuilder(object()).build("soru", ans, AnalysisWorkspace(), [], artifacts=[])
+    assert all(n.matched for n in panel.numbers), [(n.text, n.matched) for n in panel.numbers]
+    assert not any("tabloda bulunmayan sayılar" in g for g in panel.gaps), panel.gaps
+    bad = EvidenceBuilder(object()).build("soru", "Bakiye 150 milyar TL oldu.", AnalysisWorkspace(), [], artifacts=[])
+    assert not bad.numbers[0].matched, "büyüklük birimine komşu uydurma sayı işaretlenmeli"

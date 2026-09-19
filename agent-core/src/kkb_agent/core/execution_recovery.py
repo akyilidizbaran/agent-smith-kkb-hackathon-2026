@@ -44,6 +44,10 @@ RECOVERABLE_CODES = frozenset({
     "UNKNOWN_TOOL",
     "EMPTY_RESULT",
     "GEOGRAPHY_MISMATCH",
+    # EXTRACTION_FAILED SINIRLI recoverable: belge indirildi ama okunamadı (bozuk/boş/desteklenmeyen). Farklı bir
+    # kaynak denenebilir ama SINIRSIZ değil — MAX_RECOVERY_ATTEMPTS'ten sonra dürüstçe durulur (Q10: agent 6 kez
+    # aynı çıkmazı deneyip 146s harcamıştı; artık en çok 3 deneme, sonra "okuyamadım").
+    "EXTRACTION_FAILED",
     # SOURCE_MISMATCH RECOVERABLE DEĞİL: bu hata, modelin SABİT/kapsam-içi kaynağın DIŞINA çıkmaya
     # çalıştığı anlamına gelir. Farklı bir kapsam-dışı adresle yeniden denemek sonucu değiştirmez
     # (pin değişmez); tekrar planlama turu boşa gider (Q9: aynı çıkmaz 3 kez denendi). İlk seferde

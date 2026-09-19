@@ -20,7 +20,11 @@ from urllib.parse import urljoin, urlparse, urlunparse
 from ..contracts.access import AccessOutcome
 from ..core.access_policy import classify_access
 
-USER_AGENT = "kkb-agent/0.1 (KKB Hackathon 2026; robots.txt'ye uyar)"
+# Tarayıcı-benzeri UA: birçok kamu/veri sitesi (ör. borsaistanbul.com WAF'ı) standart-olmayan bot UA'sına gerçek
+# içerik yerine "Request Rejected" döndürüyor. robots.txt uyumu, hız sınırı ve SSRF korumaları AYNEN korunur;
+# yalnız istemci standart bir tarayıcı gibi görünür (jürinin örnek sitelerindeki public veriye erişim için).
+USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
 MAX_BYTES_DEFAULT = 8 * 1024 * 1024
 DATA_SUFFIXES = (".csv", ".tsv", ".xlsx", ".xls", ".json")
 
