@@ -176,6 +176,83 @@ def test_final_workspace_show_exports_the_post_transform_snapshot() -> None:
     assert frame_to_dict(projected)["columns"][-1]["label"] == "metric_b_change"
 
 
+def test_evidence_columns_stay_out_of_user_projection_after_compute_and_show() -> None:
+    base = pd.DataFrame({
+        "period_start": pd.to_datetime(["2022-01-01", "2022-02-01"]),
+        "period_end": pd.to_datetime(["2022-01-31", "2022-02-28"]),
+        "bddk_monthly:1536::value": [100.0, 110.0],
+        "bddk_monthly:1536::quality_flag": ["ok", "ok"],
+        "contributing_series": [["bddk_monthly:1536"], ["bddk_monthly:1536"]],
+        "is_complete_period": [True, True],
+    })
+    workspace = AnalysisWorkspace()
+    workspace.set_table(base, description="gold join fixture")
+    workspace.add_column(
+        "bddk_monthly:1536::value_change",
+        pd.Series([None, 10.0]),
+        description="change",
+        provenance=QueryProvenance(
+            sql='türetilmiş: "bddk_monthly:1536::value" - LAG("bddk_monthly:1536::value")',
+            dataset_ids=["bddk_monthly:1536"],
+        ),
+    )
+    answer = AgentAnswer(
+        text="ok",
+        steps=[
+            AgentStep(
+                index=1,
+                role="execute",
+                tool_name="workspace_compute_column",
+                tool_args={
+                    "column_name": "bddk_monthly:1536::value_change",
+                    "expression": '"bddk_monthly:1536::value" - LAG("bddk_monthly:1536::value")',
+                },
+                result_data=workspace.table.copy(),
+            ),
+            AgentStep(
+                index=2,
+                role="retrieve",
+                tool_name="workspace_show",
+                result_data=workspace.table.copy(),
+            ),
+        ],
+        workspace=workspace,
+    )
+    agent = SimpleNamespace(workspace=workspace)
+
+    projected = project_result_table(answer, agent, question="aylık değişimleri göster", table_before=base)
+
+    assert projected is not None
+    assert list(projected.columns) == [
+        "period_end",
+        "bddk_monthly:1536::value_change",
+    ]
+
+
+def test_direct_gold_projection_hides_lineage_columns_but_all_columns_keeps_them() -> None:
+    frame = pd.DataFrame({
+        "period_end": pd.to_datetime(["2022-01-31"]),
+        "metric": [100.0],
+        "metric::quality_flag": ["ok"],
+        "contributing_series": [["bddk:metric"]],
+        "is_complete_period": [True],
+    })
+    workspace = AnalysisWorkspace()
+    workspace.set_table(frame, description="gold join")
+    answer = AgentAnswer(
+        text="ok",
+        steps=[AgentStep(index=1, role="execute", tool_name="gold_join", result_data=frame.copy())],
+        workspace=workspace,
+    )
+    agent = SimpleNamespace(workspace=workspace)
+
+    clean = project_result_table(answer, agent, question="veriyi göster", table_before=pd.DataFrame())
+    full = project_result_table(answer, agent, question="tüm sütunları göster", table_before=pd.DataFrame())
+
+    assert clean is not None and list(clean.columns) == ["period_end", "metric"]
+    assert full is not None and list(full.columns) == list(frame.columns)
+
+
 def test_follow_up_base_request_can_recover_source_columns_from_provenance() -> None:
     _, agent, before = _derived_answer()
     follow_up = AgentAnswer(

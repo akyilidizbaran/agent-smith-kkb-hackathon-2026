@@ -57,7 +57,7 @@ def test_provider_retryler_toplam_deadlineyi_asamaz() -> None:
     client.set_deadline(time.perf_counter() + 0.05)
 
     started = time.perf_counter()
-    with pytest.raises(RuntimeError, match="LLM 2 denemede"):
+    with pytest.raises(RuntimeError, match="LLM 1 denemede"):
         client.chat([])
     elapsed = time.perf_counter() - started
 

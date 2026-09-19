@@ -69,6 +69,8 @@ class Settings:
     llm_timeout: float
     llm_max_retries: int
     llm_max_tokens: int
+    llm_narration_timeout_s: float
+    llm_tool_timeout_s: float
     agent_time_budget_s: float
     # Çağrı türüne göre dinamik completion tavanları (global tavanın altında).
     llm_plan_max_tokens: int = 1000
@@ -125,6 +127,11 @@ def load_settings() -> Settings:
         # is too small for a legitimate 24/60-month narration. Keep the
         # environment override and give the default final turn enough room.
         llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "4000")),
+        # Anlatı tüm retry'larla birlikte kısa bir üst sınıra bağlıdır; veri
+        # aracıyla kurulmuş doğrulanmış tablo bu süreden etkilenmez.
+        llm_narration_timeout_s=float(os.getenv("LLM_NARRATION_TIMEOUT_S", "30")),
+        # Tool-selection calls share one bounded deadline across provider retries.
+        llm_tool_timeout_s=float(os.getenv("LLM_TOOL_TIMEOUT_S", "90")),
         # Demo'da uzun çok-adımlı sorguların istemci tarafından erken kesilmemesi
         # için varsayılan soru bütçesi 600 s. Ortam değişkeniyle daha düşük bir
         # bütçe verilirse o değer önceliklidir.

@@ -96,6 +96,7 @@ class OpenAICompatClient:
             payload["tool_choice"] = "auto"
 
         last_err: Exception | None = None
+        attempts_made = 0
         for attempt in range(1, self._max_retries + 1):
             remaining = None
             if self._deadline is not None:
@@ -103,6 +104,7 @@ class OpenAICompatClient:
                 if remaining <= 0:
                     break
             try:
+                attempts_made = attempt
                 client = self._client
                 if remaining is not None:
                     client = client.with_options(timeout=min(self.timeout, max(0.1, remaining)))
@@ -151,4 +153,5 @@ class OpenAICompatClient:
                 if wait:
                     time.sleep(wait)
 
-        raise RuntimeError(f"LLM {self._max_retries} denemede yanıt vermedi: {last_err}")
+        detail = str(last_err) if last_err is not None else "çağrı başlamadan süre bütçesi doldu"
+        raise RuntimeError(f"LLM {attempts_made} denemede yanıt vermedi: {detail}")

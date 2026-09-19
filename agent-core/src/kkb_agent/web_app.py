@@ -29,7 +29,7 @@ from typing import Any, Callable, Literal
 
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -146,6 +146,8 @@ def _table_touched(answer: Any, before: Any, after: Any) -> bool:
     """Tablo bu cevapta üretildi ya da ele alındı mı? Aksi hâlde eski tablo cevaba iliştirilmez."""
     if after is None:
         return False
+    if bool(getattr(answer, "reused_verified_table", False)):
+        return True
     if before is not after:
         return True
     return any(s.tool_name and s.ok and s.tool_name.startswith(DATA_TOOLS_PREFIX) for s in getattr(answer, "steps", []))
@@ -187,7 +189,56 @@ def _identity_columns(frame: pd.DataFrame, expressions: list[str]) -> list[str]:
         series = frame[column]
         if pd.api.types.is_datetime64_any_dtype(series) or (str(column) in refs and not pd.api.types.is_numeric_dtype(series)):
             identity.append(str(column))
+    if "period_start" in identity and "period_end" in identity:
+        identity.remove("period_start")
     return identity
+
+
+_EVIDENCE_COLUMN_SUFFIXES = (
+    "::series_id",
+    "::quality_flag",
+    "::measure_type",
+    "::unit",
+    "::aggregation",
+    "::observations",
+    "::missing_observations",
+    "::warned_observations",
+    "::source_observation_dates",
+    "::artifact_sha256_list",
+    "::vintage_id_list",
+    "::run_id_list",
+)
+_EVIDENCE_COLUMNS = frozenset({
+    "quality_flag", "observations", "missing_observations", "warned_observations",
+    "source_observation_dates", "artifact_sha256_list", "vintage_id_list", "run_id_list",
+    "contributing_series", "absent_series", "is_complete_period", "gold_metric_id", "gold_function",
+    "gold_build_id", "gold_built_at", "gold_catalog_content_sha256", "silver_fingerprint",
+})
+
+
+def _has_evidence_columns(frame: pd.DataFrame) -> bool:
+    return any(
+        str(column) in _EVIDENCE_COLUMNS or str(column).endswith(_EVIDENCE_COLUMN_SUFFIXES)
+        for column in frame.columns
+    )
+
+
+def _clean_user_projection(frame: pd.DataFrame, question: str = "") -> pd.DataFrame:
+    """Hide lineage helper columns from the user table, keeping them in evidence."""
+    if _ALL_COLUMNS_REQUEST.search(question or "") or not _has_evidence_columns(frame):
+        return frame.copy()
+    selected = [
+        column for column in frame.columns
+        if not (
+            str(column) in _EVIDENCE_COLUMNS
+            or str(column).endswith(_EVIDENCE_COLUMN_SUFFIXES)
+        )
+    ]
+    # Gold interval tables carry both technical bounds; monthly user output
+    # uses the period end as its single canonical date axis.
+    if "period_start" in selected and "period_end" in selected:
+        selected.remove("period_start")
+    return frame.loc[:, selected].copy() if selected else frame.copy()
 
 
 def _existing_derived_projection(frame: pd.DataFrame, workspace: Any, question: str) -> pd.DataFrame | None:
@@ -229,6 +280,33 @@ def project_result_table(answer: Any, agent: Any, *, question: str = "", table_b
         return current.copy()
 
     steps = [s for s in getattr(answer, "steps", []) if getattr(s, "ok", False)]
+    reuse_proof = next(
+        (artifact for artifact in (getattr(answer, "artifacts", []) or [])
+         if isinstance(artifact, dict) and artifact.get("kind") == "verified_workspace_reuse"),
+        None,
+    )
+    if reuse_proof:
+        derived = [
+            str(column) for column in reuse_proof.get("derived_columns", [])
+            if str(column) in current.columns
+        ]
+        source = [
+            str(column) for column in reuse_proof.get("source_columns", [])
+            if str(column) in current.columns
+        ]
+        expressions = [
+            str(getattr(workspace.column_provenance(column), "sql", "") or "").removeprefix("türetilmiş:").strip()
+            for column in derived
+        ]
+        identity = _identity_columns(current, expressions)
+        selected = [*identity]
+        if _BASE_AND_DERIVED_REQUEST.search(question or ""):
+            selected.extend(source)
+        selected.extend(derived)
+        if selected:
+            return _clean_user_projection(
+                current.loc[:, list(dict.fromkeys(selected))], question
+            )
     compute_steps = [s for s in steps if getattr(s, "tool_name", None) == "workspace_compute_column"]
     last_compute = max((i for i, s in enumerate(steps)
                         if getattr(s, "tool_name", None) == "workspace_compute_column"), default=-1)
@@ -250,29 +328,30 @@ def project_result_table(answer: Any, agent: Any, *, question: str = "", table_b
             query_args = getattr(query_step, "tool_args", {}) or {}
             is_peek = query_args.get("as_active_table") is False
             if is_peek and not _BASE_REQUEST.search(question or ""):
-                return current.copy()
+                return _clean_user_projection(current, question)
             if len(frame) != len(current) or list(frame.columns) != list(current.columns):
-                return frame.copy()
+                return _clean_user_projection(frame, question)
 
     # workspace_show is an explicit final verification of the table the user
     # asked to inspect. When it occurs after transformations, export that full
     # snapshot so the downloadable table matches the verified table.
     last_show = max((i for i, s in enumerate(steps)
                      if getattr(s, "tool_name", None) == "workspace_show"), default=-1)
-    if max(last_compute, last_query) >= 0 and last_show > max(last_compute, last_query):
+    if (max(last_compute, last_query) >= 0 and last_show > max(last_compute, last_query)
+            and (not compute_steps or not _has_evidence_columns(current))):
         frame = getattr(steps[last_show], "result_data", None)
         if isinstance(frame, pd.DataFrame) and len(frame) == len(current):
-            return frame.copy()
+            return _clean_user_projection(frame, question)
     if not compute_steps:
         for step in reversed(steps):
             frame = getattr(step, "result_data", None)
             if isinstance(frame, pd.DataFrame) and getattr(step, "tool_name", None) != "workspace_show":
-                return frame.copy()
+                return _clean_user_projection(frame, question)
         if _BASE_REQUEST.search(question or ""):
             base_projection = _existing_derived_projection(current, workspace, question)
             if base_projection is not None:
                 return base_projection
-        return current.copy()
+        return _clean_user_projection(current, question)
 
     added: list[str] = []
     expressions: list[str] = []
@@ -308,7 +387,7 @@ def project_result_table(answer: Any, agent: Any, *, question: str = "", table_b
     ]
     base = referenced if _BASE_AND_DERIVED_REQUEST.search(question or "") else []
     columns = list(dict.fromkeys([*identity, *base, *selected]))
-    return current.loc[:, columns].copy() if columns else current.copy()
+    return _clean_user_projection(current.loc[:, columns] if columns else current, question)
 
 
 ACCESS_CODES = frozenset({"NEEDS_CREDENTIAL", "ACCESS_BLOCKED", "SOURCE_NOT_FOUND"})

@@ -21,11 +21,11 @@ import re
 
 import pandas as pd
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable
 
 from ..domain import DomainProfile
-from ..llm.base import ChatMessage, LLMClient, ToolCall
+from ..llm.base import ChatMessage, LLMClient, LLMResponse, ToolCall
 from .errors import ToolError
 from .grounding import causal_language, grounding_check, in_rate_context, token_tolerance, _MATCH_EPS, _NUM_RE, _ascii_minus, numbers_in
 from .claim_check import claim_cell, range_claim   # G5/G6 (Büşra, V3 §3.9): sayı doğru dönemle mi yazılmış
@@ -46,7 +46,10 @@ from .period_intent import choose_containing_window, parse_period_intent
 from .token_budget import TokenBudgetPolicy
 from .workspace_fastpath import (
     execute_verified_workspace_transform,
+    inspect_existing_verified_transform,
     plan_verified_workspace_transform,
+    requested_month_range,
+    WorkspaceTransformSatisfaction,
 )
 
 # Kullanıcının grafik isteği (Türkçe çekimli: grafiği, grafiğini, çiz, çizer misin, görselleştir).
@@ -62,6 +65,30 @@ _TRANSFORMATION_ASK = re.compile(
     r"analiz\s+etmeye\s+uygun|aynı\s+tarih\s+ekseni|aylık\s+bazda\s+hizala|"
     r"hizala|normalleştir|normalestir|dönüştür|donustur|oran|sütun|kolon",
     re.I,
+)
+# A direct table delivery is already a complete answer when the user asks to
+# retrieve/list/export data without asking for interpretation.  In that case
+# the model's post-query "peek then narrate" turns only add latency; the
+# structured table and downloads are the primary deliverable.
+_TABLE_DELIVERY_ASK = re.compile(
+    r"\b(getir|getirebilir|göster|goster|listele|sırala|sirala|sun|ver|dök|dok|aktar|indir|"
+    r"get|show|list|fetch|retrieve|return|export|download|provide)\b|"
+    r"tablo(?:yu|su| halinde| olarak)?",
+    re.IGNORECASE,
+)
+_NARRATIVE_OR_ANALYSIS_ASK = re.compile(
+    r"analiz|yorum|özet|ozet|açıkla|acikla|değerlendir|degerlendir|karşılaştır|karsilastir|"
+    r"değişim|degisim|artış|artis|azalış|azalis|büyüme|buyume|trend|eğilim|egilim|"
+    r"anomali|aykır|aykir|kırılma|kirilma|öncül|oncul|korelasyon|nedensel|neden|etkisi|"
+    r"stok|akış|akis|birim|seri türü|seri tipi|neye göre|ilişki",
+    re.IGNORECASE,
+)
+_EXPLICIT_INTERPRETATION_ASK = re.compile(
+    r"\b(?:yorumla|açıkla|acikla|özetle|ozetle|değerlendir|degerlendir|"
+    r"analiz\s+et|analizini\s+çıkar|analizini\s+cikar|bulguları\s+yorumla|"
+    r"explain|interpret|summari[sz]e|analy[sz]e|insights?)\b|"
+    r"\b(?:neden|niçin|nicin)\b",
+    re.IGNORECASE,
 )
 _TRANSFORMATION_TOOL_NAMES = frozenset({
     "workspace_add_column", "workspace_compute_column", "workspace_query", "workspace_join",
@@ -153,6 +180,7 @@ alt toplam) kullanıcı istemedikçe aynı sorguya katma; aynı döneme birden �
 tablo bozulur.
 - Kullanıcıya Türkçe, net ve kısa cevap ver. Ara adımları anlatma; sonucu ve gerekçesini anlat.
 - Tam doğrulanmış tablo arayüzde ayrı gösterilir ve CSV/XLSX olarak indirilir; nihai metinde uzun Markdown tabloyu tekrar etme. Önemli bulguları ve gerekli uyarıları yaz, tabloyu satır satır kopyalama.
+- Yapılandırılmış tablo oluşturulduysa nihai anlatımı kısa tut: en fazla 3 kısa paragraf veya 6 madde yaz. Tüm satırları, kanıt/provenance alanlarını ya da CSV başlıklarını metne kopyalama; tam içerik tablo artifact'inde bulunur.
 - YALNIZ sorulana cevap ver. İstenmemiş öneri, seçenek listesi, "başka ne yapabilirim", \
 "ne yapmak istersin" kapanışı ve emoji yazma. Sorunun cevabı bitince dur.
 - Muhatabın bir {audience}, geliştirici DEĞİL. Nihai cevapta SQL, kolon adı, araç adı, \
@@ -455,6 +483,10 @@ class AgentAnswer:
     #: FOUND / CONFIRMED_ABSENT / RETRIEVAL_FAILED / ACCESS_BLOCKED / UNKNOWN.
     #: A failed retrieval never silently becomes absence.
     availability_status: str = "UNKNOWN"
+    #: The current answer deliberately reuses a provenance-verified active
+    #: table. The API may attach it even when the DataFrame object did not
+    #: change during this turn (for example, a chart-only follow-up).
+    reused_verified_table: bool = False
 
     #: Araçların ürettiği çıktı dosyaları (grafik belirtimi/PNG; ADR-0032). CLI yolu basar,
     #: koşucular varlığını denetler. Metnin içine gömülmez: dosya yolu cevabın parçası değil.
@@ -593,6 +625,8 @@ class AnalyticsAgent:
         max_tokens: int | None = None,
         time_budget_s: float | None = None,
         token_budget_policy: TokenBudgetPolicy | None = None,
+        narration_timeout_s: float | None = 30.0,
+        tool_timeout_s: float | None = 90.0,
     ) -> None:
         # Bütçeler (M15): çıktı sınırı her çağrıya gider; süre bütçesi aşılınca araç turu durur, kısmi cevap verilir.
         self.max_tokens = max_tokens
@@ -600,6 +634,8 @@ class AnalyticsAgent:
         # fixed-budget behavior. The CLI opts into phase-aware budgets.
         self.token_budget_policy = token_budget_policy
         self.time_budget_s = time_budget_s
+        self.narration_timeout_s = narration_timeout_s
+        self.tool_timeout_s = tool_timeout_s
         self._truncated = False
         # Katalog değişince (Architect: ingest, terfi) alan profili yeniden türetilir (ADR-0048).
         self.profile_factory = profile_factory
@@ -637,6 +673,17 @@ class AnalyticsAgent:
         self._period_resolved_question: str | None = None
         self._schema_allowed: frozenset[str] | None = None
         self._ask_deadline: float | None = None
+        self._last_llm_failure: dict[str, Any] | None = None
+        # `_ask` may finish its data/tool phase and then lose the provider
+        # during the final narration call. Keep the in-flight steps visible to
+        # the outage handler so a verified table can still commit follow-up
+        # context instead of becoming an orphaned workspace.
+        self._inflight_steps: list[AgentStep] | None = None
+        self._inflight_artifacts: list[dict[str, Any]] | None = None
+        self._inflight_requested: list[tuple[str, re.Pattern[str], frozenset[str], str]] = []
+        self._pre_satisfied_capabilities: set[str] = set()
+        self._verified_workspace_satisfaction: WorkspaceTransformSatisfaction | None = None
+        self._verified_reuse_snapshot: pd.DataFrame | None = None
 
     def reset(self) -> None:
         self._history.clear()
@@ -646,6 +693,12 @@ class AnalyticsAgent:
         self.workspace = AnalysisWorkspace()
         self._follow_up_context = FollowUpContext()
         self._follow_up_resolution = None
+        self._inflight_steps = None
+        self._inflight_artifacts = None
+        self._inflight_requested = []
+        self._pre_satisfied_capabilities = set()
+        self._verified_workspace_satisfaction = None
+        self._verified_reuse_snapshot = None
         self._last_recovery = None
         self._retry_source_question = None
         self._retry_failed_signatures = set()
@@ -655,6 +708,13 @@ class AnalyticsAgent:
         self._period_resolved_question = None
         self._schema_allowed = None
         self._ask_deadline = None
+        self._last_llm_failure = None
+        self._inflight_steps = None
+        self._inflight_artifacts = None
+        self._inflight_requested = []
+        self._pre_satisfied_capabilities = set()
+        self._verified_workspace_satisfaction = None
+        self._verified_reuse_snapshot = None
 
     @property
     def follow_up_context(self) -> FollowUpContext:
@@ -686,8 +746,11 @@ class AnalyticsAgent:
             "max_tool_schemas": 0,
             "phase_switches": 0,
             "fast_planning_calls": 0,
+            "failed_llm_calls": 0,
+            "failed_llm_call_ms": 0.0,
             "token_budget_calls": [],
         }
+        self._last_llm_failure = None
         self._last_context = None
         self._follow_up_resolution = None
         self._retry_source_question = None
@@ -723,31 +786,102 @@ class AnalyticsAgent:
             return clarify
         self._prepare_follow_up(question)
         self._active_table_reuse_allowed = self._active_table_is_compatible(question)
+        self._attach_active_series_identities()
+        if self._active_table_reuse_allowed:
+            self._verified_workspace_satisfaction = inspect_existing_verified_transform(
+                question,
+                self._follow_up_resolution,
+                self.workspace,
+                active_specs=self._active_table_specs(),
+            )
+            if self._verified_workspace_satisfaction is not None:
+                self._verified_reuse_snapshot = self.workspace.table.copy()
+                self._pre_satisfied_capabilities.add("dönüşüm")
+        self._inflight_requested = [
+            cap for cap in _REQUESTED_CAPABILITIES
+            if cap[1].search(self._retry_source_question or self._period_resolved_question or question)
+            and any(self.registry.get(tool_name) is not None for tool_name in cap[2])
+        ]
         self._truncated = False
         self._ask_deadline = (time.perf_counter() + self.time_budget_s) if self.time_budget_s else None
-        fast_answer = self._try_verified_workspace_fastpath(question)
+        fast_answer = self._try_verified_transform_chart_fastpath(question)
+        if fast_answer is None:
+            fast_answer = self._try_verified_workspace_fastpath(question)
         try:
             answer = fast_answer if fast_answer is not None else self._ask(question)
         except Exception as exc:  # noqa: BLE001 — yalnız model servisi kesintisi yakalanır, gerisi yükselir
             if not _is_llm_outage(exc):
                 raise
             log.warning("model servisi kesintisi: %s", exc)
-            table = self.workspace.table
-            note = (f" Ekrandaki tablo ({len(table)} satır) kesintiden önce kurulmuştu; indirilebilir ama bu soru için "
-                    "yorumlanmadı.") if table is not None and len(table) else ""
-            text = (f"Model servisine şu an ulaşılamıyor ({type(exc).__name__}); soruyu yanıtlayamadım, birazdan yeniden "
-                    f"deneyin.{note} Sayı üretmedim.")
-            self._history.append(ChatMessage(role="user", content=question))
-            self._history.append(ChatMessage(role="assistant", content=text))
-            return self._complete_follow_up(AgentAnswer(
-                text=text,
-                steps=[AgentStep(index=1, role="narrate", thought="model servisi kesintisi",
-                                 result_summary=str(exc)[:200], ok=False, error_code="LLM_UNAVAILABLE")],
-                workspace=self.workspace,
-                usage=dict(self._usage),
+            # Tool calls that completed before the narration outage are still
+            # authoritative. Preserve them in the partial answer so
+            # `_complete_follow_up` can commit the semantic context for the
+            # next user turn. The failed narration is appended as the final
+            # step and does not make the data look fully narrated.
+            partial_steps = list(self._inflight_steps or [])
+            partial_steps.append(AgentStep(
+                index=len(partial_steps) + 1,
+                role="narrate",
+                thought="model servisi kesintisi",
+                result_summary=str(exc)[:200],
+                ok=False,
+                error_code="LLM_UNAVAILABLE",
+                duration_ms=float((self._last_llm_failure or {}).get("duration_ms", 0.0)),
             ))
+            verified_table = self._verified_active_result(partial_steps)
+            if verified_table is not None:
+                # Data retrieval and narration are independent deliverables. A
+                # provider outage must not turn a verified table into a failed
+                # answer or invite the user to repeat an expensive query.
+                capabilities_complete = self._capabilities_satisfied(partial_steps)
+                if capabilities_complete:
+                    text = (
+                        "Doğrulanmış tablo ve bu turda üretilen araç çıktıları hazır. "
+                        "Anlatım servisi yanıt vermediği için tablo dışı yorum eklemedim."
+                    )
+                else:
+                    missing = [
+                        name for name, _pattern, _tools, _note in self._inflight_requested
+                        if name not in self._pre_satisfied_capabilities
+                        and not any(step.ok and step.tool_name in _tools for step in partial_steps)
+                    ]
+                    missing_label = ", ".join(missing) or "istenen son işlem"
+                    text = (
+                        f"Doğrulanmış aktif tablo hazır; bu turda {missing_label} tamamlanamadı. "
+                        "Anlatım servisi de yanıt vermediği için tablo dışı yorum eklemedim."
+                    )
+                artifacts = list(self._inflight_artifacts or [])
+                reused = self._is_verified_workspace_reuse(partial_steps)
+                if reused:
+                    self._append_verified_reuse_artifact(artifacts)
+                answer = AgentAnswer(
+                    text=text,
+                    steps=partial_steps,
+                    workspace=self.workspace,
+                    usage=dict(self._usage),
+                    availability_status="FOUND",
+                    artifacts=artifacts,
+                    reused_verified_table=reused,
+                )
+            else:
+                table = self.workspace.table
+                note = (f" Ekrandaki tablo ({len(table)} satır) kesintiden önce kurulmuştu; indirilebilir ama bu soru için "
+                        "yorumlanmadı.") if table is not None and len(table) else ""
+                text = (f"Model servisine şu an ulaşılamıyor ({type(exc).__name__}); soruyu yanıtlayamadım, birazdan yeniden "
+                        f"deneyin.{note} Sayı üretmedim.")
+                self._history.append(ChatMessage(role="user", content=question))
+                self._history.append(ChatMessage(role="assistant", content=text))
+                return self._complete_follow_up(AgentAnswer(
+                    text=text,
+                    steps=partial_steps,
+                    workspace=self.workspace,
+                    usage=dict(self._usage),
+                ))
+            self._history.append(ChatMessage(role="user", content=question))
+            self._history.append(ChatMessage(role="assistant", content=answer.text))
         finally:
             self._ask_deadline = None
+            self._inflight_steps = None
         if self._period_selection_display:
             answer.text = self._period_selection_display + "\n\n" + answer.text
             if self._history and self._history[-1].role == "assistant":
@@ -799,9 +933,272 @@ class AnalyticsAgent:
                 log.warning("kanıt paneli kurulamadı: %s", exc)
         return self._complete_follow_up(answer)
 
+    def _verified_active_result(self, steps: list[AgentStep]) -> pd.DataFrame | None:
+        """Return a current-turn result or a provenance-verified reusable transform."""
+        active = self.workspace.table
+        if not isinstance(active, pd.DataFrame) or active.empty:
+            return None
+        for step in reversed(steps):
+            frame = step.result_data
+            if (not step.ok or step.tool_name not in self.DATA_PRODUCING_TOOLS
+                    or not isinstance(frame, pd.DataFrame) or frame.empty):
+                continue
+            try:
+                same = frame.reset_index(drop=True).equals(active.reset_index(drop=True))
+            except Exception:  # noqa: BLE001 — malformed tool frames cannot authorize fallback
+                same = False
+            if same:
+                return active
+        if self._is_verified_workspace_reuse(steps):
+            return active
+        return None
+
+    def _capabilities_satisfied(self, steps: list[AgentStep]) -> bool:
+        return all(
+            name in self._pre_satisfied_capabilities
+            or any(step.ok and step.tool_name in tool_names for step in steps)
+            for name, _pattern, tool_names, _note in self._inflight_requested
+        )
+
+    def _is_verified_workspace_reuse(self, steps: list[AgentStep]) -> bool:
+        proof = self._verified_workspace_satisfaction
+        snapshot = self._verified_reuse_snapshot
+        active = self.workspace.table
+        if (proof is None or snapshot is None or not self._active_table_reuse_allowed
+                or not isinstance(active, pd.DataFrame) or active.empty):
+            return False
+        try:
+            same = snapshot.reset_index(drop=True).equals(active.reset_index(drop=True))
+        except Exception:  # noqa: BLE001 — malformed snapshots cannot authorize a stale answer
+            same = False
+        if not same:
+            return False
+        # A failed current-turn mutation invalidates the old-table fallback: it
+        # may have changed the semantic scope or partially changed workspace state.
+        return not any(step.tool_name and not step.ok for step in steps)
+
+    def _append_verified_reuse_artifact(self, artifacts: list[dict[str, Any]]) -> None:
+        proof = self._verified_workspace_satisfaction
+        if proof is None or any(a.get("kind") == "verified_workspace_reuse" for a in artifacts):
+            return
+        artifacts.append({
+            "kind": "verified_workspace_reuse",
+            "operation": proof.operation,
+            "date_column": proof.date_column,
+            "source_columns": list(proof.source_columns),
+            "derived_columns": list(proof.derived_columns),
+            "series_ids": list(proof.series_ids),
+            "period_start": proof.period_start.isoformat() if proof.period_start is not None else None,
+            "period_end": proof.period_end.isoformat() if proof.period_end is not None else None,
+            "validation": proof.validation,
+        })
+
+    def _attach_active_series_identities(self) -> None:
+        """Keep every verified series ID from a reused multi-series table in follow-up context."""
+        resolution = self._follow_up_resolution
+        if resolution is None or not self._active_table_reuse_allowed:
+            return
+        identities: list[str] = []
+        for column in self.workspace.columns():
+            provenance = self.workspace.column_provenance(str(column))
+            for dataset_id in (getattr(provenance, "dataset_ids", []) or []):
+                value = str(dataset_id)
+                if value and value not in identities:
+                    identities.append(value)
+        self._follow_up_resolution = replace(resolution, active_series_ids=tuple(identities))
+
+    def _is_table_delivery_complete(
+        self,
+        question: str,
+        requested: list[tuple[str, re.Pattern[str], frozenset[str], str]],
+        steps: list[AgentStep],
+    ) -> bool:
+        """Whether a verified structured result can finish without model narration."""
+        if not _TABLE_DELIVERY_ASK.search(question):
+            return False
+        if _NARRATIVE_OR_ANALYSIS_ASK.search(question):
+            return False
+        # A blocked/failed step (including an unresolved clarify/fitness gate)
+        # needs its normal recovery or user-facing explanation, even if an
+        # earlier URL/file tool happened to leave a table in the workspace.
+        if any(not step.ok for step in steps):
+            return False
+        fitness = getattr(self.registry, "last_fitness", None) or {}
+        if (fitness.get("turn") == getattr(self.registry, "turn", None)
+                and fitness.get("decision") in {"partial", "reject"}):
+            return False
+        for _name, _pattern, tool_names, _note in requested:
+            if not any(step.ok and step.tool_name in tool_names for step in steps):
+                return False
+        return self._verified_active_result(steps) is not None
+
+    def _is_structured_transform_complete(
+        self,
+        question: str,
+        requested: list[tuple[str, re.Pattern[str], frozenset[str], str]],
+        steps: list[AgentStep],
+    ) -> bool:
+        """Skip prose generation when verified structured work is the deliverable."""
+        if not _TRANSFORMATION_ASK.search(question) or _EXPLICIT_INTERPRETATION_ASK.search(question):
+            return False
+        if any(not step.ok for step in steps):
+            return False
+        if not any(
+            step.ok and step.tool_name in self.TRANSFORMATION_TOOLS for step in steps
+        ) and "dönüşüm" not in self._pre_satisfied_capabilities:
+            return False
+        if not all(
+            name in self._pre_satisfied_capabilities
+            or any(step.ok and step.tool_name in tools for step in steps)
+            for name, _pattern, tools, _note in self._inflight_requested
+        ):
+            return False
+        if self._verified_active_result(steps) is None:
+            return False
+        if (any(name == "grafik" for name, *_ in self._inflight_requested)
+                and not any(step.ok and step.tool_name == "chart" for step in steps)):
+            return False
+        return True
+
+    def _try_verified_transform_chart_fastpath(self, question: str) -> AgentAnswer | None:
+        """Reuse a provenance-verified monthly transform and render its requested chart."""
+        if (not self._active_table_reuse_allowed or not _CHART_ASK.search(question)
+                or _EXPLICIT_INTERPRETATION_ASK.search(question)
+                or re.search(r"harita|map", question, re.IGNORECASE)):
+            return None
+        chart_tool = self.registry.get("chart")
+        if chart_tool is None:
+            return None
+
+        proof = self._verified_workspace_satisfaction
+        plan = None
+        if proof is None:
+            try:
+                plan = plan_verified_workspace_transform(
+                    question,
+                    self._follow_up_resolution,
+                    self.workspace,
+                    active_specs=self._active_table_specs(),
+                )
+            except (AssertionError, KeyError, TypeError, ValueError):
+                return None
+            if plan is None:
+                return None
+            derived_columns = plan.derived_columns
+            operation = plan.operation
+            date_column = plan.date_column
+            source_columns = plan.value_columns
+        else:
+            derived_columns = proof.derived_columns
+            operation = proof.operation
+            date_column = proof.date_column
+            source_columns = proof.source_columns
+
+        frame = self.workspace.table
+        if (not isinstance(frame, pd.DataFrame) or not derived_columns
+                or len(derived_columns) > 6 or date_column not in frame.columns):
+            return None
+        checked_columns = derived_columns if proof is not None else source_columns
+        if any(column not in frame.columns or not pd.api.types.is_numeric_dtype(frame[column])
+               for column in checked_columns):
+            return None
+
+        chart_type = "bar" if re.search(r"\b(?:çubuk|cubuk|bar)\b", question, re.I) else "line"
+        label = "yüzde değişim" if operation == "percent_change" else "mutlak değişim"
+        args: dict[str, Any] = {
+            "chart_type": chart_type,
+            "x_column": date_column,
+            "y_columns": list(derived_columns),
+            "title": f"Aylık {label}",
+        }
+        # Keep the fast path schema-agnostic: plugin chart tools may expose
+        # only a subset of optional arguments, but required arguments must fit.
+        fields = getattr(getattr(chart_tool, "Params", None), "model_fields", {})
+        if fields:
+            args = {key: value for key, value in args.items() if key in fields}
+            required = {key for key, field_info in fields.items() if field_info.is_required()}
+            if not required.issubset(args):
+                return None
+
+        self._begin_registry_turn(question, self._retry_source_question or question)
+        steps: list[AgentStep] = []
+        started = time.perf_counter()
+        if plan is not None:
+            transformed = execute_verified_workspace_transform(self.workspace, plan)
+            if transformed is None:
+                return None
+            steps.append(AgentStep(
+                index=1,
+                role="execute",
+                thought="doğrulanmış aktif workspace üzerinde deterministik dönüşüm",
+                tool_name="workspace_compute_column",
+                tool_args={
+                    "operation": plan.operation,
+                    "column_names": list(plan.derived_columns),
+                    "expressions": list(plan.expressions),
+                    "purpose": label,
+                    "deterministic": True,
+                },
+                result_summary=(
+                    f"{len(plan.derived_columns)} sütun {label} olarak hesaplandı; "
+                    f"{transformed.validation}."
+                ),
+                duration_ms=(time.perf_counter() - started) * 1000,
+                result_data=transformed.frame,
+            ))
+        else:
+            steps.append(AgentStep(
+                index=1,
+                role="validate",
+                thought="aktif tablodaki türetilmiş sütunlar provenance, LAG ve tarih ekseniyle doğrulandı",
+                result_summary=proof.validation if proof is not None else "doğrulanmış aktif dönüşüm",
+            ))
+
+        chart_started = time.perf_counter()
+        chart_result = self.registry.execute("chart", args)
+        steps.append(AgentStep(
+            index=len(steps) + 1,
+            role="execute" if chart_result.ok else "validate",
+            tool_name="chart",
+            tool_args=args,
+            result_summary=chart_result.content[:300],
+            ok=chart_result.ok,
+            duration_ms=(time.perf_counter() - chart_started) * 1000,
+            error_code=chart_result.error.error_code if chart_result.error else None,
+            candidates=list(chart_result.error.candidates or []) if chart_result.error else [],
+        ))
+        if not chart_result.ok or not chart_result.artifacts.get("chart"):
+            if plan is not None:
+                self.workspace.revert()
+            log.info("verified transform chart fast path geri çekildi: %s", chart_result.content[:200])
+            return None
+
+        artifacts = [chart_result.artifacts["chart"]]
+        reused = proof is not None
+        if reused:
+            self._append_verified_reuse_artifact(artifacts)
+        text = (
+            f"Doğrulanmış aktif tablodaki {len(source_columns)} seri için aylık {label} grafiği hazırlandı. "
+            "Tam tablo ve indirmeler aşağıda yer alıyor."
+        )
+        self._history.append(ChatMessage(role="user", content=question))
+        self._history.append(ChatMessage(role="assistant", content=text))
+        return AgentAnswer(
+            text=text,
+            steps=steps,
+            workspace=self.workspace,
+            grounding="OK",
+            availability_status="FOUND",
+            artifacts=artifacts,
+            reused_verified_table=reused,
+            usage=dict(self._usage),
+        )
+
     def _try_verified_workspace_fastpath(self, question: str) -> AgentAnswer | None:
         """Use one deterministic workspace operation when semantic reuse is proven safe."""
-        if not self._active_table_reuse_allowed:
+        if (not self._active_table_reuse_allowed
+                or _CHART_ASK.search(question)
+                or _EXPLICIT_INTERPRETATION_ASK.search(question)):
             return None
         try:
             plan = plan_verified_workspace_transform(
@@ -891,7 +1288,11 @@ class AnalyticsAgent:
             "domain", "source", "metric", "series", "entity", "geography",
             "date_range", "frequency", "aggregation",
         }
-        if semantic_fields.intersection(resolution.overridden + resolution.cleared):
+        period_range = requested_month_range(question, resolution)
+        semantic_changes = set(resolution.overridden + resolution.cleared)
+        if "date_range" in semantic_changes and period_range is None:
+            return False
+        if semantic_fields.intersection(semantic_changes) - {"date_range"}:
             return False
 
         # The old table must not answer a national question when it is a
@@ -946,10 +1347,15 @@ class AnalyticsAgent:
         resolution = self._follow_up_resolution
         if resolution is None:
             return answer
-        committed = any(
+        performed_data_action = any(
             step.ok and step.tool_name in self.DATA_PRODUCING_TOOLS
             for step in answer.steps
-        ) and not resolution.clarification_required
+        )
+        committed = (
+            (performed_data_action or answer.reused_verified_table)
+            and self._capabilities_satisfied(answer.steps)
+            and not resolution.clarification_required
+        )
         if committed:
             self._follow_up_context = resolution.context
             self._follow_up_resolution = resolution.mark_committed()
@@ -1105,6 +1511,7 @@ class AnalyticsAgent:
             compact_planning=(not self.workspace.has_table),
         )
         steps: list[AgentStep] = []
+        self._inflight_steps = steps
         native = self.llm.supports_native_tools()
         tools = self.registry.schemas(only=self._schema_allowed) if native else None
         self._usage["initial_tool_schemas"] = len(self._schema_allowed)
@@ -1116,17 +1523,18 @@ class AnalyticsAgent:
         acted = False           # bu turda veri getirmeyen ama iş yapan bir araç başarıyla çalıştı (terfi, grafik, ingest)
         # İstenen yetenek (grafik, analitik) araç çağrılmadan cevaplanırsa bir kez geri gönderilir.
         capability_nudged: set[str] = set()
-        requested = [
+        all_requested = [
             cap for cap in _REQUESTED_CAPABILITIES
             if cap[1].search(planning_question) and any(self.registry.get(t) is not None for t in cap[2])
         ]
+        self._inflight_requested = all_requested
+        requested = [cap for cap in all_requested if cap[0] not in self._pre_satisfied_capabilities]
         seen: set[tuple[str, str]] = set()   # (araç, argüman) — döngü kilidi
         seen.update(self._retry_failed_signatures)
         duplicates = 0                       # kilidin kaç kez devreye girdiği
         terminal: ToolError | None = None    # tekrar denemeyle çözülmeyen hata
         stuck_note: str | None = None        # son tura verilecek özel yönerge
         tool_texts: list[str] = []           # grounding havuzu: araçların gerçekten söyledikleri
-        regenerated = False                  # cevap bir kez geri gönderildi mi
         causal_rounds = 0                    # nedensellik dili için geri gönderme sayısı (en çok 2)
         miss_rounds = 0                      # araç çıktısında olmayan sayı için geri gönderme sayısı (en çok 2)
         grounding = ""                       # son ölçüm; AgentAnswer'a taşınır
@@ -1134,6 +1542,7 @@ class AnalyticsAgent:
         action_claim_nudged = False          # araçsız işlem iddiası / okunmamış dosya bir kez geri gönderilir
         join_nudged = False                  # K03: birleştirme turunda araçsız eşleşme anlatısı bir kez geri gönderilir
         general_nudged = False               # ADR-0078: genel bilgiden cevap bir kez geri gönderilir
+        self._inflight_artifacts = artifacts
 
         for i in range(1, self.max_steps + 1):
             if self.time_budget_s and time.perf_counter() - ask_started > self.time_budget_s:
@@ -1317,7 +1726,6 @@ class AnalyticsAgent:
                     # M16 beşinci koşu: tek geri göndermeden sonra da doğrulanamayan bakiye cevaba notla çıktı; MISS de iki hak alır.
                     miss_retry = (grounding.startswith("MISS") or bool(cells)) and miss_rounds < 2
                     if miss_retry or causal_retry:
-                        regenerated = True
                         if causal:
                             causal_rounds += 1
                         if grounding.startswith("MISS") or cells:
@@ -1392,9 +1800,13 @@ class AnalyticsAgent:
                 answer_text = self._coverage_note(self._source_note(answer_text, steps, artifacts), artifacts)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=answer_text))
+                reused = self._is_verified_workspace_reuse(steps)
+                if reused:
+                    self._append_verified_reuse_artifact(artifacts)
                 return self._finish_recovery(
                     AgentAnswer(text=answer_text, steps=steps, workspace=self.workspace,
-                                grounding=grounding, artifacts=artifacts, rejected_claims=rejected),
+                                grounding=grounding, artifacts=artifacts, rejected_claims=rejected,
+                                reused_verified_table=reused),
                     recovery,
                     finalization_reason=("recovery_failed" if recovery.failures else "model_finalized"),
                 )
@@ -1545,6 +1957,48 @@ class AnalyticsAgent:
                         )
                 log.info("adım %d: %s -> %s", i, call.name, "ok" if result.ok else "HATA")
                 messages.append(self._result_message(call, result, native=native))
+
+            # A verified table is the complete deliverable for direct
+            # retrieve/list/export requests. Do not let the model spend another
+            # turn peeking at a few rows and then fail while narrating a table
+            # that is already available to the user. Explicit analysis and
+            # interpretation requests continue through the normal narration path.
+            if terminal is None and (
+                self._is_table_delivery_complete(question, requested, steps)
+                or self._is_structured_transform_complete(question, requested, steps)
+            ):
+                is_transform = self._is_structured_transform_complete(question, requested, steps)
+                text = (
+                    "İstenen dönüşüm doğrulanmış aktif tabloya uygulandı; tam sonuç ve indirmeler aşağıda hazır."
+                    if is_transform
+                    else "İstenen veri tablosu hazırlandı; tam sonuç aşağıdaki tabloda yer alıyor."
+                )
+                text = self._coverage_note(self._source_note(text, steps, artifacts), artifacts)
+                steps.append(AgentStep(
+                    index=len(steps) + 1,
+                    role="narrate",
+                    thought="başarılı veri aracı aktif tabloyu üretti; model anlatım turu atlandı",
+                    result_summary=text[:200],
+                ))
+                self._history.append(ChatMessage(role="user", content=question))
+                self._history.append(ChatMessage(role="assistant", content=text))
+                reused = self._is_verified_workspace_reuse(steps)
+                if reused:
+                    self._append_verified_reuse_artifact(artifacts)
+                return self._finish_recovery(
+                    AgentAnswer(
+                        text=text,
+                        steps=steps,
+                        workspace=self.workspace,
+                        grounding=grounding,
+                        artifacts=artifacts,
+                        rejected_claims=rejected,
+                        availability_status="FOUND",
+                        reused_verified_table=reused,
+                    ),
+                    recovery,
+                    finalization_reason="verified_table_delivery",
+                )
 
             if terminal is not None:
                 # A failed follow-up must never replace a confirmed active
@@ -1735,20 +2189,37 @@ class AnalyticsAgent:
         set_deadline = getattr(self.llm, "set_deadline", None)
         set_thinking = getattr(self.llm, "set_thinking", None)
         if callable(set_deadline):
-            set_deadline(self._ask_deadline)
+            deadline = self._ask_deadline
+            if effective_phase == "tool" and self.tool_timeout_s is not None and self.tool_timeout_s > 0:
+                tool_deadline = time.perf_counter() + self.tool_timeout_s
+                deadline = min(deadline, tool_deadline) if deadline is not None else tool_deadline
+            if (effective_phase in {"narration", "long_narration", "recovery"}
+                    and self.narration_timeout_s is not None and self.narration_timeout_s > 0):
+                narration_deadline = time.perf_counter() + self.narration_timeout_s
+                deadline = min(deadline, narration_deadline) if deadline is not None else narration_deadline
+            set_deadline(deadline)
         if callable(set_thinking):
             set_thinking(True if fast_planning else None)
         if fast_planning:
             self._usage["fast_planning_calls"] = self._usage.get("fast_planning_calls", 0) + 1
+        call_started = time.perf_counter()
+        self._last_llm_failure = None
         try:
             response = (self.llm.chat(messages, tools=tools, **kwargs) if tools is not None
                         else self.llm.chat(messages, **kwargs))
+        except Exception:
+            duration_ms = (time.perf_counter() - call_started) * 1000
+            self._last_llm_failure = {"phase": effective_phase, "duration_ms": duration_ms}
+            self._usage["failed_llm_calls"] = self._usage.get("failed_llm_calls", 0) + 1
+            self._usage["failed_llm_call_ms"] = self._usage.get("failed_llm_call_ms", 0.0) + duration_ms
+            self._usage["failed_llm_phase"] = effective_phase
+            raise
         finally:
             if callable(set_deadline):
                 set_deadline(None)
             if callable(set_thinking):
                 set_thinking(None)
-        if getattr(response, "finish_reason", None) == "length" and effective_phase in {"narration", "recovery"}:
+        if getattr(response, "finish_reason", None) == "length" and effective_phase in {"narration", "long_narration", "recovery"}:
             self._truncated = True
         usage = getattr(response, "usage", None) or {}
         self._usage["prompt"] = self._usage.get("prompt", 0) + int(usage.get("prompt", 0) or 0)

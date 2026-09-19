@@ -157,8 +157,7 @@ def test_compact_explicit_period_conflict_falls_back_from_full_workspace() -> No
     """A compact YYYYMM range is a new scope, so a stale table is unsafe."""
     workspace = _workspace()
     resolution = resolve_follow_up(
-        "Verilerin bakiye yapısını dikkate alarak aylık değişimleri analiz etmeye uygun hale getir "
-        "ve tüm serileri 202201–202312 döneminde aylık bazda aynı tarih ekseninde hizala.",
+        "Bakiyeleri aylık değişime hazırla ve 202201–202312 aralığında aynı aylık eksene hizala.",
         FollowUpContext(
             domain="transport", source="transport", metric="passengers",
             series="transport:passengers", date_range="2021-04–2026-03", frequency="monthly",
@@ -175,6 +174,98 @@ def test_compact_explicit_period_conflict_falls_back_from_full_workspace() -> No
         )
         is None
     )
+
+
+def test_explicit_month_range_filters_after_full_window_lag() -> None:
+    dates = pd.date_range("2021-04-30", "2026-03-31", freq="ME")
+    frame = pd.DataFrame(
+        {
+            "period_end": dates,
+            "need": [float(i) for i in range(len(dates))],
+            "card": [float(i * 10) for i in range(len(dates))],
+            "bddk_monthly:1536::series_id": ["bddk_monthly:1536"] * len(dates),
+            "bddk_monthly:1536::unit": ["TRY_mn"] * len(dates),
+            "bddk_monthly:1536::quality_flag": ["ok"] * len(dates),
+            "gold_metric_id": ["fixture"] * len(dates),
+        }
+    )
+    workspace = AnalysisWorkspace()
+    workspace.set_table(
+        frame,
+        description="verified 60 month fixture",
+        provenance=QueryProvenance(
+            sql="SELECT period_end, need, card FROM verified_fixture",
+            dataset_ids=["bddk_monthly:1536", "bddk_monthly:1539"],
+            sources=["bddk_monthly"],
+        ),
+    )
+    resolution = resolve_follow_up(
+        "Bakiyeleri aylık değişime hazırla ve 202201–202312 aralığında aynı aylık eksene hizala.",
+        FollowUpContext(
+            domain="finance", source="bddk_monthly", metric="kredi",
+            series="bddk_monthly:1536", date_range="2021-04–2026-03", frequency="monthly",
+        ),
+    )
+    plan = plan_verified_workspace_transform(
+        resolution.question,
+        resolution,
+        workspace,
+        active_specs=[_spec(source="bddk_monthly", name="İhtiyaç"), _spec(source="bddk_monthly", name="Kart")],
+    )
+
+    assert plan is not None
+    assert plan.group_columns == ()
+    assert plan.period_start == pd.Timestamp("2022-01-01")
+    assert plan.period_end == pd.Timestamp("2023-12-31")
+    result = execute_verified_workspace_transform(workspace, plan)
+
+    assert result is not None
+    assert len(result.frame) == 24
+    assert result.frame.iloc[0]["period_end"] == pd.Timestamp("2022-01-31")
+    # December 2021 remains available as the LAG base for January 2022.
+    assert result.frame.iloc[0]["need_change"] == approx(1.0)
+    assert result.frame.iloc[0]["card_change"] == approx(10.0)
+    assert result.frame.iloc[-1]["period_end"] == pd.Timestamp("2023-12-31")
+    assert len(workspace.table) == 24
+
+
+def test_explicit_month_range_follow_up_preserves_active_series_without_llm() -> None:
+    dates = pd.date_range("2021-04-30", "2026-03-31", freq="ME")
+    workspace = AnalysisWorkspace()
+    workspace.set_table(
+        pd.DataFrame({"date": dates, "metric_a": range(len(dates)), "metric_b": range(len(dates))}),
+        description="verified 60 month fixture",
+        provenance=QueryProvenance(
+            sql="SELECT date, metric_a, metric_b FROM verified_fixture",
+            dataset_ids=["transport:passengers"],
+            sources=["transport"],
+        ),
+    )
+
+    class NeverCalledLLM:
+        model = "test"
+
+        def supports_native_tools(self) -> bool:
+            return True
+
+        def chat(self, *args, **kwargs):
+            raise AssertionError("explicit period transformation must reuse the active workspace")
+
+    agent = AnalyticsAgent(NeverCalledLLM(), ToolRegistry(), workspace=workspace)
+    agent._catalog_specs = lambda: [_spec()]
+    agent._follow_up_context = FollowUpContext(
+        domain="transport", source="transport", metric="passengers",
+        series="transport:passengers", date_range="2021-04–2026-03", frequency="monthly",
+    )
+
+    answer = agent.ask(
+        "Bakiyeleri aylık değişime hazırla ve 202201–202312 aralığında aynı aylık eksene hizala."
+    )
+
+    assert answer.usage["calls"] == 0
+    assert answer.steps[0].tool_name == "workspace_compute_column"
+    assert len(workspace.table) == 24
+    assert workspace.table.iloc[0]["metric_a_change"] == approx(1.0)
 
 
 def test_all_verified_series_follow_up_reuses_the_workspace() -> None:

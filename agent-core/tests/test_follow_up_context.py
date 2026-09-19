@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import sys
+import time
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
+import pandas as pd
 from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from kkb_agent.contracts.lakehouse import QueryProvenance
 from kkb_agent.core.agent import AnalyticsAgent
 from kkb_agent.core.follow_up import FollowUpContext, _extract, resolve_follow_up
 from kkb_agent.core.registry import ToolRegistry
@@ -44,6 +48,37 @@ class _QueryTool(Tool):
         )
 
 
+class _WorkspaceQueryTool(_QueryTool):
+    """A lakehouse-like query that installs a verified 60-month workspace."""
+
+    def __init__(self, workspace: AnalysisWorkspace) -> None:
+        super().__init__()
+        self.workspace = workspace
+
+    def run(self, params: _QueryParams) -> ToolResult:
+        self.calls += 1
+        dates = pd.date_range("2021-04-30", "2026-03-31", freq="ME")
+        frame = pd.DataFrame(
+            {
+                "period_end": dates,
+                "need": range(len(dates)),
+                "card": [value * 10 for value in range(len(dates))],
+            }
+        )
+        provenance = QueryProvenance(
+            sql="SELECT period_end, need, card FROM verified_fixture",
+            dataset_ids=["bddk_monthly:1536_Toplam", "bddk_monthly:1539_Toplam"],
+            sources=["bddk_monthly"],
+            row_count=len(frame),
+        )
+        self.workspace.set_table(frame, description="verified 60 month fixture", provenance=provenance)
+        return ToolResult(
+            content=f"Sorgu başarılı: {len(frame)} aylık satır",
+            data=frame,
+            provenance=provenance,
+        )
+
+
 class _ScriptedLLM:
     model = "scripted"
 
@@ -60,6 +95,17 @@ class _ScriptedLLM:
         turn = self.turns[min(self.calls, len(self.turns) - 1)]
         self.calls += 1
         return turn
+
+
+class _QueryThenNarrationTimeoutLLM(_ScriptedLLM):
+    """Completes the data call, then simulates a provider timeout while narrating."""
+
+    def chat(self, messages, *, tools=None, temperature=0.0, max_tokens=None) -> LLMResponse:
+        if self.calls == 0:
+            self.messages.append(list(messages))
+            self.calls += 1
+            return LLMResponse(content="", tool_calls=[_call(2025, "q1")])
+        raise RuntimeError("LLM 2 denemede yanıt vermedi: Request timed out.")
 
 
 def _call(year: int, call_id: str) -> ToolCall:
@@ -165,6 +211,20 @@ def test_referential_monthly_word_is_not_a_series_selection() -> None:
     assert "series" not in result.overridden
 
 
+def test_explicit_month_window_is_not_implicitly_a_comparison() -> None:
+    previous = FollowUpContext(
+        domain="finance", source="BDDK", metric="kredi",
+        series="bddk_monthly:1536_Toplam", date_range="2021-04–2026-03", frequency="monthly",
+    )
+    result = resolve_follow_up(
+        "Verileri 202201–202312 döneminde aylık bazda hizala.", previous
+    )
+
+    assert result.is_follow_up
+    assert result.context.date_range == "2022-01–2023-12"
+    assert result.context.comparison_target == ()
+
+
 def test_buying_series_is_replaced_by_selling_series() -> None:
     first = resolve_follow_up("USD alış kurunu getir", catalog=_catalog())
     second = resolve_follow_up("Peki satış?", first.context, catalog=_catalog())
@@ -260,6 +320,157 @@ def _agent(llm: _ScriptedLLM, *, fail_after: int | None = None) -> tuple[Analyti
     return AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace()), tool
 
 
+def test_narration_timeout_commits_verified_context_for_monthly_follow_up() -> None:
+    """A provider outage after query execution must not orphan the active table."""
+    workspace = AnalysisWorkspace()
+    tool = _WorkspaceQueryTool(workspace)
+    registry = ToolRegistry()
+    registry.register(tool)
+    specs = [
+        SimpleNamespace(
+            dataset_id="bddk_monthly:1536_Toplam",
+            name="İhtiyaç kredisi",
+            source="bddk_monthly",
+            frequency=SimpleNamespace(value="monthly"),
+            coverage=SimpleNamespace(start=date(2021, 4, 1), end=date(2026, 3, 31)),
+        ),
+        SimpleNamespace(
+            dataset_id="bddk_monthly:1539_Toplam",
+            name="Bireysel kredi kartları",
+            source="bddk_monthly",
+            frequency=SimpleNamespace(value="monthly"),
+            coverage=SimpleNamespace(start=date(2021, 4, 1), end=date(2026, 3, 31)),
+        ),
+    ]
+    agent = AnalyticsAgent(
+        llm=_QueryThenNarrationTimeoutLLM([]),
+        registry=registry,
+        workspace=workspace,
+        max_steps=4,
+    )
+    agent._catalog_specs = lambda: specs
+
+    first = agent.ask(
+        "Aylık BDDK ihtiyaç kredisi ve bireysel kredi kartı bakiyelerini tabloya getir ve sonucu kısaca açıkla."
+    )
+
+    assert tool.calls == 1
+    assert first.steps[0].tool_name == "lakehouse_query"
+    assert first.steps[-1].error_code == "LLM_UNAVAILABLE"
+    assert first.availability_status == "FOUND"
+    assert "Doğrulanmış tablo" in first.text
+    assert "Model servisine şu an ulaşılamıyor" not in first.text
+    assert first.usage["failed_llm_calls"] == 1
+    assert first.usage["failed_llm_call_ms"] >= first.steps[-1].duration_ms
+    payload = answer_to_dict(
+        first,
+        agent,
+        question="Aylık BDDK ihtiyaç kredisi ve bireysel kredi kartı bakiyelerini tabloya getir ve sonucu kısaca açıkla.",
+    )
+    assert payload["table"]["row_count"] == 60, "anlatım kesilse de doğrulanmış aktif tablo API'de korunmalı"
+    assert agent.follow_up_context.series == "bddk_monthly:1536_Toplam"
+    assert agent.follow_up_resolution is not None and agent.follow_up_resolution.committed
+
+    second = agent.ask("Bakiyeleri aylık değişime hazırla ve 202201–202312 aralığında aynı aylık eksene hizala.")
+
+    assert second.usage["calls"] == 0, "takip deterministik fast path ile tamamlanmalı"
+    assert tool.calls == 1, "takip yeni katalog/sorgu çağrısı yapmamalı"
+    assert second.steps[0].tool_name == "workspace_compute_column"
+    assert len(workspace.table) == 24
+    assert workspace.table.iloc[0]["need_change"] == 1
+    assert workspace.table.iloc[0]["card_change"] == 10
+
+
+def test_direct_table_request_finishes_after_verified_data_without_narration() -> None:
+    """Retrieval-only asks must not spend another model turn narrating a complete table."""
+    workspace = AnalysisWorkspace()
+    tool = _WorkspaceQueryTool(workspace)
+    registry = ToolRegistry()
+    registry.register(tool)
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[_call(2024, "retrieve")]),
+    ])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=workspace, max_steps=4)
+
+    question = "2024 yılına ait aylık konut kredisi bakiyelerini tablo olarak göster."
+    answer = agent.ask(question)
+
+    assert llm.calls == 1, "başarılı tablo sonrasında anlatı/örnekleme için ikinci LLM turu olmamalı"
+    assert tool.calls == 1
+    assert answer.availability_status == "FOUND"
+    assert len(answer.workspace.table) == 60
+    assert answer.steps[-1].role == "narrate"
+    assert "model anlatım turu atlandı" in answer.steps[-1].thought
+    assert "veri tablosu hazırlandı" in answer.text
+    assert answer_to_dict(answer, agent, question=question)["table"]["row_count"] == 60
+
+
+def test_narration_phase_uses_shorter_deadline_than_question_budget() -> None:
+    class _DeadlineLLM:
+        model = "deadline-test"
+
+        def __init__(self) -> None:
+            self.deadlines = []
+
+        def supports_native_tools(self) -> bool:
+            return True
+
+        def set_deadline(self, deadline) -> None:
+            self.deadlines.append(deadline)
+
+        def set_thinking(self, _disabled) -> None:
+            pass
+
+        def chat(self, _messages, *, tools=None, temperature=0.0, max_tokens=None):
+            return LLMResponse(content="Kısa, doğrulanmış açıklama.")
+
+    llm = _DeadlineLLM()
+    agent = AnalyticsAgent(
+        llm=llm,
+        registry=ToolRegistry(),
+        time_budget_s=600,
+        narration_timeout_s=12,
+    )
+    started = time.perf_counter()
+    agent._ask_deadline = started + 600
+
+    agent._chat([], phase="narration")
+
+    assert len(llm.deadlines) == 2
+    assert started + 10 <= llm.deadlines[0] <= started + 12.1
+    assert llm.deadlines[1] is None, "LLM istemcisindeki çağrı deadline'ı temizlenmeli"
+
+
+def test_tool_phase_has_total_deadline_below_question_budget() -> None:
+    class _DeadlineLLM:
+        model = "deadline-test"
+
+        def __init__(self) -> None:
+            self.deadlines = []
+
+        def supports_native_tools(self) -> bool:
+            return True
+
+        def set_deadline(self, deadline) -> None:
+            self.deadlines.append(deadline)
+
+        def chat(self, _messages, *, tools=None, temperature=0.0, max_tokens=None):
+            return LLMResponse(content="Kısa araç planı.")
+
+    llm = _DeadlineLLM()
+    agent = AnalyticsAgent(
+        llm=llm, registry=ToolRegistry(), time_budget_s=600, tool_timeout_s=18,
+    )
+    started = time.perf_counter()
+    agent._ask_deadline = started + 600
+
+    agent._chat([], phase="tool")
+
+    assert len(llm.deadlines) == 2
+    assert started + 16 <= llm.deadlines[0] <= started + 18.1
+    assert llm.deadlines[1] is None
+
+
 def test_tool_failure_does_not_commit_failed_follow_up_or_fabricate_fresh_state() -> None:
     llm = _ScriptedLLM([
         LLMResponse(content="", tool_calls=[_call(2025, "a1")]),
@@ -312,3 +523,164 @@ def test_api_payload_exposes_follow_up_resolution_without_exposing_raw_history()
 
     assert payload["follow_up"]["overridden"] == ["date_range"]
     assert "2025 konut kredisi" not in payload["follow_up"]
+
+
+def _two_series_monthly_workspace() -> tuple[AnalysisWorkspace, FollowUpContext, list[SimpleNamespace]]:
+    dates = pd.date_range("2021-04-30", periods=60, freq="ME")
+    workspace = AnalysisWorkspace()
+    workspace.set_table(
+        pd.DataFrame({"date": dates, "metric_a": range(60), "metric_b": [i * 3 for i in range(60)]}),
+        description="generic verified fixture",
+        provenance=QueryProvenance(sql="SELECT * FROM fixture", dataset_ids=[], sources=["fixture"]),
+        column_provenance={
+            "metric_a": QueryProvenance(sql="SELECT metric_a FROM fixture_a", dataset_ids=["fixture:a"]),
+            "metric_b": QueryProvenance(sql="SELECT metric_b FROM fixture_b", dataset_ids=["fixture:b"]),
+        },
+    )
+    context = FollowUpContext(
+        domain="generic", source="fixture", metric="activity", series="fixture:a",
+        date_range="2021-04–2026-03", frequency="monthly",
+    )
+    specs = [
+        SimpleNamespace(dataset_id="fixture:a", source="fixture", frequency=SimpleNamespace(value="monthly"), name="Metric A"),
+        SimpleNamespace(dataset_id="fixture:b", source="fixture", frequency=SimpleNamespace(value="monthly"), name="Metric B"),
+    ]
+    return workspace, context, specs
+
+
+def _add_fixture_changes(workspace: AnalysisWorkspace, context: FollowUpContext, specs) -> None:
+    from kkb_agent.core.workspace_fastpath import (
+        execute_verified_workspace_transform,
+        plan_verified_workspace_transform,
+    )
+
+    question = "Bu aktif tablodaki aylık değişimleri hesapla."
+    resolution = resolve_follow_up(question, context)
+    plan = plan_verified_workspace_transform(question, resolution, workspace, active_specs=specs)
+    assert plan is not None
+    assert execute_verified_workspace_transform(workspace, plan) is not None
+
+
+class _FixtureChartParams(BaseModel):
+    chart_type: str
+    x_column: str
+    y_columns: list[str]
+    title: str
+
+
+class _FixtureChartTool(Tool):
+    name = "chart"
+    description = "fixture chart"
+    Params = _FixtureChartParams
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.calls = 0
+
+    def run(self, params: _FixtureChartParams) -> ToolResult:
+        self.calls += 1
+        self.path.write_text("{}", encoding="utf-8")
+        return ToolResult(content="Chart hazır.", artifacts={
+            "chart": {"kind": "chart", "title": params.title, "spec_path": str(self.path)}
+        })
+
+
+def test_verified_transform_and_chart_follow_up_is_deterministic_and_keeps_all_series(tmp_path) -> None:
+    workspace, context, specs = _two_series_monthly_workspace()
+    before = workspace.table
+    chart = _FixtureChartTool(tmp_path / "chart.json")
+    registry = ToolRegistry()
+    registry.register(chart)
+
+    class _NeverCalledLLM:
+        model = "never-called"
+
+        def supports_native_tools(self) -> bool:
+            return True
+
+        def chat(self, *_args, **_kwargs):
+            raise AssertionError("verified table + graph must not need another model turn")
+
+    agent = AnalyticsAgent(_NeverCalledLLM(), registry, workspace=workspace)
+    agent._catalog_specs = lambda: specs
+    agent._follow_up_context = context
+    question = "Bu serilerin aylık değişimlerini çizgi grafikte göster."
+
+    answer = agent.ask(question)
+
+    assert chart.calls == 1
+    assert answer.usage["calls"] == 0
+    assert any(step.tool_name == "workspace_compute_column" and step.ok for step in answer.steps)
+    assert any(step.tool_name == "chart" and step.ok for step in answer.steps)
+    assert agent.follow_up_resolution is not None
+    assert agent.follow_up_resolution.active_series_ids == ("fixture:a", "fixture:b")
+    payload = answer_to_dict(answer, agent, table_before=before, question=question)
+    assert payload["table"]["row_count"] == 60
+    assert [column["label"] for column in payload["table"]["columns"]] == [
+        "date", "metric_a_change", "metric_b_change"
+    ]
+    assert len(payload["charts"]) == 1
+
+
+def test_chart_and_verified_table_survive_narration_timeout(tmp_path) -> None:
+    workspace, context, specs = _two_series_monthly_workspace()
+    _add_fixture_changes(workspace, context, specs)
+    chart = _FixtureChartTool(tmp_path / "chart.json")
+    registry = ToolRegistry()
+    registry.register(chart)
+
+    class _ChartThenTimeoutLLM:
+        model = "chart-timeout"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def supports_native_tools(self) -> bool:
+            return True
+
+        def chat(self, *_args, **_kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return LLMResponse(content="", tool_calls=[ToolCall(
+                    id="chart-1",
+                    name="chart",
+                    arguments={
+                        "chart_type": "line", "x_column": "date",
+                        "y_columns": ["metric_a_change", "metric_b_change"],
+                        "title": "Monthly changes",
+                    },
+                )])
+            raise RuntimeError("LLM 1 denemede yanıt vermedi: Request timed out.")
+
+    llm = _ChartThenTimeoutLLM()
+    agent = AnalyticsAgent(llm, registry, workspace=workspace, max_steps=4)
+    agent._catalog_specs = lambda: specs
+    agent._follow_up_context = context
+    agent.upload_root = tmp_path
+    question = "Bu aylık değişimlerin grafiğini çiz ve bulguları yorumla."
+
+    session = Session(lambda: agent)
+    payload = session.ask(question)
+
+    assert llm.calls == 2
+    assert chart.calls == 1
+    assert payload["availability_status"] == "FOUND"
+    assert payload["usage"]["failed_llm_phase"] == "narration"
+    assert any(step["tool"] == "chart" and step["ok"] for step in payload["steps"])
+    assert any(chart["kind"] == "chart" for chart in payload["charts"])
+    assert payload["table"]["row_count"] == 60
+    assert [column["label"] for column in payload["table"]["columns"]] == [
+        "date", "metric_a_change", "metric_b_change"
+    ]
+    assert "Model servisine şu an ulaşılamıyor" not in payload["text"]
+    exported = session.tables[0]
+    assert list(exported.columns) == ["date", "metric_a_change", "metric_b_change"]
+    assert len(exported) == 60
+    from io import BytesIO
+
+    from kkb_agent.web_app import table_csv_bytes, table_xlsx_bytes
+
+    csv_frame = pd.read_csv(BytesIO(table_csv_bytes(exported)), sep=";", decimal=",", encoding="utf-8-sig")
+    xlsx_frame = pd.read_excel(BytesIO(table_xlsx_bytes(exported)), engine="openpyxl")
+    assert list(csv_frame.columns) == list(xlsx_frame.columns) == list(exported.columns)
+    assert len(csv_frame) == len(xlsx_frame) == 60

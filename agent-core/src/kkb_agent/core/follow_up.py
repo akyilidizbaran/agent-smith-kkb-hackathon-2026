@@ -201,6 +201,10 @@ class FollowUpResolution:
     ambiguous: tuple[str, ...] = ()
     clarification_required: bool = False
     committed: bool = False
+    #: Complete set of source identities on a compatible, provenance-backed
+    #: active workspace. `context.series` remains the linguistic hint; this
+    #: field prevents a multi-series table from being reduced to one ID.
+    active_series_ids: tuple[str, ...] = ()
 
     def mark_committed(self) -> FollowUpResolution:
         return replace(self, committed=True)
@@ -219,6 +223,7 @@ class FollowUpResolution:
             "ambiguous": list(self.ambiguous),
             "clarification_required": self.clarification_required,
             "committed": self.committed,
+            "active_series_ids": list(self.active_series_ids),
         }
 
     def prompt(self) -> str:
@@ -235,6 +240,12 @@ class FollowUpResolution:
             "ÇOK TURLU İSTEK ÇÖZÜMLEMESİ (harness ipucu; katalog ve araç çıktısı yerine geçmez):",
             f"- Soru tipi: {'takip sorusu' if self.is_follow_up else 'yeni soru'}",
         ]
+        if self.active_series_ids:
+            lines.append(
+                "- Doğrulanmış aktif tablodaki tüm kaynak seri kimlikleri: "
+                + ", ".join(self.active_series_ids)
+                + ". Bu kimlikler mevcut tablonun provenance'ından gelir."
+            )
         for label, fields in (
             ("Devralınan", self.inherited),
             ("Değiştirilen", self.overridden),
@@ -466,7 +477,13 @@ def resolve_follow_up(
                     extended.append(field)
                 continue
             if field == "date_range" and old and old != value and not context.comparison_target:
-                context = replace(context, comparison_target=(str(old), str(value)))
+                # A concrete month-to-month output window is a view change,
+                # not an implicit comparison request. Keep the historical
+                # year-only comparison behavior for short prompts such as
+                # "2024'te?".
+                month_window = re.fullmatch(r"(?:19|20)\d{2}-\d{2}–(?:19|20)\d{2}-\d{2}", str(value))
+                if not month_window:
+                    context = replace(context, comparison_target=(str(old), str(value)))
             if old and old != value:
                 overridden.append(field)
             context = replace(context, **{field: value})
