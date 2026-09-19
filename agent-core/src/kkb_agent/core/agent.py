@@ -34,8 +34,10 @@ from .small_talk import capability_reply, strip_filler_opening
 from .small_talk import is_identity_question, is_small_talk, is_usage_question, small_talk_reply, trim_unsolicited_offers
 from ..labels import humanize_internal
 from . import tool_gate
+from .web_routing import public_fallback_plan, web_requested, source_domains, discovery_requested, web_forbidden
 from .execution_recovery import (
     ExecutionState,
+    absence_verified,
     RecoverySnapshot,
     is_explicit_retry,
     needs_truthful_failure_text,
@@ -877,6 +879,7 @@ class AnalyticsAgent:
     def _ask(self, question: str) -> AgentAnswer:
         planning_question = self._retry_source_question or question
         self.registry.active_question = planning_question
+        self.registry.public_web_fallback = None
         if hasattr(self.registry, "current_message"):
             self.registry.current_message = question
             self.registry.turn = getattr(self.registry, "turn", 0) + 1
@@ -921,6 +924,9 @@ class AnalyticsAgent:
         rejected: list[str] = []             # D02: cevaptan çıkarılan, doğrulanamayan iddialar (dışa aktarılmaz)
         action_claim_nudged = False          # araçsız işlem iddiası / okunmamış dosya bir kez geri gönderilir
         join_nudged = False                  # K03: birleştirme turunda araçsız eşleşme anlatısı bir kez geri gönderilir
+        web_nudged = False
+        web_fetch_nudged = False
+        db_web_opened = False
         general_nudged = False               # ADR-0078: genel bilgiden cevap bir kez geri gönderilir
 
         for i in range(1, self.max_steps + 1):
@@ -935,6 +941,44 @@ class AnalyticsAgent:
 
             # --- Araç çağrısı yoksa: nihai cevap ---
             if not calls:
+                if not any(a.get("kind") == "web" for a in artifacts):
+                    reused = self._cached_web_evidence(planning_question, response.content or "")
+                    if reused:
+                        artifacts.extend(reused)
+                        tool_texts.extend(a["read_text"]["text"] for a in reused)
+                        produced_data = True
+                        recovery.observe_success(data_produced=True)
+                        steps.append(AgentStep(index=i, role="context", ok=True,
+                                               thought="önceki turda okunan kaynak metni ve erişim izi yeniden kullanıldı"))
+                hit_urls = {u for a in artifacts if a.get("kind") == "web_search" for u in a.get("hits", [])}
+                search_hits = bool(hit_urls)
+                fetched_web = any(a.get("kind") == "web" and a.get("start_url") in hit_urls
+                                  and any(v.get("readable", True) for v in a.get("visited", [])) for a in artifacts)
+                if search_hits and not fetched_web:
+                    if not web_fetch_nudged:
+                        web_fetch_nudged = True
+                        steps.append(AgentStep(index=i, role="validate", ok=False,
+                                               thought="arama sonucu açılmadan cevap denendi"))
+                        messages.append(ChatMessage(role="assistant", content=response.content))
+                        messages.append(ChatMessage(role="user", content=
+                            "Arama alıntısı cevap için kanıt değildir. Uygun sonucu web_url ile aç; tablo varsa yükle. Sayıları arama sonucundan aktarma."))
+                        continue
+                    response.content = "Aramada kaynak adayları bulundu ancak içerikleri okunmadığı için isteği doğrulayamadım."
+                if ((web_requested(planning_question) or db_web_opened) and not produced_data and not web_nudged
+                        and not any(s.tool_name in tool_gate.WEB for s in steps)):
+                    web_nudged = True
+                    messages.append(ChatMessage(role="assistant", content=response.content))
+                    route = ("Domain içinde web_search ile kaynak keşfet, ardından web_url ile oku."
+                             if discovery_requested(planning_question) else
+                             "Adres varsa web_url ile oku; web araması istendiyse web_search ile ara ve sonucu web_url ile aç.")
+                    if self.registry.get("web_search") is None:
+                        route = "Web araması bu ortamda kapalı. Adres verilmişse web_url ile oku; adres yoksa aramanın kapalı olduğunu söyle."
+                    messages.append(ChatMessage(role="user", content=route))
+                    continue
+                if (web_nudged and not produced_data
+                        and not any(s.tool_name in tool_gate.WEB for s in steps)):
+                    response.content = "Bu istek için kaynak içeriği okunmadığından güvenilir bir sonuç veremiyorum."
+                    nudged = True
                 if recovery.should_prompt_recovery():
                     recovery.mark_recovery_prompted()
                     latest = recovery.failures[-1]
@@ -1012,14 +1056,14 @@ class AnalyticsAgent:
                     continue
 
                 acted_this_turn = any(s.tool_name and s.ok for s in steps)
-                loose_numbers = ([] if acted_this_turn or action_claim_nudged
+                loose_numbers = ([] if acted_this_turn or produced_data or action_claim_nudged
                                  else unverified_numbers(self._strip_reasoning(response.content or ""), self.workspace.table,
                                                          self._frames_pool()))
                 # D02-T05: araçsız turda tek doğrulanamayan sayı da yeter (önce ≥2 idi; tek yanlış sayı kapıyı atlatıyordu).
                 # ADR-0081: kullanım sorusunu anlatırken "sorgu çalıştırılır, hesaplanır" demek işlem iddiası değildir (canlı S3).
                 # Tabloda olmayan sayı ve okunmamış dosya kapısı kullanım sorusunda da sürer.
                 claim = bool(_ACTION_CLAIM.search(response.content or "")) and not is_usage_question(question)
-                if not acted_this_turn and not action_claim_nudged and (
+                if not acted_this_turn and not produced_data and not action_claim_nudged and (
                     claim or _FILE_REF.search(question) or len(loose_numbers) >= 1
                 ):
                     action_claim_nudged = True
@@ -1053,6 +1097,9 @@ class AnalyticsAgent:
                     continue
 
                 answer_text = self._strip_reasoning(response.content)
+                if (search_hits and not any(s.tool_name == "web_url" and s.ok
+                                            and (s.tool_args or {}).get("url") in hit_urls for s in steps)):
+                    answer_text = "Aramada kaynak adayları bulundu ancak içerikleri okunamadığı için isteği doğrulayamadım."
 
                 # If the current question is semantically different from the
                 # active table and no fresh source was queried, never publish
@@ -1242,12 +1289,38 @@ class AnalyticsAgent:
                         call.name,
                         signature,
                     )
-                if result.ok:
+                # Search snippets nominate sources; they never enter the numeric grounding pool.
+                if result.ok and call.name != "web_search":
                     tool_texts.append(result.content)
+                verified_absent = (result.artifacts.get("availability_status") == "CONFIRMED_ABSENT"
+                                   or bool(result.error and absence_verified(call.name, result.error, result.content)))
+                db_tool = self.registry.get(call.name)
+                safe_plan = public_fallback_plan(planning_question, result.provenance,
+                                                getattr(db_tool, "lakehouse", None)) if verified_absent else None
+                fallback_now = (call.name in {"lakehouse_search", "lakehouse_query"} and verified_absent
+                                and not db_web_opened and not web_forbidden(planning_question)
+                                and safe_plan is not None
+                                and self.registry.get("web_search") is not None
+                                and not any(s.tool_name == "web_search" for s in steps))
+                if fallback_now:
+                    db_web_opened = True
+                    self.registry.public_web_fallback = safe_plan
+                    gate = tool_gate.GateDecision(gate.allowed | (tool_gate.WEB & set(self.registry.names())),
+                                                  tuple(dict.fromkeys((*gate.opened, "web"))),
+                                                  tuple(f for f in gate.closed if f != "web"))
+                    self.last_gate = gate
+                    tools = self.registry.schemas(only=gate.allowed) if native else None
+                    if not native:
+                        messages[0].content += "\n" + self.registry.describe(only=tool_gate.WEB)
+                    result.content += ("\nWEB FALLBACK: Yalnız mevcut havuzda yokluğu doğrulandı, internet kaynağında yokluğu değil. "
+                        "Önceki dur yönergesi yerine web_search ile kamu kaynağını ara, sonucu web_url ile aç ve kaynak URL'siyle cevapla. "
+                        "Sorguya özel DB içeriği taşıma; kaynak sabitse include_domains=" + repr(safe_plan["include_domains"]) + " kullan. Güvenli sorgu: " + safe_plan["query"])
                 if result.ok and call.name in self.CATALOG_CHANGING_TOOLS and self.refresh_profile():
                     messages[0] = ChatMessage(role="system", content=messages[0].content.replace(
                         messages[0].content.split("\n", 1)[0], self._system_prompt.split("\n", 1)[0], 1))
-                if result.ok and call.name in self.DATA_PRODUCING_TOOLS:
+                if (result.ok and call.name in self.DATA_PRODUCING_TOOLS
+                        and result.artifacts.get("availability_status") not in {"CONFIRMED_ABSENT", "RETRIEVAL_FAILED"}
+                        and (call.name != "web_url" or any(v.get("readable", True) for v in result.artifacts.get("web", {}).get("visited", [])))):
                     produced_data = True
                     recovery.observe_success(data_produced=True)
                 elif result.ok and call.name in self.ACTING_TOOLS:
@@ -1281,7 +1354,7 @@ class AnalyticsAgent:
                     "DATASET_NOT_FOUND", "TOOL_FAILED", "UNKNOWN_TOOL", "EMPTY_RESULT",
                     "GEOGRAPHY_MISMATCH", "SOURCE_MISMATCH",
                 }
-                if (result.error is not None and not recovery.pending_recovery
+                if (result.error is not None and not fallback_now and not recovery.pending_recovery
                         and (not result.error.is_retryable or result.error.error_code in recovery_codes)
                         and getattr(result.error, "terminal", None) is not False):
                     terminal = result.error
@@ -1312,7 +1385,7 @@ class AnalyticsAgent:
                     temperature=self.narrate_temperature,
                 )
                 text = self._strip_reasoning(final.content)
-                text, rejected = self._checked_final(question, text, tool_texts, steps, i)
+                text, rejected = self._checked_final(question, text, tool_texts, steps, i, artifacts)
                 text = self._coverage_note(self._source_note(text, steps, artifacts), artifacts)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=text))
@@ -1336,7 +1409,7 @@ class AnalyticsAgent:
             ]
         )
         text = self._strip_reasoning(final.content)
-        text, rejected = self._checked_final(question, text, tool_texts, steps, self.max_steps + 1)
+        text, rejected = self._checked_final(question, text, tool_texts, steps, self.max_steps + 1, artifacts)
         text = self._coverage_note(self._source_note(text, steps, artifacts), artifacts)
         if budget_hit:
             # K02-T10 (A27): sınır kullanıcıya deterministik söylenir; modelin bunu yazmasına bırakılmaz.
@@ -1360,17 +1433,93 @@ class AnalyticsAgent:
         host = (urlparse(url or "").hostname or "").lower()
         return host[4:] if host.startswith("www.") else host
 
+    def _cached_web_evidence(self, question: str, answer: str) -> list[dict]:
+        """Reuse only recent, cited, actually read excerpts; never previous assistant prose."""
+        from datetime import datetime, timezone
+        from .intent import _norm_url
+        from .web_routing import addresses, source_domains, within_domains
+        from urllib.parse import urlparse
+
+        if self._asked_before(question) or re.search(r"yeniden|tekrar\s+(?:ara|oku|kontrol)|refresh|recheck", question, re.IGNORECASE):
+            return []
+        explicit = [u if "://" in u else "https://" + u for u in addresses(question)]
+        exact = [u for u in explicit if urlparse(u).path not in ("", "/") or urlparse(u).query]
+        scope = source_domains(question)
+        cited = {_norm_url(u if "://" in u else "https://" + u) for u in addresses(answer)}
+        reusable = []
+        for url, page in self.workspace.web_pages.items():
+            if (_norm_url(url) not in cited or not page.get("text_excerpt")
+                    or not page.get("readable") or not page.get("sha256")):
+                continue
+            if exact and not any(_norm_url(url) == _norm_url(u) for u in exact):
+                continue
+            if scope and not within_domains(url, scope):
+                continue
+            try:
+                fetched = datetime.fromisoformat(str(page.get("fetched_at")))
+                age = (datetime.now(timezone.utc) - fetched).total_seconds()
+            except (ValueError, TypeError):
+                continue
+            if not 0 <= age <= 300:
+                continue
+            reusable.append({"kind": "web", "start_url": url, "reused": True, "visited": [dict(page)],
+                             "read_text": {"url": url, "text": page["text_excerpt"]}, "blocked": [], "skipped": []})
+        return reusable
+
     def _source_note(self, text: str, steps: list, artifacts: list) -> str:
         """Erişilemeyen adresten sonra BAŞKA bir adresten veri kullanıldıysa ve cevap o kaynağı adlandırmıyorsa deterministik not
         (A18). Mentör kuralı: kaynak değişikliği sessiz olmaz; bunu modelin hatırlamasına bırakmıyoruz."""
+        original_text = text
         failed = [self._host(str((s.tool_args or {}).get("url", ""))) for s in steps
                   if s.tool_name == "web_url" and not s.ok and s.error_code in self._ACCESS_ERRORS]
         failed = [h for h in failed if h]
         used = [self._host(str(a.get("used") or "")) for a in artifacts if a.get("kind") == "web" and a.get("used")]
         used = [h for h in used if h and h not in failed]
+        # Attribute prose only to explicitly cited readable excerpts, or the last direct excerpt.
+        read = [a for a in artifacts if a.get("kind") == "web" and a.get("read_text")
+                and any(v.get("readable", True) for v in a.get("visited", []))]
+        cited = [a for a in read if a["read_text"]["url"] in text]
+        selected = cited or read[-1:]
+        if selected and not self.workspace.has_table:
+            from .evidence import _number_texts
+            from .grounding import token_tolerance
+            known = {n for a in selected for _, n in _number_texts(a["read_text"]["text"])}
+
+            def _is_identifier(unit: str, raw: str) -> bool:
+                # ISSN "1307-5683", bülten "2026/176", "5411 sayılı Kanun" gibi kimlik/atıf sayıları veri iddiası
+                # değildir; meşru cümleyi kırpmamalı (aşırı kırpma düzeltmesi — "Q1 yalnız linke indi"). Desteklenmeyen
+                # spekülatif yıl ("2026 raporu yayımlanmadı") kimlik SAYILMAZ, çıkarılmaya devam eder.
+                esc = re.escape(raw)
+                return bool(re.search(rf"(?<![\d.,]){esc}\s*[-/]\s*\d", unit)        # 1307-5683 / 2026/176 (ilk parça)
+                            or re.search(rf"\d\s*[-/]\s*{esc}(?![\d.,])", unit)       # -5683 / /176 (ikinci parça)
+                            or re.search(rf"(?<![\d.,]){esc}\s+sayılı", unit, re.I))  # 5411 sayılı ...
+
+            def _unsupported_claim(unit: str) -> bool:
+                for raw, n in _number_texts(unit):
+                    if any(abs(n - value) <= token_tolerance(raw) for value in known):
+                        continue
+                    if _is_identifier(unit, raw):
+                        continue
+                    return True
+                return False
+
+            text, removed = drop_unverified_units(text, _unsupported_claim)
+            if removed:
+                artifacts.append({"kind": "web_prose_validation", "removed_count": len(removed)})
+                text = text.rstrip() + "\n\n(Kaynakla desteklenmeyen ek yorum cevaptan çıkarıldı.)"
+        for a in selected:
+            if not a.get("used"):
+                a["used_text"] = a["read_text"]["url"]
+        table_urls = [a["used"] for a in artifacts if a.get("kind") == "web" and a.get("used")]
+        for url in dict.fromkeys(table_urls):
+            if url not in text:
+                text = text.rstrip() + "\n\nKaynak: " + url
+        if selected and not cited:
+            url = selected[-1]["read_text"]["url"]
+            text = text.rstrip() + "\n\nOkunan kaynak: " + url
         if not failed or not used:
             return text
-        low = (text or "").lower()
+        low = (original_text or "").lower()
         if all(h in low for h in used):
             return text
         return text.rstrip() + (f"\n\n(Kaynak notu: {', '.join(dict.fromkeys(failed))} adresine erişilemedi; veriler "
@@ -1380,8 +1529,12 @@ class AnalyticsAgent:
     def _frames_pool(self) -> list:
         return [*self.workspace.previous_tables(), *(frame for _, frame in self.workspace.peeks())]
 
-    def _checked_final(self, question: str, text: str, tool_texts: list[str], steps: list, index: int) -> tuple[str, list[str]]:
+    def _checked_final(self, question: str, text: str, tool_texts: list[str], steps: list, index: int, artifacts: list | None = None) -> tuple[str, list[str]]:
         """Geri gönderme hakkı olmayan çıkışlar (döngü kilidi, adım/süre sınırı): aynı doğrulama, aynı deterministik çıkış."""
+        hit_urls = {u for a in artifacts or [] if a.get("kind") == "web_search" for u in a.get("hits", [])}
+        if (hit_urls and not any(a.get("kind") == "web" and a.get("start_url") in hit_urls
+                                and any(v.get("readable", True) for v in a.get("visited", [])) for a in artifacts or [])):
+            return "Web araması yapıldı ancak kaynak içeriği okunamadığı için isteği doğrulayamadım.", []
         if tool_texts and grounding_check(question, text, tool_texts).startswith("MISS"):
             return self._final_exit(question, text, tool_texts, steps, index)
         if not tool_texts and self.workspace.has_table and unverified_numbers(text, self.workspace.table, self._frames_pool()):
@@ -1444,7 +1597,8 @@ class AnalyticsAgent:
 
         # Soruya göre seçilmiş katalog kartları ve gerçek kırılım değerleri (ADR-0013, D1):
         # keşif turları LLM turu olmaktan çıkar. Bütçe aşılırsa yalnız dizin satırı girer.
-        if self.preloader is not None:
+        self._last_context = None
+        if self.preloader is not None and not web_requested(question):
             try:
                 context = self.preloader(question)
             except Exception as exc:  # noqa: BLE001 — ön-yükleme cevabı asla düşürmez
@@ -1504,7 +1658,7 @@ class AnalyticsAgent:
             from .question_preflight import CatalogFacts, preflight
 
             specs = self._catalog_specs()
-            report = preflight(question, CatalogFacts.from_specs(specs) if specs else None,
+            report = preflight(question, CatalogFacts.from_specs(specs) if specs and not web_requested(question) else None,
                                tools=set(self.registry.names()),
                                has_table=self.workspace.has_table and self._active_table_reuse_allowed)
         except Exception as exc:  # noqa: BLE001 — ön-koşul cevabı asla düşürmez

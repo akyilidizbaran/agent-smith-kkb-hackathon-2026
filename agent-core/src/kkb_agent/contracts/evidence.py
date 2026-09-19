@@ -21,7 +21,7 @@ from typing import Any, Protocol, runtime_checkable
 # Boşluk metinleri core/evidence.py'de üretilir; rozet ayrımı bu iki imle yapılır (metin değişirse test düşer).
 _CLAIM_GAP_PREFIX = "tabloda bulunmayan sayılar"
 _PROVENANCE_GAP_MARK = "kolonunun provenance kaydı yok"
-_OCR_GAP_PREFIX = "sayılar OCR ile görüntüden okundu"
+_OCR_GAP_PREFIX = ("sayılar OCR ile görüntüden okundu", "metin OCR ile görüntüden okundu")
 
 
 @dataclass(frozen=True)
@@ -179,7 +179,7 @@ class EvidencePanel:
     def chain_gaps(self) -> list[str]:
         """Yalnız zincir halkalarının boşlukları. Sayı ve sorgu izi boşlukları kendi rozetlerinde sayılır;
         M16 ölçümü (14 Eyl): tek eşleşmeyen sayı, dosyaları diskte duran zinciri de ✗ gösteriyordu."""
-        return [g for g in self.gaps if not g.startswith((_CLAIM_GAP_PREFIX, _OCR_GAP_PREFIX)) and _PROVENANCE_GAP_MARK not in g]
+        return [g for g in self.gaps if not g.startswith((_CLAIM_GAP_PREFIX, *_OCR_GAP_PREFIX)) and _PROVENANCE_GAP_MARK not in g]
 
     @property
     def chain_ok(self) -> bool:

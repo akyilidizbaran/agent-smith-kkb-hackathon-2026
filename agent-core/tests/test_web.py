@@ -17,7 +17,7 @@ from kkb_agent.core.evidence import EvidenceBuilder  # noqa: E402
 from kkb_agent.core.workspace import AnalysisWorkspace  # noqa: E402
 from kkb_agent.tools.web import WebSearchTool, WebUrlTool  # noqa: E402
 from kkb_agent.web import CrawlBudget, RobotsCache, TavilySearch, crawl, extract_page, fetch_url  # noqa: E402
-from kkb_agent.web.fetch import FetchRefused  # noqa: E402
+from kkb_agent.web.fetch import FetchRefused, FetchTooLarge  # noqa: E402
 
 HTML = """<html><head><title>TÜFE Yıllık</title></head><body><script>var x=1;</script>
 <h1>TÜFE yıllık enflasyon</h1><p>Bu sayfa 2025 yılı verisini içerir.</p>
@@ -107,8 +107,18 @@ def test_yerel_dosya_yalniz_izinli_kokten(tmp_path: Path) -> None:
 
 def test_boyut_siniri_asilirsa_reddedilir() -> None:
     s = Session({"https://site.example/big": Resp(200, b"x" * 1000)})
-    with pytest.raises(FetchRefused):
+    with pytest.raises(FetchTooLarge) as exc:   # FetchRefused alt tipi: boyut aşımı ayrı sınıflanır
         fetch_url("https://site.example/big", session=s, max_bytes=100)
+    assert exc.value.limit == 100
+
+
+def test_crawl_buyuk_belge_oversize_olarak_isaretlenir() -> None:
+    # Boyut sınırından büyük başlangıç belgesi: erişim engeli/yokluk değil, ayrı 'oversize' kaydı.
+    s = Session({"https://site.example/rapor.pdf": Resp(200, b"%PDF-" + b"x" * 5000, ctype="application/pdf")})
+    result = crawl("https://site.example/rapor.pdf", budget=CrawlBudget(max_bytes_per_page=100),
+                   session=s, robots=RobotsCache())
+    assert result.first is None and not result.pages and not result.blocked
+    assert result.oversize == [("https://site.example/rapor.pdf", 100)]
 
 
 # ------------------------------------------------------------------ html

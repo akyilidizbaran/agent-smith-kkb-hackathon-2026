@@ -120,6 +120,7 @@ def evidence_to_dict(panel: Any) -> dict[str, Any] | None:
     return {
         "summary": panel.summary() if hasattr(panel, "summary") else str(panel),
         "complete": bool(getattr(panel, "complete", False)),
+        "ocr_unverified": bool(getattr(panel, "ocr_unverified", False)),
         "states": panel.states() if hasattr(panel, "states") else {},
         "inspected_rows": int(getattr(panel, "inspected_rows", 0) or 0),
         "numbers": [_json_safe(n) for n in getattr(panel, "numbers", [])],

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Mapping
 from urllib.parse import urlparse
 
-from .fetch import DATA_SUFFIXES, FetchRefused, FetchResult, RobotsCache, canonical, fetch_url, same_domain
+from .fetch import DATA_SUFFIXES, FetchRefused, FetchResult, FetchTooLarge, RobotsCache, canonical, fetch_url, same_domain
 from .html import PageContent, extract_page
 
 _TOKEN = re.compile(r"[0-9A-Za-zÇĞİÖŞÜçğıöşü]{3,}")
@@ -56,6 +56,7 @@ class CrawlResult:
     pages: list[VisitedPage] = field(default_factory=list)          # başarıyla okunan
     blocked: list[VisitedPage] = field(default_factory=list)        # erişim sözleşmesi reddi
     skipped: list[tuple[str, str]] = field(default_factory=list)    # (url, sebep) — bütçe / alan adı / politika
+    oversize: list[tuple[str, int]] = field(default_factory=list)   # (url, bayt sınırı) — belge var ama sınırdan büyük
     elapsed_ms: float = 0.0
     budget: CrawlBudget = field(default_factory=CrawlBudget)
 
@@ -122,6 +123,10 @@ def crawl(
         try:
             fetched = fetcher(url, session=session, robots=robots, allowed_local_roots=allowed_local_roots,
                               max_bytes=budget.max_bytes_per_page, environ=environ, allow_private=allow_private)
+        except FetchTooLarge as exc:
+            result.skipped.append((url, f"boyut: {exc}"))
+            result.oversize.append((url, exc.limit))
+            continue
         except FetchRefused as exc:
             result.skipped.append((url, f"politika: {exc}"))
             continue

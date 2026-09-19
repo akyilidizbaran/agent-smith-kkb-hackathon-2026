@@ -40,6 +40,8 @@ class PageContent:
     ocr: dict[str, Any] | None = None                # {"model", "pages", "sha256", "truncated"} — OCR ile okunduysa
     table_labels: list[str] = field(default_factory=list)   # tablo başına bağlam ("sayfa 2: GÜMÜŞ / SILVER"); tables ile hizalı
 
+    extraction_error: str | None = None
+
     def table_previews(self, max_rows: int = 3) -> list[str]:
         out = []
         for i, t in enumerate(self.tables):
@@ -452,16 +454,44 @@ def extract_page(content: bytes, media_type: str, url: str, *, ocr: Any = None,
     from ..vision.ocr import is_document, ocr_document
 
     if is_document(kind, url):
-        # PDF/görsel: tablo yalnız OCR ile çıkar; istemci yoksa "okunamadı" (uydurma yok).
+        from ..vision.ocr import has_text_layer, pdf_text_layer
+        is_pdf = kind == "application/pdf" or path.endswith(".pdf") or content[:5] == b"%PDF-"
+        # PDF METİN KATMANI (jüri: pypdf ile doğrudan okuma): varsa sayılar BİREBİR ve doğrulanmıştır — OCR gerekmez.
+        # Taranmış/görüntü PDF ve PNG/JPG metin katmanı taşımaz → OCR'a düşülür.
+        pages_spec = (ocr_options or {}).get("pages")
+        if is_pdf:
+            try:
+                text_layer, total_pp, read_pp = pdf_text_layer(content, pages=pages_spec)
+            except Exception:  # noqa: BLE001 — bozuk PDF: OCR yolu denenir
+                text_layer, total_pp, read_pp = "", 0, []
+            if has_text_layer(text_layer):
+                # Yapı (tablo) için OCR hâlâ kullanılır; ama okuma DOĞRULANMIŞ sayılır (ocr=None): sayılar metin
+                # katmanının kendisinden. Böylece "OCR·doğrulanmadı" uyarısı verilmez, sayılar birebir gelir.
+                page_lbl = ", ".join(map(str, read_pp)) or "-"
+                more = f" (belge {total_pp} sayfa; pages='3'/'4-6' ile diğer sayfalar)" if total_pp > len(read_pp) else ""
+                notes = [f"PDF metin katmanından (birebir) okundu: sayfa {page_lbl}{more}; sayılar doğrulanmış (OCR değil)."]
+                tables: list[pd.DataFrame] = []
+                title = Path(path).name
+                if ocr is not None:
+                    try:  # tablo YAPISI için OCR; sayılar yine metin katmanıyla doğrulanır
+                        doc = ocr_document(content, kind, client=ocr, url=url, **(ocr_options or {}))
+                        ocr_pc = extract_ocr_page(url, doc)
+                        tables, title = ocr_pc.tables, (ocr_pc.title or title)
+                        if tables:
+                            notes.append("Tablo YAPISI OCR ile düzenlendi; hücre sayıları PDF metin katmanıyla doğrulanmalı.")
+                    except Exception:  # noqa: BLE001 — OCR tablo çıkaramazsa metin katmanı yeter
+                        pass
+                return PageContent(url=url, title=title, text=text_layer, tables=tables, kind="document", notes=notes)
+        # Taranmış PDF / görüntü / metin katmanı yok: OCR (uydurma yok).
         if ocr is None:
             return PageContent(url=url, title=Path(path).name, kind="document",
                                text="(PDF/görsel belge; OCR istemcisi yapılandırılmamış — VISION_MODEL yok)",
-                               notes=["PDF/görsel belge OCR olmadan okunamaz."])
+                               notes=["PDF/görsel belge OCR olmadan okunamaz."], extraction_error="OCR_NOT_CONFIGURED")
         try:
             doc = ocr_document(content, kind, client=ocr, url=url, **(ocr_options or {}))
         except Exception as exc:  # noqa: BLE001 — servis hatası sayfa notuna, uydurma yok
             return PageContent(url=url, title=Path(path).name, kind="document",
-                               text=f"(PDF/görsel belge; OCR başarısız: {exc})", notes=[f"OCR başarısız: {exc}"])
+                               text=f"(PDF/görsel belge; OCR başarısız: {exc})", notes=[f"OCR başarısız: {exc}"], extraction_error="OCR_FAILED")
         return extract_ocr_page(url, doc)
     looks_xml = (kind in ("text/xml", "application/xml") or (kind.endswith("+xml") and kind != "application/xhtml+xml")
                  or path.endswith(".xml") or content[:200].lstrip().startswith(b"<?xml"))
@@ -479,7 +509,7 @@ def extract_page(content: bytes, media_type: str, url: str, *, ocr: Any = None,
         try:
             frame = _table_from_bytes(content, path or url)
         except Exception as exc:  # noqa: BLE001
-            return PageContent(url=url, title="", text=f"(veri dosyası ayrıştırılamadı: {exc})", kind="data")
+            return PageContent(url=url, title="", text=f"(veri dosyası ayrıştırılamadı: {exc})", kind="data", extraction_error="PARSE_FAILED")
         converted, notes = convert_numbers(frame)
         return PageContent(url=url, title=path.rsplit("/", 1)[-1], tables=[converted], kind="data", notes=notes)
 

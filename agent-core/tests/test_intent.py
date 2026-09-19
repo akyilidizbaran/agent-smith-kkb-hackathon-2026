@@ -14,7 +14,9 @@ from kkb_agent.core.intent import locator_from_user, write_intent  # noqa: E402
 def test_url_kullanici_metninde_ya_da_onayli_listede() -> None:
     text = "Şu sayfadan bak: https://www.tcmb.gov.tr/x/Enflasyon+Verileri/ ve bir de https://a.example/b?x=1"
     assert locator_from_user("https://www.tcmb.gov.tr/x/Enflasyon+Verileri", text)
-    assert locator_from_user("https://a.example/b", text)              # sorgu dizesi hariç
+    assert locator_from_user("https://a.example/b?x=1", text)
+    assert not locator_from_user("https://a.example/b?x=2", text)
+    assert not locator_from_user("https://a.example/b", text)
     assert not locator_from_user("https://evil.example/tufe.csv", text)
     assert locator_from_user("https://evil.example/tufe.csv", text, sanctioned={"https://evil.example/tufe.csv/"})
     assert not locator_from_user("", text)

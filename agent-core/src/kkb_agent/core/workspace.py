@@ -94,7 +94,13 @@ class AnalysisWorkspace:
         for v in artifact.get("visited", []) or []:
             url = v.get("url") if isinstance(v, dict) else None
             if url:
-                self.web_pages[str(url)] = dict(v)
+                entry = dict(v)
+                read = artifact.get("read_text") or {}
+                if isinstance(read, dict) and read.get("url") == url and v.get("readable"):
+                    entry["text_excerpt"] = str(read.get("text") or "")[:8000]
+                self.web_pages[str(url)] = entry
+        while len(self.web_pages) > 20:
+            self.web_pages.pop(next(iter(self.web_pages)))
 
     def previous_tables(self) -> list[pd.DataFrame]:
         """Geçmişteki tablo sürümleri, en yeniden en eskiye (kanıt paneli için: cevaptaki sayı

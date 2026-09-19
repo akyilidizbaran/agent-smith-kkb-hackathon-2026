@@ -110,6 +110,34 @@ def pdf_pages_to_png(content: bytes, *, max_pages: int = DEFAULT_MAX_PAGES, scal
     return out, total
 
 
+def pdf_text_layer(content: bytes, *, pages: str | None = None, max_pages: int = DEFAULT_MAX_PAGES) -> tuple[str, int, list[int]]:
+    """PDF'in KENDİ metin katmanını doğrudan çıkarır (pypdfium2, OCR/ağ yok). Dönen: (metin, toplam sayfa, okunan sayfalar).
+
+    Metin katmanı varsa sayılar BİREBİR ve doğrulanmıştır (OCR gerekmez). Taranmış/görüntü PDF'de metin ~boş döner;
+    çağıran o zaman OCR'a düşer. Sayfa seçimi OCR ile aynı (`parse_pages`)."""
+    import pypdfium2 as pdfium
+
+    doc = pdfium.PdfDocument(content)
+    total = len(doc)
+    wanted = parse_pages(pages, total, max_pages=max_pages)
+    chunks: list[str] = []
+    read: list[int] = []
+    for n in wanted:
+        if not 1 <= n <= total:
+            continue
+        body = (doc[n - 1].get_textpage().get_text_bounded() or "").strip()
+        if body:
+            chunks.append(body)
+            read.append(n)
+    return "\n".join(chunks), total, read
+
+
+def has_text_layer(text: str, *, min_chars: int = 40, min_letters: int = 20) -> bool:
+    """Anlamlı bir metin katmanı mı? Taranmış PDF neredeyse boş/harfsiz döner → OCR'a düşülür."""
+    body = (text or "").strip()
+    return len(body) >= min_chars and sum(c.isalpha() for c in body) >= min_letters
+
+
 @dataclass(frozen=True)
 class OcrPage:
     page_no: int                 # 1 tabanlı
@@ -251,4 +279,5 @@ def ocr_document(content: bytes, media_type: str, *, client: OcrClient, max_page
 
 
 __all__ = ["DEFAULT_MAX_PAGES", "DEFAULT_MAX_SECONDS", "DOC_SUFFIXES", "OcrClient", "OcrDocument", "OcrError", "OcrPage",
-           "clean_ocr_text", "is_document", "ocr_document", "parse_pages", "pdf_pages_to_png", "prose_from_ocr", "tables_from_ocr"]
+           "clean_ocr_text", "has_text_layer", "is_document", "ocr_document", "parse_pages", "pdf_pages_to_png",
+           "pdf_text_layer", "prose_from_ocr", "tables_from_ocr"]

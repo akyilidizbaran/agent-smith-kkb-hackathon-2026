@@ -29,6 +29,14 @@ class FetchRefused(Exception):
     """Politika reddi: özel adres, izinsiz kök, şema, boyut. Erişim sonucu değil, yerel karar."""
 
 
+class FetchTooLarge(FetchRefused):
+    """Boyut sınırı aşıldı: belge var ama indirme sınırından büyük. Erişim engeli veya yokluk DEĞİL."""
+
+    def __init__(self, message: str, *, limit: int) -> None:
+        super().__init__(message)
+        self.limit = limit
+
+
 @dataclass(frozen=True)
 class FetchResult:
     url: str
@@ -201,7 +209,7 @@ def fetch_url(
             return FetchResult(url=url, final_url=None, http_status=404, media_type="", content=b"",
                                sha256="", fetched_at=now, outcome=outcome, from_local_file=True)
         if path.stat().st_size > max_bytes:
-            raise FetchRefused(f"dosya {max_bytes} bayt sınırını aşıyor")
+            raise FetchTooLarge(f"dosya {max_bytes} bayt sınırını aşıyor", limit=max_bytes)
         content = path.read_bytes()
         return FetchResult(
             url=url, final_url=str(path), http_status=200, media_type=_media_type(None, str(path)),
@@ -240,7 +248,7 @@ def fetch_url(
         for chunk in resp.iter_content(65536):
             size += len(chunk)
             if size > max_bytes:
-                raise FetchRefused(f"kaynak {max_bytes} bayt sınırını aşıyor")
+                raise FetchTooLarge(f"kaynak {max_bytes} bayt sınırını aşıyor", limit=max_bytes)
             chunks.append(chunk)
     except FetchRefused:
         resp.close()

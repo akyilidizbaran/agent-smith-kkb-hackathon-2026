@@ -102,6 +102,8 @@ def _direction_word_near(answer: str, token: str, window: int = 40) -> bool:
 
 
 _REMAINDER = re.compile(r"kalan|diğer|gösterilmeyen|listelenmeyen|yazılmayan|daha fazla|\bdaha\b", re.I)
+# Bir sayının veri BÜYÜKLÜĞÜ olduğuna işaret eden birimler (tarih/kimlik yılından ayırmak için).
+_MAGNITUDE = re.compile(r"milyon|milyar|trilyon|\bbin\b|\bTL\b|₺|yüzde|%|puan|adet|\bkg\b|\bton\b", re.I)
 
 
 def _word_near_unsigned(answer: str, token: str, pattern: re.Pattern, window: int = 40) -> bool:
@@ -151,6 +153,8 @@ def _period_near(answer: str, token: str, window: int = 40) -> tuple[int | None,
 def _number_texts(answer: str) -> list[tuple[str, float]]:
     """Metindeki sayılar, göründükleri yazımla; `numbers_in` ile aynı ayrıştırma."""
     out: list[tuple[str, float]] = []
+    answer = re.sub(r"(?:https?://[^\s<>]+|(?<![\w/])(?:[a-z0-9-]+\.)+[a-z]{2,}/[^\s<>]+)", "", answer, flags=re.IGNORECASE)
+    answer = re.sub(r"(?m)^\s*\d+[.)]\s+", "", answer)
     for m in _NUM_RE.finditer(_ascii_minus(answer)):
         raw = m.group(0)
         parsed = numbers_in(raw)
@@ -219,6 +223,14 @@ class EvidenceBuilder:
                     ev.matched, ev.column, ev.row_key = True, time_col, f"yıl {int(number)}"
                     out.append(ev)
                     continue
+            # Tarih/dönem/kimlik yılı (erişim tarihi "18 Eylül 2026", bülten "2026/176") veri büyüklüğü değildir:
+            # soruda istenen bir değer değilse ve bir büyüklük birimine komşu DEĞİLSE yıl olarak muaf. Böylece
+            # time_col'suz tablolarda (ör. TCMB XML) tarih yılı "tabloda yok" yanlış-pozitifi vermez (Q5 ekranı).
+            if (float(number).is_integer() and 1900 <= number <= 2100 and number not in asked
+                    and not _word_near_unsigned(answer, text, _MAGNITUDE)):
+                ev.matched, ev.column, ev.row_key = True, "(tarih/yıl)", str(int(number))
+                out.append(ev)
+                continue
             if float(number).is_integer() and 1 <= number <= 31 and len(str(text)) <= 2:
                 continue  # gün/ay numarası ya da sıra sayısı; anlatı doğrulama da bunları saymaz
             # Satır sayısı da araç çıktısındandır ("124 hafta", "66 ay"): tablo ya da önceki sürüm.
@@ -453,10 +465,10 @@ class EvidenceBuilder:
                 continue
             if art.get("kind") != "web":
                 continue
-            used = art.get("used")
+            used = art.get("used") or art.get("used_text")
             for v in art.get("visited", []):
                 entry = {"url": v.get("url"), "sha256": v.get("sha256"), "fetched_at": v.get("fetched_at"),
-                         "status": v.get("status"), "title": v.get("title"),
+                         "status": v.get("status"), "title": v.get("title"), "reused": bool(art.get("reused")),
                          **({"ocr": v.get("ocr")} if v.get("ocr") else {})}
                 if used and v.get("url") == used:
                     if entry not in panel.web_sources:
@@ -478,8 +490,21 @@ class EvidenceBuilder:
         panel = EvidencePanel(question=question, supports_artifacts=isinstance(self.lakehouse, EvidenceCapable))
         table = workspace.table
         if table is None or table.empty:
-            panel.gaps.append("analiz tablosu yok")
-            panel.numbers = [NumberEvidence(number=n, text=t) for t, n in _number_texts(answer)]
+            self._web(panel, artifacts or [], workspace)
+            texts = [a["read_text"]["text"] for a in artifacts or []
+                     if a.get("kind") == "web" and a.get("used_text") and a.get("read_text")]
+            known = {n for text in texts for _, n in _number_texts(text)}
+            panel.numbers = [NumberEvidence(number=n, text=t, matched=any(abs(n - value) <= token_tolerance(t) for value in known))
+                             for t, n in _number_texts(answer)]
+            if not panel.web_sources:
+                panel.gaps.append("analiz tablosu yok")
+                return panel
+            if any(w.get("ocr") for w in panel.web_sources):
+                panel.ocr_unverified = True
+                panel.gaps.append("metin OCR ile görüntüden okundu; doğrulanmadı")
+            unmatched = [n.text for n in panel.numbers if not n.matched]
+            if unmatched:
+                panel.gaps.append("tabloda bulunmayan sayılar: " + ", ".join(unmatched[:8]))
             return panel
         panel.table_rows = len(table)
         panel.inspected_rows = min(len(table), self.max_rows)
@@ -489,6 +514,15 @@ class EvidenceBuilder:
             if hasattr(workspace, "sources") else []
         panel.numbers = self._match_numbers(answer, table, time_col, previous=workspace.previous_tables(),
                                             peeks=workspace.peeks(), question=question, previous_sources=sources)
+        # Bu turda okunup atıf yapılan web kaynağının metninde birebir geçen sayılar kaynakça doğrulanmıştır.
+        # İlgisiz/bayat bir analiz tablosu (ör. önceki turdan kalan tablo), metin cevabının kaynağa dayalı
+        # sayısını "tabloda yok" diye işaretlemesin — Path A (tablosuz) ile aynı kaynak havuzu kuralı.
+        source_nums = {n for a in (artifacts or []) if a.get("kind") == "web" and a.get("used_text") and a.get("read_text")
+                       for _, n in _number_texts(a["read_text"]["text"])}
+        if source_nums:
+            for ev in panel.numbers:
+                if not ev.matched and any(abs(ev.number - v) <= token_tolerance(ev.text) for v in source_nums):
+                    ev.matched, ev.column, ev.row_key = True, "(okunan kaynak metni)", "web kaynağı"
         panel.columns = self._columns(workspace, table)
         panel.observations, panel.artifacts = self._observations(table, panel.columns, time_col, panel.gaps)
 

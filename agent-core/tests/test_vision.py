@@ -297,3 +297,19 @@ def test_tablo_etiketi_sayfa_baslagini_tasir() -> None:
     assert "TABLO #1 (sayfa 2: GÜMÜŞ / SILVER" in listed.content
     loaded = tool.validate_and_run({"url": "https://site.example/cevher.pdf", "purpose": "x", "table_index": 1})
     assert loaded.ok and "sayfa 2: GÜMÜŞ / SILVER" in loaded.content and "sayfa 2" in ws.column_provenance(ws.columns()[0]).sql
+
+
+_FIXTURES = Path(__file__).resolve().parent / "golden" / "fixtures"
+
+
+def test_pdf_metin_katmani_ocrsiz_dogrulanmis_okunur() -> None:
+    """Jüri beklentisi (pypdf ile doğrudan okuma): metin katmanlı PDF, OCR OLMADAN dahi birebir/doğrulanmış
+    okunur. Eskiden ocr=None → OCR_NOT_CONFIGURED hatası dönerdi; artık gerçek değerler gelir, ocr bayrağı yok."""
+    data = (_FIXTURES / "ith_au.pdf").read_bytes()
+    pc = extract_page(data, "application/pdf", "https://x/ith_au.pdf", ocr=None)
+    assert pc.kind == "document" and pc.ocr is None and pc.extraction_error is None
+    assert "9.654" in pc.text and "48.136,74" in pc.text          # 2025 Ocak ithalat + 2026 toplam, birebir
+    assert any("metin katman" in n.lower() for n in pc.notes)     # doğrulanmış okuma notu
+    # Taranmış/boş PDF metin katmanı taşımaz → OCR yoluna düşer (OCR yoksa dürüst "okunamadı").
+    scanned = extract_page(_blank_pdf(1), "application/pdf", "https://x/scan.pdf", ocr=None)
+    assert scanned.extraction_error == "OCR_NOT_CONFIGURED"

@@ -15,39 +15,51 @@ import re
 from pathlib import Path
 from typing import Literal, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ..contracts.lakehouse import QueryProvenance
 from ..core.access_policy import decide, detect_source_constraint, render_for_model, to_tool_error
+from ..core.web_routing import addresses, discovery_requested, host_of, source_domains, within_domains, web_forbidden
 from ..core.intent import locator_from_user
 from ..core.errors import ToolError
 from ..core.preview import preview_table
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
-from ..web.crawl import CrawlBudget, CrawlResult, crawl, keywords_of
-from ..web.fetch import FetchRefused, RobotsCache
+from ..web.crawl import CrawlBudget, CrawlResult, crawl, keywords_of, link_score
+from ..web.fetch import FetchRefused, FetchTooLarge, RobotsCache
 from ..web.search import TavilySearch
 
 WEB_PROMPT_RULES = """
-PDF ve görsel adresleri (.pdf, .png, .jpg) de web_url ile açılır: sayfalar OCR ile okunur, tablolar \
-listelenir. Varsayılan ilk 5 sayfa; kart "belge N sayfa" diyorsa ve aranan tablo yoksa aynı aracı \
-pages='6-10' gibi bir sayfa aralığıyla yeniden çağır, sayfa uydurma. OCR bir okumadır, doğrulama \
-değildir: cevapta "görüntüden OCR ile okundu, doğrulanmadı" de.
-
-DIŞ KAYNAK KURALI (web):
-Kullanıcı bir adres/site verdiyse ("şu sayfadan", "bu linkten", URL) web_url ile o adresi oku; \
-tabloları listeler, istediğin tabloyu table_index ile aktif tabloya yükle, sonra sayıları oradan ver. \
-Kaynak kullanıcı tarafından belirtildiyse ve sayfada istenen veri YOKSA ya da sayfaya ERİŞİLEMİYORSA \
-bunu açıkça söyle ve kullanıcıya sor; başka bir kaynağa kendiliğinden geçme, tahmin etme. \
-Taradığın ama kullanmadığın sayfaları cevapta anlatma; kanıt paneline yazılır."""
+DIŞ KAYNAK KURALI:
+Doğrudan dosya URL'si verildiyse web_url ile oku. PDF'in metin katmanı varsa sayılar BİREBİR ve
+doğrulanmış gelir (OCR değil) — bu durumda "doğrulanmadı" deme. Yalnız taranmış PDF/görsel OCR ile
+okunur; o zaman OCR doğrulama değildir, cevapta bunu belirt. Varsayılan ilk 5 sayfa; belge uzunsa pages='6-10' ile devam et.
+Normal sayfa verildiyse web_url ile oku. Domain/ana sayfa verildiyse istenen alt sayfa veya
+belgeyi web_search include_domains ile keşfet. Sayfada gerekli veri yoksa aynı domain içinde
+arama yapabilirsin; bunu başka kuruma geçmekle karıştırma. Kaynak sabitse başka domain kullanma.
+Tabloları table_index ile yükle ve sayıları tablodan aktar. Tablo yoksa yalnız okunan metnin
+karşıladığı soruyu cevapla; hesap veya zaman serisi uydurma. Cevapta kullanılan gerçek URL'yi belirt.
+"""
 
 WEB_SEARCH_PROMPT_RULES = """
-Kullanıcı bir adres vermediyse ve veri havuzunda yoksa ya da kullanıcı "internetten araştır/bul/getir" dediyse KENDİN \
-ARAŞTIR: web_search ile ara; resmi kaynağın adres kalıbını biliyorsan (aşağıda) doğrudan web_url ile aç. Kullanıcıdan adres \
-isteme, izin bekleme. Arama sonucu veri değildir: uygun sayfayı web_url ile aç ve sayıyı tablodan al."""
+Kullanıcı webden/internetten bul veya araştır dediğinde web_search → uygun resmi/birincil kaynağı
+seç → web_url ile oku → gerekirse tabloyu yükle → kaynak URL'siyle cevapla. Adres veya izin isteme.
+Arama sonucu VERİ DEĞİLDİR; alıntılardaki sayıları cevapta kullanma. Tam URL olmadan domain
+verilirse include_domains ile o domain içinde kaynak keşfet. Kurum sabitse yalnız onun domainlerini kullan.
+DB fallback yalnız doğrulanmış veri yokluğunda ve kamu kaynağı sorusunda kullanılır. SQL hatası,
+bayat tablo, yanlış filtre veya bağlantı sorunu veri yokluğu değildir; mevcut recovery yolunu izle.
+Özel/kurum içi DB içeriğini arama sorgusuna taşıma; kullanıcı web kullanımını yasakladıysa arama yapma.
+"""
+
 
 TEXT_WINDOW = 8000
 """Belge/sayfa metninden bir çağrıda gösterilen karakter (önce 1500'dü; tek sayfalık özgeçmiş yarıda kesiliyordu)."""
+
+
+WEB_URL_MAX_BYTES = 32 * 1024 * 1024
+"""Kullanıcı/agent kaynaklı web_url okuması için sınır (yalnız bu araç). Global fetch/crawl varsayılanı (8 MiB) DEĞİŞMEZ;
+robots ayrı sınırda. Gerçek kamu rapor PDF'leri (BDDK 2024/2025 ~10,8 MB) 8 MiB'ı meşru şekilde aşıyor; builder tarafı
+zaten 25 MiB okuyor (builder/read.py). Sınırlı ve bellek-güvenli; sınır aşılırsa dürüst CONTENT_TOO_LARGE döner."""
 
 
 def official_source_rules() -> str:
@@ -104,10 +116,17 @@ def _plain(frame) -> str:
 
 
 class WebUrlParams(BaseModel):
+    @field_validator("url", mode="before")
+    @classmethod
+    def normalize_domain(cls, value: str) -> str:
+        if isinstance(value, str) and "://" not in value and addresses(value) == [value]:
+            return "https://" + value
+        return value
+
     url: str = Field(description="Okunacak adres (http/https) ya da izinli klasördeki yerel dosya yolu")
     purpose: str = Field(description="Bu sayfadan ne aranıyor, tek cümle Türkçe (tarama ilgisi buna göre)")
     table_index: int | None = Field(
-        default=None,
+        default=None, ge=0,
         description="Listelenen tablolardan hangisi aktif analiz tablosu olsun (#0, #1 ...). İlk çağrıda boş bırak, listeyi gör.",
     )
     max_pages: int = Field(default=1, ge=1, le=5, description="Tarama bütçesi: en çok kaç sayfa (aynı alan adı)")
@@ -177,6 +196,10 @@ class WebUrlTool(Tool):
         reg = self._registry
         user_text = (getattr(reg, "user_text", None) or getattr(reg, "active_question", "") or "")
         sanctioned = getattr(reg, "sanctioned_locators", set()) or set()
+        scope = source_domains(self._question()) or (getattr(reg, "public_web_fallback", None) or {}).get("include_domains", [])
+        if scope and params.url.startswith(("http://", "https://")) and not within_domains(params.url, scope):
+            return ToolError(error_code="SOURCE_MISMATCH", layer="policy", retryable=False,
+                             message="Kaynak sabit; bu adres belirtilen domainin dışında.")
         if not locator_from_user(params.url, user_text, sanctioned):
             # Resmi kamu veri kaynağı (TCMB, BDDK, TÜİK …): adres kalıbını model kurabilir. Okuma yalnız bu alan adlarına gider,
             # sızdırma kanalı açmaz (kullanıcı geri bildirimi: "internetten araştır" dendiğinde TCMB kur sayfası açılamıyordu).
@@ -200,7 +223,7 @@ class WebUrlTool(Tool):
         question = self._question()
         constraint = detect_source_constraint(question or params.url)
         keywords = keywords_of(f"{params.purpose} {question}")
-        budget = CrawlBudget(max_pages=params.max_pages, max_depth=params.max_depth)
+        budget = CrawlBudget(max_pages=params.max_pages, max_depth=params.max_depth, max_bytes_per_page=WEB_URL_MAX_BYTES)
         try:
             result = crawl(
                 params.url, budget=budget, keywords=keywords, session=self.session, robots=self.robots,
@@ -208,16 +231,24 @@ class WebUrlTool(Tool):
                 environ=self.environ, allow_private=self.allow_private, ocr=self.ocr,
                 ocr_options={"pages": params.pages} if params.pages else None,
             )
+        except FetchTooLarge as exc:
+            return self._too_large(params.url, exc.limit)
         except FetchRefused as exc:
             return ToolResult.fail(
                 "ACCESS_BLOCKED", f"Adres okunmadı: {exc}",
                 hint="http(s) bir adres ver ya da dosyayı izinli klasöre koy.", layer="access",
             )
+        scope = source_domains(question) or (getattr(self._registry, "public_web_fallback", None) or {}).get("include_domains", [])
+        if scope and any(not within_domains(p.fetch.final_url or p.url, scope)
+                         for p in result.pages if not p.fetch.from_local_file):
+            return ToolResult.fail("SOURCE_MISMATCH", "Sayfa belirtilen domain dışında bir kaynağa yönlendi; içerik kullanılmadı.",
+                                   layer="policy", retryable=False)
         self._last = result
         web_artifact = {
             "start_url": params.url,
             "used": None,
-            "visited": [{"url": p.url, "status": p.fetch.http_status, "sha256": p.fetch.sha256,
+            "visited": [{"url": p.fetch.final_url or p.url, "requested_url": p.url,
+                         "readable": bool(p.page and not p.page.extraction_error and (p.page.text.strip() or p.page.tables)), "status": p.fetch.http_status, "sha256": p.fetch.sha256,
                          "fetched_at": p.fetch.fetched_at.isoformat(), "title": (p.page.title if p.page else ""),
                          **({"ocr": p.page.ocr} if p.page and p.page.ocr else {})}
                         for p in result.pages],
@@ -229,12 +260,24 @@ class WebUrlTool(Tool):
 
         first = result.first
         if first is None or not first.ok:
+            # Boyut sınırı aşımı erişim engeli/yokluk DEĞİL: belge var, indirilemeyecek kadar büyük.
+            if result.oversize:
+                return self._too_large(params.url, max(lim for _, lim in result.oversize), web_artifact)
             outcome = first.fetch.outcome if first is not None else None
             if outcome is None:
                 return ToolResult.fail("ACCESS_BLOCKED", "Adres okunamadı.", layer="access", retryable=False)
             decision = decide(outcome, constraint)
             err = to_tool_error(outcome, decision)
+            if discovery_requested(question) and outcome.reason in ("gone", "unreachable", "js_required"):
+                err.terminal = False
+                err.hint = "Aynı domain içinde web_search ile ilgili alt sayfa veya belgeyi keşfet; kaynak değiştirme."
             return ToolResult(content=err.render(), ok=False, error=err, artifacts={"web": web_artifact})
+
+        if first.page and first.page.extraction_error:
+            return ToolResult(content="İçerik indirildi ancak okunamadı: " + first.page.text,
+                              ok=False, error=ToolError(error_code="EXTRACTION_FAILED", layer="data", retryable=True,
+                              message="Belge içerik çıkarımı başarısız; veri okunmuş sayılmaz."),
+                              artifacts={"web": web_artifact})
 
         # İstenen tablo: aktif analiz tablosu olur, provenance URL + sha + zaman.
         pages_with_tables = [p for p in result.pages if p.page and p.page.tables]
@@ -294,7 +337,7 @@ class WebUrlTool(Tool):
             )
             self.workspace.set_table(table, description=params.purpose, provenance=prov)
             self.workspace.title = params.purpose
-            web_artifact["used"] = page.url
+            web_artifact["used"] = page.fetch.final_url or page.url
             content = [
                 f"TABLO YÜKLENDİ: #{params.table_index} ({len(table)} satır, {len(table.columns)} sütun) — {page.url}"
                 + (f" — {table_label}" if table_label else ""),
@@ -336,13 +379,24 @@ class WebUrlTool(Tool):
                 index += 1
         if index == 0:
             lines.append("TABLO: yok (sayfada tablo bulunamadı)")
-        for p in pages_with_tables:
+        # Same-domain links are source candidates, not instructions embedded in fetched content.
+        links = {href: label for page in result.pages if page.page
+                 for label, href in page.page.links + page.page.data_links
+                 if within_domains(href, [host_of(params.url)])}
+        candidates = sorted(links, key=lambda href: -link_score(links[href], href, keywords))[:20]
+        sanctioned = getattr(self._registry, "sanctioned_locators", None)
+        if isinstance(sanctioned, set):
+            sanctioned.update(candidates)
+        if candidates:
+            lines.append("AYNI DOMAIN KAYNAK ADAYLARI (gerekiyorsa web_url ile oku): " + "; ".join(f"{links[u]} — {u}" for u in candidates))
+        for p in result.pages:
             for n in p.page.notes:  # type: ignore[union-attr]
                 lines.append(f"NOT: {n}")
         full_text = first.page.text or ""  # type: ignore[union-attr]
         start = min(params.text_from, len(full_text))
         excerpt = full_text[start:start + TEXT_WINDOW]
         if excerpt:
+            web_artifact["read_text"] = {"url": first.fetch.final_url or first.url, "text": excerpt}
             end = start + len(excerpt)
             lines.append(f"METİN (karakter {start}–{end} / {len(full_text)}):\n" + excerpt)
             if end < len(full_text):
@@ -363,26 +417,50 @@ class WebUrlTool(Tool):
                          "tabloyu yükle, sayıyı tablodan ver; metinden okuma.")
         else:
             lines.append("YAPACAĞIN: uygun tabloyu table_index ile yükle; tablo yoksa ve metinde de veri yoksa "
-                         "kullanıcıya bu sayfada bulunmadığını söyle, başka kaynağa kendiliğinden geçme.")
+                         "aynı domain içinde web_search include_domains ile ilgili kaynak keşfet; başka kuruma geçme.")
+        lines.append("Yanıtı bu kaynakta okunan içeriğe dayandır. Listede görünmemek, hiçbir yerde yayımlanmamış olmak demek değildir. "
+                     "Başka kaynağa ait önceki katalog/havuz uyarılarını bu kaynağın cevabına taşıma.")
         return ToolResult(content="\n".join(lines), artifacts={"web": web_artifact})
+
+    @staticmethod
+    def _too_large(url: str, limit: int, web_artifact: dict | None = None) -> ToolResult:
+        """Belge indirme sınırından büyük: dürüst 'okunamadı' — engel/yokluk değil, kaynak var."""
+        mb = limit / (1024 * 1024)
+        msg = (f"Belge indirme sınırından ({mb:.0f} MB) büyük olduğu için içeriği okunamadı: {url}. "
+               "Bunu erişim engeli veya verinin yokluğu SAYMA. Belgenin bu adreste var olduğunu ve "
+               "boyut sınırı nedeniyle okunamadığını dürüstçe bildir; içeriğini veya içindeki sayıları uydurma.")
+        err = ToolError(error_code="CONTENT_TOO_LARGE", layer="access", retryable=False, message=msg)
+        art = {"web": web_artifact} if web_artifact is not None else {}
+        return ToolResult(content=err.render(), ok=False, error=err, artifacts=art)
 
     @staticmethod
     def _year_note(question: str, pages: list[Any]) -> str:
         """Soruda geçen yıl sayfada hiç geçmiyorsa açıkça söyle — kaynak sabitse bu 'yok' demektir."""
-        years = sorted({m.group(0) for m in _YEAR.finditer(question or "")})
+        prose = re.sub(r"https?://\S+|(?:file://)?/[^\s<>]+", "", question or "")
+        years = sorted({m.group(0) for m in _YEAR.finditer(prose)})
         if not years:
             return ""
         hay = " ".join((p.page.text or "") + " " + " ".join(t.to_string() for t in p.page.tables) for p in pages if p.page)
         missing = [y for y in years if y not in hay]
         if missing:
-            return (f"DİKKAT: soruda geçen {', '.join(missing)} yılı bu sayfa(lar)da GEÇMİYOR. Kaynak kullanıcı "
-                    "tarafından belirtildiyse verinin bu kaynakta bulunmadığını söyle ve sor; uydurma.")
+            return (f"DİKKAT: soruda geçen {', '.join(missing)} yılı bu sayfa(lar)da GEÇMİYOR. "
+                    "Bu sayfa veriyi karşılamıyor; aynı domain içinde ilgili belgeyi keşfet, yılı veya sayıyı uydurma.")
         return f"Soruda geçen yıl(lar) sayfada mevcut: {', '.join(years)}."
 
 
 class WebSearchParams(BaseModel):
+    @field_validator("include_domains")
+    @classmethod
+    def normalize_domains(cls, values: list[str]) -> list[str]:
+        domains = [host_of(v) for v in values]
+        if any(not re.fullmatch(r"(?:[a-z0-9-]+\.)+[a-z]{2,}", d) for d in domains):
+            raise ValueError("include_domains yalnız geçerli domain adları içermeli")
+        return list(dict.fromkeys(domains))
+
     query: str = Field(description="Arama sorgusu, Türkçe; kurum ve gösterge adı geçsin")
     max_results: int = Field(default=5, ge=1, le=10)
+    include_domains: list[str] = Field(default_factory=list, max_length=20,
+        description="Kaynak keşfi için domain filtresi (şemasız, ör. kurum.example). Kullanıcının domain/kurum kısıtı otomatik uygulanır.")
     topic: Literal["general", "news", "finance"] = Field(default="general", description="news: güncel haber; finance: finans kaynakları")
     time_range: Literal["day", "week", "month", "year"] | None = Field(default=None, description="Yalnız bu aralıktaki sayfalar (güncel soru için)")
 
@@ -393,7 +471,7 @@ class WebSearchTool(Tool):
     description = (
         "İnternette arama yapar ve sayfa adaylarını (başlık, adres, alıntı) döndürür. Arama sonucu "
         "VERİ DEĞİLDİR: sayıyı buradan okuma; uygun sayfayı web_url ile aç ve tabloyu yükle. "
-        "Yalnız kullanıcı adres vermediyse ve veri havuzunda veri yoksa kullan."
+        "Kullanıcı web araması istediğinde, domain içinde kaynak keşfinde veya doğrulanmış kamu verisi yokluğunda kullan."
     )
     Params = WebSearchParams
 
@@ -401,15 +479,39 @@ class WebSearchTool(Tool):
         self.search = search
         self._registry = registry
 
+    def check_policy(self, params: WebSearchParams) -> ToolError | None:
+        if web_forbidden(getattr(self._registry, "active_question", "") or ""):
+            return ToolError(error_code="INTENT_REQUIRED", layer="policy", retryable=False,
+                             message="Kullanıcı bu istekte web kullanımını yasakladı.")
+        return None
+
     def run(self, params: WebSearchParams) -> ToolResult:
+        question = getattr(self._registry, "active_question", "") or ""
+        fallback = getattr(self._registry, "public_web_fallback", None) or {}
+        scope = source_domains(question) or fallback.get("include_domains", [])
+        if fallback:
+            params = params.model_copy(update={"query": fallback["query"], "include_domains": fallback["include_domains"]})
+        domains = list(dict.fromkeys(host_of(d) for d in params.include_domains))
+        if scope and domains and not all(within_domains("https://" + d, scope) for d in domains):
+            return ToolResult.fail("SOURCE_MISMATCH", "Arama filtresi belirtilen kaynağın dışında.",
+                                   layer="policy", retryable=False)
+        domains = domains or scope
+        if detect_source_constraint(question).pinned and not domains:
+            return ToolResult.fail("INTENT_REQUIRED", "Sabit kaynağın domaini belirlenemedi; domain filtresi gerekli.",
+                                   layer="policy", retryable=False)
         hits, outcome = self.search.search(params.query, max_results=params.max_results,
+                                           include_domains=domains or None,
                                            topic=params.topic, time_range=params.time_range)
+        hits = [h for h in hits if h.url.startswith(("http://", "https://"))
+                and (not domains or within_domains(h.url, domains))]
         if not outcome.ok:
-            constraint = detect_source_constraint(getattr(self._registry, "active_question", "") or "")
+            constraint = detect_source_constraint(question)
             err = to_tool_error(outcome, decide(outcome, constraint))
             return ToolResult(content=err.render(), ok=False, error=err)
         if not hits:
-            return ToolResult(content="Arama sonuç vermedi. Kullanıcıya bir adres vermesini önerebilirsin.")
+            return ToolResult(content="Arama kaynak kısıtları içinde sonuç vermedi. Veri bulunmuş gibi cevaplama.",
+                              artifacts={"web_search": {"query": params.query, "hits": [],
+                                         "include_domains": domains, "results": []}})
         sanctioned = getattr(self._registry, "sanctioned_locators", None)
         if isinstance(sanctioned, set):
             sanctioned.update(h.url for h in hits)   # kullanıcının istediği aramanın sonuçları açılabilir
@@ -417,7 +519,7 @@ class WebSearchTool(Tool):
         for i, h in enumerate(hits, start=1):
             lines.append(f"{i}. {h.title} — {h.url}\n   {h.snippet}")
         lines.append("YAPACAĞIN: sayı okuma; uygun adresi web_url ile aç ve tabloyu yükle.")
-        return ToolResult(content="\n".join(lines), artifacts={"web_search": {"query": params.query, "hits": [h.url for h in hits],
+        return ToolResult(content="\n".join(lines), artifacts={"web_search": {"query": params.query, "include_domains": domains, "hits": [h.url for h in hits],
                                                                         "results": [{"url": h.url, "title": h.title} for h in hits]}})
 
 

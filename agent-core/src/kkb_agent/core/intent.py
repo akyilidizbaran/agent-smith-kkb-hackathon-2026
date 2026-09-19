@@ -14,24 +14,24 @@ küçük model bunu talimat sansa bile adres kullanıcı mesajında yoksa kapı 
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 from urllib.parse import urlparse
 
 _WRITE = re.compile(
     r"\b(ekle|ekler misin|ekleyelim|yükle|yükler misin|yükleyelim|kaydet|kaydedelim|ingest|"
     r"havuza|içe aktar|aktar|taslak (?:seri )?olarak)\b",
-    re.I,
+    re.IGNORECASE,
 )
 
 
 def _norm_url(url: str) -> str:
     p = urlparse(url.strip())
-    return f"{p.scheme.lower()}://{p.netloc.lower()}{p.path.rstrip('/')}"
+    return f"{p.scheme.lower()}://{p.netloc.lower()}{p.path.rstrip('/')}{('?' + p.query) if p.query else ''}"
 
 
 def locator_from_user(locator: str, user_text: str, sanctioned: Iterable[str] = ()) -> bool:
-    """Adres kullanıcıdan mı? URL: aynı adres (sondaki '/' ve sorgu dizesi hariç) kullanıcı
+    """Adres kullanıcıdan mı? URL: aynı adres (sondaki '/' hariç; belge kimliği taşıyan query korunur) kullanıcı
     metninde ya da onaylı listede. Yerel dosya: dosya adı kullanıcı metninde."""
     text = user_text or ""
     if not locator:
@@ -39,8 +39,9 @@ def locator_from_user(locator: str, user_text: str, sanctioned: Iterable[str] = 
     parsed = urlparse(locator)
     if parsed.scheme in ("http", "https"):
         want = _norm_url(locator)
-        for m in re.finditer(r"https?://[^\s<>\"'\)]+", text, re.I):
-            if _norm_url(m.group(0)) == want:
+        from .web_routing import addresses
+        for candidate in addresses(text):
+            if _norm_url(candidate if "://" in candidate else "https://" + candidate) == want:
                 return True
         return any(_norm_url(s) == want for s in sanctioned)
     name = Path(parsed.path if parsed.scheme == "file" else locator).name

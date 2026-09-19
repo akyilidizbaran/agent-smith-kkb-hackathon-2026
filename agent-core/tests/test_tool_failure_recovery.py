@@ -17,6 +17,7 @@ from kkb_agent.core.execution_recovery import (
     ExecutionState,
     absence_verified,
     classify_error,
+    recoverable_error,
 )
 from kkb_agent.core.registry import ToolRegistry
 from kkb_agent.core.tool import Tool, ToolResult
@@ -383,3 +384,14 @@ def test_lakehouse_search_streak_is_turn_scoped() -> None:
 
     assert first.ok and second.ok
     assert tool._empty_streak == 1
+
+
+def test_source_mismatch_is_not_recoverable_stops_futile_domain_retries() -> None:
+    """Q9: sabit/kapsam kaynağın DIŞINA çıkma denemesi (SOURCE_MISMATCH) tekrar planlamayı hak etmez —
+    farklı kapsam-dışı adres pin'i değiştirmez, boşa tur harcanır. İlk seferde sonlanmalı."""
+    err = ToolError("SOURCE_MISMATCH", "kapsam dışı", layer="policy", retryable=False)
+    assert recoverable_error("web_search", err, attempts=0) is False
+    assert recoverable_error("web_url", err, attempts=0) is False
+    # Kontrast: kapsam-içi 404 (SOURCE_NOT_FOUND) başka dosya denenebilsin diye erişim sınıfında kalır;
+    # gerçek bir tekrar-planlama kodu (SQL_FAILED) hâlâ recoverable.
+    assert recoverable_error("lakehouse_query", ToolError("SQL_FAILED", "x", retryable=False), attempts=0) is True

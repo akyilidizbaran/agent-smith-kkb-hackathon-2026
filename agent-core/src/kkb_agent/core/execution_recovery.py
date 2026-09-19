@@ -44,7 +44,10 @@ RECOVERABLE_CODES = frozenset({
     "UNKNOWN_TOOL",
     "EMPTY_RESULT",
     "GEOGRAPHY_MISMATCH",
-    "SOURCE_MISMATCH",
+    # SOURCE_MISMATCH RECOVERABLE DEĞİL: bu hata, modelin SABİT/kapsam-içi kaynağın DIŞINA çıkmaya
+    # çalıştığı anlamına gelir. Farklı bir kapsam-dışı adresle yeniden denemek sonucu değiştirmez
+    # (pin değişmez); tekrar planlama turu boşa gider (Q9: aynı çıkmaz 3 kez denendi). İlk seferde
+    # sonlanıp dürüst cevaba geçilir. Kapsam-içi kalan başarılı akışlar (Q1/Q8) bu kodu hiç üretmez.
 })
 ACCESS_CODES = frozenset({"NEEDS_CREDENTIAL", "ACCESS_BLOCKED", "SOURCE_NOT_FOUND"})
 ABSENCE_CODES = frozenset({"OUT_OF_COVERAGE"})

@@ -592,9 +592,15 @@ function typewrite(root, done) {
   const handle = {finish}; typing = handle; raf = requestAnimationFrame(frame);
   return handle;
 }
-function validateReason(thought) {  // doğrulama adımının gerekçesi; reddedilen sayı ekrana yazılmaz
+function validateReason(thought) {  // doğrulama adımının gerekçesi; hangi kontrol tetikledi — reddedilen sayı ekrana yazılmaz
   const t = String(thought || "");
-  if (/^grounding/i.test(t)) return "araç çıktısında olmayan sayı ya da neden-sonuç dili";
+  if (/^grounding/i.test(t)) {
+    const causes = [];
+    if (/\bMISS\b/.test(t)) causes.push("araç çıktısında olmayan sayı");
+    if (/CAUSAL:/.test(t)) causes.push("neden-sonuç dili");
+    if (/CELL:/.test(t)) causes.push("dönem–sayı eşleşmesi tabloyla çelişiyor");
+    return causes.length ? causes.join(" + ") : "sayı/dil doğrulaması";
+  }
   return t.replace(/\s*—\s*geri gönderildi\s*$/, "");
 }
 function stepRow(s) {
@@ -726,16 +732,17 @@ const sqlTables = (sql) => [...new Set([...String(sql || "").matchAll(/\b(?:FROM
 const countBy = (xs) => xs.reduce((m, x) => (m[x] = (m[x] || 0) + 1, m), {});
 function evidenceStages(ev) {
   const st = ev.states || {}; const stages = [];
+  const textOnly = !ev.table_rows && (ev.web_sources || []).length > 0;
   const nums = ev.numbers || []; const matched = nums.filter((n) => n.matched).length;
   const warn = [[nums.filter((n) => n.sign_warning).length, "işaret uyarısı"], [nums.filter((n) => n.period_warning).length, "dönem uyuşmazlığı"],
     [nums.filter((n) => n.from_question && !n.matched).length, "sayı sorudan, tabloda yok"]].filter(([n]) => n).map(([n, t]) => ({t: `${n} ${t}`, warn: true}));
   const rows = ev.inspected_rows && ev.table_rows > ev.inspected_rows ? `ilk ${fmtInt(ev.inspected_rows)}/${fmtInt(ev.table_rows)} satır incelendi` : (ev.table_rows ? `${fmtInt(ev.table_rows)} satırlık tablo` : "");
-  stages.push({layer: "Cevap → tablo", title: nums.length ? `${matched}/${nums.length} sayı tabloyla eşleşti` : "Cevapta denetlenecek sayı yok", meta: [...warn, {t: rows}], ok: st["sayılar"] !== false});
+  stages.push({layer: textOnly ? "Cevap → kaynak metni" : "Cevap → tablo", title: nums.length ? `${matched}/${nums.length} sayı ${textOnly ? "kaynak metniyle" : "tabloyla"} eşleşti` : "Cevapta denetlenecek sayı yok", meta: [...warn, {t: rows}], ok: st["sayılar"] !== false || (ev.ocr_unverified && nums.every((n) => n.matched && !n.sign_warning && !n.period_warning)), warning: !!ev.ocr_unverified});
   const cols = ev.columns || []; const groups = new Map();
   cols.forEach((c) => { const key = c.sql ? c.sql.replace(/\s+/g, " ").trim() : ""; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(c.column); });
   const queries = [...groups.entries()].filter(([k]) => k); const noSql = groups.get("") || [];
   const colWarn = [...new Set(cols.flatMap((c) => c.warnings || []))];
-  stages.push({layer: "Tablo → sorgu", title: cols.length ? `${cols.length} kolon · ${queries.length} sorgu` : "Kolon izi yok",
+  if (!textOnly) stages.push({layer: "Tablo → sorgu", title: cols.length ? `${cols.length} kolon · ${queries.length} sorgu` : "Kolon izi yok",
     meta: [{t: sqlTables(queries.map(([k]) => k).join(" ")).join(", "), mono: true}, ...(noSql.length ? [{t: `sorgu izi yok: ${noSql.join(", ")}`, warn: true}] : []), {t: colWarn.length ? `${colWarn.length} kolon notu` : ""}],
     sql: queries.map(([sql, names]) => ({names, sql})), notes: colWarn, ok: st["sorgu izi"] !== false});
   const obs = ev.observations || []; const web = ev.web_sources || [];
@@ -756,8 +763,8 @@ function evidenceStages(ev) {
       ok: locs.length > 0 && fetched.length > 0});
   } else if (web.length) {
     web.forEach((w) => stages.push({layer: w.ocr ? "Belge · OCR" : "Web sayfası", title: hostOf(w.url), link: httpUrl(w.url),
-      meta: [{t: `sha256 ${shortSha(w.sha256)}`, mono: true}, {t: `çekim ${fmtWhen(w.fetched_at)}`}, ...(w.ocr ? [{t: `OCR ${w.ocr.model || ""} · sayfa ${(w.ocr.pages || []).join(",")} · kalite ${w.ocr.quality || "–"}`, warn: true}] : [])],
-      ok: !!(w.url && w.sha256) && !w.ocr}));
+      meta: [{t: `sha256 ${shortSha(w.sha256)}`, mono: true}, {t: `çekim ${fmtWhen(w.fetched_at)}`}, ...(w.reused ? [{t: "önceki soruda okunan kaynak"}] : []), ...(w.ocr ? [{t: `OCR ${w.ocr.model || ""} · sayfa ${(w.ocr.pages || []).join(",")} · kalite ${w.ocr.quality || "–"}`, warn: true}] : [])],
+      ok: !!(w.url && w.sha256 && w.fetched_at), warning: !!w.ocr}));
   } else {
     stages.push({layer: "Silver · gözlem", title: "Gözlem izi yok", meta: [{t: "seed adaptörü ya da hesaplanmış kolon"}], ok: false});
   }
@@ -767,26 +774,27 @@ function renderEvidence(p, animate) {
   const ev = p.evidence; const body = $("ev-body"); const badge = $("ev-badge");
   lastEvidence = ev || null; lastQuestion = p.question || ""; lastAnswer = p; $("btn-journey").disabled = !ev; $("btn-steps").disabled = !(p.steps || []).some((s) => s.tool); renderMini(ev || null);
   if (!ev) { badge.className = "badge none"; badge.textContent = "—"; $("ev-summary").textContent = "Bu cevap için tablo yok."; $("ev-summary").title = ""; body.innerHTML = ""; return; }
-  badge.className = "badge " + (ev.complete ? "ok" : "gap"); badge.textContent = ev.complete ? "tam" : "EKSİK";
-  const st = ev.states || {};
+  badge.className = "badge " + (ev.complete ? "ok" : "gap"); badge.textContent = ev.complete ? "tam" : ev.ocr_unverified ? "OCR · doğrulanmadı" : "EKSİK";
+  const st = {...(ev.states || {})};
+  if (!ev.table_rows && (ev.web_sources || []).length) delete st["sorgu izi"];
   badge.title = Object.entries(st).map(([k, v]) => `${k}: ${v ? "✓" : "✗"}`).join(" · ");
   const stages = evidenceStages(ev); const broken = stages.findIndex((s) => !s.ok);
   $("ev-summary").textContent = broken === -1
-    ? ((ev.observations || []).length ? "Cevap tabloya, tablo sorguya, sorgu kaynaktan çekilmiş ham dosyaya bağlı." : "Cevap tabloya, tablo sorguya ve okunan kaynağa bağlı.")
+    ? (ev.ocr_unverified ? "Kaynak izi mevcut; içerik OCR ile okundu ve doğrulanmadı." : (ev.observations || []).length ? "Cevap tabloya, tablo sorguya, sorgu kaynaktan çekilmiş ham dosyaya bağlı." : (ev.table_rows ? "Cevap tabloya, tablo sorguya ve okunan kaynağa bağlı." : "Cevap, okunan kaynak metnine bağlı."))
     : `Zincir “${stages[broken].layer}” halkasında kopuyor; sonrası doğrulanmış sayılmaz.`;
   $("ev-summary").title = ev.summary || "";
   let html = "";
-  if (Object.keys(st).length) html += `<div class="meter" title="${esc(badge.title)}">${Object.entries(st).map(([k, v]) => `<span class="${v ? "" : "no"}">${esc(k)} ${v ? "✓" : "✗"}</span>`).join("")}</div>`;
+  if (Object.keys(st).length) html += `<div class="meter" title="${esc(badge.title)}">${Object.entries(st).map(([k, v]) => `<span class="${v ? "" : "no"}">${esc(k)} ${ev.ocr_unverified && k === "sayılar" ? "· OCR" : v ? "✓" : "✗"}</span>`).join("")}</div>`;
   const metaHtml = (m) => m.filter((x) => x.t).map((x) => `<span class="${x.mono ? "mono" : ""} ${x.warn ? "warnt" : ""}">${esc(x.t)}</span>`).join("");
   html += `<ol class="flow ${animate ? "" : "still"}">${stages.map((s, i) => {
-    const cls = !s.ok ? "bad" : (broken !== -1 && i > broken ? "after" : "ok");
+    const cls = (!s.ok || s.warning) ? "bad" : (broken !== -1 && i > broken ? "after" : "ok");
     const title = s.link ? `<a href="${esc(s.link)}" target="_blank" rel="noopener noreferrer">${esc(s.title)}</a>` : esc(s.title);
     const notes = (s.notes || []).length ? `<ul class="plain" style="font-family:inherit">${s.notes.map((w) => `<li>· ${esc(w)}</li>`).join("")}</ul>` : "";
     const sql = (s.sql || []).length || notes ? `<details><summary>${s.sql.length > 1 ? `${s.sql.length} sorguyu göster` : "Sorguyu göster"}${notes ? " ve notlar" : ""}</summary>${s.sql.map((g) => `<div class="sqlcols">kolonlar: ${esc(g.names.join(", "))}</div><pre class="sql">${esc(prettySql(g.sql))}</pre>`).join("")}${notes}</details>` : "";
     const list = (s.list || []).length ? `<details><summary>${s.list.length > 1 ? `${s.list.length} seriyi göster` : "Seriyi göster"}</summary><ul class="plain">${s.list.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : "";
     return `<li class="hop ${cls}" style="--i:${i}"><span class="knot" aria-hidden="true">${cls === "ok" ? "✓" : cls === "bad" ? "!" : "·"}</span><div class="card"><div class="layer">${esc(s.layer)}</div><div class="ttl">${title}</div>${metaHtml(s.meta || []) ? `<div class="meta">${metaHtml(s.meta || [])}</div>` : ""}${sql}${list}</div></li>`;
   }).join("")}</ol>`;
-  if (ev.gaps && ev.gaps.length) html += `<div class="note amber"><strong>Kopuk halkalar</strong><br>${ev.gaps.map(esc).join("<br>")}</div>`;
+  if (ev.gaps && ev.gaps.length) html += `<div class="note amber"><strong>${ev.ocr_unverified && ev.gaps.every((g) => /^(metin|sayılar) OCR/.test(g)) ? "OCR doğrulama uyarısı" : "Doğrulama eksikleri"}</strong><br>${ev.gaps.map(esc).join("<br>")}</div>`;
   const more = [];
   if (ev.context_sources && ev.context_sources.length) more.push(`<div class="note"><strong>Bağlam kaynakları (web araması; veri değil)</strong><br>${ev.context_sources.map((w) => esc((w.url || "") + " · " + (w.title || "") + " · arama: " + (w.query || ""))).join("<br>")}</div>`);
   if (ev.web_unused && ev.web_unused.length) more.push(`<div class="note"><strong>Taranıp kullanılmayan</strong><br>${ev.web_unused.map((w) => esc((w.url || "") + " · " + (w.note || ""))).join("<br>")}</div>`);
@@ -911,8 +919,8 @@ function journeyStops(ev, idx) {
     const miss = nums.filter((n) => !n.matched).length; const warned = nums.filter((n) => n.matched && (n.sign_warning || n.period_warning)).length;
     stops.push({kind: "cevap", state: miss ? "broken" : warned ? "warn" : "ok",
       status: nums.length ? `${nums.length - miss}/${nums.length} sayı eşleşti` : "denetlenecek sayı yok",
-      fields: [jf("Denetlenen sayı", fmtInt(nums.length)), jf("Tabloda eşleşen", fmtInt(nums.length - miss)), jf("İşaret ya da dönem uyarısı", warned ? fmtInt(warned) : "", {tone: "warn"})],
-      alert: miss ? {tone: "bad", text: `${miss} sayı analiz tablosunda bulunamadı.`} : null});
+      fields: [jf("Denetlenen sayı", fmtInt(nums.length)), jf(ev.table_rows ? "Tabloda eşleşen" : "Kaynak metninde eşleşen", fmtInt(nums.length - miss)), jf("İşaret ya da dönem uyarısı", warned ? fmtInt(warned) : "", {tone: "warn"})],
+      alert: miss ? {tone: "bad", text: `${miss} sayı ${ev.table_rows ? "analiz tablosunda" : "kaynak metninde"} bulunamadı.`} : null});
   }
   const rows = ev.table_rows || 0;
   if (cols.length) {
@@ -920,7 +928,7 @@ function journeyStops(ev, idx) {
       fields: [...(num ? [jf("Hücre", `${num.column || "?"} · ${num.row_key ?? num.row_index ?? "?"}`, {mono: 1}), jf("Tablodaki değer", trNum(num.number), {mono: 1})] : []),
         jf("İncelenen", ev.inspected_rows && rows > ev.inspected_rows ? `ilk ${fmtInt(ev.inspected_rows)}/${fmtInt(rows)} satır` : (rows ? "satırların tamamı" : "")),
         jf("Kolonlar", cols.map((c) => c.column).join(", "), {mono: 1})]});
-  } else {
+  } else if (!(ev.web_sources || []).length) {
     stops.push({kind: "tablo", state: "broken", status: "analiz tablosu yok", fields: [],
       alert: {tone: "bad", text: "Bu cevap bir analiz tablosuna bağlanmadı; sayılar hücreye kadar izlenemiyor."}});
   }

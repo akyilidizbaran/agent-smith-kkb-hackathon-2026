@@ -330,3 +330,49 @@ def test_m13_t05_gosterilen_hassasiyetin_yarim_birimi_yuvarlama_maddi_fark_degil
     assert [n.matched for n in ok.numbers] == [True, True], ok.numbers
     bad = EvidenceBuilder(lake).build("soru", "Bakiye 100,6 ve 255 oldu; değişim −0,41.", ws, [])
     assert [n.matched for n in bad.numbers] == [False, False, False], "yarım birimi aşan fark maddi sayılır"
+
+
+def test_bayat_tablo_metin_cevabinin_kaynak_sayisini_gizlemez() -> None:
+    """Q7 ekranı: aynı sohbette önceki turdan kalan ilgisiz tablo dururken, finans dışı metin cevabı
+    okunan web kaynağından geliyor. Kaynak metninde birebir geçen sayı (ör. sürüm '3.14') 'tabloda
+    bulunmayan sayı' diye işaretlenmemeli — kaynakça doğrulanmıştır (Path A ile aynı kural)."""
+    class Silverish:
+        def evidence_for_observations(self, *a, **k): return []
+        def evidence_for_artifacts(self, *a, **k): return {}
+    ws = AnalysisWorkspace()
+    # Bayat/ilgisiz tablo: içinde 3.14 YOK (önceki turdan kalan döviz tablosu gibi).
+    ws.set_table(pd.DataFrame({"kur": ["USD", "EUR"], "alis": [48.6116, 52.30]}), description="önceki tur",
+                 provenance=QueryProvenance(sql="web_url https://www.tcmb.gov.tr/kurlar/today.xml tablo#0",
+                                            dataset_ids=[], sources=["web"], source_urls=["https://www.tcmb.gov.tr/kurlar/today.xml"]))
+    url = "https://docs.python.org/3/tutorial/datastructures.html"
+    answer = f"Hayır, list.copy() sığ kopya döndürür. Kaynak: Python 3.14.7 dokümantasyonu — {url}"
+    art = [{"kind": "web", "used_text": url,
+            "read_text": {"url": url, "text": "Python 3.14.7 documentation. list.copy(): Return a shallow copy of the list."},
+            "visited": [{"url": url, "readable": True, "sha256": "cd" * 32, "fetched_at": "t", "status": 200}]}]
+    panel = EvidenceBuilder(Silverish()).build("Python list.copy sığ mı?", answer, ws, [], artifacts=art)
+    m = {n.text: n for n in panel.numbers}
+    assert m["3.14"].matched and m["3.14"].column == "(okunan kaynak metni)", m["3.14"]
+    assert not any("tabloda bulunmayan sayılar" in g for g in panel.gaps), panel.gaps
+
+
+def test_time_col_suz_tabloda_tarih_yili_yanlis_pozitif_vermez() -> None:
+    """Q5 ekranı: TCMB XML tablosunda time_col yok. Cevaptaki '2026' (erişim tarihi/bülten no) veri değil;
+    'tabloda bulunmayan sayı' diye işaretlenmemeli. Ama büyüklük birimine komşu uydurma sayı YAKALANMALI."""
+    lake = _Lake() if "_Lake" in globals() else None
+    class Silverish:
+        def evidence_for_observations(self, *a, **k): return []
+        def evidence_for_artifacts(self, *a, **k): return {}
+    ws = AnalysisWorkspace()
+    ws.set_table(pd.DataFrame({"kod": ["USD", "EUR"], "alis": [48.61, 52.30], "satis": [48.70, 52.55]}),
+                 description="TCMB kur", provenance=QueryProvenance(
+                     sql="web_url https://www.tcmb.gov.tr/kurlar/today.xml tablo#0",
+                     dataset_ids=[], sources=["web"], source_urls=["https://www.tcmb.gov.tr/kurlar/today.xml"]))
+    ans = ("TCMB'nin 18 Eylül 2026 tarihli (Bülten No 2026/176) verilerine göre USD alış 48,61, satış 48,70 TL.")
+    panel = EvidenceBuilder(Silverish()).build("USD kuru?", ans, ws, [])
+    m = {n.text: n for n in panel.numbers}
+    assert m["2026"].matched and m["2026"].column == "(tarih/yıl)", m.get("2026")
+    assert m["48,61"].matched and m["48,70"].matched, "gerçek kur değerleri tabloyla eşleşmeli"
+    assert not any("tabloda bulunmayan sayılar" in g for g in panel.gaps), panel.gaps
+    # Büyüklük birimine komşu uydurma yıl-benzeri sayı hâlâ yakalanır (muafiyet birim komşuluğunda geçmez).
+    bad = EvidenceBuilder(Silverish()).build("USD kuru?", "Bakiye 2015 milyon TL oldu.", ws, [])
+    assert not bad.numbers[0].matched, "büyüklük birimine komşu '2015 milyon TL' muaf tutulmamalı"

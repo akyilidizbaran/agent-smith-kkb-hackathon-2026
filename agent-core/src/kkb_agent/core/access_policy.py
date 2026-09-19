@@ -195,7 +195,7 @@ def _institution_pin() -> re.Pattern[str] | None:
     if not names:
         return None
     return re.compile(
-        r"\b(" + "|".join(re.escape(i) for i in names) + r")(?:'?[dt][ae]n|\s+(?:kaynağından|sitesinden|verisinden))\b",
+        r"\b(" + "|".join(re.escape(i) for i in names) + r")(?:'?[dt][ae]n|\s+(?:kaynağından|sitesinden|verisinden|verilerinden))\b",
         re.I,
     )
 _ONLY = re.compile(r"\b(?:sadece|yalnızca|yalnız)\b", re.I)
@@ -213,6 +213,10 @@ def detect_source_constraint(question: str) -> SourceConstraint:
     url = _URL_RE.search(text)
     if url:
         return SourceConstraint(pinned=True, source_ref=url.group(0), phrase=url.group(0))
+    from .web_routing import addresses
+    domains = addresses(text)
+    if domains:
+        return SourceConstraint(pinned=True, source_ref=domains[0], phrase=domains[0])
     phrase = _PIN_PHRASES.search(text)
     if phrase:
         return SourceConstraint(pinned=True, source_ref=None, phrase=phrase.group(0))

@@ -17,6 +17,7 @@ import re
 from dataclasses import dataclass
 
 from .intent import write_intent
+from .web_routing import addresses, discovery_requested
 from .question_preflight import _PREMISE as _PREMISE_Q   # öncül kalıbı tek yerde (Büşra, V3 §3.9)
 
 ALWAYS = frozenset({
@@ -55,7 +56,7 @@ def decide(question: str, registered: set[str] | frozenset[str], *, user_text: s
     closed: list[str] = []
     for family, names, pattern in (("grafik", CHART, _CHART), ("analitik", ANALYTICS, _ANALYTICS), ("web", WEB, _WEB),
                                    ("öncül", PREMISE, _PREMISE_Q)):
-        if pattern.search(question) or (family == "web" and pattern.search(user_text)):
+        if pattern.search(question) or (family == "web" and (pattern.search(user_text) or addresses(question) or discovery_requested(question))):
             allowed |= names
             opened.append(family)
         else:

@@ -55,9 +55,63 @@
     "hmb.gov.tr",
     "spk.gov.tr",
     "tbb.org.tr",
-    "borsaistanbul.com"
+    "borsaistanbul.com",
+    "bddk.gov.tr"
   ],
   "url_patterns": [
     "TCMB günlük gösterge döviz kurları (XML): https://www.tcmb.gov.tr/kurlar/YYYYAA/GGAAYYYY.xml — ör. 2 Ocak 2015 için https://www.tcmb.gov.tr/kurlar/201501/02012015.xml; son yayımlanan: https://www.tcmb.gov.tr/kurlar/today.xml. Hafta sonu ve resmi tatilde yayın yoktur: sayfa bulunamazsa önceki iş gününü dene ve cevapta hangi günün kurunu verdiğini söyle."
-  ]
+  ],
+  "institution_hosts": {
+    "TCMB": [
+      "tcmb.gov.tr"
+    ],
+    "EVDS": [
+      "tcmb.gov.tr"
+    ],
+    "BDDK": [
+      "bddk.gov.tr",
+      "bddk.org.tr"
+    ],
+    "TÜİK": [
+      "tuik.gov.tr"
+    ],
+    "TUİK": [
+      "tuik.gov.tr"
+    ],
+    "TUIK": [
+      "tuik.gov.tr"
+    ],
+    "Borsa İstanbul": [
+      "borsaistanbul.com"
+    ],
+    "BİST": [
+      "borsaistanbul.com"
+    ],
+    "Hazine": [
+      "hmb.gov.tr"
+    ],
+    "SPK": [
+      "spk.gov.tr"
+    ],
+    "TBB": [
+      "tbb.org.tr"
+    ]
+  },
+  "public_source_domains": {
+    "bddk_monthly": [
+      "bddk.gov.tr",
+      "bddk.org.tr"
+    ],
+    "bddk_weekly": [
+      "bddk.gov.tr",
+      "bddk.org.tr"
+    ],
+    "bddk_finturk": [
+      "bddk.gov.tr",
+      "bddk.org.tr"
+    ],
+    "evds": [
+      "tcmb.gov.tr"
+    ]
+  }
 }
