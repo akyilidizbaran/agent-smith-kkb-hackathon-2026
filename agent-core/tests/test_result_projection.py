@@ -138,3 +138,27 @@ def test_follow_up_base_request_can_recover_source_columns_from_provenance() -> 
 
     assert projected is not None
     assert list(projected.columns) == ["date", "metric_a", "metric_b", "metric_a_change", "metric_b_change"]
+
+
+def test_fastpath_multi_column_step_projects_and_exports_derived_only() -> None:
+    answer, agent, before = _derived_answer()
+    answer.steps = [AgentStep(
+        index=1,
+        role="execute",
+        tool_name="workspace_compute_column",
+        tool_args={
+            "column_names": ["metric_a_change", "metric_b_change"],
+            "expressions": [
+                "metric_a - LAG(metric_a) OVER (ORDER BY date)",
+                "metric_b - LAG(metric_b) OVER (ORDER BY date)",
+            ],
+        },
+        result_data=agent.workspace.table.copy(),
+    )]
+    projected = project_result_table(answer, agent, question="aylık değişimleri göster", table_before=before)
+
+    assert projected is not None
+    assert list(projected.columns) == ["date", "metric_a_change", "metric_b_change"]
+    csv_frame = pd.read_csv(io.BytesIO(table_csv_bytes(projected)), sep=";", decimal=",", encoding="utf-8-sig")
+    xlsx_frame = pd.read_excel(io.BytesIO(table_xlsx_bytes(projected, title="fastpath")), sheet_name="tablo", engine="openpyxl")
+    assert list(csv_frame.columns) == list(projected.columns) == list(xlsx_frame.columns)

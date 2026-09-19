@@ -45,6 +45,10 @@ class BoundaryValidator:
     ) -> tuple[BaseModel | None, ToolError | None]:
         """Doğrulanmış parametreler ya da ilk takılan katmanın hatası."""
 
+        normalizer = getattr(tool, "normalize_args", None)
+        if callable(normalizer):
+            raw_args = normalizer(raw_args)
+
         # 1. şema — argümanın şekli
         try:
             params = tool.Params(**raw_args)

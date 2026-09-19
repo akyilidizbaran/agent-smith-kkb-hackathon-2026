@@ -177,6 +177,41 @@ class AnalysisWorkspace:
             self._column_sources[name] = provenance
         self._record("add_column", description, provenance, columns_added=[name])
 
+    def add_columns(
+        self,
+        values: dict[str, pd.Series],
+        *,
+        description: str,
+        provenance_by_column: dict[str, QueryProvenance | None] | None = None,
+    ) -> None:
+        """Atomically add several derived columns as one workspace operation.
+
+        Deterministic follow-up transformations often derive the same operation
+        for several measures. One snapshot and one history record keep that
+        operation reversible and let the answer layer project all derived
+        columns together without pretending that each column was a separate
+        model/tool turn.
+        """
+        if self._table is None:
+            raise ValueError("Önce bir tablo oluşturulmalı (set_table).")
+        if not values:
+            raise ValueError("En az bir sütun eklenmeli.")
+        names = list(values)
+        duplicate = [name for name in names if name in self._table.columns]
+        if duplicate:
+            raise ValueError(f"Sütun(lar) zaten tabloda var: {', '.join(duplicate)}")
+
+        self._snapshot()
+        for name, series in values.items():
+            self._table[name] = series.reindex(self._table.index)
+            provenance = (provenance_by_column or {}).get(name)
+            if provenance is not None:
+                self._column_sources[name] = provenance
+        first_provenance = next(
+            (p for p in (provenance_by_column or {}).values() if p is not None), None
+        )
+        self._record("add_column", description, first_provenance, columns_added=names)
+
     def replace_column(
         self,
         name: str,

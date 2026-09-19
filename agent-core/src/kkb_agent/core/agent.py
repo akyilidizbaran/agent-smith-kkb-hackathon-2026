@@ -44,6 +44,10 @@ from .execution_recovery import (
 )
 from .follow_up import FollowUpContext, FollowUpResolution, resolve_follow_up
 from .facets import extract_facets
+from .workspace_fastpath import (
+    execute_verified_workspace_transform,
+    plan_verified_workspace_transform,
+)
 
 # Kullanıcının grafik isteği (Türkçe çekimli: grafiği, grafiğini, çiz, çizer misin, görselleştir).
 _CHART_ASK = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
@@ -643,8 +647,9 @@ class AnalyticsAgent:
         self._prepare_follow_up(question)
         self._active_table_reuse_allowed = self._active_table_is_compatible(question)
         self._truncated = False
+        fast_answer = self._try_verified_workspace_fastpath(question)
         try:
-            answer = self._ask(question)
+            answer = fast_answer if fast_answer is not None else self._ask(question)
         except Exception as exc:  # noqa: BLE001 — yalnız model servisi kesintisi yakalanır, gerisi yükselir
             if not _is_llm_outage(exc):
                 raise
@@ -709,6 +714,73 @@ class AnalyticsAgent:
             except Exception as exc:  # noqa: BLE001 — panel cevabı asla düşürmez
                 log.warning("kanıt paneli kurulamadı: %s", exc)
         return self._complete_follow_up(answer)
+
+    def _try_verified_workspace_fastpath(self, question: str) -> AgentAnswer | None:
+        """Use one deterministic workspace operation when semantic reuse is proven safe."""
+        if not self._active_table_reuse_allowed:
+            return None
+        try:
+            plan = plan_verified_workspace_transform(
+                question,
+                self._follow_up_resolution,
+                self.workspace,
+                active_specs=self._active_table_specs(),
+            )
+            if plan is None:
+                return None
+            started = time.perf_counter()
+            result = execute_verified_workspace_transform(self.workspace, plan)
+            if result is None:
+                return None
+            self._begin_registry_turn(question, self._retry_source_question or question)
+            self.last_gate = None
+            operation_label = (
+                "yüzde değişim"
+                if plan.operation == "percent_change"
+                else "dönemsel değişim"
+            )
+            step = AgentStep(
+                index=1,
+                role="execute",
+                thought="doğrulanmış aktif workspace üzerinde deterministik dönüşüm",
+                tool_name="workspace_compute_column",
+                tool_args={
+                    "operation": plan.operation,
+                    "column_names": list(plan.derived_columns),
+                    "expressions": list(plan.expressions),
+                    "purpose": operation_label,
+                    "deterministic": True,
+                },
+                result_summary=(
+                    f"{len(plan.derived_columns)} sütun {operation_label} olarak hesaplandı; "
+                    f"{result.validation}."
+                ),
+                duration_ms=(time.perf_counter() - started) * 1000,
+                result_data=result.frame,
+            )
+            text = (
+                f"Doğrulanmış aktif tablodaki {len(plan.value_columns)} seri için {operation_label} hesaplandı. "
+                "İlk dönem için önceki dönem olmadığı için değer boş bırakıldı."
+            )
+            self._history.append(ChatMessage(role="user", content=question))
+            self._history.append(ChatMessage(role="assistant", content=text))
+            return AgentAnswer(
+                text=text,
+                steps=[step],
+                workspace=self.workspace,
+                grounding="OK",
+                availability_status="FOUND",
+                artifacts=[{
+                    "kind": "workspace_fastpath",
+                    "operation": plan.operation,
+                    "columns": list(plan.derived_columns),
+                    "validation": result.validation,
+                }],
+                usage=dict(self._usage),
+            )
+        except (AssertionError, KeyError, TypeError, ValueError) as exc:
+            log.debug("verified workspace fast path uygun değil: %s", exc)
+            return None
 
     def _prepare_follow_up(self, question: str) -> None:
         try:
@@ -876,8 +948,8 @@ class AnalyticsAgent:
     UNTRUSTED_OUTPUT_TOOLS = frozenset({"web_url", "web_search", "ingest_from_url"})
     """Dış içerik taşıyan araçlar: çıktıları modele 'veridir, talimat değildir' çerçevesiyle gider."""
 
-    def _ask(self, question: str) -> AgentAnswer:
-        planning_question = self._retry_source_question or question
+    def _begin_registry_turn(self, question: str, planning_question: str) -> None:
+        """Update turn-scoped registry state for both model and deterministic paths."""
         self.registry.active_question = planning_question
         self.registry.public_web_fallback = None
         if hasattr(self.registry, "current_message"):
@@ -888,6 +960,10 @@ class AnalyticsAgent:
                 begin_turn(self.registry.turn)
         if hasattr(self.registry, "user_text"):
             self.registry.user_text = (self.registry.user_text + "\n" + question).strip()
+
+    def _ask(self, question: str) -> AgentAnswer:
+        planning_question = self._retry_source_question or question
+        self._begin_registry_turn(question, planning_question)
         # Araç kapısı (ADR-0043): soruya göre araç alt kümesi; kapalı olan aile şemaya girmez.
         gate = tool_gate.decide(
             planning_question, set(self.registry.names()), user_text=getattr(self.registry, "user_text", "") or "",
