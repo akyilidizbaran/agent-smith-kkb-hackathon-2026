@@ -127,6 +127,40 @@ def undeclared(params: IngestParams, user_text: str) -> list[str]:
     return bad
 
 
+def _bare_locator(locator: str) -> bool:
+    """Adres ne http(s), ne file:, ne mutlak yol: yalnız bir dosya adı. Kullanıcı dosyayı eklemeden adını yazmıştır
+    (ölçüldü 20 Eyl: 'bist_altin_2023.csv dosyasını kaydet' → araç düz adla arandı, ACCESS_BLOCKED)."""
+    return not re.match(r"^(?:https?://|file:|[A-Za-z]:[\\/]|[\\/])", (locator or "").strip())
+
+
+def _source_display_name(locator: str) -> str:
+    """Kataloğa giren kaynak adı: yükleme kopyasının rastgele ön eki (`3bcc4cc9_`) kullanıcının dosya adı değildir."""
+    return _UPLOAD_PREFIX.sub("", Path(locator.split("?")[0]).name)
+
+
+#: Ölçüm tipinden türeyen varsayılan toplama yöntemi (katalog sözleşmesindeki anlam: stok dönem sonu değeri,
+#: dönemlik akım toplanır, yıl içi/kümülatif akım son değeri taşır, oran/endeks ortalanır, sayım toplanır).
+_AGG_BY_MEASURE = {"stock": "last", "flow_periodic": "sum", "flow_ytd": "last", "flow_cumulative": "last",
+                   "count": "sum", "rate": "avg", "ratio": "avg", "index": "avg"}
+
+
+def _default_agg_from_measure(semantics):
+    """Kullanıcı toplama yöntemi söylemediyse ölçüm tipinden türet ve kanıt satırıyla işaretle.
+
+    Ölçüldü (20 Eyl): 'birim kg, aylık, dönemlik akım' beyanıyla kaydedilen taslakta `default_agg` NULL kaldı;
+    Gold'a alınırken hizalama yöntemi belirsiz olurdu. Türetme deterministiktir ve kartta görünür; `unknown`
+    ölçüm tipinde türetilmez (bilinmeyen anlamdan yöntem çıkmaz)."""
+    from dataclasses import replace
+    from ..builder.profile import Evidence
+
+    if getattr(semantics, "default_agg", None) or semantics.measure_type not in _AGG_BY_MEASURE:
+        return semantics
+    agg = _AGG_BY_MEASURE[semantics.measure_type]
+    evidence = [e for e in semantics.evidence if e.field != "default_agg"]
+    evidence.append(Evidence("default_agg", agg, f"ölçüm tipinden türetildi ({semantics.measure_type} → {agg})", "strong"))
+    return replace(semantics, default_agg=agg, evidence=tuple(evidence))
+
+
 def _apply_declared(mapping, semantics, params: IngestParams):
     """Kullanıcı beyanı öneriyi tamamlar ya da geçersiz kılar; her alan kanıt satırıyla."""
     from dataclasses import replace
@@ -255,9 +289,14 @@ class IngestFromUrlTool(Tool):
                 frame, outcome = read_table_for_profiling(
                     params.locator, allowed_roots=[self.allowed_root], session=self.session, sheet=params.sheet)
         except ReadRefused as exc:
+            bare = _bare_locator(params.locator)
             return ToolResult.fail(
                 "ACCESS_BLOCKED", f"Kaynak okunamadı: {exc}",
-                hint="Dosyayı izinli klasöre koy ya da http(s) bir adres ver.", layer="access",
+                hint=("Dosya bu sohbete eklenmemiş: yalnız adı geçiyor, sunucuda kopyası yok. Kullanıcıya dosyayı "
+                      "📎 Dosya düğmesiyle (ya da sürükleyip bırakarak) eklemesini ve isteği aynı mesajda yazmasını söyle; "
+                      "diskte arama yapma, adı tahmin etme." if bare
+                      else "Dosyayı izinli klasöre koy ya da http(s) bir adres ver."),
+                layer="access",
             )
         except OcrUnavailable as exc:
             return ToolResult.fail("TOOL_FAILED", str(exc), layer="harness", retryable=False,
@@ -278,12 +317,17 @@ class IngestFromUrlTool(Tool):
             params = params.model_copy(update={k.split("=")[0]: None for k in invented})
         if mapping is not None and semantics is not None:
             mapping, semantics = _apply_declared(mapping, semantics, params)
+            semantics = _default_agg_from_measure(semantics)
         if mapping is None or semantics is None:
+            has_date = bool(getattr(profile, "date_candidates", ()))
             return ToolResult.fail(
                 "TOOL_FAILED",
                 f"Tabloda tarih ve değer kolonu birlikte bulunamadı ({len(frame)} satır, "
-                f"{len(frame.columns)} sütun: {', '.join(map(str, frame.columns))}).",
-                hint="Kullanıcıya hangi kolonun tarih, hangisinin değer olduğunu sor.",
+                f"{len(frame.columns)} sütun: {', '.join(map(str, frame.columns))})."
+                + ("" if has_date else " Tarih kolonu hiç yok: tarihsiz tablolar (il × değer gibi) veri havuzuna "
+                                       "kalıcı seri olarak kaydedilemez; web_url ile oturumda okunup birleştirilebilir."),
+                hint=("Kullanıcıya hangi kolonun tarih, hangisinin değer olduğunu sor." if has_date
+                      else "Kullanıcıya söyle: tablo tarihsiz, kalıcı kayıt yapılamaz; oturumda analiz için web_url ile okuyabilirsin."),
                 layer="data", retryable=False,
             )
 
@@ -380,8 +424,7 @@ class IngestFromUrlTool(Tool):
         # Ölçüldü: model ikinci koşuda farklı bir 'name' verdi, veri ekibinin sözleşmesi
         # "aynı draft farklı içerikle" diye reddetti (doğru davranış). Kullanıcının verdiği
         # ad karta girer, kataloğa değil; katalog adı dosya ve seri anahtarından türer.
-        source_name = Path(params.locator.split("?")[0]).name
-        catalog_name = f"{key} — {source_name} (taslak)"
+        catalog_name = f"{key} — {_source_display_name(params.locator)} (taslak)"
         description = (
             f"Kullanıcının getirdiği kaynaktan ({params.locator}) Architect tarafından taslak olarak "
             f"eklendi. Eşleme ve anlam veriden önerildi; ölçüm tipi {semantics.measure_type!r} "
@@ -429,6 +472,7 @@ class IngestFromUrlTool(Tool):
             "eşleme: " + ", ".join(f"{e.field}={e.value!r}" for e in mapping.evidence if e.field in
                                    ("observation_date_column", "date_format", "value_column", "decimal_separator", "entity_id_column")),
             f"anlam: frekans={semantics.frequency} ölçüm={semantics.measure_type} birim={semantics.unit}"
+            + (f" toplama={semantics.default_agg}" if getattr(semantics, "default_agg", None) else "")
             + ("  ⚠ ölçüm tipi kanıtsız, 'unknown' olarak kaydedildi" if semantics.measure_type == "unknown" else ""),
             "kanıt: " + " | ".join(f"{e.field}: {e.reason}" for e in semantics.evidence if e.confidence != "none"),
             *out.provenance_lines(),
