@@ -253,3 +253,29 @@ def test_kayit_istendi_dosya_ekli_arac_cagrilmadan_cevap_geri_gonderilir() -> No
     assert _INGEST_ASK.search(q) and not _INGEST_ASK.search("bist_altin_2023.csv dosyasını kaydet")   # ek yoksa kural yok
     assert _INGEST_ASK.search("https://a.b/rapor.pdf adresini havuza taslak olarak kaydet")
     assert _PROMOTE_ASK.search("x taslağını onaylıyorum, kataloğa al") and not _PROMOTE_ASK.search("onay bekleyen kaç seri var?")
+
+
+def test_terfi_turunda_kanit_paneli_silver_satirlarina_bakar() -> None:
+    card = ("ONAYLANDI: adhoc:bist_altin_csv_v4 — onay\ndurum: taslak → aktif\n"
+            "Silver'a kopyalanan gözlem: 11; provenance (artifact, run, vintage) korundu")
+    record = {"kind": "record", "tool": "promote_draft", "card": card, "series_id": "adhoc:bist_altin_csv_v4",
+              "artifact_sha256": None, "rows_promoted": 11}
+    panel = EvidenceBuilder(SimpleNamespace()).build("kataloğa al", "Seri aktif; 11 gözlem Silver'a kopyalandı.",
+                                                    AnalysisWorkspace(), [], artifacts=[record])
+    assert panel.complete, panel.summary()
+    assert "11 gözlem Silver'a kopyalandı" in panel.summary()
+    kayitsiz = EvidenceBuilder(SimpleNamespace()).build("kataloğa al", "Seri aktif.", AnalysisWorkspace(), [],
+                                                       artifacts=[{**record, "rows_promoted": None}])
+    assert not kayitsiz.chain_ok
+
+
+def test_kayit_turunda_ayni_turdaki_sorgu_tablosu_da_eslesir() -> None:
+    import pandas as pd
+    record = {"kind": "record", "tool": "ingest_from_url", "card": "EKLENDİ: adhoc:x — y\nsatır: 11 eşlendi",
+              "series_id": "adhoc:x", "artifact_sha256": "ab" * 32, "rows_written": 11, "rows_unchanged": 0}
+    ws = AnalysisWorkspace()
+    ws.set_table(pd.DataFrame({"donem": ["2023-01", "2023-11"], "kg": [101144.0, 40240.0]}), description="kayıt sonrası sorgu")
+    panel = EvidenceBuilder(SimpleNamespace()).build("kaydet", "11 satır yazıldı; Ocak 101.144 kg, Kasım 40.240 kg.",
+                                                    ws, [], artifacts=[record])
+    assert all(n.matched for n in panel.numbers), panel.summary()
+    assert panel.record["series_id"] == "adhoc:x"

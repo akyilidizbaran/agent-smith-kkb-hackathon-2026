@@ -190,6 +190,9 @@ class EvidencePanel:
         """Kaynak zinciri: gözlem → artifact → RAW/Bronze dosyası diskte; ya da web sayfası sha256+zaman."""
         gaps = self.chain_gaps
         if self.record is not None:
+            if self.record.get("tool") == "promote_draft":
+                # Terfi: zincir Silver'a kopyalanan satırlarda biter (provenance'ları taslaktan aynen taşınır).
+                return bool(self.record.get("rows_promoted")) and not gaps
             # Kayıt turu: zincir yazılan artifact'ta biter — sha256 kayıtlı ve (bakılabildiyse) meta.artifact'ta bulundu.
             return bool(self.record.get("artifact_sha256")) and self.record.get("artifact_found", True) and not gaps
         chained = [c for c in self.columns if not (c.sql or "").startswith("türetilmiş:")]
@@ -228,7 +231,10 @@ class EvidencePanel:
                      f"kayıt: {rec.get('series_id') or '?'} ({rec.get('tool') or 'kayıt'})"]
             if rec.get("rows_written") is not None:
                 parts.append(f"{rec.get('rows_written')} satır yazıldı, {rec.get('rows_unchanged') or 0} değişmedi")
-            parts.append(f"artifact sha256 {sha[:12]}…" if sha else "artifact kaydı yok")
+            if rec.get("tool") == "promote_draft":
+                parts.append(f"{rec.get('rows_promoted') or 0} gözlem Silver'a kopyalandı (provenance korundu)")
+            else:
+                parts.append(f"artifact sha256 {sha[:12]}…" if sha else "artifact kaydı yok")
             if rec.get("run_id"):
                 parts.append(f"run {str(rec['run_id'])[:8]}")
             if not self.complete:

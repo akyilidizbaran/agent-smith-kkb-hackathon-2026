@@ -1362,14 +1362,19 @@ class AnalyticsAgent:
                 if result.ok and call.name in ("ingest_from_url", "promote_draft"):
                     # Kayıt turu: kanıt paneli tabloya değil yazılan kayda bakar (dosya sha256, run, satır sayısı).
                     ingest_out = result.artifacts.get("ingest")
+                    promotion = result.artifacts.get("promotion") or {}
+                    args_ = call.arguments if isinstance(call.arguments, dict) else {}
+                    m = re.search(r"^(?:EKLENDİ|ONAYLANDI):\s*(\S+)", result.content or "", re.M)
+                    series_id = args_.get("series_id") or (f"adhoc:{args_['series_key']}" if args_.get("series_key") else None) \
+                        or (m.group(1) if m else None)
                     artifacts.append({
                         "kind": "record", "tool": call.name, "card": result.content,
-                        "locator": (call.arguments or {}).get("locator") if isinstance(call.arguments, dict) else None,
-                        "series_id": (call.arguments or {}).get("series_id") if isinstance(call.arguments, dict) else None,
+                        "locator": args_.get("locator"), "series_id": series_id,
                         "artifact_sha256": getattr(ingest_out, "artifact_sha256", None),
                         "run_id": getattr(ingest_out, "run_id", None),
                         "rows_written": getattr(ingest_out, "rows_written", None),
                         "rows_unchanged": getattr(ingest_out, "rows_unchanged", None),
+                        "rows_promoted": promotion.get("rows_promoted"),
                     })
                 if result.ok and result.artifacts.get("fitness"):      # uygunluk kararı + kapsam (V3 §3.9): kanıt paneli ve kapsam beyanı
                     artifacts.append({"kind": "fitness", **result.artifacts["fitness"]})
