@@ -34,6 +34,7 @@ ErrorCode = Literal[
     "VALUE_NOT_FOUND",
     # politika katmanı — izin veriliyor mu
     "UNSAFE_SQL",
+    "SQL_SYNTAX_ERROR",
     "MISSING_PERIOD_FILTER",
     # Aylık pencere sorusunda model sonucu anchor yıllarına indirgedi; çıktı
     # beklenen farklı ay sayısını taşımadığında araç sonucu kabul edilmez.
@@ -70,12 +71,21 @@ ErrorCode = Literal[
     "COLUMN_EXISTS",
     # harness
     "DUPLICATE_CALL",
+    "CATALOG_SEARCH_BUDGET",
+    "WEB_RESEARCH_BUDGET",
+    "WEB_RESEARCH_NEEDS_READ",
+    "WEB_RESEARCH_GAP_REQUIRED",
+    "WEB_RESEARCH_DUPLICATE_QUERY",
     "TOOL_FAILED",
     "SQL_FAILED",
     # erişim katmanı — kaynağa ulaşılabildi mi (ADR-0028)
     "NEEDS_CREDENTIAL",
     "ACCESS_BLOCKED",
     "SOURCE_NOT_FOUND",
+    # erişilebilir içerik var ancak harness'ın güvenli indirme bütçesini aşıyor
+    "CONTENT_TOO_LARGE",
+    # Belgeye erişildi; metin/tablo çıkarımı yapılamadı. Veri yokluğu veya erişim engeli değildir.
+    "DOCUMENT_EXTRACTION_FAILED",
 ]
 
 #: Tekrar denemenin sonucu değiştirmeyeceği hatalar. Bunlar modele "düzelt ve
@@ -95,8 +105,13 @@ NOT_RETRYABLE: frozenset[str] = frozenset({
     "NEEDS_CREDENTIAL",
     "ACCESS_BLOCKED",
     "SOURCE_NOT_FOUND",
+    "CONTENT_TOO_LARGE",  # aynı URL ve aynı bütçe ile tekrar indirmek sınırı değiştirmez
+    "DOCUMENT_EXTRACTION_FAILED",  # aynı baytlar/çıkarıcıyla otomatik retry sonucu değiştirmez
     "GOLD_REFUSED",      # kural katalogda; aynı çağrıyı tekrarlamak kuralı değiştirmez
     "INTENT_REQUIRED",   # kullanıcı söylemedikçe kapı açılmaz; model tekrarlayarak açamaz
+    "WEB_RESEARCH_BUDGET",  # bu turdaki dış araştırma sınırı doldu; yeni çağrı sonucu değiştirmez
+    "CATALOG_SEARCH_BUDGET",  # bu turdaki katalog keşif sınırı doldu; aynı turda yeni arama sonucu değiştirmez
+    "WEB_RESEARCH_DUPLICATE_QUERY",  # aynı arama sorgusu bu turda tekrarlandı
 })
 
 

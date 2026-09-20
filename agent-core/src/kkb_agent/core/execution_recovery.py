@@ -86,6 +86,8 @@ def classify_error(error: ToolError) -> FailureClass:
         return "transient_provider" if error.is_retryable else "other"
     if code == "DUPLICATE_CALL":
         return "loop_guard"
+    if code == "CATALOG_SEARCH_BUDGET":
+        return "loop_guard"
     return "other"
 
 
@@ -141,6 +143,8 @@ class ExecutionState:
     MAX_RECOVERY_ATTEMPTS = 3
     turn_id: int
     question: str
+    catalog_search_budget: int = 5
+    catalog_search_calls: int = 0
     availability_status: AvailabilityStatus = "UNKNOWN"
     failures: list[FailureObservation] = field(default_factory=list)
     recovery_prompts: int = 0
@@ -164,7 +168,10 @@ class ExecutionState:
             self.availability_status = "CONFIRMED_ABSENT"
         elif error.error_code in ACCESS_CODES:
             self.availability_status = "ACCESS_BLOCKED"
-        elif error.error_code in RECOVERABLE_CODES and self.availability_status != "FOUND":
+        elif (
+            error.error_code in {"DUPLICATE_CALL", "CATALOG_SEARCH_BUDGET", *RECOVERABLE_CODES}
+            and self.availability_status != "FOUND"
+        ):
             self.availability_status = "RETRIEVAL_FAILED"
         attempt = len(self.failures) + 1
         observation = FailureObservation(
@@ -218,6 +225,13 @@ class ExecutionState:
     def allow_next_failure_recovery(self) -> None:
         self.pending_recovery = True
 
+    def record_catalog_search(self) -> None:
+        self.catalog_search_calls += 1
+
+    @property
+    def catalog_search_budget_exhausted(self) -> bool:
+        return self.catalog_search_calls >= max(0, self.catalog_search_budget)
+
     def snapshot(self) -> RecoverySnapshot:
         return RecoverySnapshot(
             question=self.question,
@@ -236,6 +250,9 @@ class ExecutionState:
             "tool_error_code": self.failures[-1].error_code if self.failures else None,
             "retryable": self.failures[-1].retryable if self.failures else None,
             "recovery_attempt": len(self.failures),
+            "catalog_search_calls": self.catalog_search_calls,
+            "catalog_search_budget": self.catalog_search_budget,
+            "catalog_search_budget_exhausted": self.catalog_search_budget_exhausted,
             "recovery_action": "replan" if self.failures and status != "FOUND" else "none",
             "same_call_repeated": self.same_call_repeated,
             "availability_status": status,

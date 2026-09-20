@@ -47,7 +47,37 @@ class _Success:
                 finish_reason="stop",
             )],
             usage=None,
+            _request_id="req_test_123",
         )
+
+
+class _StreamSuccess:
+    def __init__(self) -> None:
+        self.chat = self
+        self.completions = self
+        self.kwargs = None
+        self.response = SimpleNamespace(headers={"x-request-id": "req_stream_test"})
+
+    def with_options(self, *, timeout: float):
+        return self
+
+    def create(self, **kwargs):
+        self.kwargs = kwargs
+        usage = SimpleNamespace(prompt_tokens=10, completion_tokens=3, prompt_tokens_details=None)
+        class FakeStream:
+            response = SimpleNamespace(headers={"x-request-id": "req_stream_test"})
+
+            def __iter__(self):
+                return iter([
+            SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="ha"), finish_reason=None)], usage=None),
+            SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="zır"), finish_reason="stop")], usage=None),
+            SimpleNamespace(choices=[], usage=usage),
+                ])
+
+            def close(self):
+                pass
+
+        return FakeStream()
 
 
 def test_provider_retryler_toplam_deadlineyi_asamaz() -> None:
@@ -77,8 +107,29 @@ def test_ilk_planlama_cagrisi_gecici_reasoning_kapatabilir():
     client.set_thinking(True)
     response = client.chat([])
     assert response.content == "hazır"
+    assert response.usage["provider_request_id"] == "req_test_123"
+    assert response.usage["provider_attempts"] == 1
+    assert response.usage["provider_retry_count"] == 0
+    assert client.last_call_metrics["status"] == "ok"
+    assert client.last_call_metrics["first_token_ms"] is None
     assert fake.kwargs["extra_body"]["reasoning_effort"] == "none"
 
     client.set_thinking(None)
     client.chat([])
     assert "extra_body" not in fake.kwargs
+
+
+def test_tool_free_stream_narration_measures_first_token_and_usage():
+    client = OpenAICompatClient("http://example.invalid/v1", "x", "model", timeout=5, max_retries=1)
+    fake = _StreamSuccess()
+    client._client = fake
+
+    response = client.chat_stream([], max_tokens=64)
+
+    assert response.content == "hazır"
+    assert response.usage["first_token_ms"] is not None
+    assert response.usage["prompt"] == 10 and response.usage["completion"] == 3
+    assert response.usage["provider_request_id"] == "req_stream_test"
+    assert fake.kwargs["stream"] is True
+    assert fake.kwargs["stream_options"] == {"include_usage": True}
+    assert client.last_call_metrics["streaming"] is True

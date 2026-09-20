@@ -14,6 +14,7 @@ from kkb_agent.core.registry import ToolRegistry
 from kkb_agent.core.workspace import AnalysisWorkspace
 from kkb_agent.core.workspace_fastpath import (
     execute_verified_workspace_transform,
+    inspect_existing_verified_transform,
     plan_verified_workspace_transform,
 )
 
@@ -157,13 +158,13 @@ def test_compact_explicit_period_conflict_falls_back_from_full_workspace() -> No
     """A compact YYYYMM range is a new scope, so a stale table is unsafe."""
     workspace = _workspace()
     resolution = resolve_follow_up(
-        "Bakiyeleri aylık değişime hazırla ve 202201–202312 aralığında aynı aylık eksene hizala.",
+        "Show the monthly change for the 202303–202402 period.",
         FollowUpContext(
             domain="transport", source="transport", metric="passengers",
             series="transport:passengers", date_range="2021-04–2026-03", frequency="monthly",
         ),
     )
-    assert resolution.explicit.date_range == "2022-01–2023-12"
+    assert resolution.explicit.date_range == "2023-03–2024-02"
     assert "date_range" in resolution.overridden
     assert (
         plan_verified_workspace_transform(
@@ -181,6 +182,7 @@ def test_explicit_month_range_filters_after_full_window_lag() -> None:
     frame = pd.DataFrame(
         {
             "period_end": dates,
+            "ay": dates.strftime("%Y-%m"),
             "need": [float(i) for i in range(len(dates))],
             "card": [float(i * 10) for i in range(len(dates))],
             "bddk_monthly:1536::series_id": ["bddk_monthly:1536"] * len(dates),
@@ -200,7 +202,7 @@ def test_explicit_month_range_filters_after_full_window_lag() -> None:
         ),
     )
     resolution = resolve_follow_up(
-        "Bakiyeleri aylık değişime hazırla ve 202201–202312 aralığında aynı aylık eksene hizala.",
+        "Show monthly changes within 202301–202412 and keep the monthly axis aligned.",
         FollowUpContext(
             domain="finance", source="bddk_monthly", metric="kredi",
             series="bddk_monthly:1536", date_range="2021-04–2026-03", frequency="monthly",
@@ -214,19 +216,98 @@ def test_explicit_month_range_filters_after_full_window_lag() -> None:
     )
 
     assert plan is not None
-    assert plan.group_columns == ()
-    assert plan.period_start == pd.Timestamp("2022-01-01")
-    assert plan.period_end == pd.Timestamp("2023-12-31")
+    assert plan.group_columns == (), "a month label mirroring the date axis is not a panel dimension"
+    assert plan.period_start == pd.Timestamp("2023-01-01")
+    assert plan.period_end == pd.Timestamp("2024-12-31")
     result = execute_verified_workspace_transform(workspace, plan)
 
     assert result is not None
     assert len(result.frame) == 24
-    assert result.frame.iloc[0]["period_end"] == pd.Timestamp("2022-01-31")
-    # December 2021 remains available as the LAG base for January 2022.
+    assert result.frame.iloc[0]["period_end"] == pd.Timestamp("2023-01-31")
+    # December 2022 remains available as the LAG base for January 2023.
     assert result.frame.iloc[0]["need_change"] == approx(1.0)
     assert result.frame.iloc[0]["card_change"] == approx(10.0)
-    assert result.frame.iloc[-1]["period_end"] == pd.Timestamp("2023-12-31")
+    assert result.frame.iloc[-1]["period_end"] == pd.Timestamp("2024-12-31")
     assert len(workspace.table) == 24
+
+
+def test_invalid_generated_transform_is_repaired_and_repeat_reuses_verified_output() -> None:
+    dates = pd.date_range("2021-04-30", "2026-03-31", freq="ME")
+    source = pd.DataFrame(
+        {
+            "observation_date": dates,
+            "ay": dates.strftime("%Y-%m"),
+            "metric_a": [float(i) for i in range(len(dates))],
+            "metric_b": [float(i * 10) for i in range(len(dates))],
+        }
+    )
+    workspace = AnalysisWorkspace()
+    base_provenance = QueryProvenance(
+        sql="SELECT observation_date, metric_a, metric_b FROM verified_fixture",
+        dataset_ids=["finance:metric_a", "finance:metric_b"],
+        sources=["finance"],
+    )
+    workspace.set_table(source, description="verified 60-period source", provenance=base_provenance)
+
+    # Reproduce the persisted failure mode: a unique text month label was
+    # mistakenly used as a partition key, leaving every derived value NULL.
+    broken = source.loc[
+        pd.to_datetime(source["observation_date"]).between("2023-01-01", "2024-12-31")
+    ].copy().reset_index(drop=True)
+    broken["metric_a_change"] = float("nan")
+    broken["metric_b_change"] = float("nan")
+    old_provenance = {
+        "metric_a_change": QueryProvenance(
+            sql='türetilmiş: "metric_a" - LAG("metric_a") OVER (PARTITION BY "ay" ORDER BY "observation_date")',
+            dataset_ids=["finance:metric_a"], sources=["finance"], row_count=len(broken),
+        ),
+        "metric_b_change": QueryProvenance(
+            sql='türetilmiş: "metric_b" - LAG("metric_b") OVER (PARTITION BY "ay" ORDER BY "observation_date")',
+            dataset_ids=["finance:metric_b"], sources=["finance"], row_count=len(broken),
+        ),
+    }
+    workspace.replace_table(
+        broken,
+        description="stale derived view",
+        column_provenance=old_provenance,
+        columns_added=list(old_provenance),
+    )
+
+    class NeverCalledLLM:
+        model = "test"
+
+        def supports_native_tools(self) -> bool:
+            return True
+
+        def chat(self, *args, **kwargs):
+            raise AssertionError("verified local transform and replay must not call the LLM")
+
+    agent = AnalyticsAgent(NeverCalledLLM(), ToolRegistry(), workspace=workspace)
+    agent._follow_up_context = FollowUpContext(
+        domain="finance", metric="metric", date_range="2021-04–2026-03", frequency="monthly"
+    )
+    question = "Show monthly changes within 202301–202412"
+
+    assert inspect_existing_verified_transform(
+        question,
+        _resolution(question, source="finance"),
+        workspace,
+    ) is None, "a generated LAG column full of invalid NULLs must not be certified"
+
+    repaired = agent.ask(question)
+    assert repaired.usage["calls"] == 0
+    assert repaired.steps[0].tool_name == "workspace_compute_column"
+    assert len(workspace.table) == 24
+    assert workspace.table.iloc[0]["metric_a_change"] == approx(1.0)
+    assert workspace.table.iloc[0]["metric_b_change"] == approx(10.0)
+    assert "2023-01" in workspace.title and "2024-12" in workspace.title
+
+    repeated = agent.ask(question)
+    assert repeated.usage["calls"] == 0
+    assert repeated.reused_verified_table
+    assert repeated.steps[0].role == "validate"
+    assert len(workspace.table) == 24
+    assert workspace.table.iloc[1]["metric_a_change"] == approx(1.0)
 
 
 def test_explicit_month_range_follow_up_preserves_active_series_without_llm() -> None:
@@ -259,7 +340,7 @@ def test_explicit_month_range_follow_up_preserves_active_series_without_llm() ->
     )
 
     answer = agent.ask(
-        "Bakiyeleri aylık değişime hazırla ve 202201–202312 aralığında aynı aylık eksene hizala."
+        "Compute changes for 202301–202412 and align monthly dates."
     )
 
     assert answer.usage["calls"] == 0

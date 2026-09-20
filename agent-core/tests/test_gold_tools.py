@@ -320,3 +320,14 @@ def test_parse_period_ve_workspace_view() -> None:
         parse_period("Q1", end=False)
     view = workspace_view(document_to_frame(ALIGN_DOC))
     assert "run_id_list" not in view.columns and "source_observation_dates" in view.columns
+
+
+def test_workspace_view_json_tarihlerini_gercek_tarih_tipine_dondurur() -> None:
+    frame = pd.DataFrame({
+        "period_start": ["2024-01-01", "2024-02-01"],
+        "period_end": ["2024-01-31", "2024-02-29"],
+        "value": [10.0, 12.0],
+    })
+    view = workspace_view(frame)
+    assert view["period_end"].iloc[0] == date(2024, 1, 31)
+    assert all(isinstance(value, date) for value in view["period_end"])

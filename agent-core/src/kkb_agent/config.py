@@ -78,6 +78,7 @@ class Settings:
     llm_narrate_max_tokens: int = 2800
     llm_long_narrate_max_tokens: int = 3400
     llm_recovery_max_tokens: int = 1400
+    llm_stream_narration: bool = False
 
     @property
     def provider_label(self) -> str:
@@ -129,7 +130,7 @@ def load_settings() -> Settings:
         llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "4000")),
         # Anlatı tüm retry'larla birlikte kısa bir üst sınıra bağlıdır; veri
         # aracıyla kurulmuş doğrulanmış tablo bu süreden etkilenmez.
-        llm_narration_timeout_s=float(os.getenv("LLM_NARRATION_TIMEOUT_S", "30")),
+        llm_narration_timeout_s=float(os.getenv("LLM_NARRATION_TIMEOUT_S", "60")),
         # Tool-selection calls share one bounded deadline across provider retries.
         llm_tool_timeout_s=float(os.getenv("LLM_TOOL_TIMEOUT_S", "90")),
         # Demo'da uzun çok-adımlı sorguların istemci tarafından erken kesilmemesi
@@ -141,4 +142,6 @@ def load_settings() -> Settings:
         llm_narrate_max_tokens=int(os.getenv("LLM_NARRATE_MAX_TOKENS", "2800")),
         llm_long_narrate_max_tokens=int(os.getenv("LLM_LONG_NARRATE_MAX_TOKENS", "3400")),
         llm_recovery_max_tokens=int(os.getenv("LLM_RECOVERY_MAX_TOKENS", "1400")),
+        # Streaming is opt-in until each OpenAI-compatible endpoint passes a canary.
+        llm_stream_narration=os.getenv("LLM_STREAM_NARRATION", "false").lower() == "true",
     )

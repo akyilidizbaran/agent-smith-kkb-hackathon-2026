@@ -90,7 +90,7 @@ class AnalysisWorkspace:
         return list(reversed(self._peeks))
 
     def remember_web(self, artifact: dict[str, object]) -> None:
-        """web_url'in ziyaret ettiği sayfalar (sha256 + zaman) sonraki turların kanıt paneli için."""
+        """Okunan sayfa ve seçilmiş tablo metadatasını sonraki turların kanıt paneli için sakla."""
         for v in artifact.get("visited", []) or []:
             url = v.get("url") if isinstance(v, dict) else None
             if url:
@@ -317,6 +317,11 @@ class AnalysisWorkspace:
         provenance: QueryProvenance | None,
         columns_added: list[str] | None = None,
     ) -> None:
+        # The active result title follows the current workspace state. Keeping
+        # the initial retrieval title after a filter/transform made the UI
+        # describe a 60-period source while exporting a 24-period derived view.
+        if description:
+            self.title = description
         self._history.append(
             WorkspaceStep(
                 order=len(self._history) + 1,

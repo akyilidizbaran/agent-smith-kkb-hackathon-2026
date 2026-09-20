@@ -38,6 +38,12 @@ class ToolRegistry:
         self.approvals = ApprovalBook()
         # Kullanıcının istediği bir aramanın döndürdüğü adresler; web_url için onaylı sayılır.
         self.sanctioned_locators: set[str] = set()
+        # Turn-scoped policy produced only by the harness after authoritative absence.
+        # WebSearchTool clamps model arguments to this plan; it resets on each turn.
+        self.public_web_fallback_plan: dict[str, Any] | None = None
+        self.public_web_fallback_consumed = False
+        from .web_research import WebResearchState
+        self.web_research = WebResearchState()
 
     def register(self, tool: Tool) -> None:
         if tool.name in self._tools:
@@ -97,6 +103,10 @@ class ToolRegistry:
 
     def begin_turn(self, turn_id: int) -> None:
         """Notify registered tools that a fresh user turn has started."""
+        self.public_web_fallback_plan = None
+        self.public_web_fallback_consumed = False
+        from .web_research import WebResearchState
+        self.web_research = WebResearchState()
         for tool in self._tools.values():
             tool.begin_turn(turn_id)
 

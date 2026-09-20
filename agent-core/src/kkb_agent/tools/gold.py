@@ -129,6 +129,18 @@ def workspace_view(frame: pd.DataFrame) -> pd.DataFrame:
     """
     keep = [c for c in frame.columns if _base(str(c)) not in _DROP_FROM_WORKSPACE]
     view = frame[keep].copy()
+    # Gold CLI/JSON boundaries may serialize canonical dates as ISO strings.
+    # Restore true date objects before the result becomes an active workspace:
+    # downstream date arithmetic and DuckDB window tools must not see a VARCHAR
+    # time axis merely because the transport format was textual.
+    for column in ("period_start", "period_end"):
+        if column not in view.columns:
+            continue
+        present = view[column].notna()
+        parsed = pd.to_datetime(view[column], errors="coerce")
+        if int(present.sum()) == int(parsed.notna().sum()):
+            dates = parsed.dt.date.astype(object)
+            view[column] = dates.where(parsed.notna(), None)
     if "entity_id" in view.columns and view["entity_id"].isna().all():
         view = view.drop(columns=["entity_id"])
     return view.reset_index(drop=True)

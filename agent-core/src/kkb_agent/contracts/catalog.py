@@ -203,6 +203,7 @@ class DatasetSpec(BaseModel):
             f"Açıklama: {self.description}",
             f"Kaynak: {self.source}"
             + (f" ({self.source_detail})" if self.source_detail else ""),
+            *( [f"Semantik güven: {self.semantic_confidence}"] if self.semantic_confidence else [] ),
             f"Frekans: {self.frequency.value} | Dönem kolonu: {self.time_column}",
             f"Kapsam: {self.coverage.start} → {self.coverage.end}"
             + (f" ({self.coverage.row_count} satır)" if self.coverage.row_count else ""),

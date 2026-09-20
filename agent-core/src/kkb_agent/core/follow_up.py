@@ -32,7 +32,7 @@ _YEAR = re.compile(
     r"yılı|yili|den|dan|ten|tan|de|da|te|ta))?\b",
     re.IGNORECASE,
 )
-# Compact month ranges (for example ``202201–202312``) are an explicit
+# Compact month ranges (for example ``YYYYMM–YYYYMM``) are an explicit
 # current-turn scope.  They must override a previous workspace's date range;
 # otherwise the verified-workspace fast path would reuse the stale table.
 _COMPACT_MONTH_RANGE = re.compile(
@@ -122,6 +122,14 @@ _GENERIC_SERIES_TERMS = frozenset({
     "yil", "yillik", "yearly", "donem", "tarih", "date", "veri", "veriler", "seri", "seriler",
     "degisim", "degisimleri", "bakiye", "bakiyeler", "analiz", "tablo", "tablolar",
 })
+_ACTIVE_TABLE_REFERENCE = re.compile(
+    r"\b(?:mevcut|aktif|önceki|onceki|bu)\s+(?:(?:aktif|analiz)\s+)?tablo(?:ya|yu|daki|dan|nun|da|de)?\b",
+    re.IGNORECASE,
+)
+_TABLE_COMPOSITION = re.compile(
+    r"ekle|kat|birleştir|birlestir|eşleştir|eslestir|join|hizala|yan yana|append|merge",
+    re.IGNORECASE,
+)
 
 
 def _specific_series_term(value: object) -> bool:
@@ -513,4 +521,21 @@ def resolve_follow_up(
     )
 
 
-__all__ = ["CONTEXT_FIELDS", "FollowUpContext", "FollowUpResolution", "resolve_follow_up"]
+def is_active_table_composition(question: str, resolution: FollowUpResolution | None) -> bool:
+    """Whether an explicit request composes a new semantic target with this table.
+
+    This does not authorize answering from the old table alone. The agent uses
+    the old table as a provenance-backed anchor while it retrieves and joins
+    the explicitly named additional target.
+    """
+    if resolution is None or resolution.clarification_required:
+        return False
+    if not _ACTIVE_TABLE_REFERENCE.search(question or "") or not _TABLE_COMPOSITION.search(question or ""):
+        return False
+    explicit = resolution.explicit
+    new_target_fields = ("source", "metric", "series", "entity", "geography")
+    return any(explicit.non_empty(field) for field in new_target_fields)
+
+
+__all__ = ["CONTEXT_FIELDS", "FollowUpContext", "FollowUpResolution", "is_active_table_composition",
+           "resolve_follow_up"]

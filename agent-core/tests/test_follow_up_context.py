@@ -14,8 +14,9 @@ from pydantic import BaseModel
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from kkb_agent.contracts.lakehouse import QueryProvenance
-from kkb_agent.core.agent import AnalyticsAgent
-from kkb_agent.core.follow_up import FollowUpContext, _extract, resolve_follow_up
+from kkb_agent.core.agent import AnalyticsAgent, _web_outage_summary
+from kkb_agent.core.evidence import EvidenceBuilder
+from kkb_agent.core.follow_up import FollowUpContext, _extract, is_active_table_composition, resolve_follow_up
 from kkb_agent.core.registry import ToolRegistry
 from kkb_agent.core.tool import Tool, ToolResult
 from kkb_agent.core.workspace import AnalysisWorkspace
@@ -217,11 +218,11 @@ def test_explicit_month_window_is_not_implicitly_a_comparison() -> None:
         series="bddk_monthly:1536_Toplam", date_range="2021-04–2026-03", frequency="monthly",
     )
     result = resolve_follow_up(
-        "Verileri 202201–202312 döneminde aylık bazda hizala.", previous
+        "Verileri 202301–202412 döneminde aylık bazda hizala.", previous
     )
 
     assert result.is_follow_up
-    assert result.context.date_range == "2022-01–2023-12"
+    assert result.context.date_range == "2023-01–2024-12"
     assert result.context.comparison_target == ()
 
 
@@ -313,6 +314,50 @@ def test_time_aliases_do_not_bind_follow_up_to_first_catalog_series() -> None:
     assert "series" not in resolved.overridden
 
 
+def test_aktif_tabloya_yeni_kaynak_ekleme_composition_olarak_siniflanir() -> None:
+    previous = FollowUpContext(
+        domain="finance", source="BDDK Aylık Bülten", metric="ihtiyaç kredisi",
+        series="bddk_monthly:1536_Toplam", date_range="2022-01–2023-12", frequency="monthly",
+    )
+    catalog = [SimpleNamespace(
+        dataset_id="evds:TP.TUFE", name="Tüketici Fiyat Endeksi", source="TCMB EVDS",
+        tags=["TÜFE", "enflasyon"], columns=[],
+    )]
+    question = "Mevcut tabloya TCMB EVDS TÜFE serisini ekle ve dönem bazında birleştir."
+    resolution = resolve_follow_up(question, previous, catalog=catalog)
+
+    assert is_active_table_composition(question, resolution)
+    assert not is_active_table_composition("2024 TÜFE verilerini getir", resolution)
+    assert not is_active_table_composition("Mevcut tabloyu göster", resolution)
+
+
+def test_composition_context_provenance_kimliklerini_prompta_tasir() -> None:
+    workspace = AnalysisWorkspace()
+    workspace.set_table(
+        pd.DataFrame({"donem": [date(2024, 1, 31)], "bakiye": [10.0]}),
+        description="Doğrulanmış BDDK tablosu",
+        provenance=QueryProvenance(sql="SELECT ...", dataset_ids=["bddk_monthly:1536_Toplam"], sources=["BDDK"]),
+    )
+    agent = AnalyticsAgent(_ScriptedLLM([]), ToolRegistry(), workspace=workspace)
+    question = "Mevcut tabloya TCMB EVDS TÜFE serisini ekle ve birleştir."
+    catalog = [SimpleNamespace(
+        dataset_id="evds:TP.TUFE", name="Tüketici Fiyat Endeksi", source="TCMB EVDS",
+        tags=["TÜFE", "enflasyon"], columns=[],
+    )]
+    agent._follow_up_resolution = resolve_follow_up(question, FollowUpContext(
+        domain="finance", source="BDDK", metric="ihtiyaç kredisi", series="bddk_monthly:1536_Toplam",
+    ), catalog=catalog)
+    agent._active_table_reuse_allowed = False
+    agent._active_table_composition_allowed = True
+    agent._attach_active_series_identities()
+
+    messages = agent._build_messages(question)
+
+    assert "AKTİF TABLO BİRLEŞTİRME ÇAPASI" in messages[0].content
+    assert "bddk_monthly:1536_Toplam" in messages[0].content
+    assert "tek başına yeni isteğin cevabı değildir" in messages[0].content
+
+
 def _agent(llm: _ScriptedLLM, *, fail_after: int | None = None) -> tuple[AnalyticsAgent, _QueryTool]:
     tool = _QueryTool(fail_after=fail_after)
     registry = ToolRegistry()
@@ -360,8 +405,14 @@ def test_narration_timeout_commits_verified_context_for_monthly_follow_up() -> N
     assert first.availability_status == "FOUND"
     assert "Doğrulanmış tablo" in first.text
     assert "Model servisine şu an ulaşılamıyor" not in first.text
+    assert "Yerel otomatik veri özeti (LLM yorumu değildir)" in first.text
+    assert "60 satır, 3 sütun" in first.text
+    assert "need" in first.text and "min 0" in first.text and "max 59" in first.text
+    assert "card" in first.text and "min 0" in first.text and "max 590" in first.text
     assert first.usage["failed_llm_calls"] == 1
     assert first.usage["failed_llm_call_ms"] >= first.steps[-1].duration_ms
+    assert first.usage["llm_call_ms"] >= first.usage["failed_llm_call_ms"]
+    assert first.steps[-1].llm_duration_ms == first.steps[-1].duration_ms
     payload = answer_to_dict(
         first,
         agent,
@@ -371,7 +422,7 @@ def test_narration_timeout_commits_verified_context_for_monthly_follow_up() -> N
     assert agent.follow_up_context.series == "bddk_monthly:1536_Toplam"
     assert agent.follow_up_resolution is not None and agent.follow_up_resolution.committed
 
-    second = agent.ask("Bakiyeleri aylık değişime hazırla ve 202201–202312 aralığında aynı aylık eksene hizala.")
+    second = agent.ask("Aylık değişimleri 202301–202412 dönemine hizala.")
 
     assert second.usage["calls"] == 0, "takip deterministik fast path ile tamamlanmalı"
     assert tool.calls == 1, "takip yeni katalog/sorgu çağrısı yapmamalı"
@@ -379,6 +430,141 @@ def test_narration_timeout_commits_verified_context_for_monthly_follow_up() -> N
     assert len(workspace.table) == 24
     assert workspace.table.iloc[0]["need_change"] == 1
     assert workspace.table.iloc[0]["card_change"] == 10
+
+
+def test_web_narration_timeout_keeps_sources_and_does_not_attach_stale_table() -> None:
+    class _WebParams(BaseModel):
+        url: str
+        purpose: str
+
+    class _WebReadTool(Tool):
+        name = "web_url"
+        description = "web sayfası oku"
+        Params = _WebParams
+
+        def run(self, params: _WebParams) -> ToolResult:
+            return ToolResult(
+                content="Sayfa açıldı; içerik tablosu yok.",
+                artifacts={"web": {
+                    "start_url": params.url,
+                    "used": None,
+                    "table_loaded": False,
+                    "visited": [{
+                        "url": params.url,
+                        "status": 200,
+                        "sha256": "a" * 64,
+                        "fetched_at": "2026-09-20T10:00:00+00:00",
+                        "title": "Duyurular",
+                    }],
+                    "blocked": [],
+                    "skipped": [],
+                    "limit_exceeded": [],
+                }},
+            )
+
+    class _ReadThenTimeoutLLM:
+        model = "web-timeout"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def supports_native_tools(self) -> bool:
+            return True
+
+        def chat(self, *_args, **_kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return LLMResponse(content="", tool_calls=[ToolCall(
+                    id="read-1",
+                    name="web_url",
+                    arguments={"url": "https://example.test/news", "purpose": "duyuruları incele"},
+                )])
+            raise RuntimeError("LLM 1 denemede yanıt vermedi: Request timed out.")
+
+    workspace = AnalysisWorkspace()
+    workspace.set_table(pd.DataFrame({"eski_soru_degeri": [987654321]}), description="önceki tur")
+    registry = ToolRegistry()
+    registry.register(_WebReadTool())
+    agent = AnalyticsAgent(
+        _ReadThenTimeoutLLM(), registry, workspace=workspace,
+        evidence=EvidenceBuilder(None), max_steps=4,
+    )
+    session = Session(lambda: agent)
+
+    payload = session.ask("TERA Holding duyurularını şu sayfadan incele: https://example.test/news")
+
+    assert "dış kaynak sayfaları okundu" in payload["text"]
+    assert "doğrulanmış bir içerik özeti veya sayı sunmuyorum" in payload["text"]
+    assert "987654321" not in payload["text"]
+    assert payload["availability_status"] == "UNKNOWN"
+    assert payload["table"] is None, "önceki tur tablosu yeni web yanıtına sızmamalı"
+    assert payload["evidence"]["table_rows"] == 0
+    assert payload["evidence"]["web_reads"][0]["url"] == "https://example.test/news"
+    assert "sentezlenmedi" in payload["evidence"]["gaps"][-1]
+
+
+def test_web_outage_summary_distinguishes_search_candidates_from_read_sources() -> None:
+    search_only = [{
+        "kind": "web_search",
+        "hits": ["https://example.test/report"],
+        "results": [{"url": "https://example.test/report", "title": "Rapor"}],
+    }]
+    text = _web_outage_summary(search_only)
+    assert text is not None and "Arama parçacıkları" in text
+    assert "sayfa açıldı" not in text
+    assert _web_outage_summary([]) is None
+
+
+def test_search_only_timeout_preserves_candidates_as_context_not_data() -> None:
+    class _SearchParams(BaseModel):
+        query: str
+
+    class _SearchTool(Tool):
+        name = "web_search"
+        description = "web araması"
+        Params = _SearchParams
+
+        def run(self, params: _SearchParams) -> ToolResult:
+            return ToolResult(
+                content="Bir arama adayı bulundu.",
+                artifacts={"web_search": {
+                    "query": params.query,
+                    "hits": ["https://example.test/report"],
+                    "results": [{"url": "https://example.test/report", "title": "Ekonomik görünüm"}],
+                }},
+            )
+
+    class _SearchThenTimeoutLLM:
+        model = "search-timeout"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def supports_native_tools(self) -> bool:
+            return True
+
+        def chat(self, *_args, **_kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return LLMResponse(content="", tool_calls=[ToolCall(
+                    id="search-1", name="web_search", arguments={"query": "ekonomik görünüm"},
+                )])
+            raise RuntimeError("LLM 1 denemede yanıt vermedi: Request timed out.")
+
+    workspace = AnalysisWorkspace()
+    registry = ToolRegistry()
+    registry.register(_SearchTool())
+    agent = AnalyticsAgent(
+        _SearchThenTimeoutLLM(), registry, workspace=workspace,
+        evidence=EvidenceBuilder(None), max_steps=4,
+    )
+
+    payload = Session(lambda: agent).ask("İnternetten ekonomik görünümü araştır ve özetle.")
+
+    assert "Arama parçacıkları veri kanıtı sayılmadığından" in payload["text"]
+    assert payload["table"] is None
+    assert payload["evidence"]["context_sources"][0]["url"] == "https://example.test/report"
+    assert payload["evidence"]["web_reads"] == []
 
 
 def test_direct_table_request_finishes_after_verified_data_without_narration() -> None:
@@ -397,6 +583,9 @@ def test_direct_table_request_finishes_after_verified_data_without_narration() -
 
     assert llm.calls == 1, "başarılı tablo sonrasında anlatı/örnekleme için ikinci LLM turu olmamalı"
     assert tool.calls == 1
+    assert answer.steps[0].llm_duration_ms > 0
+    assert answer.steps[0].tool_duration_ms >= 0
+    assert answer.usage["llm_call_ms"] >= answer.steps[0].llm_duration_ms
     assert answer.availability_status == "FOUND"
     assert len(answer.workspace.table) == 60
     assert answer.steps[-1].role == "narrate"

@@ -24,7 +24,7 @@ _MONTH_PAIR = re.compile(
     re.IGNORECASE,
 )
 # Compact month ranges are common in catalog requests and UI copy
-# (``202201–202312``).  Keep this separate from ``_MONTH_PAIR`` so a six-digit
+# (``YYYYMM–YYYYMM``).  Keep this separate from ``_MONTH_PAIR`` so a six-digit
 # token can never be mistaken for a bare year.
 _COMPACT_MONTH_PAIR = re.compile(
     r"\b(19\d{2}|20\d{2})(0[1-9]|1[0-2])\s*"

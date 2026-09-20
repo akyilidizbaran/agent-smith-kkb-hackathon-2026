@@ -64,6 +64,10 @@ class LakehouseError(Exception):
     kendini onarabilmeli (SQL'i düzeltip yeniden denemeli)."""
 
 
+class SQLSyntaxError(LakehouseError):
+    """SQL parser hatası; güvenlik/politika reddinden ayrı olarak düzeltilebilir."""
+
+
 class GoldRefused(LakehouseError):
     """Gold katmanı dönüşümü SEBEBİYLE reddetti; bu bir hata değil, bir karar.
 

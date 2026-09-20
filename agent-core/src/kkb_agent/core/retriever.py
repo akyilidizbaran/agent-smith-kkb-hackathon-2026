@@ -15,15 +15,23 @@ eşikleri); eşikler `scripts/retrieval_golden.py` ile ölçülerek konur, sezgi
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import re
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 
 import numpy as np
-import re
-from typing import Iterable, Sequence
 
 from ..contracts.retrieval import Candidate, Embedder, reciprocal_rank_fusion
-from .facets import Facets, extract_facets, frequency_rank, province_of, source_matches
-from .lexical import Bm25Index, candidate_text, tokenize
+from ..source_hints import load_source_hints
+from .facets import (
+    FREQUENCY_WORDS,
+    Facets,
+    extract_facets,
+    frequency_rank,
+    province_of,
+    source_matches,
+)
+from .lexical import Bm25Index, candidate_text, fold, tokenize
 
 MODES = ("auto", "preload_all", "bm25", "hybrid")
 DEFAULT_SMALL_MAX = 60        # bu sayıya kadar katalog kart olarak sığar (≈ 6.000 token bütçesi)
@@ -36,6 +44,20 @@ _BREAKDOWN_INTENT = re.compile(
     r"taksitli|taksitsiz|ayrıştır|ayristir)\b",
     re.IGNORECASE,
 )
+_MEASURE_INTENTS = (
+    ("stock", re.compile(r"\b(?:stok\w*|bakiy\w*|balance|outstanding)\b|\bdonem\s+son\w*|\bay\s+son\w*|\byil\s+son\w*")),
+    ("flow", re.compile(r"\b(?:akim\w*|flow|kullandirim\w*|harcama\w*|ciro\w*|donem\s+ici)\b")),
+    ("rate", re.compile(r"\b(?:faiz\w*|interest\s+rate|yield|getiri\w*)\b")),
+    ("ratio", re.compile(r"(?:%|\b(?:rasyo\w*|ratio|oran\w*|yuzde\w*|payda)\b)")),
+    ("index", re.compile(r"\b(?:endeks\w*|index)\b")),
+    ("count", re.compile(r"\b(?:adet\w*|sayi\w*|count)\b")),
+)
+_CHANGE_INTENT = re.compile(r"\b(?:degisim\w*|fark\w*|artis\w*|azalis\w*|growth|change|return)\b")
+_RANKING_CONTEXT_TERMS = frozenset({
+    "veri", "veriler", "dataset", "data", "seri", "seriler", "tablo", "tablosu", "kaynak",
+    "bulten", "getir", "getirin", "listele", "goster", "gosterin", "bul", "find", "show",
+    "ulusal", "national", "turkiye", "turkey", "turkish", "sektor", "genel", "geneli",
+})
 
 
 @dataclass(frozen=True)
@@ -56,6 +78,9 @@ class CatalogRecord:
     additivity: str = "unknown"
     relation_confidence: str | None = None
     relation_source: str | None = None
+    semantic_confidence: str | None = None
+    measure_type: str | None = None
+    measure_types: tuple[str, ...] = ()
 
     @property
     def text(self) -> str:
@@ -66,6 +91,11 @@ class CatalogRecord:
 def record_from_spec(spec) -> CatalogRecord:
     aliases = tuple(a for c in spec.columns for a in c.aliases)
     freq = getattr(spec.frequency, "value", spec.frequency)
+    measure_types = tuple(sorted({
+        str(getattr(column.semantic_type, "value", column.semantic_type))
+        for column in spec.measures()
+        if getattr(column, "semantic_type", None)
+    }))
     return CatalogRecord(id=spec.dataset_id, name=spec.name, description=spec.description, aliases=aliases,
                          tags=tuple(spec.tags), frequency=str(freq) if freq else None, source=spec.source,
                          province=province_of(f"{spec.dataset_id} {spec.name}"),
@@ -75,7 +105,55 @@ def record_from_spec(spec) -> CatalogRecord:
                          dimension_path=tuple(getattr(spec, "dimension_path", ()) or ()),
                          additivity=getattr(spec, "additivity", "unknown"),
                          relation_confidence=getattr(spec, "relation_confidence", None),
-                         relation_source=getattr(spec, "relation_source", None))
+                         relation_source=getattr(spec, "relation_source", None),
+                         semantic_confidence=getattr(spec, "semantic_confidence", None),
+                         measure_type=getattr(spec, "measure_type", None) or (measure_types[0] if len(measure_types) == 1 else None),
+                         measure_types=measure_types)
+
+
+def _query_measure_intents(query: str) -> frozenset[str]:
+    """Return only explicit measurement semantics, never infer from a metric name."""
+    folded = fold(query)
+    found = {kind for kind, pattern in _MEASURE_INTENTS if pattern.search(folded)}
+    # A percent/fraction produced by a requested change calculation describes
+    # the output, not necessarily the source series' measurement type.
+    if "ratio" in found and _CHANGE_INTENT.search(folded):
+        found.remove("ratio")
+    # In Turkish, "faiz oranı" is a rate, not a generic ratio.
+    if "rate" in found:
+        found.discard("ratio")
+    return frozenset(found)
+
+
+def _query_topic_terms(query: str, facets: Facets) -> tuple[str, ...]:
+    """Remove retrieval context (source, frequency, geography, request verbs).
+
+    What remains are the terms that distinguish one requested concept from
+    another. Their order is retained so exact name/alias coverage is stable.
+    """
+    ignored = set(_RANKING_CONTEXT_TERMS)
+    ignored.update(token for values in FREQUENCY_WORDS.values() for phrase in values
+                   for token in tokenize(phrase, prefixes=False))
+    for source, words in load_source_hints().get("source_words", {}).items():
+        ignored.update(tokenize(source, prefixes=False))
+        ignored.update(token for phrase in words for token in tokenize(phrase, prefixes=False))
+    ignored.update(token for province in facets.provinces for token in tokenize(province, prefixes=False))
+    if facets.national:
+        ignored.update({"ulusal", "national", "turkiye", "turkey", "genel", "geneli", "sektor"})
+
+    terms: list[str] = []
+    for token in tokenize(query, prefixes=False):
+        if token.isdigit() or token in ignored or token in terms:
+            continue
+        terms.append(token)
+    return tuple(terms)
+
+
+def _measure_types(record: CatalogRecord | None) -> tuple[str, ...]:
+    if record is None:
+        return ()
+    values = record.measure_types or ((record.measure_type,) if record.measure_type else ())
+    return tuple(sorted({str(getattr(value, "value", value)).casefold() for value in values if value}))
 
 
 @dataclass
@@ -296,6 +374,85 @@ class CatalogRetriever:
                         )
         return sorted(output.values(), key=lambda value: (-value.score, value.id))
 
+    def _semantic_tie_break(self, query: str, ranked: Sequence[Candidate], facets: Facets) -> list[Candidate]:
+        """Refine only close lexical cohorts with explicit semantic evidence.
+
+        BM25 can over-rank shared source/frequency words over the requested
+        concept. Inside a 15% score cohort, explicit measure intent and direct
+        name/alias coverage resolve that ambiguity. Verification is used only
+        for candidates with the same matched concept terms and measure type.
+        """
+        if len(ranked) < 2:
+            return list(ranked)
+        topic_terms = _query_topic_terms(query, facets)
+        measure_intents = _query_measure_intents(query)
+        output: list[Candidate] = []
+        cursor = 0
+        while cursor < len(ranked):
+            leader = ranked[cursor]
+            floor = leader.score * 0.85
+            cohort = [leader]
+            cursor += 1
+            while cursor < len(ranked) and ranked[cursor].score >= floor:
+                cohort.append(ranked[cursor])
+                cursor += 1
+            if len(cohort) > 1:
+                decorated: list[tuple[Candidate, tuple[int, tuple[int, ...]], tuple[str, ...]]] = []
+                for candidate in cohort:
+                    record = self._by_id.get(candidate.id)
+                    candidate_types = _measure_types(record)
+                    if not measure_intents or (candidate_types and measure_intents.intersection(candidate_types)):
+                        intent_rank = 0
+                    elif candidate_types:
+                        intent_rank = 2
+                    else:
+                        intent_rank = 1
+                    name_tokens = set(tokenize(
+                        " ".join((record.name, *record.aliases)) if record else candidate.text,
+                        prefixes=False,
+                    ))
+                    topic_signature = tuple(int(term in name_tokens) for term in topic_terms)
+                    decorated.append((candidate, (intent_rank, topic_signature), candidate_types))
+
+                # Stable sort keeps BM25 order when explicit semantic evidence
+                # is equal. The booleans use descending order for term coverage.
+                decorated.sort(key=lambda item: (item[1][0], tuple(-hit for hit in item[1][1])))
+
+                # Verification only breaks ties between the same topic match
+                # and measurement kind; it cannot promote an unrelated series.
+                start = 0
+                while start < len(decorated):
+                    end = start + 1
+                    group_key = (decorated[start][1], decorated[start][2])
+                    while end < len(decorated) and (decorated[end][1], decorated[end][2]) == group_key:
+                        end += 1
+                    same_semantics = decorated[start:end]
+                    if any(group_key[0][1]):
+                        same_semantics.sort(key=lambda item: (
+                            0 if getattr(self._by_id.get(item[0].id), "semantic_confidence", None) == "verified" else 1
+                        ))
+                    decorated[start:end] = same_semantics
+                    start = end
+                output.extend(item[0] for item in decorated)
+            else:
+                output.extend(cohort)
+        return output
+
+    def _with_semantic_metadata(self, candidates: Sequence[Candidate]) -> list[Candidate]:
+        out: list[Candidate] = []
+        for candidate in candidates:
+            record = self._by_id.get(candidate.id)
+            meta = dict(candidate.meta)
+            if record is not None:
+                if record.semantic_confidence:
+                    meta["semantic_confidence"] = record.semantic_confidence
+                if record.measure_type:
+                    meta["measure_type"] = record.measure_type
+                if record.measure_types:
+                    meta["measure_types"] = record.measure_types
+            out.append(Candidate(candidate.id, candidate.text, candidate.score, candidate.source, meta))
+        return out
+
     # ---------- arama ----------
     def search(self, query: str, *, k: int = 8, mode: str | None = None, use_facets: bool = True,
                query_vector: Sequence[float] | None = None) -> list[Candidate]:
@@ -350,11 +507,22 @@ class CatalogRetriever:
         else:
             ranked = list(lexical)
         ranked = self._relation_adjust(query, ranked)
+        ranked = self._with_semantic_metadata(ranked)
+        ranked = self._semantic_tie_break(query, ranked, facets)
         return apply_facets(self.records, ranked, facets, k=k)
 
     def __len__(self) -> int:
         return len(self.records)
 
 
-__all__ = ["CANDIDATE_MULTIPLIER", "CatalogRecord", "CatalogRetriever", "DEFAULT_HYBRID_MIN", "DEFAULT_SMALL_MAX",
-           "MODES", "RetrievalPolicy", "apply_facets", "record_from_spec"]
+__all__ = [
+    "CANDIDATE_MULTIPLIER",
+    "DEFAULT_HYBRID_MIN",
+    "DEFAULT_SMALL_MAX",
+    "MODES",
+    "CatalogRecord",
+    "CatalogRetriever",
+    "RetrievalPolicy",
+    "apply_facets",
+    "record_from_spec",
+]

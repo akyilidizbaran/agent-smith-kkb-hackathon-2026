@@ -18,13 +18,13 @@ from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from kkb_agent.core.agent import AnalyticsAgent  # noqa: E402
+from kkb_agent.core.agent import AnalyticsAgent, NARRATION_PROMPT  # noqa: E402
 from kkb_agent.core.follow_up import FollowUpContext  # noqa: E402
 from kkb_agent.core.registry import ToolRegistry  # noqa: E402
 from kkb_agent.core import tool_gate  # noqa: E402
 from kkb_agent.core.tool import Tool, ToolResult  # noqa: E402
 from kkb_agent.core.workspace import AnalysisWorkspace  # noqa: E402
-from kkb_agent.llm.base import ChatMessage, LLMResponse, ToolCall  # noqa: E402
+from kkb_agent.llm.base import LLMResponse, ToolCall  # noqa: E402
 
 
 class _Params(BaseModel):
@@ -58,6 +58,8 @@ class _ScriptedLLM:
         self._turns = turns
         self.seen_tool_offers: list[bool] = []
         self.seen_tool_counts: list[int] = []
+        self.seen_system_prompts: list[str] = []
+        self.seen_user_messages: list[str] = []
 
     def supports_native_tools(self) -> bool:
         return True
@@ -65,6 +67,8 @@ class _ScriptedLLM:
     def chat(self, messages, *, tools=None, temperature=0.0, max_tokens=None) -> LLMResponse:
         self.seen_tool_offers.append(tools is not None)
         self.seen_tool_counts.append(len(tools or []))
+        self.seen_system_prompts.append(messages[0].content if messages else "")
+        self.seen_user_messages.append(next((m.content for m in reversed(messages) if m.role == "user"), ""))
         turn = self._turns[min(len(self.seen_tool_offers) - 1, len(self._turns) - 1)]
         return turn
 
@@ -197,6 +201,72 @@ def test_anlatidaki_uydurma_sayi_bir_kez_geri_gonderilir() -> None:
     assert answer.text.startswith("Bakiye 100")
     assert answer.grounding == "OK"
     assert any(s.thought and s.thought.startswith("grounding: MISS") for s in answer.steps)
+
+
+def test_narration_fazinda_operasyon_promptu_kisa_cevap_promptuyla_degistirilir() -> None:
+    agent, llm = _grounding_agent([
+        LLMResponse(content="", tool_calls=[_call(1)]),
+        LLMResponse(content="2025 yılında bakiye 100 milyon TL idi."),
+    ])
+
+    answer = agent.ask("2025 yılındaki bakiyeyi açıkla.")
+
+    assert answer.text
+    assert "İlk turda yalnızca doğru veri yolunu keşfet" in llm.seen_system_prompts[0]
+    assert "YANIT AŞAMASI" in llm.seen_system_prompts[1]
+    assert "İlk turda yalnızca doğru veri yolunu keşfet" not in llm.seen_system_prompts[1]
+    assert NARRATION_PROMPT.splitlines()[0].startswith("YANIT AŞAMASI")
+    assert "DOĞRULANMIŞ ANLATIM OLGULARI" in llm.seen_user_messages[1]
+    assert "Sorgu başarılı" not in llm.seen_user_messages[1], "ham araç konuşması narration'a taşınmamalı"
+    assert llm.seen_tool_offers == [True, False], "tamamlanmış anlatım çağrısı toolsuz olmalı"
+
+
+def test_llm_cagri_telemetrisi_faz_sureleri_ve_payload_boyutunu_tasiyor() -> None:
+    agent, llm = _grounding_agent([
+        LLMResponse(content="", tool_calls=[_call(1)], usage={"prompt": 120, "completion": 4}),
+        LLMResponse(content="2025 yılında değer 100 idi.", usage={"prompt": 210, "completion": 12}),
+    ])
+
+    answer = agent.ask("2025 yılındaki değeri açıkla.")
+
+    traces = answer.usage["llm_calls"]
+    assert [trace["phase"] for trace in traces] == ["planning", "narration"]
+    assert [trace["prompt_tokens"] for trace in traces] == [120, 210]
+    assert all(trace["duration_ms"] >= 0 for trace in traces)
+    assert traces[0]["tool_schema_count"] > 0
+    assert traces[1]["message_chars"] > 0
+    assert "2025 yılındaki değeri" not in repr(traces), "telemetri prompt metnini saklamamalı"
+    assert answer.usage["llm_phase_ms"]["planning"] >= 0
+    assert answer.usage["llm_phase_ms"]["narration"] >= 0
+    assert answer.usage["tool_execution_ms"] >= 0
+    assert answer.usage["narration_fact_preparation_ms"] >= 0
+    assert answer.usage["tool_free_narration_calls"] == 1
+    assert answer.usage["context_preparation_ms"] >= 0
+    assert answer.usage["turn_wall_ms"] >= answer.usage["llm_call_ms"]
+
+
+def test_bekleyen_analitik_yetenek_narration_araclarini_acik_tutar() -> None:
+    from kkb_agent.core.agent import _REQUESTED_CAPABILITIES
+    from kkb_agent.core.execution_recovery import ExecutionState
+    from kkb_agent.core.narration_facts import build_narration_facts
+
+    agent, _ = _grounding_agent([])
+    analysis_capability = next(cap for cap in _REQUESTED_CAPABILITIES if cap[0] == "analitik")
+    agent._inflight_requested = [analysis_capability]
+    frame = pd.DataFrame({"value": [1, 2]})
+    steps = [SimpleNamespace(ok=True, tool_name="lakehouse_query", result_data=frame)]
+    facts = build_narration_facts(frame)
+    assert agent._narration_ready_without_tools(
+        phase="narration",
+        produced_data=True,
+        steps=steps,
+        recovery=ExecutionState(turn_id=1, question="relationship"),
+        facts=facts,
+        miss_rounds=0,
+        causal_rounds=0,
+        web_search_succeeded=False,
+        web_page_succeeded=False,
+    ) is False
 
 
 def test_ikinci_denemede_de_dogrulanamayan_sayi_isaretlenir() -> None:

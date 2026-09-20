@@ -37,8 +37,21 @@ class TokenBudgetPolicy:
         if self.global_max is not None and self.global_max <= 0:
             raise ValueError(f"global_max pozitif olmalı: {self.global_max}")
 
-    def for_phase(self, phase: str, *, rows: int = 0, columns: int = 0) -> int | None:
-        """Faz ve beklenen çıktı şekline göre uygulanacak tavanı döndürür."""
+    def for_phase(
+        self,
+        phase: str,
+        *,
+        rows: int = 0,
+        columns: int = 0,
+        extended_narration: bool | None = None,
+    ) -> int | None:
+        """Choose a completion ceiling by phase and narration complexity.
+
+        ``extended_narration`` is the preferred signal: table size belongs to
+        the UI artifact and should not, by itself, buy the model a larger
+        prose budget. The row/column thresholds remain as a compatibility
+        fallback for callers that have not supplied a task-complexity signal.
+        """
         if phase == "planning":
             target = self.planning
         elif phase == "tool":
@@ -46,7 +59,12 @@ class TokenBudgetPolicy:
         elif phase == "recovery":
             target = self.recovery
         elif phase == "narration":
-            target = self.long_narration if rows >= self.long_rows or columns >= self.long_columns else self.narration
+            is_extended = (
+                extended_narration
+                if extended_narration is not None
+                else rows >= self.long_rows or columns >= self.long_columns
+            )
+            target = self.long_narration if is_extended else self.narration
         else:
             raise ValueError(f"bilinmeyen token bütçesi fazı: {phase!r}")
         return min(target, self.global_max) if self.global_max is not None else target

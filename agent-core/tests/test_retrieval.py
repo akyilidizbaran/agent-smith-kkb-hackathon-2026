@@ -18,6 +18,7 @@ from kkb_agent.core.facets import extract_facets, province_of  # noqa: E402
 from kkb_agent.core.period_intent import choose_containing_window, containing_windows, parse_period_intent  # noqa: E402
 from kkb_agent.core.registry import ToolRegistry  # noqa: E402
 from kkb_agent.core.retriever import CatalogRecord, CatalogRetriever, RetrievalPolicy, apply_facets  # noqa: E402
+from kkb_agent.core.retriever import record_from_spec  # noqa: E402
 
 
 def _rec(id, name, freq="monthly", source="bddk_monthly", aliases=(), province=None):
@@ -67,11 +68,11 @@ def test_ic_ice_donem_dis_sinir_verilmezse_belirsiz_kalir() -> None:
     explicit = parse_period_intent("2021-01 ile 2025-12 arasındaki 60 aylık dönem")
     assert explicit.outer_bounds_explicit and not explicit.ambiguous_containment
 
-    compact = parse_period_intent("202201–202312 döneminde aylık serileri hizala")
+    compact = parse_period_intent("202301–202412 döneminde aylık serileri hizala")
     assert compact.outer_bounds_explicit
     assert compact.effective_window_months == 24
-    assert compact.outer_start == date(2022, 1, 1)
-    assert compact.outer_end == date(2023, 12, 31)
+    assert compact.outer_start == date(2023, 1, 1)
+    assert compact.outer_end == date(2024, 12, 31)
 
 
 def test_il_sorulmadiysa_ulusal_seri_one_il_sorulduysa_yalniz_o_il() -> None:
@@ -150,6 +151,100 @@ def test_series_relation_parent_child_secimini_genel_kilar() -> None:
         "bddk_monthly:1541_Toplam",
         "bddk_monthly:1542_Toplam",
     ]
+
+
+def test_verified_semantik_yalniz_yakin_eslesmede_tie_break_olur() -> None:
+    records = [
+        CatalogRecord(
+            id="source:derived", name="Toplam Mevduat (Vade İtibarıyla)",
+            aliases=("ulusal toplam mevduat",), source="source", semantic_confidence="derived",
+        ),
+        CatalogRecord(
+            id="source:verified", name="Toplam Mevduat (Sektör)",
+            aliases=("ulusal toplam mevduat",), source="source", semantic_confidence="verified",
+        ),
+        CatalogRecord(
+            id="source:exact-child", name="Mevduat Vade Dağılımı", aliases=("toplam mevduat vade",),
+            source="source", semantic_confidence="verified",
+        ),
+    ]
+    retriever = CatalogRetriever(records, policy=RetrievalPolicy(mode="bm25"))
+
+    broad = retriever.search("ulusal toplam mevduat", k=3)
+    assert broad[0].id == "source:verified"
+    assert broad[0].meta["semantic_confidence"] == "verified"
+
+    explicit = retriever.search("toplam mevduat vade itibarıyla", k=3)
+    assert explicit[0].id == "source:derived", "açık alt-kırılım dili semantik tie-break'i geçersiz kılmalı"
+
+
+def test_retrieval_yakin_adaylarda_olcum_tipi_ve_kavram_adini_kullanir() -> None:
+    records = [
+        CatalogRecord(
+            id="source:unrelated-stock", name="Consumer Housing Loans, Total",
+            description="Monthly national total; verified source series.", source="bddk_monthly",
+            semantic_confidence="verified", measure_types=("stock",),
+        ),
+        CatalogRecord(
+            id="source:deposit-ratio", name="Total Deposits Ratio",
+            description="Monthly national total deposits ratio; verified source series.", source="bddk_monthly",
+            semantic_confidence="verified", measure_types=("ratio",),
+        ),
+        CatalogRecord(
+            id="source:deposit-breakdown", name="Total Deposits (Maturity Breakdown)",
+            description="Monthly national total deposits stock; derived source series.", source="bddk_monthly",
+            semantic_confidence="derived", measure_types=("stock",),
+        ),
+        CatalogRecord(
+            id="source:deposit-total", name="Total Deposits (Sector)",
+            description="Monthly national total deposits stock; verified source series.", source="bddk_monthly",
+            semantic_confidence="verified", measure_types=("stock",),
+        ),
+    ]
+    retriever = CatalogRetriever(records, policy=RetrievalPolicy(mode="bm25"))
+
+    stock_hits = retriever.search("monthly national total deposits stock", k=4)
+    assert stock_hits[0].id == "source:deposit-total"
+    assert stock_hits.index(next(hit for hit in stock_hits if hit.id == "source:deposit-ratio")) > 0
+    assert stock_hits.index(next(hit for hit in stock_hits if hit.id == "source:unrelated-stock")) > 0
+
+    ratio_hits = retriever.search("monthly national total deposits ratio", k=4)
+    assert ratio_hits[0].id == "source:deposit-ratio"
+
+
+def test_record_from_spec_measure_type_katalog_kolonlarindan_turetilir() -> None:
+    measure = SimpleNamespace(
+        aliases=["account balance"],
+        semantic_type=SimpleNamespace(value="stock"),
+    )
+    spec = SimpleNamespace(
+        dataset_id="fixture:balance", name="Account Balance", description="A verified stock series.",
+        source="fixture", frequency=SimpleNamespace(value="monthly"), columns=[measure], tags=(),
+        measures=lambda: [measure],
+    )
+
+    record = record_from_spec(spec)
+
+    assert record.measure_type == "stock"
+    assert record.measure_types == ("stock",)
+
+
+def test_semantik_guven_bos_kavram_sorgusunda_alakasiz_adaylari_yukseltemez() -> None:
+    records = [
+        CatalogRecord(
+            id="source:a-derived", name="A", description="Monthly national source data.",
+            source="bddk_monthly", semantic_confidence="derived", measure_types=("stock",),
+        ),
+        CatalogRecord(
+            id="source:z-verified", name="Z", description="Monthly national source data.",
+            source="bddk_monthly", semantic_confidence="verified", measure_types=("stock",),
+        ),
+    ]
+    retriever = CatalogRetriever(records, policy=RetrievalPolicy(mode="bm25"))
+
+    hits = retriever.search("monthly national source data", k=2)
+
+    assert [hit.id for hit in hits] == ["source:a-derived", "source:z-verified"]
 
 
 def test_frekans_yuzu_ayni_frekansi_one_ince_olani_ortaya_kabayi_sona_koyar() -> None:
@@ -240,6 +335,8 @@ def test_arac_kapisi_sinyalle_acar_yetkiyi_daraltmaz() -> None:
     d = tool_gate.decide("bunun grafiğini çiz", registered)
     assert "chart" in d.allowed and "anomaly_detect" not in d.allowed
     d = tool_gate.decide("aykırı aylar hangileri?", registered)
+    assert tool_gate.ANALYTICS <= d.allowed
+    d = tool_gate.decide("Aynı takvim ayına göre 3 MAD'den fazla sapan ayları bul.", registered)
     assert tool_gate.ANALYTICS <= d.allowed
     d = tool_gate.decide("şu sayfadan TÜFE'yi söyle: https://x/y.html", registered)
     assert "web_url" in d.allowed and "ingest_from_url" not in d.allowed

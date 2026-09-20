@@ -1,0 +1,13 @@
+period,konut_kredi_mln_tl,rate_period,politika_faizi_pct,credit_series_id,rate_series_id,join_rule
+2024-01-31,436688.0,2024-01-31,44.0,bddk_monthly:1534_Toplam,evds:TP.APIFON4,latest non-missing rate observation <= month_end
+2024-02-29,438203.0,2024-02-29,45.0,bddk_monthly:1534_Toplam,evds:TP.APIFON4,latest non-missing rate observation <= month_end
+2024-03-31,444323.0,2024-03-29,51.22,bddk_monthly:1534_Toplam,evds:TP.APIFON4,latest non-missing rate observation <= month_end
+2024-04-30,444367.0,2024-04-30,52.24,bddk_monthly:1534_Toplam,evds:TP.APIFON4,latest non-missing rate observation <= month_end
+2024-05-31,446895.0,2024-05-31,50.0,bddk_monthly:1534_Toplam,evds:TP.APIFON4,latest non-missing rate observation <= month_end
+2024-06-30,446932.0,2024-06-28,51.37,bddk_monthly:1534_Toplam,evds:TP.APIFON4,latest non-missing rate observation <= month_end
+2024-07-31,450578.0,2024-07-31,50.0,bddk_monthly:1534_Toplam,evds:TP.APIFON4,latest non-missing rate observation <= month_end
+2024-08-31,456695.0,2024-08-29,52.79,bddk_monthly:1534_Toplam,evds:TP.APIFON4,latest non-missing rate observation <= month_end
+2024-09-30,465313.0,2024-09-30,50.0,bddk_monthly:1534_Toplam,evds:TP.APIFON4,latest non-missing rate observation <= month_end
+2024-10-31,480472.0,2024-10-31,50.0,bddk_monthly:1534_Toplam,evds:TP.APIFON4,latest non-missing rate observation <= month_end
+2024-11-30,496122.0,2024-11-29,50.0,bddk_monthly:1534_Toplam,evds:TP.APIFON4,latest non-missing rate observation <= month_end
+2024-12-31,512259.0,2024-12-31,48.13,bddk_monthly:1534_Toplam,evds:TP.APIFON4,latest non-missing rate observation <= month_end

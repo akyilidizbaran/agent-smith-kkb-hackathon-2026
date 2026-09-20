@@ -131,6 +131,7 @@ def evidence_to_dict(panel: Any) -> dict[str, Any] | None:
         "observation_count": len(getattr(panel, "observations", [])),
         "artifacts": _json_safe(getattr(panel, "artifacts", {})),
         "web_sources": _json_safe(getattr(panel, "web_sources", [])),
+        "web_reads": _json_safe(getattr(panel, "web_reads", [])),
         "web_unused": _json_safe(getattr(panel, "web_unused", [])),
         "context_sources": _json_safe(getattr(panel, "context_sources", [])),
         "consulted_unused": list(getattr(panel, "consulted_unused", [])),
@@ -431,6 +432,8 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None, questio
             "label": tool_label(s.tool_name), "detail": args_detail(s.tool_name, s.tool_args),
             "args": _json_safe(s.tool_args), "ok": bool(s.ok), "error_code": s.error_code,
             "summary": (s.result_summary or "")[:400], "duration_ms": round(float(getattr(s, "duration_ms", 0.0) or 0.0)),
+            "llm_duration_ms": round(float(getattr(s, "llm_duration_ms", 0.0) or 0.0)),
+            "tool_duration_ms": round(float(getattr(s, "tool_duration_ms", 0.0) or 0.0)),
             "candidates": list(getattr(s, "candidates", []) or []),
         })
     charts = []

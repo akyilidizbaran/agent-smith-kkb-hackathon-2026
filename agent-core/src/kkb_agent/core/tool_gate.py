@@ -44,7 +44,7 @@ ARCHITECT = frozenset({"ingest_from_url", "ingest_source", "promote_draft"})
 PREMISE = frozenset({"check_premise"})
 
 _CHART = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
-_ANALYTICS = re.compile(r"anomali|aykır|olağan ?dışı|sıra ?dışı|kırılma|rejim değişi|öncül|önden mi|korelasyon|granger|ilişki", re.I)
+_ANALYTICS = re.compile(r"anomali|aykır|sapan|sapma|olağan ?dışı|sıra ?dışı|kırılma|rejim değişi|öncül|önden mi|korelasyon|granger|ilişki|mevsimsel|seasonal|\bmad\b|medyan mutlak", re.I)
 _WEB = re.compile(r"https?://|www\.|\.pdf\b|\.png\b|\.jpe?g\b|\.csv\b|\.xlsx?\b|sayfa|siteden|linkten|adres|internet|web|\barama\b|\bara\b|bul\b", re.I)
 _ARCHITECT = re.compile(r"taslak|onayl|kataloğa al|kataloga al|ekle\b|yükle|yukle|kaydet|ingest|terfi|yayınla", re.I)
 _WORKSPACE_HINT = re.compile(
@@ -106,6 +106,25 @@ def post_retrieval_allowed(
     return frozenset(allowed)
 
 
+def open_verified_public_web_fallback(
+    decision: GateDecision,
+    registered: set[str] | frozenset[str],
+) -> GateDecision:
+    """Open only registered web tools after the harness has verified absence.
+
+    Callers must already have a source/domain-constrained fallback plan. This
+    helper only changes the offered schema; it does not grant execution policy.
+    """
+
+    web_tools = WEB & frozenset(registered)
+    if not web_tools:
+        return decision
+    allowed = decision.allowed | web_tools
+    opened = decision.opened if "web_fallback" in decision.opened else (*decision.opened, "web_fallback")
+    closed = tuple(family for family in decision.closed if family != "web")
+    return GateDecision(allowed, opened, closed)
+
+
 def decide(
     question: str,
     registered: set[str] | frozenset[str],
@@ -138,4 +157,4 @@ def decide(
     return GateDecision(frozenset(n for n in allowed if n in registered), tuple(opened), tuple(closed))
 
 
-__all__ = ["ALWAYS", "ANALYTICS", "ARCHITECT", "CHART", "GOLD_PHASE", "GateDecision", "PREMISE", "RETRIEVAL_PHASE", "WEB", "WORKSPACE_PHASE", "decide", "initial_allowed", "post_retrieval_allowed"]
+__all__ = ["ALWAYS", "ANALYTICS", "ARCHITECT", "CHART", "GOLD_PHASE", "GateDecision", "PREMISE", "RETRIEVAL_PHASE", "WEB", "WORKSPACE_PHASE", "decide", "initial_allowed", "open_verified_public_web_fallback", "post_retrieval_allowed"]

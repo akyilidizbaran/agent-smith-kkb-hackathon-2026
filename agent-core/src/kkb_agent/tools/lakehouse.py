@@ -98,6 +98,8 @@ class LakehouseSearchTool(Tool):
                 f"- {s.dataset_id}: {s.name}. {s.description[:180]} "
                 f"[frekans: {s.frequency.value}, kapsam: {s.coverage.start}→{s.coverage.end}, kaynak: {spec_origin(s)}]"
             )
+            if getattr(s, "semantic_confidence", None):
+                lines.append(f"    katalog semantik güveni: {s.semantic_confidence}")
             matched, unmatched = terms.get(s.dataset_id, ([], []))
             if unmatched:
                 # Ölçüldü: "taşıt kredisi" araması konut serisini "kredisi" ile buluyor; hangi

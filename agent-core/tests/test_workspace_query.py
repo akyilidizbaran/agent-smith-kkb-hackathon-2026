@@ -47,3 +47,25 @@ def test_tehlikeli_sql_reddedilir_ve_sql_hatasi_geri_doner() -> None:
     assert not r.ok and r.error.error_code == "UNSAFE_SQL"
     r2 = WorkspaceQueryTool(_ws()).validate_and_run({"sql": "SELECT yok FROM t", "purpose": "x"})
     assert not r2.ok and r2.error.error_code == "SQL_FAILED"
+
+
+def test_union_all_sorgusu_guvenli_calisir_ve_parser_hatasi_recoverable_doner() -> None:
+    ws = _ws()
+    tool = WorkspaceQueryTool(ws)
+    valid = (
+        "(SELECT year, population FROM t WHERE year <= 2000 ORDER BY year LIMIT 2) "
+        "UNION ALL "
+        "(SELECT year, population FROM t WHERE year > 2000 ORDER BY year LIMIT 2)"
+    )
+    result = tool.validate_and_run({"sql": valid, "purpose": "iki aralığı birleştir"})
+    assert result.ok, result.content
+    assert len(result.data) == 4
+
+    malformed = (
+        "SELECT year, population FROM t WHERE year <= 2000 ORDER BY year LIMIT 2 "
+        "UNION ALL SELECT year, population FROM t WHERE year > 2000"
+    )
+    error = tool.validate_and_run({"sql": malformed, "purpose": "iki aralığı birleştir"})
+    assert not error.ok and error.error.error_code == "SQL_SYNTAX_ERROR"
+    assert error.error.is_retryable
+    assert "UNSAFE_SQL" not in error.content

@@ -39,6 +39,7 @@ class PageContent:
     notes: list[str] = field(default_factory=list)   # sayı biçimi belirsizlikleri vb.
     ocr: dict[str, Any] | None = None                # {"model", "pages", "sha256", "truncated"} — OCR ile okunduysa
     table_labels: list[str] = field(default_factory=list)   # tablo başına bağlam ("sayfa 2: GÜMÜŞ / SILVER"); tables ile hizalı
+    extraction: dict[str, Any] | None = None          # parser yöntemi ve sayfa kapsamı; OCR doğrulaması değildir
 
     def table_previews(self, max_rows: int = 3) -> list[str]:
         out = []
@@ -404,7 +405,10 @@ def extract_ocr_page(url: str, doc: Any) -> PageContent:
     title = Path(urlparse(url).path).name or url
     return PageContent(url=url, title=title, text=text, tables=tables, kind="ocr", notes=notes, table_labels=labels,
                        ocr={"model": doc.model, "pages": [p.page_no for p in doc.pages], "sha256": doc.sha256,
-                            "truncated": doc.truncated, "total_pages": doc.total_pages, "quality": quality})
+                            "truncated": doc.truncated, "total_pages": doc.total_pages, "quality": quality},
+                       extraction={"method": "ocr", "pages": [p.page_no for p in doc.pages],
+                                   "total_pages": doc.total_pages, "truncated": doc.truncated,
+                                   "structured_tables": bool(tables)})
 
 
 MAX_TEXT_CHARS = 400_000
@@ -452,17 +456,54 @@ def extract_page(content: bytes, media_type: str, url: str, *, ocr: Any = None,
     from ..vision.ocr import is_document, ocr_document
 
     if is_document(kind, url):
-        # PDF/görsel: tablo yalnız OCR ile çıkar; istemci yoksa "okunamadı" (uydurma yok).
+        is_pdf = kind == "application/pdf" or path.endswith(".pdf") or content[:5] == b"%PDF-"
+        text_layer = None
+        text_layer_error = None
+        if is_pdf:
+            from ..vision.pdf import PdfTextLayerError, extract_pdf_text_layer
+
+            try:
+                text_layer = extract_pdf_text_layer(content, pages=(ocr_options or {}).get("pages"))
+            except PdfTextLayerError as exc:
+                text_layer_error = str(exc)
+
+        def text_only_page(note: str, *, method: str) -> PageContent:
+            has_text = bool(text_layer and text_layer.has_text)
+            notes = ([text_layer.note()] if has_text and text_layer else []) + [note]
+            if has_text:
+                notes.append("PDF metni okunabilir; tablo yapısı çıkarılmadı. Sayısal tablo gibi kullanma.")
+            elif text_layer_error:
+                notes.append(text_layer_error)
+            return PageContent(
+                url=url, title=Path(path).name, kind="document",
+                text=text_layer.text if has_text and text_layer else "(PDF/görsel belge; metin katmanı çıkarılamadı)",
+                notes=notes,
+                extraction=(text_layer.metadata() if has_text and text_layer else {
+                    "method": method, "pages": [], "total_pages": text_layer.total_pages if text_layer else None,
+                    "truncated": False, "structured_tables": False,
+                }),
+            )
+
+        # PDF text layer is useful for prose and source context, but pypdfium2 does
+        # not provide reliable table layout reconstruction. OCR remains explicit and unverified.
         if ocr is None:
-            return PageContent(url=url, title=Path(path).name, kind="document",
-                               text="(PDF/görsel belge; OCR istemcisi yapılandırılmamış — VISION_MODEL yok)",
-                               notes=["PDF/görsel belge OCR olmadan okunamaz."])
+            if text_layer and text_layer.has_text:
+                return text_only_page("OCR istemcisi yapılandırılmamış — görsel tablolardan veri çıkarılmadı.",
+                                      method="pdf_text_layer")
+            return text_only_page("PDF/görsel belge OCR olmadan okunamadı; taranmış belge olabilir.",
+                                  method="unavailable")
         try:
             doc = ocr_document(content, kind, client=ocr, url=url, **(ocr_options or {}))
         except Exception as exc:  # noqa: BLE001 — servis hatası sayfa notuna, uydurma yok
-            return PageContent(url=url, title=Path(path).name, kind="document",
-                               text=f"(PDF/görsel belge; OCR başarısız: {exc})", notes=[f"OCR başarısız: {exc}"])
-        return extract_ocr_page(url, doc)
+            return text_only_page(f"OCR başarısız: {exc}", method="extraction_failed")
+        extracted = extract_ocr_page(url, doc)
+        if text_layer and text_layer.has_text:
+            extracted.text = text_layer.text
+            extracted.notes.insert(0, text_layer.note())
+            extracted.notes.append("OCR tablosu ayrı çıkarıldı; PDF metin katmanı OCR hücreleriyle hücre-hücre karşılaştırılmadı ve tabloyu doğrulanmış yapmaz.")
+            extracted.extraction = {**text_layer.metadata(), "method": "ocr+pdf_text_layer",
+                                    "ocr_pages": [p.page_no for p in doc.pages], "structured_tables": bool(extracted.tables)}
+        return extracted
     looks_xml = (kind in ("text/xml", "application/xml") or (kind.endswith("+xml") and kind != "application/xhtml+xml")
                  or path.endswith(".xml") or content[:200].lstrip().startswith(b"<?xml"))
     if looks_xml and b"<html" not in content[:2000].lower():

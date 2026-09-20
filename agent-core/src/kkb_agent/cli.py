@@ -264,6 +264,7 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
         ),
         narration_timeout_s=settings.llm_narration_timeout_s,
         tool_timeout_s=settings.llm_tool_timeout_s,
+        stream_narration=settings.llm_stream_narration,
     )
     agent.profile_name = agent_profile_name          # analyst | architect (M04)
     agent.upload_root = settings.ingest_allowed_root

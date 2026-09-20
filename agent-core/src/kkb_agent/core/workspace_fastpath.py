@@ -9,6 +9,7 @@ period-over-period calculation.
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
@@ -135,6 +136,45 @@ def _date_like(series: pd.Series) -> bool:
         return True
     values = series.dropna()
     return not values.empty and all(hasattr(value, "year") for value in values.head(20))
+
+
+def _monthly_periods(series: pd.Series) -> pd.PeriodIndex | None:
+    """Parse a period label without guessing when any value is ambiguous."""
+    values = series.astype("string").str.strip()
+    if values.empty or values.isna().any():
+        return None
+    if values.str.fullmatch(r"(?:19|20)\d{4}").all():
+        parsed = pd.to_datetime(values, format="%Y%m", errors="coerce")
+    elif values.str.fullmatch(r"(?:19|20)\d{2}[-/](?:0?[1-9]|1[0-2])").all():
+        normalized = values.str.replace("/", "-", regex=False)
+        parsed = pd.to_datetime(normalized + "-01", format="mixed", errors="coerce")
+    else:
+        parsed = pd.to_datetime(values, errors="coerce")
+    if parsed.isna().any():
+        return None
+    return pd.PeriodIndex(parsed.dt.to_period("M"))
+
+
+def _is_redundant_month_key(frame: pd.DataFrame, column: str, date_column: str) -> bool:
+    """Exclude a text month key when it encodes the primary date axis row-for-row.
+
+    Lakehouse results may carry both a DATE (`observation_date`) and a text
+    label (`ay`, `202201`, etc.). Treating that label as a panel dimension
+    partitions every month into a one-row group, making every LAG NULL.
+    Real dimensions such as province/product remain grouping keys because
+    they do not exactly track the primary month axis.
+    """
+    candidate = frame[column]
+    if pd.api.types.is_numeric_dtype(candidate) or _date_like(candidate):
+        return False
+    candidate_months = _monthly_periods(candidate)
+    date_values = pd.to_datetime(frame[date_column], errors="coerce")
+    if candidate_months is None or date_values.isna().any():
+        return False
+    date_months = pd.PeriodIndex(date_values.dt.to_period("M"))
+    return len(candidate_months) == len(date_months) and bool(
+        (candidate_months == date_months).all()
+    )
 
 
 def _date_column(frame: pd.DataFrame) -> str | None:
@@ -331,6 +371,7 @@ def _base_columns_for_groups(
         if str(column) != date_column
         and not _is_provenance_column(column)
         and not _date_like(frame[column])
+        and not _is_redundant_month_key(frame, str(column), date_column)
         and not pd.api.types.is_numeric_dtype(frame[column])
     )
     return list(frame.columns), groups
@@ -528,6 +569,40 @@ def inspect_existing_verified_transform(
         ):
             return None
 
+    # Column names and a SQL string containing LAG are not enough to certify a
+    # saved transformation. Recheck its values against the active source data;
+    # this catches degenerate partitions such as PARTITION BY a unique month
+    # label, where every result is silently NULL.
+    ordered = frame.assign(__fast_date=date_values).sort_values(
+        [*groups, "__fast_date"], kind="stable"
+    )
+    for source, derived in zip(source_columns, derived_columns):
+        values = pd.to_numeric(ordered[source], errors="coerce")
+        actual = pd.to_numeric(ordered[derived], errors="coerce")
+        if groups:
+            grouped = ordered.groupby(list(groups), sort=False, dropna=False)
+            previous = grouped[source].shift(1)
+            first_in_group = grouped.cumcount().eq(0)
+        else:
+            previous = ordered[source].shift(1)
+            first_in_group = pd.Series(False, index=ordered.index)
+            if len(first_in_group):
+                first_in_group.iloc[0] = True
+        expected = values - pd.to_numeric(previous, errors="coerce")
+        if operation == "percent_change":
+            denominator = pd.to_numeric(previous, errors="coerce").replace(0, np.nan)
+            expected = expected / denominator * 100
+        # The first visible row in a filtered view may have a valid LAG from
+        # the source window that is no longer visible. Validate every later
+        # observation, where both operands are still present in this frame.
+        comparable = ~first_in_group
+        if not comparable.any():
+            return None
+        got = actual.loc[comparable].to_numpy(dtype=float)
+        want = expected.loc[comparable].to_numpy(dtype=float)
+        if not np.allclose(got, want, equal_nan=True, rtol=1e-12, atol=1e-12):
+            return None
+
     period_range = requested_month_range(question, resolution)
     period_start, period_end = period_range or (None, None)
     if period_start is not None and period_end is not None:
@@ -653,6 +728,84 @@ def execute_verified_workspace_transform(
     )
 
 
+def repair_invalid_previous_transform(
+    question: str,
+    resolution: FollowUpResolution | None,
+    workspace: AnalysisWorkspace,
+    *,
+    active_specs: Iterable[Any] = (),
+) -> WorkspaceFastPathResult | None:
+    """Recompute a failed generated transform from its immediately prior snapshot.
+
+    This is deliberately limited to a last workspace transform whose exact
+    generated output columns and LAG provenance match the current request. It
+    lets the harness repair persisted bad output without reusing untrusted
+    values or searching the catalog again.
+    """
+    history = workspace.history
+    current = workspace.table
+    snapshots = workspace.previous_tables()
+    if (
+        resolution is None
+        or not isinstance(current, pd.DataFrame)
+        or not history
+        or history[-1].action != "transform"
+        or not snapshots
+    ):
+        return None
+
+    previous = snapshots[0]
+    temporary = copy.deepcopy(workspace)
+    temporary._table = previous.copy()
+    temporary._history = history[:-1]
+    temporary._snapshots = []
+
+    plan = plan_verified_workspace_transform(
+        question, resolution, temporary, active_specs=active_specs
+    )
+    if plan is None or not set(plan.derived_columns).issubset(history[-1].columns_added):
+        return None
+    if any(column not in current.columns or column in previous.columns for column in plan.derived_columns):
+        return None
+    for source, derived in zip(plan.value_columns, plan.derived_columns):
+        provenance = workspace.column_provenance(derived)
+        sql = _fold(getattr(provenance, "sql", "") or "")
+        if (
+            provenance is None
+            or not sql.startswith("türetilmiş:")
+            or "lag(" not in sql
+            or _fold(source) not in sql
+            or _fold(plan.date_column) not in sql
+        ):
+            return None
+
+    result = execute_verified_workspace_transform(temporary, plan)
+    if result is None:
+        return None
+    provenance = {
+        column: temporary.column_provenance(column) for column in plan.derived_columns
+    }
+    description = (
+        "Dönemsel yüzde değişim" if plan.operation == "percent_change" else "Dönemsel mutlak değişim"
+    ) + " [doğrulama sonrası yeniden hesaplandı]"
+    if plan.period_start is not None and plan.period_end is not None:
+        description += f"; çıktı aralığı {plan.period_start:%Y-%m}–{plan.period_end:%Y-%m}"
+    try:
+        workspace.replace_table(
+            result.frame,
+            description=description,
+            column_provenance=provenance,
+            columns_added=list(plan.derived_columns),
+        )
+    except (AssertionError, KeyError, TypeError, ValueError):
+        return None
+    return WorkspaceFastPathResult(
+        plan=plan,
+        frame=result.frame.copy(),
+        validation="önceki snapshot'tan yeniden hesaplandı; " + result.validation,
+    )
+
+
 __all__ = [
     "WorkspaceFastPathPlan",
     "WorkspaceFastPathResult",
@@ -660,5 +813,6 @@ __all__ = [
     "execute_verified_workspace_transform",
     "inspect_existing_verified_transform",
     "plan_verified_workspace_transform",
+    "repair_invalid_previous_transform",
     "requested_month_range",
 ]

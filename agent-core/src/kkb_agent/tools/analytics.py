@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field
 
-from ..analytics.methods import detect_anomalies, detect_change_points, lead_lag, has_non_positive
+from ..analytics.methods import detect_anomalies, detect_seasonal_anomalies, detect_change_points, lead_lag, has_non_positive
 from ..contracts.lakehouse import QueryProvenance
 from ..core.errors import ToolError
 from dataclasses import dataclass
@@ -170,7 +170,10 @@ class _AnalyticsTool(Tool):
 # ----------------------------------------------------------------------------- anomaly_detect
 class AnomalyParams(BaseModel):
     column: str = Field(description="Aykırılık aranacak SAYISAL sütun; aktif tablodaki adıyla birebir")
-    method: Literal["iqr", "zscore"] = Field(default="iqr", description="iqr: Tukey çiti (k=1.5); zscore: |z|>3")
+    method: Literal["iqr", "zscore", "seasonal_mad"] = Field(
+        default="iqr",
+        description="iqr: Tukey çiti (k=1.5); zscore: |z|>3; seasonal_mad: aylık veride aynı takvim ayını yıllar arasında karşılaştıran robust MAD (|z|>3)",
+    )
     basis: Literal["auto", "level", "change"] = Field(
         default="auto",
         description="auto: seri trendliyse dönemlik yüzde değişim, değilse düzey üzerinde çalışır; "
@@ -183,7 +186,8 @@ class AnomalyDetectTool(_AnalyticsTool):
     name = "anomaly_detect"
     description = (
         "Aktif tablodaki bir sayısal sütunda olağandışı (aykırı) gözlemleri deterministik olarak bulur: "
-        "IQR ya da z-skoru; trendli seride (stok ya da endeks düzeyi) dönemlik yüzde değişim üzerinde. Tabloya "
+        "IQR, z-skoru ya da aynı takvim aylarını yıllar arasında karşılaştıran seasonal MAD; trendli seride "
+        "(stok ya da endeks düzeyi) dönemlik yüzde değişim üzerinde. Tabloya "
         "<sütun>_anomali ('ok'/'aykırı') ve <sütun>_skor sütunlarını ekler, satır sayısı değişmez. "
         "Kullanıcı olağandışı, aykırı, anomali, sıra dışı dönem sorduğunda veriyi getirdikten SONRA çağır."
     )
@@ -201,7 +205,29 @@ class AnomalyDetectTool(_AnalyticsTool):
         vals, fin = _finite(table[col].to_numpy(dtype=float))
         if "seri sabit" in fin:
             return ToolResult.fail("INVALID_ARGS", f"'{col}' sabit seri: aykırılık tanımsız.", layer="data", retryable=False)
-        res = detect_anomalies(vals, method=params.method, basis=params.basis)
+        if params.method == "seasonal_mad":
+            if axis.column is None or axis.frequency != "aylık":
+                return ToolResult.fail(
+                    "INVALID_ARGS", "seasonal_mad için doğrulanabilir aylık tarih ekseni gerekir.",
+                    hint="Aylık tarih kolonu olan tabloyu kullan veya iqr/zscore yöntemini seç.",
+                    layer="data", retryable=False,
+                )
+            months = pd.to_datetime(table[axis.column], errors="coerce").dt.month.to_numpy()
+            res = detect_seasonal_anomalies(vals, months, threshold=3.0, min_periods=4)
+            eligible = int(np.isfinite(res.scores).sum())
+            if eligible == 0:
+                return ToolResult.fail(
+                    "INVALID_ARGS", "Aynı takvim ayı için en az 4 yıllık geçerli gözlem yok; mevsimsel MAD hesaplanmadı.",
+                    hint="Daha uzun aylık tarih aralığı kullan veya iqr/zscore yöntemini seç.",
+                    layer="data", retryable=False,
+                )
+            month_counts = pd.Series(months[~np.isnan(vals)]).value_counts()
+            insufficient = [int(m) for m in range(1, 13) if int(month_counts.get(m, 0)) < 4]
+            if insufficient:
+                fin.append("yeterli 4 yıllık gözlem olmayan takvim ayları puanlanmadı: "
+                           + ", ".join(map(str, insufficient)))
+        else:
+            res = detect_anomalies(vals, method=params.method, basis=params.basis)
         if params.basis == "auto" and has_non_positive(vals):
             fin = fin + ["seride sıfır/negatif değer var: yüzde değişim tabanı kullanılmadı, düzey üzerinde bakıldı"]
         elif res.basis == "change" and has_non_positive(vals):
@@ -219,7 +245,7 @@ class AnomalyDetectTool(_AnalyticsTool):
         self.workspace.add_column(flag_col, pd.Series(np.where(res.flags, "aykırı", "ok"), index=table.index),
                                   description=f"{params.purpose} [{desc}]", provenance=prov)
         self.workspace.add_column(score_col, pd.Series(np.round(res.scores, 3), index=table.index),
-                                  description=f"{col} aykırılık skoru ({'z' if res.method.startswith('zscore') else 'IQR birimi'})",
+                                  description=f"{col} aykırılık skoru ({'robust z' if res.method == 'seasonal_mad' else 'z' if res.method.startswith('zscore') else 'IQR birimi'})",
                                   provenance=prov)
         updated = self.workspace.table
         assert updated is not None
@@ -235,16 +261,25 @@ class AnomalyDetectTool(_AnalyticsTool):
             rows = rows.reindex(rows["skor"].abs().sort_values(ascending=False).index)
             self.workspace.note_peek(f"anomaly_detect({col})", rows)
         # Kart parametreleri de sayıdır (ölçüldü: model k=1.5 ve n=66'yı yazdı, panel "tabloda yok" dedi).
+        analysed_n = int(np.isfinite(res.scores).sum()) if res.method == "seasonal_mad" else int(np.sum(~np.isnan(res.analysed)))
         self.workspace.note_peek(f"anomaly_detect({col}) parametreler", pd.DataFrame({
-            "k": [res.threshold], "n": [int(np.sum(~np.isnan(res.analysed)))], "aykiri": [res.count],
+            "k": [res.threshold], "n": [analysed_n], "aykiri": [res.count],
             "alt_sinir": [round(float(res.lower), 2)], "ust_sinir": [round(float(res.upper), 2)],
             "trend_rho": [round(float(res.trend_rho), 2)]}))
         unit = "%" if res.basis == "change" else ""
+        range_text = (
+            f"aynı takvim ayındaki medyan çevresinde robust z, |z|>{res.threshold:g}"
+            if res.method == "seasonal_mad"
+            else f"normal aralık: [{_fmt(res.lower)}{unit}, {_fmt(res.upper)}{unit}]"
+        )
+        method_text = f"{res.method} (takvim ayı bazında MAD, |z|>{res.threshold:g})" if res.method == "seasonal_mad" else (
+            f"{res.method} ({'Tukey çiti k=' if res.method == 'iqr' else '|z|>'}{res.threshold:g})"
+        )
         card = [
-            f"AYKIRILIK: {col} — yöntem {res.method} ({'Tukey çiti k=' if res.method == 'iqr' else '|z|>'}{res.threshold:g}) | taban: {_BASIS_TEXT[res.basis]} "
+            f"AYKIRILIK: {col} — yöntem {method_text} | taban: {_BASIS_TEXT[res.basis]} "
             f"| zaman ekseni: {axis.frequency}" + (" (" + "; ".join(axis.notes + fin) + ")" if (axis.notes or fin) else " (düzenli)") + " "
-            f"(trend rho={res.trend_rho:.2f}) | normal aralık: [{_fmt(res.lower)}{unit}, {_fmt(res.upper)}{unit}] | "
-            f"n={int(np.sum(~np.isnan(res.analysed)))} | aykırı: {res.count}",
+            f"(trend rho={res.trend_rho:.2f}) | {range_text} | "
+            f"n={analysed_n} | aykırı: {res.count}",
             f"Tabloya eklendi: {flag_col}, {score_col}" + (f", {col}_degisim_yuzde" if res.basis == "change" else "")
             + f"; tablo bozulmadı ({len(updated)} satır).",
         ]
@@ -252,8 +287,10 @@ class AnomalyDetectTool(_AnalyticsTool):
             card.append("Aykırı dönemler (skora göre):\n" + rows.head(12).to_string(index=False))
         else:
             card.append("Aykırı gözlem yok: hiçbir değer normal aralığın dışına çıkmıyor.")
-        card.append("SINIRLAMA: betimsel ve tek değişkenli; aykırılık seçilen yöntem ve eşiğe bağlıdır, mevsimsellik ayrıştırılmaz, "
-                    "sebep göstermez.")
+        card.append("SINIRLAMA: betimsel ve tek değişkenli; aykırılık seçilen yöntem ve eşiğe bağlıdır; "
+                    + ("takvim ayı grupları arasında karşılaştırma yapar, mevsimsel bileşeni nedensel olarak açıklamaz, "
+                       if res.method == "seasonal_mad" else "mevsimsellik ayrıca ayrıştırılmaz, ")
+                    + "sebep göstermez.")
         card.append("YAPACAĞIN: aykırı dönemleri ve sayıları bu karttan aktar; sebep uydurma, veride sebep yok. "
                     "ARAÇ ÇAĞIRMAYI BIRAK, cevabını yaz.")
         return ToolResult(content="\n".join(card), data=updated)

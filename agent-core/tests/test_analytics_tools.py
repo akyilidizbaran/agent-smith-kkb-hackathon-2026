@@ -44,6 +44,37 @@ def test_anomali_sutun_ekler_ve_sicrama_ayini_kartta_yazar() -> None:
     assert ws.column_provenance("bakiye_anomali").sql.startswith("türetilmiş: anomali(")
 
 
+def test_seasonal_mad_tool_same_month_baseline_and_gate() -> None:
+    dates = pd.date_range("2019-01-31", periods=60, freq="ME").date
+    values = np.tile(np.arange(1, 13, dtype=float) * 10, 5)
+    jan = np.flatnonzero(pd.to_datetime(pd.Series(dates)).dt.month.to_numpy() == 1)
+    values[jan[-1]] = 110.0
+    ws = AnalysisWorkspace()
+    ws.set_table(pd.DataFrame({"donem": dates, "bakiye": values}), description="aylık test",
+                 provenance=QueryProvenance(sql="q", dataset_ids=[], sources=["test"]))
+
+    result = AnomalyDetectTool(ws).validate_and_run({
+        "column": "bakiye", "method": "seasonal_mad", "purpose": "takvim ayı aykırılıkları",
+    })
+
+    assert result.ok, result.content
+    assert "takvim ayı bazında MAD" in result.content
+    assert "2023-01-31" in result.content
+    assert int((ws.table["bakiye_anomali"] == "aykırı").sum()) == 1
+
+
+def test_seasonal_mad_tool_aylik_olmayan_eksende_guvenli_reddeder() -> None:
+    ws = AnalysisWorkspace()
+    ws.set_table(pd.DataFrame({"donem": pd.date_range("2024-01-01", periods=16, freq="D").date,
+                               "bakiye": np.arange(16, dtype=float)}), description="günlük",
+                 provenance=QueryProvenance(sql="q", dataset_ids=[], sources=["test"]))
+    result = AnomalyDetectTool(ws).validate_and_run({
+        "column": "bakiye", "method": "seasonal_mad", "purpose": "test",
+    })
+    assert not result.ok and result.error.error_code == "INVALID_ARGS"
+    assert "aylık tarih ekseni" in result.content
+
+
 def test_olmayan_ya_da_sayisal_olmayan_sutun_hata() -> None:
     ws = _ws()
     r = AnomalyDetectTool(ws).validate_and_run({"column": "yok", "purpose": "x"})
