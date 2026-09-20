@@ -137,7 +137,7 @@ def test_direct_html_table_and_extensionless_json(source_env):
              b'<tr><td>2026-07-01</td><td>10</td></tr><tr><td>2026-07-02</td><td>11</td></tr>'
              b'<tr><td>2026-07-03</td><td>12</td></tr></table></html>')
     url = "https://reports.example/table"
-    tool._registry.user_text = f"{url} kaydet"
+    tool._registry.user_text = tool._registry.active_question = f"{url} kaydet"
     session.routes[url] = (table, "text/html")
     assert tool.validate_and_run({"locator": url, "name": "Index"}).content.startswith("EKLENDİ")
     json_url = "https://reports.example/data"
@@ -172,7 +172,7 @@ def test_single_date_frequency_asks_before_any_write(source_env):
     tool, runner, session, _ = source_env
     url = "https://reports.example/one.json"
     session.routes[url] = (b'[{"date":"2026-07-31","index":100}]', "application/json")
-    tool._registry.user_text = f"{url} kaydet"
+    tool._registry.user_text = tool._registry.active_question = f"{url} kaydet"
     result = tool.validate_and_run({"locator": url, "name": "single"})
     assert result.ok and "frekans:" in result.content and not runner.calls
 
@@ -202,7 +202,7 @@ def test_excel_formula_is_not_laundered_through_staged_csv(source_env):
     book.save(buffer)
     url = "https://reports.example/export"
     session.routes[url] = (buffer.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    tool._registry.user_text = f"{url} kaydet"
+    tool._registry.user_text = tool._registry.active_question = f"{url} kaydet"
     result = tool.validate_and_run({"locator": url, "name": "Formula"})
     assert "formül içeriyor" in result.content
     assert not runner.calls and not (root / "incoming").exists()
@@ -216,7 +216,7 @@ def test_multiple_html_tables_require_explicit_selection(source_env):
              b'<tr><td>2026-07-02</td><td>11</td></tr>'
              b'<tr><td>2026-07-03</td><td>12</td></tr></table>')
     session.routes[url] = (b'<html>' + table + table + b'</html>', 'text/html')
-    tool._registry.user_text = f"{url} kaydet"
+    tool._registry.user_text = tool._registry.active_question = f"{url} kaydet"
     result = tool.validate_and_run({"locator": url, "name": "Index"})
     assert "table_index" in result.content and not runner.calls
     result = tool.validate_and_run({"locator": url, "name": "Index", "table_index": 1})
