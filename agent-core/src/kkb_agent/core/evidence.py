@@ -471,12 +471,48 @@ class EvidenceBuilder:
         panel.context_sources[:] = [c for c in panel.context_sources if c.get("url") not in used]   # açılıp tabloya giren sayfa veri kaynağıdır
 
     # ------------------------------------------------------------------ giriş
+    def _record_panel(self, panel: EvidencePanel, answer: str, record: dict[str, Any]) -> EvidencePanel:
+        """Kayıt turu (ingest_from_url / promote_draft): tablo yok, kanıt yazılan kayıttır.
+
+        Sayılar araç kartıyla eşleştirilir (kart araç çıktısıdır; "11 satır", "2023" oradan gelir), dosya zinciri
+        artifact sha256 ile: adaptör artifact izi sunuyorsa `meta.artifact`'ta aranır ve bulunmazsa halka kopuk sayılır."""
+        card = str(record.get("card") or "")
+        card_numbers = {n for _, n in _number_texts(card)}
+        panel.numbers = [NumberEvidence(number=n, text=t, matched=n in card_numbers,
+                                        column="kayıt kartı" if n in card_numbers else None)
+                         for t, n in _number_texts(answer)]
+        rec = {k: record.get(k) for k in ("tool", "series_id", "locator", "artifact_sha256", "run_id", "rows_written", "rows_unchanged")}
+        sha = rec.get("artifact_sha256")
+        if sha and isinstance(self.lakehouse, EvidenceCapable):
+            try:
+                found = self.lakehouse.evidence_for_artifacts([str(sha)])
+            except Exception as exc:  # noqa: BLE001 — iz okunamazsa panel bunu söyler, cevabı düşürmez
+                found = {}
+                panel.gaps.append(f"artifact izi okunamadı: {exc}")
+            panel.artifacts = dict(found)
+            rec["artifact_found"] = str(sha) in found
+            if not rec["artifact_found"]:
+                panel.gaps.append(f"yazılan artifact {str(sha)[:12]}… meta.artifact'ta bulunamadı")
+        elif not sha:
+            panel.gaps.append("kayıt kartı artifact sha256 taşımıyor")
+        panel.record = rec
+        unmatched = [n.text for n in panel.numbers if not n.matched]
+        if unmatched:
+            # Aynı ön ek: sayı boşluğu "sayılar" rozetinde sayılır, dosya zincirini ✗ yapmaz (M16 ölçümü, chain_gaps).
+            panel.gaps.append("tabloda bulunmayan sayılar (kayıt kartında da yok): " + ", ".join(unmatched[:8]))
+        return panel
+
     def build(
         self, question: str, answer: str, workspace: AnalysisWorkspace, steps: list[Any],
         *, artifacts: list[dict[str, Any]] | None = None,
     ) -> EvidencePanel:
         panel = EvidencePanel(question=question, supports_artifacts=isinstance(self.lakehouse, EvidenceCapable))
         table = workspace.table
+        records = [a for a in (artifacts or []) if isinstance(a, dict) and a.get("kind") == "record"]
+        if records:
+            # Kayıt turu her zaman kaydı anlatır: önceki turdan kalan tablo bu cevabın kanıtı değildir
+            # (ölçüldü: terfi turunda panel eski sorgu tablosunun halkalarını gösteriyordu).
+            return self._record_panel(panel, answer, records[-1])
         if table is None or table.empty:
             panel.gaps.append("analiz tablosu yok")
             panel.numbers = [NumberEvidence(number=n, text=t) for t, n in _number_texts(answer)]
