@@ -20,6 +20,7 @@ from src.lakehouse.ingestion.observability import (
     RUN_STATUS_WARNING,
     TERMINAL_RUN_STATUSES,
     IngestionWarning,
+    RunArtifactLink,
     RunLifecycleError,
     RunRepository,
     WarningIntegrityError,
@@ -754,8 +755,27 @@ def test_warnings_naming_an_unregistered_artifact_are_rejected(tmp_path: Path) -
         repository.connection.close()
 
 
+def test_warnings_for_a_shared_artifact_linked_to_this_run_are_accepted(tmp_path: Path) -> None:
+    """Canlı tam set (17 Eyl 2026): EVDS'in boş pencere yanıtı her seri için aynı baytlardır; artifact ilk serinin
+    dataset'iyle kayıtlıyken ikinci serinin 'pencere boş' uyarısı "belongs to X but run covers Y" ile düşüyor ve
+    ingest çöküyordu. Artifact bu run'a bağlıysa (meta.run_artifact) uyarı bu run'ındır; ilk kaydeden kim olursa olsun."""
+    repository = _repository(tmp_path)
+    try:
+        _open_run(repository)
+        _register_artifact(repository, dataset_id="another_dataset")     # aynı baytları önce başka seri kaydetti
+        repository.link_artifact(RunArtifactLink(run_id=RUN_ID, artifact_sha256=DIGEST, source_id="fake_source",
+                                                 dataset_id="fake_dataset", fetched_at=STARTED_AT, parser_config_sha256=None))
+        repository.record_warnings([_warning(artifact_sha256=DIGEST, message="window 11/11 returned no observations")],
+                                   created_at=STARTED_AT)
+        assert repository.connection.execute(
+            "SELECT dataset_id, artifact_sha256 FROM meta.ingest_warning"
+        ).fetchall() == [("fake_dataset", DIGEST)]                         # uyarı BU run'ın dataset'iyle kayıtlı
+    finally:
+        repository.connection.close()
+
+
 def test_warnings_naming_an_artifact_from_another_dataset_are_rejected(tmp_path: Path) -> None:
-    """Acceptance criterion 10."""
+    """Acceptance criterion 10 — bağ yoksa kayıt bağlamı tek kanıttır ve run ile uyuşmalı (17 Eyl kararı bunu korur)."""
 
     repository = _repository(tmp_path)
     try:

@@ -446,10 +446,33 @@ def test_06_sql_rejects_a_second_row_for_the_same_pair(tmp_path: Path) -> None:
         connection.close()
 
 
+def test_06b_same_bytes_registered_under_another_dataset_still_link_to_this_run(tmp_path: Path) -> None:
+    """Canlı tam set (17 Eyl 2026): EVDS'in boş pencere yanıtı her seri için aynı baytlardır; artifact ilk serinin
+    dataset'iyle kayıtlıyken 24 serinin bağı "registered under X but the link claims Y" ile düştü. Artifact kimliği
+    baytlardır; bağ run'ın bağlamını taşır ve run ile doğrulanır, artifact'ın ilk kaydedeniyle değil."""
+    from src.lakehouse.ingestion.observability import RunArtifactLink
+
+    connection = bootstrap_database(tmp_path / "data/lakehouse.duckdb")
+    try:
+        repository = RunRepository(connection)
+        artifacts = ArtifactRepository(connection)
+        asset = _adhoc_asset(tmp_path, b'{"totalCount":0,"items":[]}')
+        now = datetime(2026, 9, 17, 10, tzinfo=timezone.utc)
+        artifacts.register(replace(asset, dataset_id="adhoc_other"))       # ilk kaydeden başka seri
+        run_id = repository.start(run_id=str(uuid4()), source_id="adhoc", dataset_id=DATASET_ID, started_at=now)
+        link = RunArtifactLink(run_id=run_id, artifact_sha256=asset.artifact_sha256, source_id="adhoc",
+                               dataset_id=DATASET_ID, fetched_at=FETCHED_AT, parser_config_sha256=None)
+        assert repository.link_artifact(link) is True
+        assert [(l[2], l[3]) for l in _links(connection)] == [("adhoc", DATASET_ID)]   # bağ BU run'ın dataset'ini taşır
+        assert connection.execute("SELECT dataset_id FROM meta.artifact WHERE artifact_sha256 = ?",
+                                  [asset.artifact_sha256]).fetchone() == ("adhoc_other",)  # artifact ilk bağlamını korur
+    finally:
+        connection.close()
+
+
 @pytest.mark.parametrize(
     "kind",
-    ["unknown_run", "closed_run", "run_other_dataset", "unregistered_artifact",
-     "artifact_other_dataset", "link_claims_other_source"],
+    ["unknown_run", "closed_run", "run_other_dataset", "unregistered_artifact", "link_claims_other_source"],
 )
 def test_06_application_refuses_inconsistent_links(tmp_path: Path, kind: str) -> None:
     from src.lakehouse.ingestion.observability import RunArtifactIntegrityError, RunArtifactLink
@@ -487,8 +510,6 @@ def test_06_application_refuses_inconsistent_links(tmp_path: Path, kind: str) ->
             link = replace(link, run_id=other)
         elif kind == "unregistered_artifact":
             pass  # meta.artifact has no row for this digest
-        elif kind == "artifact_other_dataset":
-            artifacts.register(replace(asset, dataset_id="adhoc_other"))
         elif kind == "link_claims_other_source":
             artifacts.register(asset)
             link = replace(link, source_id="evds")

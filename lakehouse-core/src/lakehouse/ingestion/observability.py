@@ -474,12 +474,11 @@ class RunRepository:
                 f"cannot link artifact {link.artifact_sha256} to run {link.run_id}: the "
                 "artifact is not registered in meta.artifact"
             )
-        if tuple(artifact) != (link.source_id, link.dataset_id):
-            raise RunArtifactIntegrityError(
-                f"artifact {link.artifact_sha256} is registered under "
-                f"{artifact[0]}/{artifact[1]} but the link claims "
-                f"{link.source_id}/{link.dataset_id}"
-            )
+        # Artifact kimliği BAYTLARDIR (17 Eyl, ArtifactRepository.register ile aynı karar): aynı baytlar başka bir
+        # serinin isteğinden de gelebilir (EVDS'in boş pencere yanıtı her seri için aynıdır). meta.artifact ilk
+        # kaydedenin source/dataset bağlamını taşır; bu bağ ise BU run'ın bağlamını taşır ve yukarıda run ile
+        # doğrulandı. İkisinin eşit olması istenmez — eskiden istendiği için 24 seri "registered under X but the
+        # link claims Y" ile düşüyordu.
 
         self.connection.execute(
             """
@@ -578,7 +577,14 @@ class RunRepository:
         run_source_id: str,
         run_dataset_id: str,
     ) -> None:
-        """Refuse a warning that names an artifact which is missing or belongs elsewhere."""
+        """Refuse a warning that names an artifact which is missing or belongs elsewhere.
+
+        "Belongs" is decided by this run's own link (``meta.run_artifact``), not by who registered
+        the bytes first: artifact identity is the bytes (17 Eyl, same decision as
+        ``ArtifactRepository.register`` and ``link_artifact``), so the same artifact can be fetched
+        by several datasets — EVDS's empty-window body is identical for every series. Without a
+        link, the registration context is the only evidence and must match the run as before.
+        """
 
         digests = {
             warning.artifact_sha256
@@ -595,7 +601,11 @@ class RunRepository:
                     f"cannot record warnings for run {run_id}: artifact {digest} is not "
                     "registered in meta.artifact"
                 )
-            if tuple(artifact) != (run_source_id, run_dataset_id):
+            linked = self.connection.execute(
+                "SELECT 1 FROM meta.run_artifact WHERE run_id = ? AND artifact_sha256 = ?",
+                [run_id, digest],
+            ).fetchone()
+            if linked is None and tuple(artifact) != (run_source_id, run_dataset_id):
                 raise WarningIntegrityError(
                     f"artifact {digest} belongs to {artifact[0]}/{artifact[1]} but run "
                     f"{run_id} covers {run_source_id}/{run_dataset_id}"
