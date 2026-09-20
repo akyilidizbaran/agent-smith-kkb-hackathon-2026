@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from typing import Iterable, Sequence
 
+from ..adapters.mia_embedder import record_digest as _record_digest
 from ..contracts.retrieval import Candidate, Embedder, reciprocal_rank_fusion
 from .facets import Facets, extract_facets, frequency_rank, province_of
 from .lexical import Bm25Index, candidate_text
@@ -126,6 +127,8 @@ class CatalogRetriever:
         self._bm25.index([Candidate(id=r.id, text=r.text) for r in self.records])
         self._vectors: list[list[float]] | None = None
         self._cache = embedding_cache
+        self.embedded_fresh = 0      # son vektör kurulumunda MIA'ya gönderilen kayıt sayısı (ölçüm/iz için)
+        self.embedded_reused = 0     # önceki önbellek sürümünden alınan kayıt sayısı
         self.mode = self.policy.resolve(len(self.records), embedder_available=embedder is not None)
         self.last_facets: Facets = Facets()
         self.last_error: str | None = None
@@ -135,13 +138,29 @@ class CatalogRetriever:
         if self._vectors is not None or self.embedder is None:
             return
         texts = [f"{r.name}. {' '.join(r.aliases)}".strip() for r in self.records]
-        cached = self._cache.get(self.embedder.model, [r.id for r in self.records], texts) if self._cache else None
+        ids = [r.id for r in self.records]
+        cached = self._cache.get(self.embedder.model, ids, texts) if self._cache else None
         if cached is None:
-            vectors = []
-            for i in range(0, len(texts), 64):
-                vectors.extend(self.embedder.embed(texts[i:i + 64]))
+            # Artımlı yol: katalog değiştiyse (Architect bir taslak ekledi, alias düzeltildi) yalnız parmak izi
+            # tutmayan kayıtlar gömülür; gerisi en yeni önceki sürümden okunur. Sonuç tam hesapla birebir aynıdır.
+            reused: dict[str, list[float]] = {}
+            if self._cache and hasattr(self._cache, "reuse"):
+                try:
+                    reused = self._cache.reuse(self.embedder.model, ids, texts)
+                except Exception:  # noqa: BLE001 — önbellek hızlandırıcıdır; okunamazsa tam hesap
+                    reused = {}
+            digests = [_record_digest(i, t) for i, t in zip(ids, texts)] if reused else [None] * len(ids)
+            missing = [k for k, d in enumerate(digests) if d not in reused]
+            fresh: dict[int, list[float]] = {}
+            for i in range(0, len(missing), 64):
+                chunk = missing[i:i + 64]
+                for k, vec in zip(chunk, self.embedder.embed([texts[k] for k in chunk])):
+                    fresh[k] = vec
+            vectors = [fresh[k] if k in fresh else reused[digests[k]] for k in range(len(ids))]
+            self.embedded_fresh = len(missing)
+            self.embedded_reused = len(ids) - len(missing)
             if self._cache:
-                self._cache.put(self.embedder.model, [r.id for r in self.records], texts, vectors)
+                self._cache.put(self.embedder.model, ids, texts, vectors)
             cached = vectors
         self._vectors = cached
 
