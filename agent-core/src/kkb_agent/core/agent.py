@@ -51,6 +51,11 @@ from .workspace_fastpath import (
 _CHART_ASK = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
 # Analitik isteği: aykırılık / kırılma / öncülük (ADR-0040). Araç çalışmadan iddia yazılmaz.
 _ANALYTICS_ASK = re.compile(r"anomali|aykır|olağan ?dışı|sıra ?dışı|kırılma|rejim değişi|öncül|önden mi|korelasyon|granger", re.I)
+# Terfi onayı (tools/promote.py `_CONFIRM` ile aynı sözlük) ve dosya/adres kayıt isteği (mesajda ek + yazma fiili).
+_PROMOTE_ASK = re.compile(r"\b(onayl[ıi]yorum|onayla|onaylayalım|kataloğa al|kataloga al|terfi ettir|yayınla|yayinla)\b", re.I)
+_INGEST_ASK = re.compile(r"(?=.*(?:\n\s*Dosya:\s*\S|https?://))(?=.*\b(?:kaydet|kaydedelim|taslak (?:seri )?olarak|havuza|içe aktar|ingest)\b)", re.I | re.S)
+#: Aktif tablo ya da üretilmiş veri gerektirmeyen yetenekler (yazma yolu): geri gönderme koşulu tabloya bakmaz.
+_TABLE_FREE_CAPABILITIES = frozenset({"terfi", "kayıt"})
 # (ad, soru deseni, yeterli sayılan araçlar, geri gönderme mesajı) — her biri turda bir kez.
 _REQUESTED_CAPABILITIES: tuple[tuple[str, "re.Pattern[str]", frozenset[str], str], ...] = (
     ("grafik", _CHART_ASK, frozenset({"chart"}),
@@ -63,6 +68,17 @@ _REQUESTED_CAPABILITIES: tuple[tuple[str, "re.Pattern[str]", frozenset[str], str
     ("öncül", _PREMISE_ASK, frozenset({"check_premise"}),
      "Soru bir yön varsayıyor ama check_premise ile doğrulamadın. Öncülü araçla sına (seri, kırılım değeri, yıl, "
      "iddia edilen yön); kart ÇELİŞİYOR derse cevabın ilk cümlesi düzeltme olsun. Sonra cevabını yaz."),
+    # Terfi (Architect, tools/promote.py): "onaylıyorum / kataloğa al" araç çağrılmadan cevaplanmaz (ölçüldü 20 Eyl:
+    # model tek turda "kataloğa alındı" yazdı, promote_draft hiç çağrılmadı; guard metni sildi, kullanıcı boş cevap gördü).
+    ("terfi", _PROMOTE_ASK, frozenset({"promote_draft"}),
+     "Kullanıcı bir taslağın kataloğa alınmasını onayladı ama promote_draft aracını çağırmadın. Seri kimliğini kullanıcının "
+     "mesajından al (adhoc:<anahtar>), promote_draft(series_id, purpose) çağır; sonucu araç kartından yaz, kendin 'alındı' deme."),
+    # Kayıt (Architect, tools/ingest.py): mesajda dosya/adres ve kaydetme isteği varsa ingest_from_url çağrılmadan
+    # 'kaydedildi' ya da 'kaydedemedim' yazılmaz; sonuç araç kartından gelir.
+    ("kayıt", _INGEST_ASK, frozenset({"ingest_from_url"}),
+     "Kullanıcı bir dosyanın/adresin havuza taslak olarak kaydedilmesini istedi ama ingest_from_url aracını çağırmadın. "
+     "Mesajdaki 'Dosya: <yol>' satırındaki yolu ya da adresi locator olarak ver, beyanları (birim, frekans, ölçüm tipi, "
+     "seri anahtarı) aktar ve aracı çağır; sonucu araç kartından yaz."),
 )
 from .registry import ToolRegistry
 from .tool import ToolResult
@@ -520,7 +536,7 @@ class AnalyticsAgent:
     # must never answer a new semantic request by accident.
     FRESH_DATA_TOOLS = frozenset({
         "lakehouse_query", "gold_align", "gold_decompose", "gold_join",
-        "web_url", "ingest_source", "ingest_from_url",
+        "web_url", "ingest_source", "ingest_from_url", "promote_draft",
     })
 
     def __init__(
@@ -1036,8 +1052,10 @@ class AnalyticsAgent:
                 # Kimlik sorusu ("Sen kimsin?") veri istemez: geri gönderilince doğru taslak bozuluyordu (kimlik deneyi, 15 Eyl).
                 # Ürün kullanım sorusu ("architect rolüne nasıl geçebilirim") da: geri gönderilen model geçmişteki son veri
                 # sorusuna dönüp onu cevapladı (arayüz denemesi, 15 Eyl).
+                # Yazma turu (terfi/kayıt istendi): "önce veriyi çek" yanlış yönlendirir; o turun uyarısı aşağıdaki yetenek kapısıdır.
+                write_turn = any(cap[0] in _TABLE_FREE_CAPABILITIES for cap in requested)
                 if (not produced_data and not nudged and not recovery.failures and not acted and not self.workspace.has_table
-                        and not is_identity_question(question) and not is_usage_question(question)):
+                        and not write_turn and not is_identity_question(question) and not is_usage_question(question)):
                     nudged = True
                     steps.append(
                         AgentStep(
@@ -1066,9 +1084,11 @@ class AnalyticsAgent:
                 # Kullanıcı grafik ya da analitik istedi, model tabloyu "doğrulamak" için sorgu
                 # üstüne sorgu atıp araçsız cevap yazdı (ölçüldü, Deney 2 tur 3). Her yetenek için
                 # bir kez geri gönderilir; veri hazırsa araç çağrısı tek adımdır.
+                # Terfi ve kayıt tabloya bağlı değildir: veri üretilmemiş olsa da araç çağrılmadan cevaplanmaz.
                 missing = next(
                     (cap for cap in requested
-                     if cap[0] not in capability_nudged and (produced_data or self.workspace.has_table)
+                     if cap[0] not in capability_nudged
+                     and (produced_data or self.workspace.has_table or cap[0] in _TABLE_FREE_CAPABILITIES)
                      and not any(s.tool_name in cap[2] and s.ok for s in steps)),
                     None,
                 )
@@ -1134,7 +1154,11 @@ class AnalyticsAgent:
                 # active table and no fresh source was queried, never publish
                 # prose based on the stale table.
                 prior_query_context = self._has_confirmed_follow_up_context()
-                if (self.workspace.has_table and prior_query_context
+                # Bu turda taze kaynak/yazma aracı DENENDİYSE (başarısız da olsa) cevap bayat tabloyu anlatmıyor,
+                # denemenin sonucunu anlatıyor (ölçüldü 20 Eyl: çakışan taslak reddi ve "iki seçenek" metni
+                # "uyumlu değil" cümlesiyle eziliyordu; kullanıcı neden kaydedilmediğini hiç görmedi).
+                attempted_fresh = any(getattr(s, "tool_name", None) in self.FRESH_DATA_TOOLS for s in steps)
+                if (self.workspace.has_table and prior_query_context and not attempted_fresh
                         and not any(s.ok and s.tool_name in self.FRESH_DATA_TOOLS for s in steps)):
                     answer_text = (
                         "Bu istek mevcut analiz tablosuyla uyumlu değil. Doğru kaynak ve kapsam için "
@@ -1335,6 +1359,18 @@ class AnalyticsAgent:
                     self.workspace.remember_web(result.artifacts["web"])  # sonraki turların zinciri için
                 if result.ok and result.artifacts.get("web_search"):   # K02-T04: bağlam kaynağı, veri değil (ADR-0075)
                     artifacts.append({"kind": "web_search", **result.artifacts["web_search"]})
+                if result.ok and call.name in ("ingest_from_url", "promote_draft"):
+                    # Kayıt turu: kanıt paneli tabloya değil yazılan kayda bakar (dosya sha256, run, satır sayısı).
+                    ingest_out = result.artifacts.get("ingest")
+                    artifacts.append({
+                        "kind": "record", "tool": call.name, "card": result.content,
+                        "locator": (call.arguments or {}).get("locator") if isinstance(call.arguments, dict) else None,
+                        "series_id": (call.arguments or {}).get("series_id") if isinstance(call.arguments, dict) else None,
+                        "artifact_sha256": getattr(ingest_out, "artifact_sha256", None),
+                        "run_id": getattr(ingest_out, "run_id", None),
+                        "rows_written": getattr(ingest_out, "rows_written", None),
+                        "rows_unchanged": getattr(ingest_out, "rows_unchanged", None),
+                    })
                 if result.ok and result.artifacts.get("fitness"):      # uygunluk kararı + kapsam (V3 §3.9): kanıt paneli ve kapsam beyanı
                     artifacts.append({"kind": "fitness", **result.artifacts["fitness"]})
                     # Netleştirme kapısı (tools/clarify.py) bu turun kararını okur: yalnız "kısmen" ise soru sorulabilir.
@@ -1413,6 +1449,7 @@ class AnalyticsAgent:
         )
         text = self._strip_reasoning(final.content)
         text, rejected = self._checked_final(question, text, tool_texts, steps, self.max_steps + 1)
+        text = self._no_tool_claim_exit(question, text, steps)
         text = self._coverage_note(self._source_note(text, steps, artifacts), artifacts)
         if budget_hit:
             # K02-T10 (A27): sınır kullanıcıya deterministik söylenir; modelin bunu yazmasına bırakılmaz.
@@ -1455,6 +1492,24 @@ class AnalyticsAgent:
     # ------------------------------------------------------------------ D02: güvenilir son çıkış
     def _frames_pool(self) -> list:
         return [*self.workspace.previous_tables(), *(frame for _, frame in self.workspace.peeks())]
+
+    NO_TOOL_EXIT_TEXT = ("Bu soru için hiçbir araç adımı tamamlanamadı: kaynağa erişilmedi, veri okunmadı ve "
+                         "veritabanına hiçbir şey yazılmadı. Aynı isteği yeniden gönderebilir ya da dosyayı 📎 ile ekleyebilirsiniz.")
+
+    def _no_tool_claim_exit(self, question: str, text: str, steps: list) -> str:
+        """Kapanış turunda (süre/adım sınırı) araçsız işlem iddiası geçmez.
+
+        Ölçüldü (20 Eyl, canlı): Architect kaydından sonraki soruda embedding yeniden hesabı bütçeyi döngü
+        başlamadan bitirdi; kapanış çağrısında model "sayfaya eriştim, OCR ile okudum, listede tek rapor var"
+        yazdı — sıfır adım, sıfır kaynak. Döngü içindeki `_ACTION_CLAIM` kapısı kapanışta uygulanmıyordu.
+        Kural: başarılı bir araç adımı yoksa ve metin işlem iddiası taşıyorsa ya da soru adres/dosya
+        içeriyorsa, modelin metni yerine deterministik açıklama gider (ADR-0037 ruhu: uydurma yerine sessizlik)."""
+        ran_tool = any(getattr(s, "ok", False) and getattr(s, "tool_name", None) for s in steps)
+        if ran_tool:
+            return text
+        if _ACTION_CLAIM.search(text or "") or _FILE_REF.search(question or ""):
+            return self.NO_TOOL_EXIT_TEXT
+        return text
 
     def _checked_final(self, question: str, text: str, tool_texts: list[str], steps: list, index: int) -> tuple[str, list[str]]:
         """Geri gönderme hakkı olmayan çıkışlar (döngü kilidi, adım/süre sınırı): aynı doğrulama, aynı deterministik çıkış."""
