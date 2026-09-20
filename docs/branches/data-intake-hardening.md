@@ -23,6 +23,20 @@ hiçbiri tahmin değildir. Kararlar `ADR-0037` (uydurma yerine sessizlik), `ADR-
 | 11 | Terfiden sonra `first_obs/last_obs` boş; ajan "kapsam bilinmiyor" diyordu | Kapsam yalnız tam Silver kurulumunda yenileniyordu | `promote_draft_series` aynı işlemde `refresh_series_coverage` çağırır | `lakehouse-core/catalog/promotion.py` |
 | 12 | Aynı CSV yeni seri anahtarıyla kaydedilemedi: "artifact … is not registered under the run-artifact link's source/dataset"; üç deneme üç **yetim taslak** ve üç **"success" run** (rows_out 11, gözlem 0) bıraktı | PR #11 artifact kimliğini baytlara bağladı (`meta.artifact` ilk çekimin dataset'ini saklar) ama ad-hoc yayın kontrolü hâlâ eşitlik istiyordu; kayıt sırası run→seri→yayın, yayın düşünce geri alınmıyordu | Yayın, run'ın kendi `meta.run_artifact` bağını esas alır (artifact var olmalı, ilk dataset'e eşit olmak zorunda değil); yayın reddedilirse bu çağrının eklediği taslak silinir ve run `failed` + gerekçe olur | `lakehouse-core/adhoc/publication.py`, `application.py` |
 
+### 1a. Codex'in adres kaydı işi bu dala alındı (cherry-pick, 21 Eylül)
+
+`feature/architect-url-ingest` dalının üç commit'i (`5acc34a`, `298cb26`, `7b29e9f`) yazarlıkları korunarak
+alındı; dal ucundaki merge commit'in test dosyasına eklediği `active_question` atamaları ayrı commit'le tamamlandı.
+Kazanımlar: rapor **sayfasındaki** indirilebilir ekler listelenip `resource_index` ile seçilir (sunumdaki
+Borsa İstanbul "piyasa verileri" ve `endeks/xtumy` adresleri sayfa, dosya değil); metin katmanlı PDF tabloları
+`pdfplumber` ile OCR'suz okunur, `table_index`/`value_row` ile ölçüm seçilir; PDF adresine HTTP 200 ile dönen
+"Request Rejected" HTML'i erişim engeli sayılır, sayfa değiştirerek tekrar denenmez; lakehouse CLI yürütülebilir
+dosyası yapılandırılmış PATH'ten çözülür. Yeni bağımlılık `pdfplumber` (`uv.lock` değişti; Elif'in PR #17'si aynı
+işi `pypdfium2` ile yapıyor, ikisi birlikte de zararsız). Canlı: Risk Merkezi Temmuz 2026 bülteni sayfa → ek 1 →
+sayfa 4 → "Nakdi Krediler" satırı → 5 kurum taslak (Bankalar 27.790, Toplam 28.963 milyar TL), ikinci koşu
+idempotent; Borsa PDF adresi bugün 404 → `SOURCE_NOT_FOUND`, uydurma yok. Belgeler: `docs/ARCHITECT_URL_KAYIT.md`,
+`docs/PDF_ERISIM_TESHISI.md`.
+
 Değişmeyenler, bilinçli: beyan kapısı (birim/ölçüm tipi kullanıcıdan gelir, doğrulanmaz), aynı anahtar farklı içerik reddi
 (veri ekibinin sözleşmesi), tarihsiz tablonun kalıcı kaydedilmemesi, `unknown` ölçüm tipinde toplama türetilmemesi.
 
