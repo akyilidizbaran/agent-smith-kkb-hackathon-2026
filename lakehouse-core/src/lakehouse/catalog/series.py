@@ -511,14 +511,37 @@ def _upsert_series_relations(
     connection: duckdb.DuckDBPyConnection,
     rows: list[SeriesRecord] | list[Mapping[str, Any]],
 ) -> int:
-    """Synchronize the relation graph after the semantic catalog transaction is prepared."""
+    """Synchronize only changed relation rows, using one prepared batch statement.
+
+    ``bootstrap_database`` is intentionally safe to call from every CLI operation and test.
+    The catalog often contains thousands of records, so rewriting every relation on every
+    bootstrap would make an unchanged catalog increasingly expensive. The content hash covers
+    every persisted semantic field; matching hashes are therefore a safe no-op.
+    """
 
     relations = infer_series_relations(rows)
     if not relations:
         return 0
+    existing = dict(
+        connection.execute(
+            "SELECT series_id, relation_content_sha256 FROM meta.series_relation"
+        ).fetchall()
+    )
+    changed = [
+        relation
+        for relation in relations
+        if existing.get(relation.series_id) != relation.content_sha256
+    ]
+    if not changed:
+        return len(relations)
+
     placeholders = ", ".join("?" for _ in _RELATION_WRITE_COLUMNS)
-    for relation in relations:
-        values = [
+    sql = (
+        f"INSERT OR REPLACE INTO meta.series_relation ({', '.join(_RELATION_WRITE_COLUMNS)}, updated_at) "
+        f"VALUES ({placeholders}, current_timestamp)"
+    )
+    values = [
+        [
             relation.series_id,
             relation.concept_id,
             relation.parent_series_id,
@@ -529,11 +552,9 @@ def _upsert_series_relations(
             relation.relation_source,
             relation.content_sha256,
         ]
-        connection.execute(
-            f"INSERT OR REPLACE INTO meta.series_relation ({', '.join(_RELATION_WRITE_COLUMNS)}, updated_at) "
-            f"VALUES ({placeholders}, current_timestamp)",
-            values,
-        )
+        for relation in changed
+    ]
+    connection.executemany(sql, values)
     return len(relations)
 
 

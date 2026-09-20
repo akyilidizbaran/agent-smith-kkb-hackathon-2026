@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import time
+
 from src.lakehouse.catalog.relations import infer_series_relations
+from src.lakehouse.catalog.series import _upsert_series_relations
+from src.lakehouse.db.bootstrap import bootstrap_database
 
 
 def _row(series_id: str, source_id: str, native_code: str, name_tr: str, **extra):
@@ -56,3 +60,43 @@ def test_evds_dataset_regions_share_a_dimension_parent_when_published_together()
     assert by_id["evds:TP.TEST.TR10"].parent_series_id == "evds:TP.TEST.TR"
     assert by_id["evds:TP.TEST.TR10"].relation_type == "child_breakdown"
     assert by_id["evds:TP.TEST.TR10"].dimension_path == ("region=TP.TEST.TR10",)
+
+
+def test_unchanged_relations_are_not_rewritten_and_changed_rows_are_upserted(tmp_path) -> None:
+    connection = bootstrap_database(tmp_path / "relations.duckdb", catalog_root=None)
+    rows = [
+        _row("manual:one", "manual", "one", "Birinci seri", concept_id="shared"),
+        _row("manual:two", "manual", "two", "İkinci seri", concept_id="shared"),
+    ]
+
+    assert _upsert_series_relations(connection, rows) == 2
+    before = connection.execute(
+        "SELECT series_id, relation_content_sha256, epoch_ms(updated_at) "
+        "FROM meta.series_relation ORDER BY series_id"
+    ).fetchall()
+
+    assert _upsert_series_relations(connection, rows) == 2
+    unchanged = connection.execute(
+        "SELECT series_id, relation_content_sha256, epoch_ms(updated_at) "
+        "FROM meta.series_relation ORDER BY series_id"
+    ).fetchall()
+    assert unchanged == before
+
+    rows[1] = _row(
+        "manual:two",
+        "manual",
+        "two",
+        "Yeni ad (İstanbul)",
+        concept_id="different",
+    )
+    time.sleep(0.05)
+    assert _upsert_series_relations(connection, rows) == 2
+    after = connection.execute(
+        "SELECT series_id, relation_content_sha256, epoch_ms(updated_at) "
+        "FROM meta.series_relation ORDER BY series_id"
+    ).fetchall()
+    assert after[0][1] == unchanged[0][1]
+    assert after[1][1] != unchanged[1][1]
+    assert after[0][2] == unchanged[0][2]
+    assert after[1][2] > unchanged[1][2]
+    connection.close()
