@@ -203,6 +203,46 @@ def test_evds_is_windowed_and_a_full_limit_response_is_truncation(env, monkeypat
     assert out2.status == "failed" and "per-request limit" in out2.error and out2.new == 0
 
 
+def test_an_empty_window_in_a_windowed_fetch_is_a_warning_not_a_failure(env, monkeypatch) -> None:
+    """Canlı tam set (17 Eyl 2026): 25 EVDS serisinde son pencere (2026-01..06) gözlemsiz döndü — kaynak o dönemi henüz
+    yayımlamamış. Bu ingest hatası değil, kayıtlı uyarıdır; öteki pencereler iner. Her pencere boşsa yine hatadır. Boş
+    gövde her seride aynı baytlardır: ikinci seri kimlik çatışması değil, aynı artifact'ı görür."""
+    EMPTY = b'{"totalCount":0,"items":[]}'
+
+    class EvdsConn(BaseConnector):
+        def __init__(self, raw, session=None):
+            pass
+
+        def fetch(self, spec):
+            body = EMPTY if spec.end_date.year >= 2018 else f'{{"w":"{spec.start_date}"}}'.encode()
+            return [_asset(env["tmp"], body, source="evds", dataset=spec.dataset_id)]
+
+    class P:
+        def parse(self, asset):
+            if asset.raw_path.read_bytes() == EMPTY:
+                raise LakehouseError(ErrorPayload(error_code="EMPTY_DATASET", message="EVDS response contains no observations",
+                                                  source_id=asset.source_id, dataset_id=asset.dataset_id, retryable=False))
+            return _batch(asset)
+
+    monkeypatch.setitem(rci.CONNECTOR_REGISTRY, "evds", ConnectorBinding(
+        connector_cls=EvdsConn, parser_cls=P,
+        build_spec=lambda row, s, e: FetchSpec(source_id="evds", dataset_id=row.dataset_id, locator="evds", start_date=s,
+                                               end_date=e, parameters={"series": row.native_code})))
+    row = SeriesRow(series_id="evds:X", source_id="evds", native_code="X", dataset_id="evds_x", name_tr="x")
+    out = rci._run_one(row, env["raw"], None, env["arts"], env["bronze"], start=date(2016, 1, 1), end=date(2018, 6, 30))
+    # üç pencere: 2016 ve 2017 dolu, 2018 (son) boş
+    assert out.status == "warning" and out.new == 2 and out.empty == 1 and out.failed == 0 and out.error is None
+    assert _runs(env["con"])[0][0] == "warning"
+    (message,), = env["con"].execute("SELECT message FROM meta.ingest_warning").fetchall()
+    assert "window 3/3" in message and "no observations" in message
+
+    # Aynı boş baytlar başka bir seriden, tek pencereyle: kimlik çatışması yok; her pencere boş → EMPTY_DATASET hatası.
+    row2 = SeriesRow(series_id="evds:Y", source_id="evds", native_code="Y", dataset_id="evds_y", name_tr="y")
+    out2 = rci._run_one(row2, env["raw"], None, env["arts"], env["bronze"], start=date(2018, 1, 1), end=date(2018, 6, 30))
+    assert out2.status == "failed" and "EMPTY_DATASET" in out2.error and "identity conflict" not in out2.error
+    assert env["con"].execute("SELECT count(*) FROM meta.artifact WHERE byte_size = ?", [len(EMPTY)]).fetchone()[0] == 1
+
+
 def test_a22_warned_artifact_ingested_twice_is_idempotent_and_keeps_each_runs_warning(env, monkeypatch) -> None:
     """K02-T08 (A22): the same bytes with a parser warning, fetched by two runs. Data lands once (one artifact, one Bronze
     file with unchanged bytes); each run keeps its own link and its own warning row, so a later Silver rebuild can still
