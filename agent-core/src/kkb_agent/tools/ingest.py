@@ -203,6 +203,20 @@ def _mentioned(name: str | None, user_text: str) -> bool:
     return any(w in text for w in words) or name.lower() in text
 
 
+def _entity_label(user_text: str) -> str:
+    """Satır-ölçüm matrisinde sütunlardan satıra inen varlık kolonunun adı, kullanıcının sözüyle: 'il bazında' → il,
+    'kurum' → kurum, 'ülke' → ulke; söylenmediyse 'kurum' (Risk Merkezi örneği). Ölçüldü (21 Eyl, KFE.pdf): iller
+    'kurum' başlığıyla dönünce model haklı olarak teyit istedi."""
+    text = (user_text or "").lower()
+    if re.search(r"il(ler|lere|lerin|de)?|il baz|şehir|sehir|bölge|bolge", text):
+        return "il"
+    if re.search(r"ülke|ulke|country", text):
+        return "ulke"
+    if re.search(r"banka|kurum|kuruluş|sektör", text):
+        return "kurum"
+    return "kurum"
+
+
 def _bare_locator(locator: str) -> bool:
     """Adres ne http(s), ne file:, ne mutlak yol: yalnız bir dosya adı. Kullanıcı dosyayı eklemeden adını yazmıştır
     (ölçüldü 20 Eyl: 'bist_altin_2023.csv dosyasını kaydet' → araç düz adla arandı, ACCESS_BLOCKED)."""
@@ -441,6 +455,7 @@ class IngestFromUrlTool(Tool):
                     pages=params.pages, sheet=params.sheet, value_row=params.value_row,
                     session=self.session, ocr=self.ocr,
                     period=parse_period(params.period) if params.period else None,
+                    entity_label=_entity_label(self._user_text()),
                 )
                 frame, outcome = web_source.frame, web_source.outcome
             elif is_document("", params.locator.split("?")[0]):
@@ -486,7 +501,7 @@ class IngestFromUrlTool(Tool):
         local_matrix = None
         if web_source is None and params.value_row:
             try:
-                local_matrix = measure_row_to_long(frame, params.value_row, period)
+                local_matrix = measure_row_to_long(frame, params.value_row, period, entity_label=_entity_label(self._user_text()))
             except SourceSelection as exc:
                 return ToolResult(content=f"EKLENMEDİ — kaynak seçimi veya ek bilgi gerekli:\n{exc}", ok=True)
             if local_matrix is not None:
@@ -517,7 +532,7 @@ class IngestFromUrlTool(Tool):
         mapping, semantics = propose(profile, frame, series_id=series_id)
         if mapping is not None and semantics is not None:
             from ..builder.profile import Evidence
-            matrix_entity = web_source.entity_column if web_source is not None else ("kurum" if local_matrix else None)
+            matrix_entity = web_source.entity_column if web_source is not None else (_entity_label(self._user_text()) if local_matrix else None)
             matrix_frequency = web_source.frequency if web_source is not None else (local_matrix[2] if local_matrix else None)
             turkish = web_source.turkish_numbers if web_source is not None else bool(local_matrix)
             if matrix_entity:

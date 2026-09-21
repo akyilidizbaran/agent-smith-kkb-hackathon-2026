@@ -202,15 +202,16 @@ def measure_row_to_long(frame: pd.DataFrame, value_row: str | None, period: tupl
     return long, note, frequency
 
 
-def _monthly_matrix(result: SourceTable, value_row: str | None, period: tuple[str, str] | None = None) -> None:
+def _monthly_matrix(result: SourceTable, value_row: str | None, period: tuple[str, str] | None = None,
+                    entity_label: str = "kurum") -> None:
     """An explicit month in the first header (or a user-declared period) anchors a metric-by-entity report matrix."""
     frame = result.frame
     assert frame is not None
-    converted = measure_row_to_long(frame, value_row, period)
+    converted = measure_row_to_long(frame, value_row, period, entity_label=entity_label)
     if converted is None:
         return
     result.frame, note, frequency = converted
-    result.entity_column = "kurum"
+    result.entity_column = entity_label
     result.frequency = frequency
     result.turkish_numbers = True
     result.note += note
@@ -220,7 +221,7 @@ def read_web_source(locator: str, *, allowed_root: Path, resource_index: int | N
                     table_index: int | None = None, pages: str | None = None,
                     sheet: str | None = None, value_row: str | None = None,
                     session: Any = None, ocr: Any = None,
-                    period: tuple[str, str] | None = None) -> SourceTable:
+                    period: tuple[str, str] | None = None, entity_label: str = "kurum") -> SourceTable:
     content, media, outcome = read_bytes_for_profiling(locator, allowed_roots=[allowed_root], session=session)
     result = SourceTable(None, outcome)
     if content is None or not outcome.ok:
@@ -290,5 +291,5 @@ def read_web_source(locator: str, *, allowed_root: Path, resource_index: int | N
         [f"{label}, {len(t)} satır; sütunlar: {', '.join(map(str, t.columns))[:700]}; örnek: {t.head(2).to_dict('records')}"
          for label, t in tables])
     result.note += f" {label}, table_index={table_index if table_index is not None else 0}."
-    _monthly_matrix(result, value_row, period)
+    _monthly_matrix(result, value_row, period, entity_label)
     return result

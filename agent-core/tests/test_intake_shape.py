@@ -124,3 +124,14 @@ def test_satir_olcum_matrisi_beyan_edilen_donemle_uzun_tabloya_cevrilir() -> Non
     with pytest.raises(SourceSelection, match="value_row ile seç"):
         measure_row_to_long(frame, "Yok", ("2026-08-31", "monthly"))
     assert measure_row_to_long(frame, None, None) is None, "value_row yoksa dönüşüm istenmiyor"
+
+
+def test_varlik_kolonu_adi_kullanicinin_sozunden() -> None:
+    from kkb_agent.tools.ingest import _entity_label
+    assert _entity_label("KFE satırını il bazında kaydet") == "il"
+    assert _entity_label("kurumlara göre nakdi kredi") == "kurum"
+    assert _entity_label("ülke bazında enflasyon") == "ulke"
+    assert _entity_label("taslak olarak kaydet") == "kurum"
+    frame = pd.DataFrame({"": ["KFE"], "TÜRKİYE": ["236,8"], "ANKARA": ["265,0"]})
+    long, _, _ = measure_row_to_long(frame, "KFE", ("2026-08-31", "monthly"), entity_label="il")
+    assert list(long.columns) == ["tarih", "il", "KFE"]
