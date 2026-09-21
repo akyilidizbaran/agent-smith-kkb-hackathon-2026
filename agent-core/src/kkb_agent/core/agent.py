@@ -537,6 +537,10 @@ class AnalyticsAgent:
     FRESH_DATA_TOOLS = frozenset({
         "lakehouse_query", "gold_align", "gold_decompose", "gold_join",
         "web_url", "ingest_source", "ingest_from_url", "promote_draft",
+        # Aktif tabloya katalogdan yeni kolon/tablo getirir; taze kaynaktır. Ölçüldü (22 Eyl, benchmark R06):
+        # "mevcut tabloya TÜFE ekle" turunda workspace_add_column 72 gözlemi eklemişken cevap bayat-tablo
+        # guard'ı ("uyumlu değil") tarafından siliniyordu — jürinin "faiz ekle / KFE sütunu ekle" adımları da bu.
+        "workspace_add_column", "workspace_join",
     })
 
     def __init__(

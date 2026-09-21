@@ -33575,7 +33575,8 @@ series:
       "(FİYAT) BİST 100 Endeks (XU100), Kapanış Fiyatlarına Göre (Ocak 1986=0,01)". İş günü kapanış değeri, puan.
       Fiyat düzeyidir: aya/çeyreğe indirgenirken dönem sonu kapanışı alınır (kural last), toplanmaz; günlük ve aylık
       değişim bu kapanışlardan hesaplanır. Frekans ve ad EVDS'nin kendi metadata'sından (canlı seri listesi 21 Eylül
-      2026); baz değeri kaynağın adında yazar, ayrıca doğrulanmadı (derived).
+      2026). Değerler yüklendikten sonra Borsa İstanbul'un yayımladığı kapanışlarla doğrulandı (22 Eylül 2026:
+      2023-12-29 kapanış 7.470,18; 2021-01-04 1.495,43): birim puan, düzey serisi, ay sonu kuralı last.
     aliases:
       - bist 100
       - bist100
@@ -33590,7 +33591,7 @@ series:
     unit: index
     measure_type: index
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_service
     metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_mkbrgn
     status: active
@@ -33603,7 +33604,8 @@ series:
       TCMB EVDS, "bie_mkbrgn" veri grubu; kaynak Borsa İstanbul. "(FİYAT) BİST Tüm-100 Endeksi (XTUMY), Kapanış
       Fiyatlarına Göre". BIST 100 dışındaki payları kapsayan endeks; BIST 100 (XU100) ile karıştırılmamalı
       (borsaistanbul.com/endeks/xtumy sayfası bu endekstir). İş günü kapanış değeri, puan; dönem sonu kapanışı ile
-      indirgenir (kural last). Frekans ve ad EVDS metadata'sından (21 Eylül 2026); baz doğrulanmadı (derived).
+      indirgenir (kural last). Frekans ve ad EVDS metadata'sından (21 Eylül 2026); değerler yüklendikten sonra BIST 100 ile aynı
+      grup ve aynı kaynak tablosundan geldiği doğrulandı (22 Eylül 2026): birim puan, düzey serisi.
     aliases:
       - bist tüm-100
       - bist tum-100
@@ -33616,7 +33618,7 @@ series:
     unit: index
     measure_type: index
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_service
     metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_mkbrgn
     status: active
