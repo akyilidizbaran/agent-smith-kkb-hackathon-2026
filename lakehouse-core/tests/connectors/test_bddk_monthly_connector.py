@@ -430,3 +430,23 @@ def test_connector_never_disables_tls_verification() -> None:
     assert "InsecureRequestWarning" not in source
     assert "disable_warnings" not in source
     assert "_create_unverified_context" not in source
+
+
+def test_series_key_parameter_is_metadata_not_a_form_field(tmp_path: Path) -> None:
+    """A historical schema id is fetched on behalf of a catalogued series (M07 follow-up, 21 Sept).
+
+    ``series_key`` tells the parser where to publish; BDDK must never see it, and an ordinary
+    request must not grow a new metadata key.
+    """
+
+    connector, session = _connector(tmp_path, [_ok_response(), _ok_response()])
+
+    asset = connector.fetch(_spec(parameters={"periyot": "1", "paraBirimi": "TL", "taraf": ["10001"],
+                                              "kalemSutun": "288?Toplam", "gosterimTuru": "grid",
+                                              "series_key": "1534_Toplam"}))[0]
+    plain = connector.fetch(_spec())[0]
+
+    assert asset.metadata["requested_series_key"] == "1534_Toplam"
+    assert asset.metadata["requested_kalem_sutun"] == ["288?Toplam"]
+    assert all(name != "series_key" for name, _ in session.calls[0]["data"])
+    assert "requested_series_key" not in plain.metadata

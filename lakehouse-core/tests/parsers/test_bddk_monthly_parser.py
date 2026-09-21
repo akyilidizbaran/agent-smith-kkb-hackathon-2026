@@ -305,3 +305,20 @@ def test_committed_simple_report_capture_carries_the_real_bold_signal() -> None:
     }
     assert marked["Tüketici Kredileri (2+3+4)"] == "bold"
     assert marked["Tüketici Kredileri - Konut"] == ""
+
+
+def test_series_id_honours_the_series_key_the_connector_recorded_for_an_older_schema_id() -> None:
+    """The response is keyed by the OLD item id; the catalog knows the item by its current one.
+
+    The connector records which catalogued series the historical request was made for, and the
+    parser publishes the single measure column under that key. With more than one measure column
+    the override is ambiguous and is ignored with a warning, never guessed.
+    """
+
+    parsed = BddkMonthlyParser().parse(
+        _asset(REPORT, metadata={"expected_period_count": 5, "requested_kalem_sutun": ["288?Toplam"],
+                                 "requested_series_key": "1534_Toplam"})
+    )
+
+    assert set(parsed.dataframe["series_id"]) == {"bddk_monthly:1534_Toplam"}
+    assert not any("requested_series_key" in warning for warning in parsed.warnings)

@@ -63,6 +63,58 @@ from src.lakehouse.storage.raw import RawStorage
 DEFAULT_START = date(2016, 1, 1)
 DEFAULT_END = date(2026, 6, 30)
 
+# BDDK aylık bülten: bir kalemin şeması değişince kimliği de değişir ve eski aylar eski kimlikte kalır
+# (21 Eyl ölçümü: 2021 başından sonra başlayan 70 serinin 63'ü). Bu dosya seri → eski kimlik → dönem
+# penceresi eşlemesidir; pencereler örtüşmez (geçiş ayı yalnız yeni kimlikten alınır).
+HISTORY_FILE = _REPO_ROOT / "catalog" / "bddk_monthly_history.yml"   # catalog/series/ altında değil: o klasörün her dosyası seri kataloğu sayılır
+
+
+@dataclass(frozen=True)
+class HistoryWindow:
+    series_id: str
+    native_code: str
+    start: date
+    end: date
+
+
+def load_history(path: Path | None = None) -> dict[str, list[HistoryWindow]]:
+    """series_id → its older schema ids with the months each one answers for. Missing file → {}."""
+    path = HISTORY_FILE if path is None else path       # çağrı anında okunur: test dosyayı değiştirebilir
+    if not path.is_file():
+        return {}
+    import yaml
+
+    entries = yaml.safe_load(path.read_text(encoding="utf-8")) or []
+    out: dict[str, list[HistoryWindow]] = {}
+    for entry in entries:
+        window = HistoryWindow(
+            series_id=str(entry["series_id"]), native_code=str(entry["native_code"]),
+            start=entry["start"] if isinstance(entry["start"], date) else date.fromisoformat(str(entry["start"])),
+            end=entry["end"] if isinstance(entry["end"], date) else date.fromisoformat(str(entry["end"])),
+        )
+        if window.start > window.end:
+            raise ValueError(f"{path.name}: {window.series_id} {window.native_code}: start after end")
+        out.setdefault(window.series_id, []).append(window)
+    for series_id, windows in out.items():
+        windows.sort(key=lambda w: w.start)
+        for earlier, later in zip(windows, windows[1:]):
+            if earlier.end >= later.start:
+                raise ValueError(f"{path.name}: {series_id}: windows of {earlier.native_code} and "
+                                 f"{later.native_code} overlap; the transition month belongs to one id only")
+    return out
+
+
+def history_rows(row: SeriesRow, windows: list[HistoryWindow], start: date, end: date) -> list[tuple[SeriesRow, date, date]]:
+    """The extra fetches a series needs inside the requested window: (row with the old id, start, end)."""
+    key = row.series_id.split(":", 1)[1] if ":" in row.series_id else row.series_id
+    out = []
+    for w in windows:
+        lo, hi = max(w.start, start), min(w.end, end)
+        if lo > hi:
+            continue
+        out.append((SeriesRow(row.series_id, row.source_id, w.native_code, row.dataset_id, row.name_tr, series_key=key), lo, hi))
+    return out
+
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -97,6 +149,7 @@ class SeriesOutcome:
     error: str | None = None
     seconds: float = 0.0
     shared_with: str | None = None
+    history_code: str | None = None     # set when this outcome is an older schema id fetched for the series
 
 
 @dataclass
@@ -477,6 +530,7 @@ def main(argv: list[str] | None = None) -> int:
             # silently smaller success (M07-T10).
             print(f"ERROR: --only listed series not active in the catalog: {', '.join(report.missing)}")
     print(f"Katalogda {len(series)} aktif seri bulundu · dönem {args.start} → {args.end}.")
+    history = load_history()
 
     by_id: dict[str, SeriesOutcome] = {}
     # Aynı çekimi paylaşan seriler (FinTürk: bir ilin 8 ölçüm sütunu tek yanıtta gelir) bir kez
@@ -509,6 +563,12 @@ def main(argv: list[str] | None = None) -> int:
                                start=args.start, end=args.end)
             by_id[row.series_id] = outcome
             report.outcomes.append(outcome)
+            for old_row, lo, hi in history_rows(row, history.get(row.series_id, []), args.start, args.end):
+                time.sleep(0.2)
+                print(f"  eski şema kimliği {old_row.native_code} · {lo} → {hi} (aynı seri)")
+                old_outcome = _run_one(old_row, raw_storage, session, artifact_repository, parquet_storage, start=lo, end=hi)
+                old_outcome.history_code = old_row.native_code
+                report.outcomes.append(old_outcome)
     finally:
         trusted.close()
         session.close()

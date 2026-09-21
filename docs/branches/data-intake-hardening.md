@@ -115,6 +115,32 @@ Yani 52 seri için ayrı Gold tablosu gerekmiyor; ayrıştırma sorulduğunda he
 aylık akıma çözüldü" notu düşüyor. Silver'a türetilmiş seri yazılmaması bilinçli: ham gözlem kaynağın yayınladığı
 gibi kalır, türetim Gold'un işi (ADR-0031).
 
+### 1f. BDDK aylık: 70 serinin 2021 boşluğu — eski şema kimlikleri (21 Eylül gece)
+
+Yarışma 2021-01'den itibaren derinlik ister; 498 aylık serinin 70'i daha geç başlıyordu (2021-11: 9, 2022-01: 32,
+2022-06: 6, 2022-09: 8, 2023-01: 11, 2024-02: 4). Kaynağa soruldu: BDDK Gelişmiş sayfasındaki `<option value="1842,1626,…">`
+bir kalemin şema sürümlerinin kimliklerini (yeniden eskiye) taşıyor; eski aylar eski kimlikte duruyor. 70 serinin
+tamamı için her kimliğe canlı sorgu (≈400 istek): **63 seride eski kimlik 2021 başını veriyor**, 7 seride hiçbir
+kimlikte yok (kaynak sonradan yayınlamış: 1840, 1891, 1892, 1893, 1913, 1914, 1936), 1 seri (1937) yalnız 2021-11'den.
+Kimlikler zincir olabiliyor (1940: 1933 → 1934 → 1935 → 1940) ve geçiş ayında örtüşüyor.
+
+Uygulama (lakehouse-core, veri sözleşmesi değişmedi):
+- `catalog/bddk_monthly_history.yml`: seri → eski kimlik → pencere (73 pencere, 63 seri); pencereler örtüşmez, geçiş
+  ayı yeni kimlikte kalır (Silver aynı gözlem için iki farklı değeri revizyon çatışması sayar). `catalog/series/`
+  altına konmadı: o klasörün her dosyası seri kataloğu sayılıyor.
+- `run_catalog_ingestion.py`: seri çekildikten sonra eski kimlikler istenen pencereye kırpılarak aynı seri için ayrı
+  run olarak çekilir (`history_code` raporda); `--only`/`--only-file` ana seriyi seçer, tarihçe otomatik gelir.
+- `SeriesRow.series_key` → FetchSpec `series_key` (tel alanı değil) → connector metadata `requested_series_key` →
+  parser tek ölçüm kolonunu katalogdaki anahtar altında yayınlar; birden çok kolonda uyarıyla yok sayılır.
+- Testler: registry, connector, parser, betik (pencere kırpma + örtüşme reddi).
+
+Canlı doğrulama (kopya DB + RAW/Bronze kopyası, 4 seri, ardından `lakehouse silver`): 1842, 1940 ve 1953 artık
+2021-01 → 2026-06 kesintisiz 66 ay (2, 4 ve 3 artifact'tan), geçiş aylarında değerler süreklilik gösteriyor
+(1842: 2021-10 525.011 → 2021-11 557.655); 1937 kaynak sınırı gereği 2021-11'den. Silver satırı 232.217 → 232.310.
+
+Gerçek DB için (sunucu kapalı): `run_catalog_ingestion.py --only-file catalog/bddk_monthly_history.series.txt
+--start 2021-01-01 --end 2026-06-30`, sonra `silver` ve `gold`.
+
 Değişmeyenler, bilinçli: beyan kapısı (birim/ölçüm tipi kullanıcıdan gelir, doğrulanmaz), aynı anahtar farklı içerik reddi
 (veri ekibinin sözleşmesi), tarihsiz tablonun kalıcı kaydedilmemesi, `unknown` ölçüm tipinde toplama türetilmemesi.
 

@@ -264,6 +264,17 @@ class BddkMonthlyParser:
         the response returns exactly as many measure columns as ids were requested.
         """
 
+        override = asset.metadata.get("requested_series_key")
+        if override and len(measure_indexes) == 1:
+            # A historical schema id of a catalogued item: the response is keyed by the OLD id, the
+            # catalog knows the item by its current one. The connector recorded which series this
+            # request was made for; one measure column, so the mapping is unambiguous.
+            return {measure_indexes[0]: self._slug(str(override))}
+        if override:
+            warnings.append(
+                f"'requested_series_key' ({override}) ignored: the response has "
+                f"{len(measure_indexes)} measure columns, the override is only unambiguous for one"
+            )
         requested = asset.metadata.get("requested_kalem_sutun")
         if isinstance(requested, (list, tuple)) and len(requested) == len(measure_indexes):
             return {
