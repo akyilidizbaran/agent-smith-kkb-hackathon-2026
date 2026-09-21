@@ -78,7 +78,7 @@ _GOLD_COLUMN_NOTES = {
     "cumulative_value": "Kaynağın birikimli okuması (dokunulmamış)",
     "previous_cumulative_value": "Bir önceki dönemin birikimli okuması (taban)",
     "raw_change": "İki okuma farkı; dönem akımı olarak yazılmadıysa burada durur",
-    "quality_flag": "ok | partial_period | boundary_missing | missing_value | source_warning",
+    "quality_flag": "ok | partial_period | boundary_missing | boundary_shifted (endeks/oran: dönem sınırı tatil, son işlem günü alındı) | missing_value | source_warning",
     "decomposition_flag": "ok | no_prior_base | unattributable_year_start | spans_multiple_periods | negative_change | missing_value",
     "observations": "Döneme giren kaynak gözlem sayısı",
     "missing_observations": "Dönemde eksik gelen gözlem sayısı",

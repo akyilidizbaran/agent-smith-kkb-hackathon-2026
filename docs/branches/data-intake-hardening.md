@@ -171,6 +171,12 @@ iş günü takvimli serilerde tatil NULL'ları Silver'a gözlem olarak girmesin.
 Ayrıca bir MIA kesintisi (3 deneme zaman aşımı) `/api/ask`'ten 500 döndürdü; veriyle ilgisi yok, arayüzde hata metni
 olarak görünür.
 
+**Karar (Zümra, 22 Eylül 02:30): uygulandı.** `gold/align.py`: `index` ve `rate` ölçüm tipinde sınır kuralı (`last`/`first`)
+NULL sınır okumasını atlayıp dönemin son (ilk) yayımlanmış okumasını alır, yeni bayrak `boundary_shifted` ile söyler
+(`source_observation_dates` günü verir). Stok serilerinde davranış değişmedi (`boundary_missing` kalır). Mevcut Gold
+tabloları etkilenmiyor (kur ve faiz `avg`). Kopya DB'de BIST 100 2025: Mart 9.659,48 `boundary_shifted`, öbür aylar aynı.
+Testler: endeks tatil sınırı, oran `first`, stok `first` (eski sözleşme korunuyor).
+
 Değişmeyenler, bilinçli: beyan kapısı (birim/ölçüm tipi kullanıcıdan gelir, doğrulanmaz), aynı anahtar farklı içerik reddi
 (veri ekibinin sözleşmesi), tarihsiz tablonun kalıcı kaydedilmemesi, `unknown` ölçüm tipinde toplama türetilmemesi.
 
