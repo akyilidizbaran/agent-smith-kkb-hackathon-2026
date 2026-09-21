@@ -135,3 +135,16 @@ def test_varlik_kolonu_adi_kullanicinin_sozunden() -> None:
     frame = pd.DataFrame({"": ["KFE"], "TÜRKİYE": ["236,8"], "ANKARA": ["265,0"]})
     long, _, _ = measure_row_to_long(frame, "KFE", ("2026-08-31", "monthly"), entity_label="il")
     assert list(long.columns) == ["tarih", "il", "KFE"]
+
+
+def test_kaynak_birimi_acikca_yaziyorsa_sorulmadan_alinir(tmp_path: Path) -> None:
+    csv = "Tarih;Konut Kredisi (milyon TL)\n31.01.2025;1.234,5\n28.02.2025;1.300,0\n31.03.2025;1.402,75\n30.04.2025;1.450,1\n31.05.2025;1.500,0\n30.06.2025;1.560,9\n"
+    tool, runner, incoming = _tool(tmp_path, "konut.csv dosyasını taslak olarak kaydet; ölçüm tipi stok", {"konut.csv": csv})
+    r = tool.validate_and_run({"locator": str(incoming / "konut.csv"), "name": "Konut", "measure_type": "stock"})
+    assert r.content.startswith("EKLENDİ"), r.content
+    assert _flag(runner.calls[-1][0], "--unit") in ("milyon TL", "TRY_mn") and "birim kaynaktan alındı" in r.content
+    # Kaynak sessizse yine sorulur; tahmin yazılmaz.
+    sessiz = "Tarih;deger\n31.01.2025;1.234,5\n28.02.2025;1.300,0\n31.03.2025;1.402,75\n30.04.2025;1.450,1\n31.05.2025;1.500,0\n30.06.2025;1.560,9\n"
+    tool2, runner2, incoming2 = _tool(tmp_path / "b", "sessiz.csv dosyasını taslak olarak kaydet; ölçüm tipi stok", {"sessiz.csv": sessiz})
+    r2 = tool2.validate_and_run({"locator": str(incoming2 / "sessiz.csv"), "name": "Sessiz", "measure_type": "stock"})
+    assert r2.content.startswith("EKLENMEDİ") and "birim" in r2.content and not runner2.calls

@@ -616,11 +616,25 @@ class IngestFromUrlTool(Tool):
         # 2d. birim tahmini (builder/unit_guess.py): belgede birim yoksa boş soru yerine kanıtlı aday;
         # yine yazılmaz, kullanıcı onaylar (beyan kuralı: unit= yalnız kullanıcı metninde geçerse).
         unit_hint = None
+        unit_from_source: str | None = None
         if semantics.unit is None:
             unit_hint = guess_unit(
-                texts=[Path(params.locator.split("?")[0]).name, *map(str, frame.columns), doc_note or ""],
+                texts=[Path(params.locator.split("?")[0]).name, *map(str, frame.columns), doc_note or "",
+                       (web_source.note if web_source is not None else "")],
                 crosscheck=crosscheck, values=file_points(frame, mapping).values(),
             )
+            # Kaynak birimi AÇIKÇA yazıyorsa (kolon başlığı "(Milyon TL)", "%", "kg", tablo başlığı "endeks")
+            # sorulmaz, kaynaktan alınır ve kartta söylenir (21 Eyl; "birim vermeden kaydedilebilir mi?").
+            # Ölçek/aralık tahminleri (katalog oranı, 0–100 arası) yine sorulur: onlar kaynağın sözü değil.
+            if unit_hint is not None and unit_hint.confidence == "strong" and unit_hint.reason.startswith("metinde"):
+                from ..builder.profile import Evidence
+                unit_from_source = unit_hint.unit
+                semantics = replace(semantics, unit=unit_hint.unit,
+                                    evidence=tuple(e for e in semantics.evidence if e.field != "unit") +
+                                    (Evidence("unit", unit_hint.unit, f"kaynak metninden alındı: {unit_hint.reason}", "strong"),))
+                unit_hint = None
+        if params.unit is None and semantics.unit is not None:
+            unit_from_source = semantics.unit          # profilci kolon başlığından ("(milyon TL)") ya da yukarıdaki ipucundan
 
         # 3. doğrulama — yayınlama kurallarıyla
         # Çakışma yalnız küratörlü/başka kaynaklı serilerle: aynı dosyanın ikinci ingest'i
@@ -718,6 +732,7 @@ class IngestFromUrlTool(Tool):
             "eşleme: " + ", ".join(f"{e.field}={e.value!r}" for e in mapping.evidence if e.field in
                                    ("observation_date_column", "date_format", "value_column", "decimal_separator", "entity_id_column")),
             f"anlam: frekans={semantics.frequency} ölçüm={semantics.measure_type} birim={semantics.unit}"
+            + (f" (birim kaynaktan alındı; yanlışsa 'birim …' diyerek düzeltin)" if unit_from_source else "")
             + (f" toplama={semantics.default_agg}" if getattr(semantics, "default_agg", None) else "")
             + ("  ⚠ ölçüm tipi kanıtsız, 'unknown' olarak kaydedildi" if semantics.measure_type == "unknown" else ""),
             "kanıt: " + " | ".join(f"{e.field}: {e.reason}" for e in semantics.evidence if e.confidence != "none"),
