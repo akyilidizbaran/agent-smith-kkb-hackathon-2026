@@ -141,6 +141,36 @@ Canlı doğrulama (kopya DB + RAW/Bronze kopyası, 4 seri, ardından `lakehouse 
 Gerçek DB için (sunucu kapalı): `run_catalog_ingestion.py --only-file catalog/bddk_monthly_history.series.txt
 --start 2021-01-01 --end 2026-06-30`, sonra `silver` ve `gold`.
 
+### 1g. Benchmark alt kümesi (Baran'ın `TEST_PROMPTLARI_V2.md`, 22 Eylül gece)
+
+Gerçek DB'nin güncel kopyası, gerçek MIA, Architect; 13 vaka + jürinin 2. adımı. Sonuçlar:
+
+| Vaka | Sonuç |
+|---|---|
+| P05 haftalık takipteki alacak oranı | Doğru ret: haftalıkta oran yok, adaylar ve kapsam sınırı verildi (90 sn, 11 adım — yavaş) |
+| R02 "toplam kredi" adayları | Adaylar tablo hâlinde, ulusal seri seçildi, FinTürk ayrı tutuldu (150 sn) |
+| R05 mortgage alias | `bddk_monthly:1534_Toplam`, 2023 12 ay, kanıt tam |
+| T02 kümülatif ihracat akışı | Doğru ret: stok farkı akış diye sunulmadı |
+| T04 politika faizi yıllık ortalama | 2022 12,63 · 2023 20,67 · 2024 48,96 · 2025 42,83; kredi akışı yok denildi |
+| T05 reel mevduat | 48 satır, `workspace_real_value`, kanıt tam |
+| Q01 kapsam dışı tarih | Sayı üretilmedi, son gözlem 30 Haziran 2026 |
+| Q02 bilinmeyen seri | Benzer seri seçilmedi, adaylar açıklandı |
+| Jüri 1. adım (aylık faiz) | Gold aylık ortalama, 60 ay, kanıt tam (159 sn) |
+| Jüri 2. adım "faiz sütunu ekle" | Önce haftalık seriyle 9 satır eşleşti, sonra Gold aylık sütunu eklendi; 60/60 dolu (148 sn) |
+| İhracat kredileri 2021-01 → 2022-06 | Eski kimlikten gelen aylar dahil 18 satır, 2 artifact, kanıt tam |
+| R06 tur 2 "mevcut tabloya TÜFE ekle" | **Kusur:** `workspace_add_column` 72 gözlemi eklemişken cevap bayat-tablo guard'ıyla silindi → `workspace_add_column` ve `workspace_join` taze kaynak sayıldı; tekrarında 36/36 satır, cevap korundu |
+| BIST 100 2025 aylık | **Kusur:** katalog kaydı `derived` olduğu için Gold indirgeme reddedildi → değerler Borsa İstanbul kapanışlarıyla doğrulanıp `verified` yapıldı; tekrarında tablo geldi |
+
+Tekrarda kalan sınır: BIST'te **Mart 2025 boş**. Kaynak (EVDS) tatil günlerini (31 Mart, 1 Nisan 2025 bayram) NULL satır olarak
+yayınlıyor; Gold `last` kuralı dönemin son gözlemini alıyor ve o NULL (`boundary_missing`). `gold/align.py` bunu bilinçli
+yapıyor: "sınır okuması eksikse geriye uzanmak enterpolasyondur" (stok mantığı). Borsa endeksi için ay sonu kapanışı = son
+işlem günü kapanışıdır; tatil satırı eksik okuma değil takvim boşluğudur. Öneri (veri ekibinin kararı, sözleşme değişikliği):
+`index`/`rate` ölçüm tipinde sınır kuralı NULL'u atlayıp son mevcut okumayı alsın ve bunu bayrakla söylesin; ya da
+iş günü takvimli serilerde tatil NULL'ları Silver'a gözlem olarak girmesin.
+
+Ayrıca bir MIA kesintisi (3 deneme zaman aşımı) `/api/ask`'ten 500 döndürdü; veriyle ilgisi yok, arayüzde hata metni
+olarak görünür.
+
 Değişmeyenler, bilinçli: beyan kapısı (birim/ölçüm tipi kullanıcıdan gelir, doğrulanmaz), aynı anahtar farklı içerik reddi
 (veri ekibinin sözleşmesi), tarihsiz tablonun kalıcı kaydedilmemesi, `unknown` ölçüm tipinde toplama türetilmemesi.
 
