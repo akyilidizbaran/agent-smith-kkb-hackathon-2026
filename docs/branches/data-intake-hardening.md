@@ -100,6 +100,21 @@ Jürinin 1. adım sorusu ("2021–2025 aylık konut kredisi faiz oranı") üç a
 
 Sonuç (canlı, kopya DB, Gold yeniden kurulmuş): jüri sorusu → `gold.konut_faizi_aylik`, 60 ay, 2021-01 18,39 … 2022-11 21,58 …, kanıt sayılar ✓, 81 sn; "KFE 2024 ortalaması ve baz yılı" → 141,54 ve 2023, 33 sn.
 
+### 1e. Kümülatif seriler: canlı doğrulama (21 Eylül gece)
+
+Transkript 10:15–10:25 kümülatif yayınlanan serilerin aylık akıma çevrilmesini ister. 53 `flow_ytd` serisi Silver'da
+kaynağın yayınladığı gibi (yıl başından birikimli) durur; ayrıştırma iki yoldan çalışır ve ikisi de canlıda ölçüldü
+(gerçek MIA, kopya DB, Gold yeniden kurulmuş):
+
+| Soru | Yol | Sonuç |
+|---|---|---|
+| "Haziran 2026 aylık net kârı, kümülatif değil" | Hazır Gold `net_kar_aylik` (decompose_cumulative) | 106.642 mn TL (Haziran kümülatifi 528.431 − Mayıs), cevap ayrımı açıkça söylüyor, 57 sn |
+| "2025 aylık toplam faiz gelirleri, ay ay" (hazır Gold yok) | Ajan `gold_decompose` aracını `bddk_monthly:158_Toplam` için anında çalıştırdı | 12 ay, Ocak 621.187 … Aralık 804.880 mn TL, kanıt 13/13 sayı tabloda, 56 sn |
+
+Yani 52 seri için ayrı Gold tablosu gerekmiyor; ayrıştırma sorulduğunda hesaplanıyor ve kartta "kaynakta kümülatif,
+aylık akıma çözüldü" notu düşüyor. Silver'a türetilmiş seri yazılmaması bilinçli: ham gözlem kaynağın yayınladığı
+gibi kalır, türetim Gold'un işi (ADR-0031).
+
 Değişmeyenler, bilinçli: beyan kapısı (birim/ölçüm tipi kullanıcıdan gelir, doğrulanmaz), aynı anahtar farklı içerik reddi
 (veri ekibinin sözleşmesi), tarihsiz tablonun kalıcı kaydedilmemesi, `unknown` ölçüm tipinde toplama türetilmemesi.
 
