@@ -96,6 +96,17 @@ _EXPLICIT_INTERPRETATION_ASK = re.compile(
     r"\b(?:neden|niçin|nicin)\b",
     re.IGNORECASE,
 )
+# A comparison request wants prose about the result, not only the table.
+# Measured (PR #18 jenerik, 21 Sep): transform/delivery fast paths answered
+# comparison questions with two fixed sentences and no interpretation.
+_COMPARISON_ASK = re.compile(
+    r"karşılaştır|karsilastir|kıyasla|kiyasla|\bvs\b|yorumla|değerlendir|degerlendir", re.IGNORECASE,
+)
+# Katalog semantic_type → kullanıcı dili (deterministik teslim özeti).
+_SEMANTIC_TYPE_TR = {
+    "stock": "dönem sonu stok", "flow": "dönem içi akım", "rate": "oran", "index": "endeks",
+    "ratio": "pay/oran", "count": "adet",
+}
 _TRANSFORMATION_TOOL_NAMES = frozenset({
     "workspace_add_column", "workspace_compute_column", "workspace_query", "workspace_join",
     "gold_align", "gold_decompose", "gold_join",
@@ -1359,7 +1370,8 @@ class AnalyticsAgent:
         steps: list[AgentStep],
     ) -> bool:
         """Skip prose generation when verified structured work is the deliverable."""
-        if not _TRANSFORMATION_ASK.search(question) or _EXPLICIT_INTERPRETATION_ASK.search(question):
+        if (not _TRANSFORMATION_ASK.search(question) or _EXPLICIT_INTERPRETATION_ASK.search(question)
+                or _COMPARISON_ASK.search(question)):
             return False
         if any(not step.ok for step in steps):
             return False
@@ -1662,6 +1674,73 @@ class AnalyticsAgent:
             f"Doğrulanmış aktif tablodaki {len(derived_columns)} seri için {label}{scope} {action}; "
             f"toplam {len(frame)} satır. {lag_note}"
         )
+
+    def _verified_delivery_summary(self, steps: list[AgentStep], *, is_transform: bool) -> str:
+        """Deterministic delivery text: what the table is, where it comes from, unit and stock/flow.
+
+        Measured (PR #18 jenerik, 21 Sep): skipping the narration turn saves tokens, but two fixed
+        sentences gave the user no source, period, unit or stock/flow information (12 cases, A0 had 0).
+        Everything below is computed from the verified frame, provenance and catalog; no model call.
+        """
+        lead = (
+            "İstenen dönüşüm doğrulanmış aktif tabloya uygulandı; tam sonuç ve indirmeler aşağıda hazır."
+            if is_transform
+            else "İstenen veri tablosu hazırlandı; tam sonuç aşağıdaki tabloda yer alıyor."
+        )
+        frame = self._verified_active_result(steps)
+        if not isinstance(frame, pd.DataFrame) or frame.empty:
+            return lead
+        try:
+            facts = self._build_narration_facts(steps)
+        except Exception:  # noqa: BLE001 — özet cevabı düşürmez
+            facts = None
+        parts = [f"{len(frame):,}".replace(",", ".") + " satır"]
+        if facts is not None and facts.period_start and facts.period_end:
+            parts.append(f"dönem {facts.period_start} – {facts.period_end}")
+        columns = [str(column) for column in frame.columns]
+        shown = ", ".join(columns[:8]) + (f" (+{len(columns) - 8} sütun)" if len(columns) > 8 else "")
+        parts.append("sütunlar: " + shown)
+        lines = [lead, "", "Tablo: " + "; ".join(parts) + "."]
+
+        specs = self._active_table_specs()
+        source_lines: list[str] = []
+        for spec in specs[:4]:
+            origin = spec_origin(spec)
+            name = str(getattr(spec, "name", "") or getattr(spec, "dataset_id", ""))
+            unit = None
+            kind = None
+            for column in getattr(spec, "columns", []) or []:
+                role = getattr(getattr(column, "role", None), "value", getattr(column, "role", None))
+                if role != "measure":
+                    continue
+                unit = unit or getattr(column, "unit", None)
+                semantic = getattr(column, "semantic_type", None)
+                semantic = getattr(semantic, "value", semantic)
+                kind = kind or (_SEMANTIC_TYPE_TR.get(str(semantic)) if semantic else None)
+            detail = ", ".join(part for part in (origin, name, unit and f"birim {unit}", kind) if part)
+            if detail:
+                source_lines.append("- " + detail)
+        if len(specs) > 4:
+            source_lines.append(f"- ve {len(specs) - 4} seri daha")
+        if source_lines:
+            lines.append("Kaynak:")
+            lines.extend(source_lines)
+        elif facts is not None and facts.source_names:
+            lines.append("Kaynak: " + "; ".join(facts.source_names[:6]) + ".")
+        text = "\n".join(lines)
+        try:
+            text, _ = humanize_internal(text, specs)
+        except Exception as exc:  # noqa: BLE001 — kimlik çevirisi başarısızsa ham metin gider
+            log.debug("teslim özeti kimlik çevirisi atlandı: %s", exc)
+        return text
+
+    def _is_bare_tool_name(self, text: str) -> bool:
+        """A final answer that is only a tool name is a failed narration, not an answer (C04, PR #18 jenerik)."""
+        stripped = (text or "").strip().strip("`'\"*_ .:").strip()
+        if not stripped or len(stripped) > 48 or " " in stripped:
+            return False
+        names = {str(name).casefold() for name in self.registry.names()}
+        return stripped.casefold() in names
 
     def _prepare_follow_up(self, question: str) -> None:
         try:
@@ -2237,7 +2316,8 @@ class AnalyticsAgent:
                     continue
 
                 answer_text = self._strip_reasoning(response.content)
-                if not answer_text.strip():
+                bare_tool_name = self._is_bare_tool_name(answer_text)
+                if not answer_text.strip() or bare_tool_name:
                     answer_text = self._empty_final_response_fallback(state=recovery, steps=steps)
                     self._usage["empty_final_response_fallbacks"] = (
                         self._usage.get("empty_final_response_fallbacks", 0) + 1
@@ -2245,7 +2325,9 @@ class AnalyticsAgent:
                     steps.append(AgentStep(
                         index=i,
                         role="narrate",
-                        thought="model boş/yalnız reasoning yanıtı verdi; doğrulanmış durum deterministik sunuldu",
+                        thought=("model yalnız araç adı yazdı; doğrulanmış durum deterministik sunuldu"
+                                 if bare_tool_name else
+                                 "model boş/yalnız reasoning yanıtı verdi; doğrulanmış durum deterministik sunuldu"),
                         ok=False,
                         result_summary=answer_text[:200],
                         duration_ms=(time.perf_counter() - started) * 1000,
@@ -2639,11 +2721,7 @@ class AnalyticsAgent:
                 or self._is_structured_transform_complete(question, requested, steps)
             ):
                 is_transform = self._is_structured_transform_complete(question, requested, steps)
-                text = (
-                    "İstenen dönüşüm doğrulanmış aktif tabloya uygulandı; tam sonuç ve indirmeler aşağıda hazır."
-                    if is_transform
-                    else "İstenen veri tablosu hazırlandı; tam sonuç aşağıdaki tabloda yer alıyor."
-                )
+                text = self._verified_delivery_summary(steps, is_transform=is_transform)
                 text = self._coverage_note(self._source_note(text, steps, artifacts), artifacts)
                 steps.append(AgentStep(
                     index=len(steps) + 1,

@@ -943,3 +943,76 @@ def test_multi_word_catalog_name_still_binds_on_new_question() -> None:
     first = resolve_follow_up("2026 USD satış kuru", catalog=_catalog())
     assert first.context.series == "evds:usd_satis"
 
+
+def test_direct_table_delivery_text_carries_rows_period_and_source() -> None:
+    """PR #18 jenerik (21 Eyl): 12 vakada iki sabit cümle; kullanıcıya satır/dönem/kaynak bilgisi gitmiyordu."""
+    workspace = AnalysisWorkspace()
+    tool = _WorkspaceQueryTool(workspace)
+    registry = ToolRegistry()
+    registry.register(tool)
+    llm = _ScriptedLLM([LLMResponse(content="", tool_calls=[_call(2024, "retrieve")])])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=workspace, max_steps=4)
+    agent._catalog_specs = lambda: [
+        SimpleNamespace(
+            dataset_id="bddk_monthly:1536_Toplam", name="İhtiyaç kredisi", source="bddk_monthly",
+            source_detail="Tablo 5", source_url=None, frequency=SimpleNamespace(value="monthly"),
+            columns=[SimpleNamespace(name="need", role="measure", unit="milyon TL", semantic_type="stock",
+                                     aliases=["ihtiyaç kredisi"], example_values=[])],
+        ),
+        SimpleNamespace(
+            dataset_id="bddk_monthly:1539_Toplam", name="Bireysel kredi kartları", source="bddk_monthly",
+            source_detail="Tablo 5", source_url=None, frequency=SimpleNamespace(value="monthly"),
+            columns=[SimpleNamespace(name="card", role="measure", unit="milyon TL", semantic_type="stock",
+                                     aliases=["kredi kartı"], example_values=[])],
+        ),
+    ]
+
+    answer = agent.ask("2024 yılına ait aylık konut kredisi bakiyelerini tablo olarak göster.")
+
+    assert llm.calls == 1, "anlatım turu yine atlanmalı (token kazancı korunur)"
+    assert "veri tablosu hazırlandı" in answer.text
+    assert "60 satır" in answer.text
+    assert "2021-04-30" in answer.text and "2026-03-31" in answer.text
+    assert "period_end, need, card" in answer.text
+    assert "İhtiyaç kredisi" in answer.text and "Bireysel kredi kartları" in answer.text
+    assert "birim milyon TL" in answer.text
+    assert "dönem sonu stok" in answer.text
+
+
+def test_comparison_request_is_not_finished_by_transform_fast_path() -> None:
+    workspace = AnalysisWorkspace()
+    tool = _WorkspaceQueryTool(workspace)
+    registry = ToolRegistry()
+    registry.register(tool)
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[_call(2024, "retrieve")]),
+        LLMResponse(content="İki seri aynı eksende: need 0 → 59, card 0 → 590."),
+    ])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=workspace, max_steps=4)
+
+    answer = agent.ask("İki serinin aylık değişimlerini aynı tarih ekseninde karşılaştır.")
+
+    assert llm.calls == 2, "karşılaştırma isteyen soruda anlatım turu atlanmamalı"
+    assert answer.steps[-1].role == "narrate"
+    assert "dönüşüm doğrulanmış aktif tabloya uygulandı" not in answer.text
+
+
+def test_bare_tool_name_answer_is_replaced_by_deterministic_summary() -> None:
+    """C04 (PR #18 jenerik): anlatım turu yalnız 'workspace_compute_column' döndürdü, harness cevap saydı."""
+    workspace = AnalysisWorkspace()
+    tool = _WorkspaceQueryTool(workspace)
+    registry = ToolRegistry()
+    registry.register(tool)
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[_call(2024, "retrieve")]),
+        LLMResponse(content="lakehouse_query"),
+    ])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=workspace, max_steps=4)
+
+    answer = agent.ask("2024 verilerinin genel yönünü değerlendir.")
+
+    assert answer.text.strip() != "lakehouse_query"
+    assert "Doğrulanmış sonuç tablosu ve indirmeler hazır" in answer.text
+    assert "60 satır" in answer.text
+    assert answer.usage["empty_final_response_fallbacks"] == 1
+    assert any("yalnız araç adı" in (step.thought or "") for step in answer.steps)
