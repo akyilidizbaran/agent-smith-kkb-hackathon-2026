@@ -147,7 +147,7 @@ _RESET = re.compile(r"(?<![\w])(sıfırla\w*|baştan\s+başla\w*)(?![\w])", re.I
 # Veri isteyen fiil ya da ekli dosya/adres: kullanım sorusu değildir ("risk profilini göster", "Dosya: /…/a.csv").
 _DATA_VERB = re.compile(r"(?<![\w])(göster\w*|hesapla\w*|karşılaştır\w*|getir\w*|çiz\w*|listele\w*|kaç|ne\s+kadar)(?![\w])", re.I)
 _ATTACHED = re.compile(r"(?:^|\n)\s*Dosya:\s*\S|https?://", re.I)
-UPLOAD_HELP_KINDS = ("CSV", "TSV", "TXT", "XLSX", "JSON", "PDF", "PNG", "JPG", "JPEG", "WEBP")   # web_app.UPLOAD_KINDS ile aynı (test)
+UPLOAD_HELP_KINDS = ("CSV", "TSV", "TXT", "XLSX", "XLS", "JSON", "PDF", "PNG", "JPG", "JPEG", "WEBP")   # web_app.UPLOAD_KINDS ile aynı (test)
 UPLOAD_HELP_MB = 25
 
 

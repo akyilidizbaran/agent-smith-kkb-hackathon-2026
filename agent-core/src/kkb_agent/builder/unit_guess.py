@@ -34,7 +34,7 @@ _TEXT_HINTS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\bkg\b|kilogram", re.I), "kg"),
     (re.compile(r"\bton\b", re.I), "ton"),
     (re.compile(r"\bgram\b|\bgr\b", re.I), "gram"),
-    (re.compile(r"tl|try|türk lirası|turk lirasi", re.I), "TL"),     # en son: "milyon TL" yukarıda yakalanır
+    (re.compile(r"\btl\b|\btry\b|türk lirası|turk lirasi", re.I), "TL"),     # en son: "milyon TL" yukarıda yakalanır
 )
 
 _TL_LADDER = ("TL", "bin TL", "milyon TL", "milyar TL")

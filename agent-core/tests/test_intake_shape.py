@@ -148,3 +148,29 @@ def test_kaynak_birimi_acikca_yaziyorsa_sorulmadan_alinir(tmp_path: Path) -> Non
     tool2, runner2, incoming2 = _tool(tmp_path / "b", "sessiz.csv dosyasını taslak olarak kaydet; ölçüm tipi stok", {"sessiz.csv": sessiz})
     r2 = tool2.validate_and_run({"locator": str(incoming2 / "sessiz.csv"), "name": "Sessiz", "measure_type": "stock"})
     assert r2.content.startswith("EKLENMEDİ") and "birim" in r2.content and not runner2.calls
+
+
+def test_ay_adi_sutunu_beyan_edilen_yilla_tarihe_cevrilir() -> None:
+    from kkb_agent.tools.ingest import month_names_to_dates
+    frame = pd.DataFrame({"AY/MONTH": ["Ocak / January", "Şubat / February", "Mart / March", "Nisan / April", "Mayıs / May",
+                                       "Haziran / June", "Temmuz / July", "TOPLAM / TOTAL"],
+                          "TL Hacim": ["93.824.682.381", "90.534.914.196", "1", "2", "3", "4", "5", "999"]})
+    out, note = month_names_to_dates(frame, 2026)
+    assert out["AY/MONTH"].tolist() == ["2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30", "2026-05-31", "2026-06-30", "2026-07-31"]
+    assert "TOPLAM" in note and len(out) == 7 and "999" not in out["TL Hacim"].tolist()
+    assert month_names_to_dates(pd.DataFrame({"il": ["Adana", "Ankara"], "x": ["1", "2"]}), 2026) is None
+
+
+def test_altin_pdf_benzeri_tablo_yilla_kaydedilir(tmp_path: Path) -> None:
+    csv = ("AY/MONTH;TL Hacim (TL);Miktar (KG)\nOcak / January;93.824.682.381;13.837\nŞubat / February;90.534.914.196;12.649\n"
+           "Mart / March;95.000.000.000;14.000\nNisan / April;91.000.000.000;13.000\nMayıs / May;92.000.000.000;13.500\n"
+           "Haziran / June;93.000.000.000;13.600\nTOPLAM / TOTAL;555.359.596.577;80.586\n")
+    tool, runner, incoming = _tool(tmp_path, "altin.csv dosyasındaki TL hacim kolonunu 2026 yılı aylık taslak olarak kaydet; dönemlik akım", {"altin.csv": csv})
+    r = tool.validate_and_run({"locator": str(incoming / "altin.csv"), "name": "Altın TL hacim", "measure_type": "flow_periodic",
+                               "period": "2026", "value_column": "TL Hacim (TL)"})
+    assert r.content.startswith("EKLENDİ"), r.content
+    cmd = runner.calls[-1][0]
+    staged = Path(cmd[cmd.index("ingest-file") + 1])
+    frame = pd.read_csv(staged, sep=",")
+    assert len(frame) == 6 and frame["AY/MONTH"].tolist()[0] == "2026-01-31" and _flag(cmd, "--frequency") == "monthly"
+    assert _flag(cmd, "--unit") in ("TL", "TRY") and "TOPLAM" in r.content

@@ -43,15 +43,15 @@ log = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 MAX_ROWS = 200
 
-# Dosya girişi (M10, ADR-0054): desteklenen türler ve sınır. Legacy .xls bilerek yok (xlrd yok);
+# Dosya girişi (M10, ADR-0054): desteklenen türler ve sınır. Eski .xls 21 Eyl'den beri okunur (xlrd), CSV'ye çevrilerek kaydedilir;
 # .html/.htm dosyası web_url ile açılır (tablo çıkarımı orada). Kullanıcının yerel yolu sunucuya gelmez:
 # dosya oturuma özel dizine güvenli adla yazılır, ajana verilen yol o kopyadır.
-UPLOAD_KINDS = {".csv": "tablo", ".tsv": "tablo", ".txt": "tablo", ".xlsx": "tablo (Excel)",
+UPLOAD_KINDS = {".csv": "tablo", ".tsv": "tablo", ".txt": "tablo", ".xlsx": "tablo (Excel)", ".xls": "tablo (eski Excel)",
                 ".json": "tablo (JSON)", ".pdf": "belge (OCR)", ".png": "görsel (OCR)", ".jpg": "görsel (OCR)",
                 ".jpeg": "görsel (OCR)", ".webp": "görsel (OCR)"}
 # .xlsm burada reddedilir: ajan okuyucu açabiliyordu ama veri ekibinin CLI'ı makrolu dosyayı ilke gereği
 # reddediyor (lakehouse/generic/formats.py); yükleme kabul edilip kayıt son adımda düşüyordu.
-UPLOAD_REFUSED = {".xls": "eski Excel (.xls) desteklenmiyor; dosyayı .xlsx olarak kaydedin",
+UPLOAD_REFUSED = {
                   ".xlsm": "makro içeren Excel (.xlsm) veri havuzuna alınmıyor; dosyayı .xlsx olarak kaydedin",
                   ".xlsb": "ikili Excel (.xlsb) desteklenmiyor; dosyayı .xlsx olarak kaydedin",
                   ".html": "HTML dosyası için sayfa adresini verin ya da tabloyu CSV olarak kaydedin",

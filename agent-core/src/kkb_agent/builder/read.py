@@ -40,9 +40,9 @@ def _under(path: Path, roots: Iterable[Path]) -> bool:
     return False
 
 
-def excel_sheets(content: bytes) -> list[str]:
-    """XLSX sayfa adları (M10-T05): birden çok sayfa varsa kullanıcı/model seçer, sessizce ilki alınmaz."""
-    with pd.ExcelFile(io.BytesIO(content)) as xf:
+def excel_sheets(content: bytes, *, engine: str | None = None) -> list[str]:
+    """XLSX/XLS sayfa adları (M10-T05): birden çok sayfa varsa kullanıcı/model seçer, sessizce ilki alınmaz."""
+    with pd.ExcelFile(io.BytesIO(content), engine=engine) as xf:
         return [str(n) for n in xf.sheet_names]
 
 
@@ -50,13 +50,17 @@ def _table_from_bytes(content: bytes, name: str, *, sheet: str | int | None = No
     """Tip çıkarımı YOK: her hücre metin. Boş hücre boş kalır, NaN olmaz.
 
     XLSX: `sheet` ad ya da 0-tabanlı indeks; verilmemişse ve birden çok sayfa varsa ReadRefused ile
-    sayfa listesi döner (belirsizlik sorulur). Legacy .xls desteklenmez (xlrd yok) — açıkça söylenir.
+    sayfa listesi döner (belirsizlik sorulur). Eski .xls xlrd ile okunur (21 Eyl: TÜİK/TBB dosyaları);
+    veri havuzu .xls almaz, ingest yolu türetilmiş CSV'yi sahneler.
     """
     suffix = Path(name.split("?")[0]).suffix.lower()
-    if suffix == ".xls":
-        raise ReadRefused("eski Excel (.xls) desteklenmiyor; dosyayı .xlsx olarak kaydedin")
-    if suffix in (".xlsx", ".xlsm"):
-        names = excel_sheets(content)
+    if suffix in (".xlsx", ".xlsm", ".xls"):
+        engine = "xlrd" if suffix == ".xls" else "openpyxl"
+        try:
+            names = excel_sheets(content, engine=engine)
+        except Exception as exc:  # noqa: BLE001 — bozuk/şifreli/yanlış uzantılı dosya: sebebi söylenir, tahmin yok
+            raise ReadRefused(f"Excel dosyası ({suffix}) okunamadı: {type(exc).__name__}: {str(exc)[:120]}; "
+                              "dosya bozuk, şifreli ya da uzantısı yanlış olabilir") from exc
         if sheet is None and len(names) > 1:
             raise ReadRefused("Excel dosyasında birden çok sayfa var: " + ", ".join(names) + " — `sheet` ile birini seç")
         target: str | int = 0 if sheet is None else sheet
@@ -66,7 +70,7 @@ def _table_from_bytes(content: bytes, name: str, *, sheet: str | int | None = No
             raise ReadRefused(f"sayfa '{target}' yok; sayfalar: {', '.join(names)}")
         if isinstance(target, int) and not (0 <= target < len(names)):
             raise ReadRefused(f"sayfa indeksi {target} yok; {len(names)} sayfa var")
-        frame = pd.read_excel(io.BytesIO(content), sheet_name=target, dtype=str, keep_default_na=False, engine="openpyxl")
+        frame = pd.read_excel(io.BytesIO(content), sheet_name=target, dtype=str, keep_default_na=False, engine=engine)
         return frame.fillna("")
     text = content.decode("utf-8-sig", errors="replace")
     if suffix == ".json":

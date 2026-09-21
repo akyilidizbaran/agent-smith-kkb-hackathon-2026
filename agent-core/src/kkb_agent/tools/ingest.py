@@ -77,7 +77,7 @@ class IngestParams(BaseModel):
     entity_column: str | None = Field(default=None, description="Varlık/boyut kolonu (il, kurum, ülke); tarih başına birden çok satır varsa")
     # Beyan edilen dönem (21 Eyl): tarih kolonu olmayan kesit tablolarında (il × değer, kurum × tutar) kullanıcı
     # dönemi söyler ('Ağustos 2026', '2026-06-30', '2025', '2026Q2'); tüm satırlar o döneme bağlanır.
-    period: str | None = Field(default=None, description="Tarih kolonu yoksa kullanıcının söylediği dönem: 'Ağustos 2026', '2026-08', '2026-06-30', '2025', '2026Q2'")
+    period: str | None = Field(default=None, description="Tarih kolonu yoksa kullanıcının söylediği dönem: 'Ağustos 2026', '2026-08', '2026-06-30', '2025', '2026Q2'. Tabloda ay adları sütunu varsa (Ocak, Şubat…) yılı ver ('2026'): satırlar aylara bağlanır.")
     # İlgi kapısı (V3 §3.9): dosya soruyla ilgisiz görünürse yazılmaz ve sorulur. Kullanıcı
     # "yine de ekle / doğru dosya bu" derse model bu bayrağı açar; bayrak yalnız kullanıcı
     # metninde onay sözü varsa geçerlidir (beyan kuralıyla aynı: modelin sözü yetmez).
@@ -215,6 +215,43 @@ def _entity_label(user_text: str) -> str:
     if re.search(r"banka|kurum|kuruluş|sektör", text):
         return "kurum"
     return "kurum"
+
+
+_MONTH_TOKENS = {**{k: v for k, v in _TR_MONTHS.items()},
+                 **{m: i + 1 for i, m in enumerate(("january", "february", "march", "april", "may", "june", "july",
+                                                     "august", "september", "october", "november", "december"))},
+                 **{m: i + 1 for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))},
+                 **{m: i + 1 for i, m in enumerate(("oca", "şub", "mar", "nis", "may", "haz", "tem", "ağu", "eyl", "eki", "kas", "ara"))}}
+
+
+def _month_of(cell: str) -> int | None:
+    """'Ocak / January', 'Şubat/February', 'Mart', 'Aug' → ay numarası; 'TOPLAM / TOTAL' → None."""
+    for token in re.split(r"[^0-9a-zçğıöşü]+", str(cell).lower().replace("i̇", "i")):
+        if token in _MONTH_TOKENS:
+            return _MONTH_TOKENS[token]
+    return None
+
+
+def month_names_to_dates(frame: Any, year: int) -> tuple[Any, str] | None:
+    """Ay adı sütunu + beyan edilen yıl → ISO ay sonu tarihleri (21 Eyl; Borsa altın PDF'i: 'AY/MONTH' sütunu, yıl başlıkta).
+
+    En az 6 farklı ay adı taşıyan ilk metin sütunu tarih sütunu olur; ay okunamayan satırlar (TOPLAM/TOTAL) düşürülür
+    ve notta sayılır. Böyle bir sütun yoksa None (çağıran sabit dönem yoluna düşer)."""
+    import calendar
+
+    for column in frame.columns:
+        values = [str(v) for v in frame[column].tolist()]
+        months = [_month_of(v) for v in values]
+        distinct = {m for m in months if m}
+        if len(distinct) >= 6:
+            keep = [m is not None for m in months]
+            dropped = [values[i] for i, k in enumerate(keep) if not k and values[i].strip()]
+            out = frame.loc[keep].copy()
+            out[column] = [f"{year:04d}-{m:02d}-{calendar.monthrange(year, m)[1]:02d}" for m, k in zip(months, keep) if k]
+            note = (f"'{column}' sütunundaki ay adları kullanıcının beyan ettiği {year} yılıyla ay sonu tarihlerine çevrildi"
+                    + (f"; ay olmayan {len(dropped)} satır düşürüldü ({', '.join(d[:20] for d in dropped[:3])})" if dropped else "") + ".")
+            return out, note
+    return None
 
 
 def _bare_locator(locator: str) -> bool:
@@ -509,14 +546,25 @@ class IngestFromUrlTool(Tool):
                 derived_notes.append(note.strip())
                 if matrix_frequency and not params.frequency:
                     params = params.model_copy(update={"frequency": matrix_frequency})
+        if web_source is None and Path(params.locator.split("?")[0]).suffix.lower() == ".xls":
+            derived_notes.append("Eski Excel (.xls) xlrd ile okundu ve CSV'ye çevrildi; veri havuzu .xls almaz, "
+                                 "kaynak dosya değiştirilmedi.")
         profile = profile_table(frame)
         if period is not None and not profile.date_candidates:
-            frame = frame.copy()
-            frame.insert(0, "observation_date", period[0])
-            derived_notes.append(f"Kaynakta tarih kolonu yok; tüm satırlar kullanıcının beyan ettiği döneme bağlandı: "
-                                 f"dönem sonu {period[0]} ('{params.period}').")
-            if period[1] and not params.frequency:
-                params = params.model_copy(update={"frequency": period[1]})
+            by_month = month_names_to_dates(frame, int(period[0][:4])) if local_matrix is None else None
+            if by_month is not None:
+                # Ay adı sütunu + yıl: her satır kendi ayına (Borsa altın PDF'i, TÜİK aylık tabloları).
+                frame, note = by_month
+                derived_notes.append(note)
+                if not params.frequency:
+                    params = params.model_copy(update={"frequency": "monthly"})
+            else:
+                frame = frame.copy()
+                frame.insert(0, "observation_date", period[0])
+                derived_notes.append(f"Kaynakta tarih kolonu yok; tüm satırlar kullanıcının beyan ettiği döneme bağlandı: "
+                                     f"dönem sonu {period[0]} ('{params.period}').")
+                if period[1] and not params.frequency:
+                    params = params.model_copy(update={"frequency": period[1]})
             profile = profile_table(frame)
         if derived_notes:
             if web_source is not None:
@@ -549,7 +597,12 @@ class IngestFromUrlTool(Tool):
                     (Evidence("decimal_separator", ",", "Türkçe aylık rapor: ondalık virgül, binlik nokta; tüm değerler doğrulanır", "strong"),))
             mapping, semantics = _apply_declared(mapping, semantics, params)
             try:
+                before = mapping.value_column
                 mapping = _apply_columns(mapping, profile, params)
+                if mapping.value_column != before and params.unit is None:
+                    # Profilci birimi kendi seçtiği kolonun başlığından çıkarmıştı; kolon değişti, birim yeniden okunur.
+                    semantics = replace(semantics, unit=None,
+                                        evidence=tuple(e for e in semantics.evidence if e.field != "unit"))
             except ColumnChoiceError as exc:
                 return ToolResult.fail("TOOL_FAILED", f"Kolon seçimi uygulanamadı: {exc}",
                                        hint="Kullanıcıya dosyadaki kolonları göster ve doğru kolonu sor.", layer="data", retryable=False)
@@ -618,7 +671,10 @@ class IngestFromUrlTool(Tool):
         unit_hint = None
         unit_from_source: str | None = None
         if semantics.unit is None:
-            unit_hint = guess_unit(
+            # Önce seçilen değer kolonunun kendi başlığı ("TL Hacim (TL)"), sonra dosya adı/öbür kolonlar/belge notu:
+            # öbür kolonun birimi ("Miktar (KG)") seçilen seriye sızmasın (ölçüldü 21 Eyl, altın PDF'i).
+            from ..builder.unit_guess import _from_text as _unit_from_text
+            unit_hint = _unit_from_text([str(mapping.value_column)]) or guess_unit(
                 texts=[Path(params.locator.split("?")[0]).name, *map(str, frame.columns), doc_note or "",
                        (web_source.note if web_source is not None else "")],
                 crosscheck=crosscheck, values=file_points(frame, mapping).values(),

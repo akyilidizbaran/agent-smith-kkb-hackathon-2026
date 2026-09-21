@@ -1359,8 +1359,10 @@ class AnalyticsAgent:
                     self.workspace.remember_web(result.artifacts["web"])  # sonraki turların zinciri için
                 if result.ok and result.artifacts.get("web_search"):   # K02-T04: bağlam kaynağı, veri değil (ADR-0075)
                     artifacts.append({"kind": "web_search", **result.artifacts["web_search"]})
-                if result.ok and call.name in ("ingest_from_url", "promote_draft"):
+                if result.ok and call.name in ("ingest_from_url", "promote_draft") and (
+                        result.artifacts.get("ingest") or result.artifacts.get("promotion")):
                     # Kayıt turu: kanıt paneli tabloya değil yazılan kayda bakar (dosya sha256, run, satır sayısı).
+                    # "EKLENMEDİ — sorulmalı" cevapları ok=True ama kayıt değildir; onlara kayıt paneli kurulmaz.
                     ingest_out = result.artifacts.get("ingest")
                     promotion = result.artifacts.get("promotion") or {}
                     args_ = call.arguments if isinstance(call.arguments, dict) else {}

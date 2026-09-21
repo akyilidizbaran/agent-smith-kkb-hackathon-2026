@@ -279,3 +279,22 @@ def test_kayit_turunda_ayni_turdaki_sorgu_tablosu_da_eslesir() -> None:
                                                     ws, [], artifacts=[record])
     assert all(n.matched for n in panel.numbers), panel.summary()
     assert panel.record["series_id"] == "adhoc:x"
+
+
+def test_eklenmedi_cevabi_kayit_paneli_kurmaz() -> None:
+    """EKLENMEDİ (soru) turu ok=True döner ama kayıt değildir; kanıt paneli 'kayıt: … artifact yok' dememeli."""
+    class _AskingIngest(Tool):
+        name = "ingest_from_url"
+        description = "test"
+        Params = _PromoteParams   # series_id alanı yeter
+
+        def run(self, params):
+            return ToolResult(content="EKLENMEDİ — önce kullanıcıya sorulmalı:\n  - değer kolonu: 3 sayısal kolon var", ok=True)
+
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[ToolCall(id="i1", name="ingest_from_url", arguments={"series_id": "x"})]),
+        LLMResponse(content="Dosyada 3 sayısal kolon var; hangisini kaydedeyim?"),
+    ])
+    registry = ToolRegistry(); registry.register(_AskingIngest()); registry.register(_CountingTool())
+    ans = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=6).ask("x.csv dosyasını kaydet")
+    assert not any(a.get("kind") == "record" for a in ans.artifacts), [a.get("kind") for a in ans.artifacts]
