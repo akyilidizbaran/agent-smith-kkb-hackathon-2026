@@ -132,16 +132,19 @@ def test_bddk_housing_loans_record_matches_the_verified_source_evidence() -> Non
     assert "mortgage" in record.aliases
 
 
-def test_housing_price_index_is_an_index_with_an_unverified_base_year() -> None:
-    """The unit is 'index'; what is unverified is the base year, which is a different thing."""
+def test_housing_price_index_is_an_index_with_a_verified_base_year() -> None:
+    """The unit is 'index'; the base year is a separate fact. It was unverified until 21 Sept 2026,
+    when the loaded data itself settled it: the twelve 2023 readings average exactly 100.00, so the
+    entry states 2023=100 and is verified. A description that lost that statement would silently
+    reopen the question, hence the assertion on the text."""
 
     record = {r.series_id: r for r in load_catalog_files(REPO_CATALOG)}["evds:TP.KFE.TR"]
 
     assert record.measure_type == "index"
     assert record.unit == "index"
-    assert record.semantic_confidence == "derived"
+    assert record.semantic_confidence == "verified"
     assert "konut fiyat endeksi" in record.aliases
-    assert "BAZ YILI" in record.description
+    assert "2023=100" in record.description
 
 
 def test_monthly_stock_series_has_no_flow_suggesting_alias() -> None:
