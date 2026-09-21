@@ -306,8 +306,12 @@ class BddkMonthlyConnector(BaseConnector):
         start, end = spec.start_date, spec.end_date
         assert start is not None and end is not None  # validated in _build_form
         expected_periods = (end.year - start.year) * 12 + (end.month - start.month) + 1
+        series_key = spec.parameters.get("series_key")
         return {
             "request_form": [list(pair) for pair in form],
+            # Present only for a historical schema id fetched on behalf of a catalogued series; the
+            # parser publishes the (single) measure column under this key instead of the requested id.
+            **({"requested_series_key": str(series_key)} if series_key else {}),
             "requested_start_period": f"{start.year}-{start.month:02d}",
             "requested_end_period": f"{end.year}-{end.month:02d}",
             "expected_period_count": expected_periods,

@@ -265,3 +265,56 @@ def test_a22_warned_artifact_ingested_twice_is_idempotent_and_keeps_each_runs_wa
     after = sorted((env["tmp"] / "data" / "bronze").rglob("*.parquet"))
     assert after == bronze_files and [hashlib.sha256(p.read_bytes()).hexdigest() for p in after] == digests, "Bronze idempotent"
     assert [r[0] for r in _runs(con)] == ["warning", "warning"]
+
+
+def test_history_windows_fetch_the_older_schema_id_for_the_same_series(tmp_path, monkeypatch) -> None:
+    """BDDK monthly: an item re-keyed at a schema change keeps its older months under the older id
+    (measured 21 Sept: 63/70 late-starting series). The history file names the older id and the months
+    it answers for; the runner fetches it as a second run for the SAME series, clipped to the requested
+    window, and the outcome says which id it came from. Outside the requested window nothing is fetched."""
+    monkeypatch.chdir(Path(__file__).resolve().parents[2])
+    seen: list[tuple[str, str | None, str, str]] = []
+
+    class MonthlyConn(BaseConnector):
+        def __init__(self, raw, session=None):
+            pass
+
+        def fetch(self, spec):
+            seen.append((spec.parameters["kalemSutun"], spec.parameters.get("series_key"), str(spec.start_date), str(spec.end_date)))
+            payload = f'{{"kalem":"{spec.parameters["kalemSutun"]}","from":"{spec.start_date}"}}'.encode()
+            return [_asset(tmp_path, payload, source=spec.source_id, dataset=spec.dataset_id)]
+
+    class P:
+        def parse(self, asset):
+            return _batch(asset)
+
+    monkeypatch.setitem(rci.CONNECTOR_REGISTRY, "bddk_monthly", ConnectorBinding(
+        connector_cls=MonthlyConn, parser_cls=P, build_spec=rci.CONNECTOR_REGISTRY["bddk_monthly"].build_spec))
+    monkeypatch.setattr(rci.time, "sleep", lambda s: None)
+    history = tmp_path / "history.yml"
+    history.write_text(
+        "- {series_id: 'bddk_monthly:1534_Toplam', native_code: '288?Toplam', start: 2021-01-01, end: 2021-10-31}\n"
+        "- {series_id: 'bddk_monthly:1534_Toplam', native_code: '219?Toplam', start: 2016-01-01, end: 2020-12-31}\n",
+        encoding="utf-8")
+    monkeypatch.setattr(rci, "HISTORY_FILE", history)
+    report = tmp_path / "report.json"
+    code = rci.main(["--database", str(tmp_path / "db.duckdb"), "--data-root", str(tmp_path / "data"),
+                     "--only", "bddk_monthly:1534_Toplam", "--start", "2021-01-01", "--end", "2026-06-30",
+                     "--report", str(report)])
+    data = json.loads(report.read_text(encoding="utf-8"))
+    assert code == 0 and data["ok"] is True
+    assert seen == [("1534?Toplam", None, "2021-01-01", "2026-06-30"),
+                    ("288?Toplam", "1534_Toplam", "2021-01-01", "2021-10-31")], seen     # 219 penceresi istek dışı
+    assert [o["history_code"] for o in data["outcomes"]] == [None, "288?Toplam"]
+    assert {o["series_id"] for o in data["outcomes"]} == {"bddk_monthly:1534_Toplam"}
+
+
+def test_history_windows_must_not_overlap(tmp_path) -> None:
+    history = tmp_path / "history.yml"
+    history.write_text(
+        "- {series_id: 'bddk_monthly:x', native_code: '1?Toplam', start: 2021-01-01, end: 2021-11-30}\n"
+        "- {series_id: 'bddk_monthly:x', native_code: '2?Toplam', start: 2021-11-01, end: 2022-05-31}\n",
+        encoding="utf-8")
+    with pytest.raises(ValueError, match="overlap"):
+        rci.load_history(history)
+    assert rci.load_history(tmp_path / "yok.yml") == {}
