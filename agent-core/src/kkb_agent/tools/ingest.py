@@ -323,8 +323,10 @@ class IngestFromUrlTool(Tool):
         "tarih, hangisinin değer olduğunu veriye bakarak kanıtıyla önerir; belirsizse eklemeden "
         "önce kullanıcıya sorar. Kullanıcı 'bu dosyayı ekle', 'şu linkteki veriyi yükle' dediğinde "
         "BU aracı kullan. HTML sayfası dosyaları resource_index ile, PDF tabloları table_index ve pages "
-        "ile seçilir; ölçümler satırlardaysa value_row kullanılır. Önceki çağrı seçenek döndürdüyse "
-        "aynı locator ile uygun seçimi yap. Veri okunması kaydedildiği anlamına gelmez: EKLENDİ kartını bekle."
+        "ile seçilir; ölçümler satırlardaysa value_row kullanılır. Birden çok sayısal kolon varsa kullanıcının "
+        "andığı kolonu value_column ile ver (tarih için date_column, il/kurum için entity_column); tarih kolonu "
+        "olmayan kesit tablosunda kullanıcının söylediği dönemi period ile ver ('Ağustos 2026'). Önceki çağrı "
+        "seçenek döndürdüyse aynı locator ile uygun seçimi yap. Veri okunması kaydedildiği anlamına gelmez: EKLENDİ kartını bekle."
     )
     Params = IngestParams
 
