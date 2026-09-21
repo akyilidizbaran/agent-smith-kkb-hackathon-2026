@@ -1977,6 +1977,7 @@ class AnalyticsAgent:
         seen: set[tuple[str, str]] = set()   # (araç, argüman) — döngü kilidi
         seen.update(self._retry_failed_signatures)
         duplicates = 0                       # kilidin kaç kez devreye girdiği
+        budget_refusals = 0                  # katalog arama sınırı kaç kez reddetti (ilk red turu bitirmez)
         terminal: ToolError | None = None    # tekrar denemeyle çözülmeyen hata
         public_fallback_pending: dict[str, Any] | None = None
         stuck_note: str | None = None        # son tura verilecek özel yönerge
@@ -2418,13 +2419,28 @@ class AnalyticsAgent:
                             "cevabın sonunda tek cümleyle söyle. Sayı uydurma."
                         )
                 elif call.name == "lakehouse_search" and recovery.catalog_search_budget_exhausted:
+                    budget_refusals += 1
                     result = ToolResult.fail(
                         "CATALOG_SEARCH_BUDGET",
                         f"Bu turda {recovery.catalog_search_budget} katalog araması yapıldı; yeni arama durduruldu.",
-                        hint="Mevcut aday ve şema çıktılarıyla devam et; yeterli kanıt yoksa doğrulanamayan kısmı açıkça belirt.",
+                        hint=("Yeni arama yapma. Önceki arama çıktılarındaki adaylarla devam et: lakehouse_describe ile "
+                              "şemayı doğrula, lakehouse_query ile veriyi çek; yeterli aday yoksa doğrulanamayan kısmı "
+                              "açıkça belirt."),
                         layer="harness",
                         retryable=False,
                     )
+                    # Measured (PR #18 jenerik, 21 Sep): treating the first refusal as terminal produced a
+                    # fixed "arama sınırına ulaşıldı" answer in 10 cases although candidates were already on
+                    # hand. The first refusal only blocks the search; the turn continues with the other
+                    # tools. A second refusal means the model is looping on search, and the turn closes.
+                    if budget_refusals < 2 and result.error is not None:
+                        result.error.terminal = False
+                        # The generic non-retryable footer ("kullanıcıya durumu açıkla") would end the
+                        # turn in the model's eyes; only the search is closed, the other tools stay open.
+                        result.content = "\n".join(
+                            line for line in result.content.split("\n")
+                            if not line.startswith("BU HATA TEKRAR DENEMEYLE")
+                        ) + "\nTur devam ediyor: lakehouse_describe / lakehouse_query / workspace araçları açık."
                     tool_started = time.perf_counter()
                 else:
                     seen.add(signature)
