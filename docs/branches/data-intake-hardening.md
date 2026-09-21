@@ -37,6 +37,27 @@ sayfa 4 → "Nakdi Krediler" satırı → 5 kurum taslak (Bankalar 27.790, Topla
 idempotent; Borsa PDF adresi bugün 404 → `SOURCE_NOT_FOUND`, uydurma yok. Belgeler: `docs/ARCHITECT_URL_KAYIT.md`,
 `docs/PDF_ERISIM_TESHISI.md`.
 
+### 1b. Şekil düzeltmeleri: kolon seçimi ve beyan edilen dönem (21 Eylül)
+
+Kullanıcının verdiği on adresin yoklaması (`docs/…` yerine sohbet kaydı): erişilebilen tablolu kaynakların çoğu
+biçim değil **şekil** yüzünden kaydedilemiyordu. İki eksik kapatıldı:
+
+- **Kolon seçimi** (`value_column`, `date_column`, `entity_column`): profilci çok kolonlu dosyada "en dolu sayısal
+  kolonu" sessizce alıyordu (TLREF'te kapanış yerine en düşük değer olabilirdi). Şimdi birden çok sayısal kolon varsa
+  ve kullanıcı seçmediyse yazılmaz, kolonlar listelenip sorulur. Seçim beyandır: model, aracın listelediği kolonu
+  kullanıcı anmadan seçemez (`_mentioned`); dosyada olmayan ya da role uymayan kolon açıkça reddedilir.
+- **Beyan edilen dönem** (`period`): tarih kolonu olmayan kesit tablolarında (il × değer, kurum × tutar) kullanıcı
+  dönemi söyler ('Ağustos 2026', '2026-08', '2026-06-30', '2026Q2', '2025'); tüm satırlar dönem sonuna bağlanır,
+  frekans dönemden türer, türetilen tablo izinli köke `derived_<ad>_<sha>.csv` olarak yazılır ve dönüşüm notu
+  kartta/katalogda taşınır. Dönemin yılı kullanıcı metninde geçmiyorsa beyan sayılmaz. Belirsiz yazım ('06/08/2026')
+  kabul edilmez. Codex'in satır-ölçüm matrisi (`value_row`) artık başlıkta ay yoksa beyan edilen dönemle de çalışır
+  ve yerel dosyalar (yükleme, OCR) için de uygulanır.
+
+Canlı (modelsiz araç, 21 Eyl): TCMB `KFE.pdf` sayfa 2, `value_row="Konut Fiyat Endeksi"`, `period="Ağustos 2026"` →
+4 il taslak olarak yazıldı (Türkiye 236,8; İstanbul 226,6; Ankara 265,0; İzmir 229,6), kaynak zinciri PDF sha256 +
+türetilen CSV + manifest. Sınır: PDF metin katmanı harf aralıklı başlıkları bozuk verebiliyor ("T Ü R K İY E",
+"İS T A N L"); il adları sorguda eşleşmeyebilir, aynı veri EVDS `TP.KFE.*` serilerinde temiz duruyor.
+
 Değişmeyenler, bilinçli: beyan kapısı (birim/ölçüm tipi kullanıcıdan gelir, doğrulanmaz), aynı anahtar farklı içerik reddi
 (veri ekibinin sözleşmesi), tarihsiz tablonun kalıcı kaydedilmemesi, `unknown` ölçüm tipinde toplama türetilmemesi.
 
