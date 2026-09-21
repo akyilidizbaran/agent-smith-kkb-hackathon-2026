@@ -231,6 +231,10 @@ def project_result_table(answer: Any, agent: Any, *, question: str = "", table_b
         return None
     if _ALL_COLUMNS_REQUEST.search(question or ""):
         return current.copy()
+    if any(isinstance(a, dict) and a.get("kind") == "candidates" for a in (getattr(answer, "artifacts", []) or [])):
+        # Aday listesi turu (core/search_ledger, 22 Eyl): teslim edilen tablo tam aday listesidir; modelin kısa anlatısı
+        # ya da bu turda çekilen tek serinin sorgu sonucu onun yerine geçmez. İndirme de bu tabloyu verir.
+        return current.copy()
 
     steps = [s for s in getattr(answer, "steps", []) if getattr(s, "ok", False)]
     compute_steps = [s for s in steps if getattr(s, "tool_name", None) == "workspace_compute_column"]
@@ -351,6 +355,7 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None, questio
             None,
         ),
         "grounding": getattr(answer, "grounding", "") or "",
+        "completion": dict(getattr(answer, "completion", {}) or {}),
         "follow_up": follow_up.as_dict() if follow_up is not None else None,
         "hit_step_limit": bool(getattr(answer, "hit_step_limit", False)),
         "gate": {"allowed": sorted(gate.allowed), "opened": list(gate.opened), "closed": list(gate.closed)} if gate else None,

@@ -279,3 +279,36 @@ def test_parse_period_ve_workspace_view() -> None:
         parse_period("Q1", end=False)
     view = workspace_view(document_to_frame(ALIGN_DOC))
     assert "run_id_list" not in view.columns and "source_observation_dates" in view.columns
+
+
+def test_dogrulanmamis_ret_dogrulanmis_esdegeri_aday_olarak_verir(env) -> None:
+    """Benchmark P04 (22 Eyl): model semantiği doğrulanmamış seriyi seçti, Gold reddetti, tur bitti; aynı adla aranan
+    doğrulanmış seri duruyordu. Ret artık doğrulanmış eşdeğer(ler)i aday olarak taşır; onay istemeden önce o denenir."""
+    lake, ws, runner = env
+    runner.refusal = ("UNVERIFIED_SEMANTICS", "semantic_confidence is 'derived'")
+    tool = GoldAlignTool(lake, ws)
+
+    r = tool.validate_and_run({"series_id": "bddk_monthly:konut", "target_frequency": "quarterly", "purpose": "çeyreklik"})
+
+    assert not r.ok and r.error.error_code == "GOLD_REFUSED"
+    alts = tool._verified_alternatives("bddk_monthly:konut")
+    assert "bddk_monthly:konut" not in alts
+    if alts:                                            # test kataloğunda doğrulanmış komşu varsa ipucuna ve adaylara girer
+        assert set(alts) <= set(r.error.candidates) and "DOĞRULANMIŞ serisi var" in r.content
+
+
+def test_dogrulanmis_esdeger_varsa_ret_terminal_degildir(env, monkeypatch) -> None:
+    """Eşdeğer aday varken tur bitmez: model aynı işlemi doğrulanmış seriyle yeniden dener."""
+    lake, ws, runner = env
+    runner.refusal = ("UNVERIFIED_SEMANTICS", "semantic_confidence is 'derived'")
+    tool = GoldAlignTool(lake, ws)
+    monkeypatch.setattr(tool, "_verified_alternatives", lambda sid, limit=3: ["bddk_monthly:konut_dogrulanmis"])
+
+    r = tool.validate_and_run({"series_id": "bddk_monthly:konut", "target_frequency": "quarterly", "purpose": "çeyreklik"})
+
+    assert not r.ok and r.error.error_code == "GOLD_REFUSED" and r.error.terminal is False
+    assert r.error.candidates == ["bddk_monthly:konut_dogrulanmis"] and "DOĞRULANMIŞ serisi var" in r.content
+    runner.refusal = ("UNVERIFIED_SEMANTICS", "semantic_confidence is 'derived'")
+    monkeypatch.setattr(tool, "_verified_alternatives", lambda sid, limit=3: [])
+    r2 = tool.validate_and_run({"series_id": "bddk_monthly:konut", "target_frequency": "monthly", "purpose": "aylık"})
+    assert not r2.ok and r2.error.terminal is None          # eşdeğer yok: ret terminal (kullanıcıya sorulur)

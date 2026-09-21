@@ -30,6 +30,10 @@ class SearchParams(BaseModel):
     query: str = Field(
         description="Aranan konuyu anlatan kısa Türkçe ifade, ör. 'aylık {example_entity}'"
     )
+    limit: int = Field(
+        default=5, ge=1, le=40,
+        description="Kaç aday listelensin (varsayılan 5). Kullanıcı eşleşen serileri LİSTELEMEK istiyorsa 40 ver.",
+    )
 
 
 class LakehouseSearchTool(Tool):
@@ -55,16 +59,22 @@ class LakehouseSearchTool(Tool):
         self.lakehouse = lakehouse
         self._empty_streak = 0
         self._pending_streak = 0
+        # Arama defteri (core/search_ledger): tur içinde tekil adayları, yeni aday üretimini ve istenen yüzleri izler.
+        # Aramayı çağrı sayısı değil verim durdurur; ajan `ledger.begin_turn(soru)` ile turu açar.
+        from ..core.search_ledger import SearchLedger
+        self.ledger = SearchLedger()
 
     def begin_turn(self, turn_id: int) -> None:
         """Search limits apply inside one turn, never to a later user intent."""
         del turn_id
         self._empty_streak = 0
         self._pending_streak = 0
+        self.ledger.begin_turn("")
 
     def run(self, params: SearchParams) -> ToolResult:
-        specs = self.lakehouse.search_datasets(params.query)
+        specs = self.lakehouse.search_datasets(params.query, limit=int(params.limit))
         if not specs:
+            self.ledger.record(params.query, [])
             self._empty_streak += 1
             search_un = getattr(self.lakehouse, "search_uningested", None)
             pending = list(search_un(params.query, 5)) if callable(search_un) else []
@@ -87,6 +97,7 @@ class LakehouseSearchTool(Tool):
                 )
             return ToolResult(content="\n".join(lines), ok=True)
         self._empty_streak = 0
+        verdict = self.ledger.record(params.query, specs)
         terms = getattr(self.lakehouse, "last_search_terms", {}) or {}
         from ..labels import spec_origin
         lines = ["Bulunan tablolar:"]
@@ -139,7 +150,17 @@ class LakehouseSearchTool(Tool):
         else:
             self._pending_streak = 0
         lines.append("\nSorgu yazmadan önce lakehouse_describe ile kolonları incele.")
-        return ToolResult(content="\n".join(lines))
+        lines.append(verdict.line())
+        rows = self.ledger.candidates_frame().to_dict("records")
+        if verdict.saturated:
+            # Doygunluk: son aramalar yeni aday üretmedi. Bütçe dolduğu için değil, arama artık bir şey katmadığı için
+            # durulur; tam aday listesi burada (model kısa anlatısıyla listenin yerine geçemez, ajan tabloya da koyar).
+            lines.append(f"SEARCH_SATURATED: arama doydu ({verdict.searches} arama, {verdict.total_unique} tekil aday). "
+                         "YENİDEN ARAMA YAPMA. Ya adaylardan uygun olanı seçip sorgula ya da istenen yüz "
+                         "(frekans/il/kaynak) adaylarda yoksa bunu kullanıcıya açıkça söyle; 'veri yok' deme, adayları say.")
+            lines.append("Tüm adaylar: " + "; ".join(f"{r['series_id']} ({r['frequency']}, {r['source']})" for r in rows))
+        return ToolResult(content="\n".join(lines),
+                          artifacts={"candidates": rows, "search_ledger": self.ledger.summary()})
 
     def _access_sql(self, spec) -> str | None:
         """Kimliğin tablo adı olmadığı adaptörler için çalıştırılabilir erişim kalıbı.

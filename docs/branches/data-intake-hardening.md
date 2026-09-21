@@ -177,6 +177,41 @@ NULL sınır okumasını atlayıp dönemin son (ilk) yayımlanmış okumasını 
 tabloları etkilenmiyor (kur ve faiz `avg`). Kopya DB'de BIST 100 2025: Mart 9.659,48 `boundary_shifted`, öbür aylar aynı.
 Testler: endeks tatil sınırı, oran `first`, stok `first` (eski sözleşme korunuyor).
 
+### 1h. Tamamlanma sözleşmesi ve arama defteri (22 Eylül)
+
+İki istek (Baran'ın benchmark bulguları): (1) işin tamamlandığını doğrulayan genel bir sözleşme — istekten beklenen
+seri kimlikleri, dönem/frekans, işlem, kolonlar ve çıktı kapsamı çıkarılsın; teslimden önce satır/dönem kapsamı, seri
+kimliklerinin korunması, türetilmiş değerlerin girdiyle tutarlılığı denetlensin; eksikse araç akışı sürsün ya da
+eksiklik açıkça yazılsın. (2) Katalog araması çağrı sayısıyla durdurulmasın; yeni ve tekil aday üretimi ile istenen
+yüzler izlensin; büyük sonuçta tam aday listesi indirilebilir tabloda kalsın.
+
+Hiçbir sürümde yoktu: main ve bu dal yalnız anlatıdaki sayıyı denetliyordu; Baran'ın `feature/agent-engine` dalı
+aramayı sabit `max_catalog_search_calls` ile kesiyor ("N arama yapıldı, durduruldu").
+
+Uygulama (soruya özel kural yok):
+- `core/completion.py`: beklenti sorudan türetilir (ay/YYYYMM/çeyrek/ay adı/yıl/takvim yılı/yarıyıl pencereleri, frekans
+  sözcüğü ya da pencerenin tanesi, "önceki aya göre fark" ve "yüzde değişim" türetimleri, katalog kimlikleri, liste
+  isteği). Denetim: dönem kapsamı (eksik dönemler adlandırılır), fark/yüzde kolonunun girdisiyle tutarlılığı, seri
+  kimliklerinin kaynak/SQL'de bulunması. Frekans bilinmiyorsa dönem sayısı zorlanmaz (yalnız pencerede hiç gözlem yoksa).
+- Ajan: nihai cevaptan önce kontrol; eksikse bir kez "TAMAMLANMA KONTROLÜ" notuyla modele geri gider (araçlarla
+  tamamlasın), ikinci kez de eksikse cevabın sonuna deterministik "(Kapsam kontrolü: …)" notu; adım/süre limiti ve
+  terminal hata kapanışlarında da. Dürüst ret ("yok", "…amıyorum") geri gönderilmez, not tekrar edilmez.
+  `AgentAnswer.completion` ve API'de `completion` alanı.
+- `core/search_ledger.py`: tur içi defter — tekil adaylar, arama başına yeni aday, istenen yüzler (frekans/il/kaynak)
+  adaylarda var mı. Doygunluk: ≥3 aramadan sonra son iki arama yeni aday üretmediyse (`SEARCH_SATURATED`, tam liste
+  ile); ısrar edilirse ikinci kez araçlar geri alınır. `lakehouse_search` `limit` aldı (liste isteğinde ajan 40 verir).
+  Aday listesi istendiğinde ya da arama doyunca adaylar tablo olarak kurulur ("(Aday listesi: N seri; tam liste
+  tabloda, indirilebilir.)"), API/indirme bu tabloyu verir.
+- Yan bulgular: Gold doğrulanmamış seriyi reddedince aynı adın doğrulanmış serisi aday olarak döner ve tur bitmez
+  (P04: 1888 → 1160 ile tamamlandı); konu belirten "hangi seriler var" sorusu envanter cevabına kaçmaz (konu sözcükleri
+  katalogdan); `claim_check` Gold satırında `period_end`'i etiket sayar (P04 yanlış çelişki notu).
+
+Canlı (gerçek MIA, güncel DB kopyası, dört tur): P02 ve üç yazımı 24/24 + fark/yüzde kolonu doğrulandı; P04 ve iki
+yazımı 16/16 (ilk denemede Gold reddi → doğrulanmış eşdeğerle tamamlandı); P05 dürüst ret + 25/48 adaylık tablo;
+R02 50 adaylık tablo teslim edildi; R02b (konu belirten liste) 68 aday; R04 boşluksuz; Q01 ve "2026-03–2026-09"
+kısmi pencere: eksik dönemler adlandırıldı. Birim: `test_completion_contract.py` (24 vaka), gold ve small_talk testleri;
+tam paket 855.
+
 Değişmeyenler, bilinçli: beyan kapısı (birim/ölçüm tipi kullanıcıdan gelir, doğrulanmaz), aynı anahtar farklı içerik reddi
 (veri ekibinin sözleşmesi), tarihsiz tablonun kalıcı kaydedilmemesi, `unknown` ölçüm tipinde toplama türetilmemesi.
 
