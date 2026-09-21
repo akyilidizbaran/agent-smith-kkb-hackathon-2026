@@ -87,6 +87,19 @@ Altın PDF'i yeni kodla tekrar sürüldü (aynı sunucu düzeni), iki kusur daha
 Son ölçüm: kayıt 41 sn, 2 LLM çağrısı, 12 ay yazıldı (Ocak–Aralık 2026, TOPLAM düşürüldü), birim TL başlıktan, kanıt
 zinciri tam; aynı oturumda "en yüksek ay hangisi" 18 sn, doğru (Mart 2026), kanıt tam.
 
+### 1d. Eski sorunlar: faiz alias çakışması, Gold bayatlığı, KFE (21 Eylül akşamı)
+
+Jürinin 1. adım sorusu ("2021–2025 aylık konut kredisi faiz oranı") üç ayrı sebeple yanlış ya da boş dönüyordu:
+
+| Sebep | Ölçüm | Düzeltme |
+|---|---|---|
+| Alias çakışması (PR #9 alias üreticisi): stok serisi `TP.BKR.TRY.18` de "konut kredisi faiz oranı" alias'ını taşıyordu; 19 faiz alias'ı birden çok seride | BM25: stok 33,84 · akım `TP.KTF12` 33,31 · Gold `konut_faizi_aylik` 33,14; "aylık" yüzü stoku öne aldı | Stok grubunun her alias'ı "stok" taşır; `(KMH Dahil)`, `(… Hariç)`, döviz nitelikleri alias'ta kalır (aynı alias iki seride değil); üreticiye `--rewrite` seçeneği |
+| Puanlar alias sayısına bağlı, anlama değil | Aynı ölçüm | Retriever'da eşitlik bandı (%5): bantta doğrulanmış seri ya da Gold metriği otomatik girişin önüne geçer; bant dışında sıra değişmez. Gold faiz tablosuna iki alias |
+| Gold bayat: gerçek DB'de Gold 15 Eylül'de 116.413 Silver satırıyla kurulmuş, 18 Eylül genişletmesi Silver'ı 232.217'ye çıkarmış | Sorgu `GOLD_STALE` ile reddedildi (kopya DB'de aynı) | Kaynaktan çekme ve terfi araçları Silver'dan sonra `lakehouse gold` çalıştırır (`LakehouseCLI.refresh_gold`); gerçek DB'de bir kez elle `gold` gerekiyor |
+| KFE `TP.KFE.TR` "baz yılı doğrulanmadı" diye `derived` | 2023'ün 12 ayının ortalaması tam 100,00 | Açıklama 2023=100 ile, `verified` |
+
+Sonuç (canlı, kopya DB, Gold yeniden kurulmuş): jüri sorusu → `gold.konut_faizi_aylik`, 60 ay, 2021-01 18,39 … 2022-11 21,58 …, kanıt sayılar ✓, 81 sn; "KFE 2024 ortalaması ve baz yılı" → 141,54 ve 2023, 33 sn.
+
 Değişmeyenler, bilinçli: beyan kapısı (birim/ölçüm tipi kullanıcıdan gelir, doğrulanmaz), aynı anahtar farklı içerik reddi
 (veri ekibinin sözleşmesi), tarihsiz tablonun kalıcı kaydedilmemesi, `unknown` ölçüm tipinde toplama türetilmemesi.
 

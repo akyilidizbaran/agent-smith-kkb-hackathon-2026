@@ -108,6 +108,19 @@ class LakehouseCLI:
             cmd += ["--delimiter", delimiter]
         return cmd
 
+    def refresh_gold(self) -> tuple[bool, str]:
+        """Silver değiştikten sonra Gold tablolarını yeniden kurar (`python -m lakehouse gold`).
+
+        Ölçüldü (21 Eyl, gerçek DB): Gold 15 Eylül'de 116.413 Silver satırıyla kurulmuş, 18 Eylül'deki genişletme
+        Silver'ı 232.217'ye çıkarmış; yedi Gold tablosu da "bayat" sayılıp jürinin aylık faiz sorusu GOLD_STALE ile
+        reddedildi. Architect'in Silver'a yazan her yolu (kaynaktan çekme, terfi) bunu çağırır; Gold tablosu Silver'ın
+        parmak izine bağlı olduğu için yalnız ilgili tabloyu yenilemek mümkün değil, hepsi kurulur (saniyeler)."""
+        cmd = [*self.launcher.split(), "-m", "lakehouse", "gold",
+               "--database", str(self.database), "--data-root", str(self.data_root)]
+        code, out, err = self.runner(cmd, self.core_dir)
+        ok = code == 0 and "status: success" in (out or "")
+        return ok, (out + err).strip()[-300:]
+
     def ingest_file(self, **kwargs) -> IngestOutcome:
         cmd = self.ingest_file_command(**kwargs)
         code, out, err = self.runner(cmd, self.core_dir)

@@ -111,13 +111,16 @@ class IngestSourceTool(Tool):
                 if s_code != 0:
                     return ToolResult.fail("TOOL_FAILED", f"Veri çekildi ama Silver yenilenemedi: {(s_err or s_out).strip()[-300:]}",
                                            hint="Kullanıcıya verinin henüz sorgulanamadığını söyle.", layer="harness", retryable=False)
+                # Silver değişti → Gold tabloları bayat olur; burada yenilenmezse bir sonraki Gold sorgusu GOLD_STALE ile düşer.
+                gold_ok, gold_note = self.cli.refresh_gold()
             finally:
                 self.lakehouse.reload()
         card = [
             f"KAYNAKTAN ÇEKİLDİ: {params.series_id} · {params.start} → {params.end} · durum {status}",
             f"run {outcome.get('run_id', '?')} · yeni artifact {outcome.get('new', '?')} · satır {outcome.get('rows_out', '?')}"
             + (f" · uyarı {outcome.get('warnings')}" if outcome.get("warnings") else ""),
-            "Silver yeniden kuruldu; seri artık bu dönemi de kapsıyor.",
+            "Silver ve Gold yeniden kuruldu; seri artık bu dönemi de kapsıyor." if gold_ok
+            else f"Silver yeniden kuruldu; Gold yenilenemedi ({gold_note}) — hazır Gold tabloları bayat kalabilir, seri Silver'dan sorgulanır.",
             "YAPACAĞIN: şimdi lakehouse_query ile istenen dönemi sorgula; sayıları o tablodan ver.",
         ]
         return ToolResult(content="\n".join(card), artifacts={"ingest_source": {"series_id": params.series_id, **outcome}})

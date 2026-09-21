@@ -54,6 +54,8 @@ metrics:
       girdiğini söyler. Yeni açılan kredilere uygulanan orandır, stokun ortalama faizi değil.
     aliases:
       - aylık konut kredisi faizi
+      - aylık konut kredisi faiz oranı
+      - konut kredisi faiz oranı aylık
       - aylık ortalama konut faizi
       - konut faizi aylık
     tags: [faiz, konut, kredi, tcmb, gold, aylik]
