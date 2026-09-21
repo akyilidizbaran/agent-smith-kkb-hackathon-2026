@@ -33550,3 +33550,62 @@ series:
     semantic_source: source_service
     metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_hpbitablo1
     status: active
+
+  # --- Borsa İstanbul endeksleri (bie_mkbrgn; canlı seri listesi 21 Eylül 2026) ---------------
+  # Demo senaryosu "BIST 100 endeksi günlük/aylık değişimi" için. borsaistanbul.com/endeks/xtumy
+  # sayfası JavaScript ile dolar ve bot engeli uygular; resmî kamu kaynağı TCMB EVDS'dir.
+  # DİKKAT: XTUMY "BIST Tüm-100"dür, BIST 100 (XU100) değil; iki seri ayrı girilmiştir.
+  - series_id: evds:TP.MK.F.BILESIK
+    native_code: TP.MK.F.BILESIK
+    dataset_id: evds_bist_index
+    name_tr: BIST 100 Endeksi (XU100), Kapanış (Fiyat)
+    description: >-
+      TCMB EVDS, "bie_mkbrgn" (Borsa İstanbul Endeksi ve Günlük İşlem Hacmi) veri grubu; kaynak Borsa İstanbul.
+      "(FİYAT) BİST 100 Endeks (XU100), Kapanış Fiyatlarına Göre (Ocak 1986=0,01)". İş günü kapanış değeri, puan.
+      Fiyat düzeyidir: aya/çeyreğe indirgenirken dönem sonu kapanışı alınır (kural last), toplanmaz; günlük ve aylık
+      değişim bu kapanışlardan hesaplanır. Frekans ve ad EVDS'nin kendi metadata'sından (canlı seri listesi 21 Eylül
+      2026); baz değeri kaynağın adında yazar, ayrıca doğrulanmadı (derived).
+    aliases:
+      - bist 100
+      - bist100
+      - bist 100 endeksi
+      - borsa istanbul 100 endeksi
+      - xu100
+      - borsa endeksi
+      - hisse senedi endeksi
+      - bist 100 kapanış
+    tags: [endeks, borsa, bist, hisse, tcmb]
+    frequency: daily
+    unit: index
+    measure_type: index
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_service
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_mkbrgn
+    status: active
+
+  - series_id: evds:TP.MK.F.BILESIK.TUM
+    native_code: TP.MK.F.BILESIK.TUM
+    dataset_id: evds_bist_index
+    name_tr: BIST Tüm-100 Endeksi (XTUMY), Kapanış (Fiyat)
+    description: >-
+      TCMB EVDS, "bie_mkbrgn" veri grubu; kaynak Borsa İstanbul. "(FİYAT) BİST Tüm-100 Endeksi (XTUMY), Kapanış
+      Fiyatlarına Göre". BIST 100 dışındaki payları kapsayan endeks; BIST 100 (XU100) ile karıştırılmamalı
+      (borsaistanbul.com/endeks/xtumy sayfası bu endekstir). İş günü kapanış değeri, puan; dönem sonu kapanışı ile
+      indirgenir (kural last). Frekans ve ad EVDS metadata'sından (21 Eylül 2026); baz doğrulanmadı (derived).
+    aliases:
+      - bist tüm-100
+      - bist tum-100
+      - bist tüm 100
+      - bist tüm-100 endeksi
+      - xtumy
+      - tüm-100 endeksi
+    tags: [endeks, borsa, bist, hisse, tcmb]
+    frequency: daily
+    unit: index
+    measure_type: index
+    default_agg: last
+    semantic_confidence: derived
+    semantic_source: source_service
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_mkbrgn
+    status: active
