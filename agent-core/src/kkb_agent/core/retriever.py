@@ -29,6 +29,7 @@ MODES = ("auto", "preload_all", "bm25", "hybrid")
 DEFAULT_SMALL_MAX = 60        # bu sayıya kadar katalog kart olarak sığar (≈ 6.000 token bütçesi)
 DEFAULT_HYBRID_MIN = 5000     # bu sayıdan sonra BM25 tek başına yetmez (ölçülecek)
 CANDIDATE_MULTIPLIER = 10     # yüz filtrelerinden önce aday havuzu k × bu
+NEAR_TIE = 0.05               # en iyi puanın %5 altına kadar "eşit"; bu bantta doğrulanmış kayıt öne (ölçüm aşağıda)
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,7 @@ class CatalogRecord:
     frequency: str | None = None
     source: str | None = None
     province: str | None = None    # None → ulusal/il-dışı
+    curated: bool = False          # semantiği insan doğruladı (verified) ya da Gold metriği; otomatik üretilen değil
 
     @property
     def text(self) -> str:
@@ -52,9 +54,11 @@ class CatalogRecord:
 def record_from_spec(spec) -> CatalogRecord:
     aliases = tuple(a for c in spec.columns for a in c.aliases)
     freq = getattr(spec.frequency, "value", spec.frequency)
+    confidence = getattr(spec, "semantic_confidence", None)
+    curated = confidence == "verified" or spec.source == "gold" or str(spec.dataset_id).startswith("gold.")
     return CatalogRecord(id=spec.dataset_id, name=spec.name, description=spec.description, aliases=aliases,
                          tags=tuple(spec.tags), frequency=str(freq) if freq else None, source=spec.source,
-                         province=province_of(f"{spec.dataset_id} {spec.name}"))
+                         province=province_of(f"{spec.dataset_id} {spec.name}"), curated=curated)
 
 
 @dataclass
@@ -77,13 +81,21 @@ class RetrievalPolicy:
 
 def apply_facets(records: Sequence[CatalogRecord], ranked: Sequence[Candidate], facets: Facets, *, k: int) -> list[Candidate]:
     """Yüzler: il varsa yalnız o il (yoksa il-dışı seriler öne); frekans varsa önce o frekans
-    (sonra daha ince olanlar: Gold kaba yapabilir; kaba olanlar en sona); kaynak ipucu varsa öne."""
+    (sonra daha ince olanlar: Gold kaba yapabilir; kaba olanlar en sona); kaynak ipucu varsa öne.
+
+    Eşitlik bandı (21 Eyl): en iyi puanın %5'i içindeki adaylar arasında semantiği doğrulanmış seri ya da
+    Gold metriği, otomatik üretilmiş girişin önüne geçer. Ölçüldü: jürinin "aylık konut kredisi faiz oranı"
+    sorusunda otomatik alias'lı stok serisi 33,84, Gold aylık ortalama tablosu 33,14 puan aldı; puan farkı
+    alias sayısından geliyordu, anlamdan değil. Bant dışında (açıkça daha iyi eşleşen) sıra değişmez."""
     by_id = {r.id: r for r in records}
     kept: list[tuple[tuple, Candidate]] = []
+    top = max((c.score for c in ranked), default=0.0)
+    band = top * (1 - NEAR_TIE) if top > 0 else top
     for pos, cand in enumerate(ranked):
         rec = by_id.get(cand.id)
         if rec is None:
             continue
+        tie_key = 0 if (rec.curated and cand.score >= band) else 1
         if facets.provinces:
             if rec.province is None or rec.province not in facets.provinces:
                 # il soruldu: başka ilin serisi elenir; ulusal seri geride kalır ama düşmez
@@ -107,11 +119,11 @@ def apply_facets(records: Sequence[CatalogRecord], ranked: Sequence[Candidate], 
         else:
             freq_key = 0
         src_key = 0 if (not facets.sources or rec.source in facets.sources) else 1
-        kept.append(((prov_key, freq_key, src_key, pos), cand))
+        kept.append(((prov_key, freq_key, src_key, tie_key, pos), cand))
     kept.sort(key=lambda t: t[0])
     out = []
     for key, cand in kept[:k]:
-        meta = {**cand.meta, "facet_rank": key[:3]}
+        meta = {**cand.meta, "facet_rank": key[:3], "curated_tie": key[3] == 0}
         out.append(Candidate(id=cand.id, text=cand.text, score=cand.score, source=cand.source, meta=meta))
     return out
 
@@ -213,5 +225,5 @@ class CatalogRetriever:
         return len(self.records)
 
 
-__all__ = ["CANDIDATE_MULTIPLIER", "CatalogRecord", "CatalogRetriever", "DEFAULT_HYBRID_MIN", "DEFAULT_SMALL_MAX",
+__all__ = ["CANDIDATE_MULTIPLIER", "NEAR_TIE", "CatalogRecord", "CatalogRetriever", "DEFAULT_HYBRID_MIN", "DEFAULT_SMALL_MAX",
            "MODES", "RetrievalPolicy", "apply_facets", "record_from_spec"]

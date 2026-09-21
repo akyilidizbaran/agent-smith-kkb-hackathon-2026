@@ -88,13 +88,18 @@ RULES: dict[str, GroupRule] = {
         "konut birim kirası", "prefix",
         ("metrekare kirası", "m2 kirası", "kira TL/m2"), ("kira", "m2"),
     ),
-    # "Konut Kredisi (TL, Stok, %)" — says which loan, never says "faiz".
+    # "Konut Kredisi (TL, Stok, %)" — says which loan, never says "faiz". The stock group is the
+    # average rate on the EXISTING loan book; the flow group is the rate on loans opened that week.
+    # Both used to get the plain "konut kredisi faiz oranı" alias, and the jury's "monthly housing
+    # loan rate" question landed on the stock series (21 Eyl). Every stock phrase now carries
+    # "stok"; the plain phrase belongs to the flow series only.
     "evds_bie_kt210a": GroupRule(
-        "kredi faiz oranı", "parens_strip", ("faiz oranı stok", "kredi faizi"),
+        "kredi stoku faiz oranı", "parens_strip",
+        ("stok faiz oranı", "mevcut kredilerin ortalama faizi"),
         ("faiz", "oran", "stok"),
     ),
     "evds_bie_kt100h": GroupRule(
-        "kredi faiz oranı", "parens_strip", ("faiz oranı akım", "kredi faizi"),
+        "kredi faiz oranı", "parens_strip", ("faiz oranı akım", "kredi faizi", "yeni açılan kredi faizi"),
         ("faiz", "oran", "akim"),
     ),
     # "0111. Tahıllar Ve Tahıl Ürünleri" — a COICOP line of the CPI basket.
@@ -130,8 +135,21 @@ def distinguishing_part(name: str, shape: str) -> tuple[str, str]:
         # "İstanbul Konut Birim Fiyatları" -> "İstanbul"
         return (name.split()[0] if name.split() else name, "")
     if shape == "parens_strip":
-        # "Konut Kredisi (TL, Stok, %)" -> "Konut Kredisi"
-        return (re.sub(r"\s*\([^)]*\)", "", name).strip(), "")
+        # "Konut Kredisi (TL, Stok, %)" -> "Konut Kredisi". The trailing spec parenthesis
+        # (currency, stock/flow, %) goes; a foreign currency in it stays as a word, and a real
+        # qualifier such as "(KMH Dahil)" or "(... Hariç)" stays too — without it "İhtiyaç
+        # Kredisi (KMH Dahil)" and "İhtiyaç Kredisi" collapsed onto the same alias. An
+        # enumeration like "(İhtiyaç+Taşıt+Konut)" is a definition, not a qualifier: dropped.
+        kept: list[str] = []
+        for inside in re.findall(r"\(([^)]*)\)", name):
+            if re.search(r"(stok|akım|akim)|%", inside, re.I):
+                currency = re.search(r"euro|abd doları|usd|dolar", inside, re.I)
+                if currency:
+                    kept.append(currency.group(0))
+            elif "+" not in inside:
+                kept.append(inside.strip())
+        base = re.sub(r"\s*\([^)]*\)", "", name).strip()
+        return (" ".join([base, *kept]).strip(), "")
     if shape == "code_prefix":
         # "0111. Tahıllar Ve Tahıl Ürünleri" -> "Tahıllar Ve Tahıl Ürünleri"
         return (re.sub(r"^[\d.]+\s*", "", name).strip(), "")
@@ -221,7 +239,11 @@ def split_entries(lines: list[str]) -> tuple[list[str], list[Block]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--rewrite", default="", metavar="DATASET_IDS",
+                        help="comma-separated dataset ids whose generated aliases are replaced (rule changed); "
+                             "hand-written entries (semantic_confidence: verified) are still left alone")
     args = parser.parse_args()
+    rewrite = {d.strip() for d in args.rewrite.split(",") if d.strip()}
 
     lines = CATALOG.read_text(encoding="utf-8").splitlines(keepends=True)
     header, blocks = split_entries(lines)
@@ -233,6 +255,12 @@ def main() -> int:
     for block in blocks:
         dataset_id = block.value("dataset_id")
         name = block.value("name_tr")
+        if dataset_id in rewrite and block.has("aliases") and block.value("semantic_confidence") != "verified":
+            start = next(i for i, line in enumerate(block.lines) if line.startswith("    aliases:"))
+            end = start + 1
+            while end < len(block.lines) and block.lines[end].startswith("      - "):
+                end += 1
+            del block.lines[start:end]
         if block.has("aliases") or not dataset_id or not name:
             continue
         rule = RULES.get(dataset_id)
