@@ -58,6 +58,9 @@ ErrorCode = Literal[
     # Netleştirme kapısı (Büşra, tools/clarify.py, V3 §3.9): soru yalnız uygunluk kapısı "kısmen" dediğinde ve tur başına bir kez;
     # aksi hâlde model eldeki veriyle cevap verir (turu bitirmez: terminal=False).
     "CLARIFY_NOT_ALLOWED",
+    # Arama defteri (core/search_ledger, 22 Eyl): arama artık yeni aday üretmiyor; tam aday listesi verildi, model
+    # aramayı bırakıp adaylardan seçer ya da eksik yüzü söyler. "Veri yok" değil, "arama doydu".
+    "SEARCH_SATURATED",
     # veri katmanı — sorgu çalıştı, sonuç ne söylüyor
     "OUT_OF_COVERAGE",
     "EMPTY_RESULT",

@@ -198,6 +198,19 @@ class _GoldTool(Tool):
                 return missing
         return None
 
+    def _verified_alternatives(self, series_id: str | None, limit: int = 3) -> list[str]:
+        """Reddedilen serinin adıyla arayıp semantiği doğrulanmış, başka kimlikli serileri döndürür (en çok `limit`)."""
+        if not series_id:
+            return []
+        try:
+            spec = self.lakehouse.get_dataset(series_id)
+            hits = self.lakehouse.search_datasets(str(getattr(spec, "name", "") or series_id), limit=8)
+        except Exception:  # noqa: BLE001 — öneri üretilemezse ret yine geçerli
+            return []
+        return [str(h.dataset_id) for h in hits
+                if str(h.dataset_id) != series_id and getattr(h, "semantic_confidence", None) == "verified"
+                and not str(h.dataset_id).startswith("gold.")][:limit]
+
     # ---- çağrı
     def _call(self, params: BaseModel) -> QueryResult:
         raise NotImplementedError
@@ -212,14 +225,26 @@ class _GoldTool(Tool):
             reason = exc.reason
             tr = REASON_TR.get(reason, exc.detail)
             alt = _ALTERNATIVE_TR.get(reason, "")
-            return ToolResult.fail(
+            verified = self._verified_alternatives(exc.series_id) if reason == "UNVERIFIED_SEMANTICS" else []
+            if verified:
+                # Ölçüldü (benchmark P04, 22 Eyl): model "Toplam Krediler (Krediler tablosu)" — semantiği doğrulanmamış —
+                # seçti, Gold reddetti, tur bitti; aynı kavramın doğrulanmış serisi (Bilanço "Krediler, Toplam") duruyordu.
+                # Aday genel: aynı adla aranan, semantiği doğrulanmış, başka kimlikli seriler.
+                alt = (alt + " Aynı kavramın DOĞRULANMIŞ serisi var: " + ", ".join(verified)
+                       + " — onay istemeden önce aynı işlemi bu seriyle yeniden dene.").strip()
+            result = ToolResult.fail(
                 "GOLD_REFUSED",
                 f"Gold reddetti [{reason}]{f' ({exc.series_id})' if exc.series_id else ''}: {tr} "
                 f"(veri katmanı: {exc.detail})",
                 hint=("Kullanıcıya bu sebebi sade Türkçeyle söyle; sayı üretme, aynı işi SQL ile "
                       "yapmaya kalkma. " + alt).strip(),
-                layer="policy", retryable=False,
+                layer="policy", retryable=False, candidates=verified,
             )
+            if verified and result.error is not None:
+                # Doğrulanmış eşdeğer varken tur bitmez: model aynı işlemi o seriyle yeniden dener (terminal=False,
+                # CLARIFY_NOT_ALLOWED ile aynı sözleşme). Eşdeğer yoksa ret terminal kalır, kullanıcıya sorulur.
+                result.error.terminal = False
+            return result
         except LakehouseError as exc:
             return ToolResult.fail("TOOL_FAILED", str(exc), layer="harness", retryable=False,
                                    hint="Kullanıcıya hesabın yapılamadığını söyle.")
