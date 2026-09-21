@@ -51,6 +51,12 @@ def main():
     parser.add_argument("--table-index", type=int)
     parser.add_argument("--value-row")
     parser.add_argument("--pages")
+    parser.add_argument("--period", help="tarih kolonu yoksa dönem: 'Ağustos 2026', '2026-08', '2026-06-30'")
+    parser.add_argument("--value-column")
+    parser.add_argument("--date-column")
+    parser.add_argument("--entity-column")
+    parser.add_argument("--unit")
+    parser.add_argument("--measure-type")
     parser.add_argument("--series-key", default="url_acceptance")
     parser.add_argument("--output-root", type=Path, required=True)
     args = parser.parse_args()
@@ -74,7 +80,10 @@ def main():
         return completed.returncode, completed.stdout, completed.stderr
 
     reader = Reader(db)
-    question = f"{args.url} adresindeki {args.value_row or 'veriyi'} taslak seri olarak kaydet."
+    question = (f"{args.url} adresindeki {args.value_row or 'veriyi'} taslak seri olarak kaydet"
+                + (f"; dönem {args.period}" if args.period else "") + (f"; değer kolonu {args.value_column}" if args.value_column else "")
+                + (f"; tarih kolonu {args.date_column}" if args.date_column else "") + (f"; varlık kolonu {args.entity_column}" if args.entity_column else "")
+                + (f"; birim {args.unit}" if args.unit else "") + (f"; ölçüm tipi {args.measure_type}" if args.measure_type else "") + ".")
     registry = SimpleNamespace(user_text=question, active_question=question, turn=1)
     tool = IngestFromUrlTool(reader, LakehouseCLI(core_dir=core, database=db, data_root=root / "data", runner=runner),
                             allowed_root=root / "incoming", registry=registry)
@@ -83,7 +92,9 @@ def main():
     try:
         result = tool.validate_and_run({"locator": args.url, "name": args.value_row or "URL verisi",
             "resource_index": args.resource_index, "table_index": args.table_index,
-            "value_row": args.value_row, "pages": args.pages, "series_key": args.series_key})
+            "value_row": args.value_row, "pages": args.pages, "series_key": args.series_key,
+            "period": args.period, "value_column": args.value_column, "date_column": args.date_column,
+            "entity_column": args.entity_column, "unit": args.unit, "measure_type": args.measure_type})
         report.update({"tool_ok": result.ok, "content": result.content, "writer_calls": calls})
         print(result.content, flush=True)
     finally:

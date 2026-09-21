@@ -33,7 +33,7 @@ from ..builder.relevance import assess as assess_relevance, catalog_entries, use
 from ..core.fitness import _LOCATOR as _LOCATOR_RE, Lexicon, assess as assess_fitness, signature_of
 from ..builder.unit_guess import guess_unit
 from ..builder.verify import verify_mapping
-from ..builder.web_source import SourceSelection, read_web_source
+from ..builder.web_source import SourceSelection, measure_row_to_long, read_web_source
 from ..contracts.lakehouse import LakehouseClient
 from ..core.access_policy import decide, detect_source_constraint, render_for_model, to_tool_error
 from ..core.errors import ToolError
@@ -70,6 +70,14 @@ class IngestParams(BaseModel):
     frequency: Literal["daily", "business_daily", "weekly", "biweekly", "monthly", "quarterly", "semiannual", "yearly"] | None = Field(
         default=None, description="Kullanıcı söylediyse frekans")
     date_format: str | None = Field(default=None, description="Kullanıcı söylediyse tarih biçimi, ör. '%d/%m/%Y' (belirsiz gün/ay için)")
+    # Kolon seçimi (21 Eyl): çok kolonlu dosyada hangi kolonun seri olacağını kullanıcı söyler; araç önerdiği
+    # seçeneklerden birini kullanıcı anmadan model seçemez (beyan kuralıyla aynı).
+    value_column: str | None = Field(default=None, description="Kaydedilecek DEĞER kolonunun adı (araç seçenekleri listeler; kullanıcının andığı kolon)")
+    date_column: str | None = Field(default=None, description="TARİH kolonunun adı; birden çok tarih kolonu varsa ya da öneri yanlışsa")
+    entity_column: str | None = Field(default=None, description="Varlık/boyut kolonu (il, kurum, ülke); tarih başına birden çok satır varsa")
+    # Beyan edilen dönem (21 Eyl): tarih kolonu olmayan kesit tablolarında (il × değer, kurum × tutar) kullanıcı
+    # dönemi söyler ('Ağustos 2026', '2026-06-30', '2025', '2026Q2'); tüm satırlar o döneme bağlanır.
+    period: str | None = Field(default=None, description="Tarih kolonu yoksa kullanıcının söylediği dönem: 'Ağustos 2026', '2026-08', '2026-06-30', '2025', '2026Q2'")
     # İlgi kapısı (V3 §3.9): dosya soruyla ilgisiz görünürse yazılmaz ve sorulur. Kullanıcı
     # "yine de ekle / doğru dosya bu" derse model bu bayrağı açar; bayrak yalnız kullanıcı
     # metninde onay sözü varsa geçerlidir (beyan kuralıyla aynı: modelin sözü yetmez).
@@ -129,7 +137,70 @@ def undeclared(params: IngestParams, user_text: str) -> list[str]:
             w in text for w in {"daily": ("günlük",), "weekly": ("haftalık",), "monthly": ("aylık",),
                                 "quarterly": ("çeyreklik",), "yearly": ("yıllık",)}.get(params.frequency, ())):
         bad.append(f"frequency={params.frequency!r}")
+    # Kolon seçimi ve dönem de beyandır: model, aracın listelediği seçenekten kullanıcı anmadan seçemez.
+    for field_name in ("value_column", "date_column", "entity_column"):
+        value = getattr(params, field_name)
+        if value and not _mentioned(value, text):
+            bad.append(f"{field_name}={value!r}")
+    if params.period:
+        year = re.search(r"(19|20)\d{2}", params.period)
+        if not year or year.group(0) not in text:
+            bad.append(f"period={params.period!r}")
     return bad
+
+
+_TR_MONTHS = {name: i + 1 for i, name in enumerate(
+    ("ocak", "şubat", "mart", "nisan", "mayıs", "haziran", "temmuz", "ağustos", "eylül", "ekim", "kasım", "aralık"))}
+_TR_MONTHS.update({"subat": 2, "mayis": 5, "agustos": 8, "eylul": 9, "kasim": 11, "aralik": 12})
+
+
+def parse_period(text: str | None) -> tuple[str, str | None] | None:
+    """Kullanıcının söylediği dönemi (dönem sonu tarihi, frekans) çiftine çevirir; anlaşılmazsa None.
+
+    Kabul edilen yazımlar: '2026-06-30' (gün), '2026-08' ve 'Ağustos 2026' / '2026 Ağustos' (ay → ay sonu, monthly),
+    '2026Q2' / '2026 Ç2' (çeyrek → çeyrek sonu, quarterly), '2025' (yıl → yıl sonu, yearly). Tahmin yok: iki
+    okuması olan yazım ('06/08/2026') kabul edilmez."""
+    import calendar
+    from datetime import date as _date
+
+    s = (text or "").strip().lower().replace("i̇", "i")
+    if not s:
+        return None
+    if m := re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", s):
+        y, mo, d = map(int, m.groups())
+        try:
+            return _date(y, mo, d).isoformat(), None
+        except ValueError:
+            return None
+    if m := re.fullmatch(r"(\d{4})[-/](\d{1,2})", s):
+        y, mo = int(m[1]), int(m[2])
+    elif m := re.fullmatch(r"([a-zçğıöşü]+)\s+(\d{4})", s) or re.fullmatch(r"(\d{4})\s+([a-zçğıöşü]+)", s):
+        a, b = m.groups()
+        name, y = (a, int(b)) if a.isalpha() else (b, int(a))
+        mo = _TR_MONTHS.get(name)
+        if not mo:
+            return None
+    elif m := re.fullmatch(r"(\d{4})\s*[qç]\s*([1-4])", s):
+        y, q = int(m[1]), int(m[2])
+        mo = q * 3
+        return f"{y:04d}-{mo:02d}-{calendar.monthrange(y, mo)[1]:02d}", "quarterly"
+    elif m := re.fullmatch(r"(\d{4})", s):
+        y = int(m[1])
+        return f"{y:04d}-12-31", "yearly"
+    else:
+        return None
+    if not 1 <= mo <= 12:
+        return None
+    return f"{y:04d}-{mo:02d}-{calendar.monthrange(y, mo)[1]:02d}", "monthly"
+
+
+def _mentioned(name: str | None, user_text: str) -> bool:
+    """Kolon adının anlamlı bir parçası (≥3 harf) kullanıcı metninde geçiyor mu — 'TL hacim' → 'Hacim/Volume (TL)'."""
+    if not name:
+        return False
+    text = (user_text or "").lower()
+    words = [w for w in re.split(r"[^0-9a-zçğıöşü]+", name.lower()) if len(w) >= 3]
+    return any(w in text for w in words) or name.lower() in text
 
 
 def _bare_locator(locator: str) -> bool:
@@ -164,6 +235,59 @@ def _default_agg_from_measure(semantics):
     evidence = [e for e in semantics.evidence if e.field != "default_agg"]
     evidence.append(Evidence("default_agg", agg, f"ölçüm tipinden türetildi ({semantics.measure_type} → {agg})", "strong"))
     return replace(semantics, default_agg=agg, evidence=tuple(evidence))
+
+
+class ColumnChoiceError(ValueError):
+    """Kullanıcının seçtiği kolon dosyada yok ya da istenen role uymuyor; kayıt yapılmadan söylenir."""
+
+
+def _apply_columns(mapping, profile, params: IngestParams):
+    """Kullanıcının seçtiği tarih/değer/varlık kolonlarını öneriye uygular; uymayanı açıkça reddeder."""
+    from dataclasses import replace
+
+    from ..builder.profile import Evidence
+
+    updates: dict[str, Any] = {}
+    evidence = list(mapping.evidence)
+
+    def _swap(field_name: str, value: Any, reason: str) -> None:
+        nonlocal evidence
+        updates[field_name] = value
+        evidence = [e for e in evidence if e.field != field_name]
+        evidence.append(Evidence(field_name, value, reason, "strong"))
+
+    if params.date_column:
+        col = profile.column(params.date_column)
+        if col is None:
+            raise ColumnChoiceError(f"tarih kolonu {params.date_column!r} dosyada yok; kolonlar: "
+                                    + ", ".join(c.name for c in profile.columns))
+        if not col.date_formats:
+            raise ColumnChoiceError(f"{params.date_column!r} tarih olarak ayrışmıyor; tarih adayları: "
+                                    + (", ".join(c.name for c in profile.date_candidates) or "yok"))
+        _swap("observation_date_column", col.name, "kullanıcı seçimi")
+        if not params.date_format:
+            _swap("date_format", col.date_formats[0], f"{col.name} kolonunun biçimi")
+    if params.value_column:
+        col = profile.column(params.value_column)
+        if col is None:
+            raise ColumnChoiceError(f"değer kolonu {params.value_column!r} dosyada yok; kolonlar: "
+                                    + ", ".join(c.name for c in profile.columns))
+        if not col.numeric_under:
+            raise ColumnChoiceError(f"{params.value_column!r} sayı olarak ayrışmıyor; sayısal kolonlar: "
+                                    + (", ".join(c.name for c in profile.value_candidates) or "yok"))
+        _swap("value_column", col.name, "kullanıcı seçimi")
+        decimal, thousands = col.numeric_under[0]
+        _swap("decimal_separator", decimal, f"{col.name} kolonu bu ayraçla ayrışıyor")
+        updates["thousands_separator"] = thousands
+    if params.entity_column:
+        col = profile.column(params.entity_column)
+        if col is None:
+            raise ColumnChoiceError(f"varlık kolonu {params.entity_column!r} dosyada yok; kolonlar: "
+                                    + ", ".join(c.name for c in profile.columns))
+        _swap("entity_id_column", col.name, "kullanıcı seçimi (varlık/boyut)")
+    if updates:
+        mapping = replace(mapping, **updates, evidence=tuple(evidence))
+    return mapping
 
 
 def _apply_declared(mapping, semantics, params: IngestParams):
@@ -253,6 +377,22 @@ class IngestFromUrlTool(Tool):
         frame = table.astype(str).where(table.notna(), "")
         return frame, outcome, note, str(csv_path)
 
+    def _stage_frame(self, frame: Any, locator: str) -> str:
+        """Türetilen tabloyu (dönem eklenmiş kesit, satır-ölçüm matrisi) izinli köke içerik adresli CSV olarak yazar.
+
+        Veri ekibinin CLI'ı yalnız dosya alır; RAW'a bu CSV girer, kaynağın kendisi ve dönüşüm notu katalog
+        açıklamasında ve kartta taşınır (OCR yolundaki `ocr_<sha>_*.csv` ile aynı kural)."""
+        import hashlib
+
+        self.allowed_root.mkdir(parents=True, exist_ok=True)
+        csv = frame.to_csv(index=False, lineterminator="\n").encode("utf-8")
+        digest = hashlib.sha256(csv).hexdigest()[:12]
+        stem = _UPLOAD_PREFIX.sub("", Path(locator.split("?")[0]).stem) or "tablo"
+        path = self.allowed_root / f"derived_{stem}_{digest}.csv"
+        if not path.exists():
+            path.write_bytes(csv)
+        return str(path)
+
     # ------------------------------------------------------------------ hooks
     def _user_text(self) -> str:
         reg = self._registry
@@ -298,6 +438,7 @@ class IngestFromUrlTool(Tool):
                     resource_index=params.resource_index, table_index=params.table_index,
                     pages=params.pages, sheet=params.sheet, value_row=params.value_row,
                     session=self.session, ocr=self.ocr,
+                    period=parse_period(params.period) if params.period else None,
                 )
                 frame, outcome = web_source.frame, web_source.outcome
             elif is_document("", params.locator.split("?")[0]):
@@ -325,31 +466,76 @@ class IngestFromUrlTool(Tool):
             err = to_tool_error(outcome, decision)
             return ToolResult(content=err.render(), ok=False, error=err)
 
-        # 2. profil + öneri
+        # 2. beyan kapısı önce: kullanıcının söylemediği alan (birim, ölçüm tipi, kolon seçimi, dönem) yok sayılır ve sorulur.
+        invented = undeclared(params, self._user_text())
+        if invented:
+            params = params.model_copy(update={k.split("=")[0]: None for k in invented})
+
+        # 2a. Şekil düzeltmeleri (21 Eyl): ölçümleri satırda gösteren rapor matrisi uzun tabloya; tarih kolonu olmayan
+        # kesit tablosu kullanıcının beyan ettiği döneme bağlanır. İkisi de kaynağı değiştirmez: türetilen tablo
+        # izinli köke CSV olarak yazılır, kaynak kopyası ve dönüşüm notu provenance'ta taşınır.
+        period = parse_period(params.period) if params.period else None
+        if params.period and period is None:
+            return ToolResult.fail(
+                "TOOL_FAILED", f"Dönem {params.period!r} anlaşılamadı; kabul edilen yazımlar: '2026-06-30', '2026-08', "
+                "'Ağustos 2026', '2026Q2', '2025'.", hint="Kullanıcıya dönemi bu biçimlerden biriyle sor.",
+                layer="data", retryable=False)
+        derived_notes: list[str] = []
+        local_matrix = None
+        if web_source is None and params.value_row:
+            try:
+                local_matrix = measure_row_to_long(frame, params.value_row, period)
+            except SourceSelection as exc:
+                return ToolResult(content=f"EKLENMEDİ — kaynak seçimi veya ek bilgi gerekli:\n{exc}", ok=True)
+            if local_matrix is not None:
+                frame, note, matrix_frequency = local_matrix
+                derived_notes.append(note.strip())
+                if matrix_frequency and not params.frequency:
+                    params = params.model_copy(update={"frequency": matrix_frequency})
+        profile = profile_table(frame)
+        if period is not None and not profile.date_candidates:
+            frame = frame.copy()
+            frame.insert(0, "observation_date", period[0])
+            derived_notes.append(f"Kaynakta tarih kolonu yok; tüm satırlar kullanıcının beyan ettiği döneme bağlandı: "
+                                 f"dönem sonu {period[0]} ('{params.period}').")
+            if period[1] and not params.frequency:
+                params = params.model_copy(update={"frequency": period[1]})
+            profile = profile_table(frame)
+        if derived_notes:
+            if web_source is not None:
+                web_source.frame = frame
+                web_source.note += " " + " ".join(derived_notes)
+            else:
+                cli_locator = self._stage_frame(frame, params.locator)
+                doc_note = ((doc_note + " ") if doc_note else "") + " ".join(derived_notes) + f" Türetilen tablo: {Path(cli_locator).name}."
+
+        # 2b. profil + öneri
         key = params.series_key or _slug(_UPLOAD_PREFIX.sub("", Path(params.locator.split("?")[0]).stem))
         series_id = f"adhoc:{key}"
-        profile = profile_table(frame)
         mapping, semantics = propose(profile, frame, series_id=series_id)
-        if web_source is not None and mapping is not None and semantics is not None:
+        if mapping is not None and semantics is not None:
             from ..builder.profile import Evidence
-            if web_source.entity_column:
-                mapping = replace(mapping, entity_id_column=web_source.entity_column,
+            matrix_entity = web_source.entity_column if web_source is not None else ("kurum" if local_matrix else None)
+            matrix_frequency = web_source.frequency if web_source is not None else (local_matrix[2] if local_matrix else None)
+            turkish = web_source.turkish_numbers if web_source is not None else bool(local_matrix)
+            if matrix_entity:
+                mapping = replace(mapping, entity_id_column=matrix_entity,
                     evidence=tuple(e for e in mapping.evidence if e.field != "entity_id_column") +
-                    (Evidence("entity_id_column", web_source.entity_column, "rapor sütunlarından korunan kurum başlıkları", "strong"),))
-            if web_source.frequency:
-                semantics = replace(semantics, frequency=web_source.frequency,
+                    (Evidence("entity_id_column", matrix_entity, "rapor sütunlarından korunan kurum başlıkları", "strong"),))
+            if matrix_frequency:
+                semantics = replace(semantics, frequency=matrix_frequency,
                     evidence=tuple(e for e in semantics.evidence if e.field != "frequency") +
-                    (Evidence("frequency", web_source.frequency, "kaynak tablonun açık ay/yıl dönem başlığı", "strong"),))
-            if web_source.turkish_numbers:
+                    (Evidence("frequency", matrix_frequency, "kaynak tablonun açık ay/yıl dönem başlığı ya da beyan edilen dönem", "strong"),))
+            if turkish:
                 mapping = replace(mapping, decimal_separator=",", thousands_separator=".",
                     evidence=tuple(e for e in mapping.evidence if e.field != "decimal_separator") +
                     (Evidence("decimal_separator", ",", "Türkçe aylık rapor: ondalık virgül, binlik nokta; tüm değerler doğrulanır", "strong"),))
-        invented = undeclared(params, self._user_text())
-        if invented:
-            # Kullanıcının söylemediği beyan yok sayılır; alan boş kalır ve aşağıda sorulur.
-            params = params.model_copy(update={k.split("=")[0]: None for k in invented})
-        if mapping is not None and semantics is not None:
             mapping, semantics = _apply_declared(mapping, semantics, params)
+            try:
+                mapping = _apply_columns(mapping, profile, params)
+            except ColumnChoiceError as exc:
+                return ToolResult.fail("TOOL_FAILED", f"Kolon seçimi uygulanamadı: {exc}",
+                                       hint="Kullanıcıya dosyadaki kolonları göster ve doğru kolonu sor.", layer="data", retryable=False)
             semantics = _default_agg_from_measure(semantics)
         if mapping is None or semantics is None:
             has_date = bool(getattr(profile, "date_candidates", ()))
@@ -428,6 +614,12 @@ class IngestFromUrlTool(Tool):
         asks: list[str] = []
         if not report.ok:
             asks += [f"{c.name}: {c.detail}" for c in report.failures]
+        # Çok kolonlu dosya (21 Eyl): "en dolu sayısal kolon" sessiz tahminiyle yanlış seri kaydedilir (TLREF'te
+        # kapanış yerine en düşük değer). Birden çok sayısal kolon varsa ve kullanıcı seçmediyse sorulur.
+        numeric_columns = [c.name for c in profile.value_candidates if c.name != mapping.observation_date_column]
+        if len(numeric_columns) > 1 and not params.value_column:
+            asks.append(f"değer kolonu: {len(numeric_columns)} sayısal kolon var ({', '.join(numeric_columns)}); "
+                        f"öneri {mapping.value_column!r}. Kullanıcıya hangisinin kaydedileceğini sor; cevabı value_column ile aktar")
         if semantics.unit is None:
             if unit_hint is not None:
                 asks.append(f"birim: belgede yazmıyor. {unit_hint.line()}. Kullanıcıya 'birim {unit_hint.unit!r} mi?' "

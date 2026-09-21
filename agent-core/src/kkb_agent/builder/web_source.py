@@ -165,38 +165,62 @@ _MONTHS = {name: i + 1 for i, name in enumerate(
     ("ocak", "şubat", "mart", "nisan", "mayıs", "haziran", "temmuz", "ağustos", "eylül", "ekim", "kasım", "aralık"))}
 
 
-def _monthly_matrix(result: SourceTable, value_row: str | None) -> None:
-    """An explicit month in the first header anchors a metric-by-entity report matrix."""
-    frame = result.frame
-    assert frame is not None
+def header_period(frame: pd.DataFrame) -> tuple[str, str] | None:
+    """İlk sütun başlığında açık 'Ay YYYY' varsa (dönem sonu tarihi, frekans); yoksa None."""
     match = re.fullmatch(r"([\wÇĞİÖŞÜçğıöşü]+)\s+(20\d{2}|19\d{2})", str(frame.columns[0]).strip())
     month = _MONTHS.get(match[1].lower()) if match else None
     if not month:
+        return None
+    year = int(match[2])
+    return f"{year:04d}-{month:02d}-{calendar.monthrange(year, month)[1]:02d}", "monthly"
+
+
+def measure_row_to_long(frame: pd.DataFrame, value_row: str | None, period: tuple[str, str] | None,
+                        *, entity_label: str = "kurum") -> tuple[pd.DataFrame, str, str | None] | None:
+    """Ölçümleri satırda, varlıkları sütunda gösteren rapor matrisini uzun tabloya çevirir.
+
+    Dönem ya ilk başlıktan ('Temmuz 2026') ya da kullanıcının beyanından (`period`) gelir; ikisi de yoksa ve
+    `value_row` verildiyse açıkça sorulur. Döner: (uzun tablo, not, frekans) ya da dönüşüm gerekmiyorsa None."""
+    period = header_period(frame) or period
+    if period is None:
         if value_row is not None:
-            raise SourceSelection("value_row için ilk sütun başlığında açık bir ay/yıl bulunmalı.")
-        return
+            raise SourceSelection("value_row için ilk sütun başlığında açık bir ay/yıl bulunmalı ya da dönemi "
+                                  "period ile söyleyin (ör. 'Ağustos 2026').")
+        return None
     labels = frame.iloc[:, 0].tolist()
     if value_row not in labels or labels.count(value_row) != 1:
         raise SourceSelection("Bu tablo ölçümleri satırlarda gösteriyor. Kaydedilecek ölçümü value_row ile seç:\n"
                               + "\n".join(f"  {label}" for label in labels))
     selected = frame.loc[frame.iloc[:, 0] == value_row].iloc[0]
-    year = int(match[2])
-    date = f"{year:04d}-{month:02d}-{calendar.monthrange(year, month)[1]:02d}"
-    result.frame = pd.DataFrame({"tarih": [date] * (len(frame.columns) - 1),
-                                 "kurum": list(frame.columns[1:]),
-                                 value_row: selected.iloc[1:].tolist()})
+    date, frequency = period
+    long = pd.DataFrame({"tarih": [date] * (len(frame.columns) - 1),
+                         entity_label: list(frame.columns[1:]),
+                         value_row: selected.iloc[1:].tolist()})
+    note = (f" Ölçüm satırı {value_row!r}; {entity_label} sütunlardan satırlara çevrildi. "
+            f"Dönem {'başlığı ' + repr(str(frame.columns[0])) if header_period(frame) else 'kullanıcı beyanı'}, "
+            f"dönem sonu {date}; Türkçe sayı gösterimi: ondalık virgül, binlik nokta. Toplam ayrı satır olarak korundu.")
+    return long, note, frequency
+
+
+def _monthly_matrix(result: SourceTable, value_row: str | None, period: tuple[str, str] | None = None) -> None:
+    """An explicit month in the first header (or a user-declared period) anchors a metric-by-entity report matrix."""
+    frame = result.frame
+    assert frame is not None
+    converted = measure_row_to_long(frame, value_row, period)
+    if converted is None:
+        return
+    result.frame, note, frequency = converted
     result.entity_column = "kurum"
-    result.frequency = "monthly"
+    result.frequency = frequency
     result.turkish_numbers = True
-    result.note += (f" Ölçüm satırı {value_row!r}; kurumlar sütunlardan satırlara çevrildi. "
-                    f"Dönem başlığı {frame.columns[0]!r}, aylık dönem sonu {date}; "
-                    "Türkçe sayı gösterimi: ondalık virgül, binlik nokta. Toplam ayrı kurum olarak korundu.")
+    result.note += note
 
 
 def read_web_source(locator: str, *, allowed_root: Path, resource_index: int | None = None,
                     table_index: int | None = None, pages: str | None = None,
                     sheet: str | None = None, value_row: str | None = None,
-                    session: Any = None, ocr: Any = None) -> SourceTable:
+                    session: Any = None, ocr: Any = None,
+                    period: tuple[str, str] | None = None) -> SourceTable:
     content, media, outcome = read_bytes_for_profiling(locator, allowed_roots=[allowed_root], session=session)
     result = SourceTable(None, outcome)
     if content is None or not outcome.ok:
@@ -266,5 +290,5 @@ def read_web_source(locator: str, *, allowed_root: Path, resource_index: int | N
         [f"{label}, {len(t)} satır; sütunlar: {', '.join(map(str, t.columns))[:700]}; örnek: {t.head(2).to_dict('records')}"
          for label, t in tables])
     result.note += f" {label}, table_index={table_index if table_index is not None else 0}."
-    _monthly_matrix(result, value_row)
+    _monthly_matrix(result, value_row, period)
     return result
