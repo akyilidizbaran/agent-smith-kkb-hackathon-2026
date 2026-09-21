@@ -408,7 +408,7 @@ def assess(question: str, sig: DataSignature, lexicon: Lexicon | None = None) ->
         competing = strict(have - req)
         labeled = bool(m_have) or bool(competing)
         dims["entity"] = "fail" if (labeled and strict(missing_q)) else "partial"
-        reasons.append(f"varlık/segment {'farklı' if labeled else 'belirsiz'}: eksik {', '.join(sorted(missing_q))}; veride {', '.join(sorted(have)) or '—'}")
+        reasons.append(f"varlık/segment {'farklı' if labeled else 'belirsiz'}: eksik {', '.join(sorted(missing_q))}; veride {', '.join(sorted(set(have))) or '—'}")
         return out("reject" if dims["entity"] == "fail" else "partial", 0.2 if labeled else 0.45)
     dims["entity"] = "ok" if qualifiers else "n/a"
     if measures and not m_have:

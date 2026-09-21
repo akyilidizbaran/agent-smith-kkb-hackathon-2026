@@ -77,6 +77,7 @@ class LakehouseCLI:
     def ingest_file_command(
         self, *, locator: str, dataset_id: str, mapping: MappingProposal, semantics: SemanticsProposal,
         name: str, description: str, allowed_root: Path, timeout: float = 60.0,
+        delimiter: str | None = None,
     ) -> list[str]:
         cmd = [*self.launcher.split(), "-m", "lakehouse", "ingest-file", locator,
                "--database", str(self.database), "--data-root", str(self.data_root),
@@ -101,6 +102,10 @@ class LakehouseCLI:
             cmd += ["--week-anchor", semantics.week_anchor]
         if semantics.cumulative_reset:
             cmd += ["--cumulative-reset", semantics.cumulative_reset]
+        if delimiter:
+            # Kendi yazdığımız CSV (OCR/türetilmiş/web tablosu): ayraç bilinir, veri ekibinin koklayıcısına
+            # bırakılmaz — başlıkta "|" geçince (Borsa altın PDF'i) koklayıcı iki adayı da geçerli buluyordu.
+            cmd += ["--delimiter", delimiter]
         return cmd
 
     def ingest_file(self, **kwargs) -> IngestOutcome:

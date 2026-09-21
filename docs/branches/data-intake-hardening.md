@@ -58,6 +58,35 @@ Canlı (modelsiz araç, 21 Eyl): TCMB `KFE.pdf` sayfa 2, `value_row="Konut Fiyat
 türetilen CSV + manifest. Sınır: PDF metin katmanı harf aralıklı başlıkları bozuk verebiliyor ("T Ü R K İY E",
 "İS T A N L"); il adları sorguda eşleşmeyebilir, aynı veri EVDS `TP.KFE.*` serilerinde temiz duruyor.
 
+### 1c. Canlı model testi ve son düzeltmeler (21 Eylül öğleden sonra)
+
+Gerçek MIA, yalıtılmış veritabanı kopyası, Architect profili, üç senaryo:
+
+| Senaryo | Sonuç |
+|---|---|
+| TCMB KFE.pdf adresi, "il bazında, dönem Ağustos 2026" | Model `pages=2`, `value_row`, `period`, `entity_column="il"` verdi; 4 il yazıldı, birim başlıktan ("endeks"), kanıt tam, 71 sn |
+| TLREF CSV (4 sayısal kolon), kolon söylenmeden | Yazmadı; dört kolonu listeleyip sordu (öneri: Kapanış). "Kapanış Değeri kolonunu kaydet" deyince `value_column` ile geçti; model ölçüm tipini kendi değiştirince beyan kapısı bir kez daha sordu (doğru) |
+| Borsa altın PDF'i (OCR), "TL hacim kolonu" | "Tarihsiz" sayıldı: tablo tarih değil ay adı taşıyor ("Ocak / January"), yıl başlıkta; oturumda tablo olarak yüklendi, uydurma yok |
+
+Üçüncü bulgudan iki düzeltme: ay adı sütunu + beyan edilen yıl → ay sonu tarihleri (TOPLAM satırı düşürülür,
+notta sayılır); birim ipucu önce seçilen değer kolonunun kendi başlığından okunur (öbür kolonun "KG"si sızmaz).
+Ayrıca eski `.xls` xlrd ile okunur ve türetilmiş CSV olarak sahnelenir (veri havuzu politikası değişmedi);
+TBB'nin `.xls`'i okunuyor ama sayfası rapor düzeninde (birleşik başlık, dönem başına TP/YP/Toplam üç satır),
+otomatik eşlemeye uygun değil, sınır olarak kalıyor. "EKLENMEDİ — sorulmalı" turunda kanıt paneline kayıt satırı
+kurulmuyor.
+
+Altın PDF'i yeni kodla tekrar sürüldü (aynı sunucu düzeni), iki kusur daha çıktı ve kapatıldı:
+
+| Kusur | Düzeltme |
+|---|---|
+| Model `value_column="TL Hacim"` yazdı, dosyada "TL \| Hacim/Volume (TL)"; birebir ad şartı turu boşa harcadı | Kolon adı önce birebir, sonra büyük/küçük ve Türkçe harf farkı, sonra sözcük kapsamasıyla eşlenir; iki kolona uyarsa seçilmez, adaylar sayılır |
+| Başlıkta "\|" olunca veri ekibinin ayraç koklayıcısı virgülü de dikeyi de geçerli buldu, kayıt reddedildi | Kendi yazdığımız CSV'lerde (OCR, türetilmiş, web tablosu) `--delimiter ,` açıkça gider; kullanıcının kendi dosyasında koklayıcı kalır |
+| Kayıt cevabı "(Veri: … UYARI: uygunluk kısmen …)" ön ekiyle açılıyordu | Kayıt turunda kapsam satırı yok; kart zaten dönem/satır/birimi söylüyor. Uygunluk gerekçesindeki yinelenen etiketler de tekilleşti |
+| Sonraki soruda cevap "1.513497e+11 TL" | Modele giden tablolarda bilimsel gösterim kapatıldı (pandas float biçimi); cevap "151.349.741.325 TL" |
+
+Son ölçüm: kayıt 41 sn, 2 LLM çağrısı, 12 ay yazıldı (Ocak–Aralık 2026, TOPLAM düşürüldü), birim TL başlıktan, kanıt
+zinciri tam; aynı oturumda "en yüksek ay hangisi" 18 sn, doğru (Mart 2026), kanıt tam.
+
 Değişmeyenler, bilinçli: beyan kapısı (birim/ölçüm tipi kullanıcıdan gelir, doğrulanmaz), aynı anahtar farklı içerik reddi
 (veri ekibinin sözleşmesi), tarihsiz tablonun kalıcı kaydedilmemesi, `unknown` ölçüm tipinde toplama türetilmemesi.
 

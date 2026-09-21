@@ -298,3 +298,22 @@ def test_eklenmedi_cevabi_kayit_paneli_kurmaz() -> None:
     registry = ToolRegistry(); registry.register(_AskingIngest()); registry.register(_CountingTool())
     ans = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=6).ask("x.csv dosyasını kaydet")
     assert not any(a.get("kind") == "record" for a in ans.artifacts), [a.get("kind") for a in ans.artifacts]
+
+
+def test_kayit_turunda_kapsam_on_eki_yok() -> None:
+    """Canlı ölçüm (21 Eyl, altın PDF'i): kayıt cevabı '(Veri: … | UYARI: uygunluk kısmen — …)' ile açılıyordu;
+    uygunluk kapısı tabloyu analiz için ölçer, kullanıcı ise kaydettirdi. Analiz turunda ön ek kalır."""
+    fit = {"kind": "fitness", "coverage": "x — 2026, monthly, 12 satır", "decision": "partial", "reasons": ["varlık farklı"], "quality": []}
+    rec = {"kind": "record", "tool": "ingest_from_url", "card": "EKLENDİ: adhoc:x"}
+    assert AnalyticsAgent._coverage_note(None, "Kayıt tamamlandı.", [fit, rec]) == "Kayıt tamamlandı."
+    assert AnalyticsAgent._coverage_note(None, "Cevap.", [fit]).startswith("(Veri: x — 2026, monthly, 12 satır | UYARI: uygunluk kısmen — varlık farklı)")
+
+
+def test_modele_giden_tabloda_bilimsel_gosterim_yok() -> None:
+    """Canlı ölçüm: 151.349.741.325 TL modele '1.513497e+11' gitti, cevaba da öyle yazıldı."""
+    import pandas as pd
+
+    from kkb_agent.core import workspace as _ws  # noqa: F401 — biçimlendirici modül yüklenince kurulur
+
+    text = pd.DataFrame({"value": [151349741325.0, 98.75, 0.5]}).to_string(index=False)
+    assert "151349741325.0" in text and "98.75" in text and "e+" not in text

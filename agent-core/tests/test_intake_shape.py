@@ -77,6 +77,37 @@ def test_olmayan_kolon_secimi_acikca_reddedilir(tmp_path: Path) -> None:
     assert not r.ok and "dosyada yok" in r.content and "Kapanış Değeri" in r.content and not runner.calls
 
 
+def test_kolon_adi_sozcuk_kapsamasiyla_eslenir(tmp_path: Path) -> None:
+    """Canlı ölçüm (21 Eyl, altın PDF'i): model "TL Hacim" yazdı, dosyada "TL | Hacim/Volume (TL)"; birebir ad
+    istemek turu boşa harcıyordu. Sözcük kapsaması tek kolona uyuyorsa o kolon; iki kolona uyarsa seçilmez."""
+    tool, runner, incoming = _tool(tmp_path, "tlref.csv dosyasındaki kapanış kolonunu taslak olarak kaydet; birim puan, ölçüm tipi seviye", {"tlref.csv": TLREF})
+    r = tool.validate_and_run({"locator": str(incoming / "tlref.csv"), "name": "TLREF", "unit": "puan", "measure_type": "index",
+                               "value_column": "kapanış"})
+    assert r.content.startswith("EKLENDİ"), r.content
+    assert _flag(runner.calls[-1][0], "--value-column") == "Kapanış Değeri"
+    assert _flag(runner.calls[-1][0], "--delimiter") is None, "kullanıcının kendi CSV'si: ayraç veri ekibinin koklayıcısına kalır"
+
+    tool, runner, incoming = _tool(tmp_path / "iki", "tlref.csv dosyasındaki değer kolonunu taslak olarak kaydet; birim puan, ölçüm tipi seviye", {"tlref.csv": TLREF})
+    r = tool.validate_and_run({"locator": str(incoming / "tlref.csv"), "name": "TLREF", "unit": "puan", "measure_type": "index",
+                               "value_column": "Değer"})
+    assert not r.ok and "birden çok kolona uyuyor" in r.content and "'En Düşük Değer'" in r.content and not runner.calls
+
+
+def test_kendi_yazdigimiz_csv_ayraci_cliya_acikca_verilir(tmp_path: Path) -> None:
+    """Başlıkta '|' geçen türetilmiş tabloda (Borsa altın PDF'i) veri ekibinin koklayıcısı iki adayı da geçerli
+    bulup reddediyordu; kendi yazdığımız CSV'nin ayracı bellidir, açıkça gider."""
+    pipe = HASTANE.replace("hastane_sayisi", "TL | Hastane/Hospital (adet)")
+    tool, runner, incoming = _tool(
+        tmp_path, "hastane_il.csv dosyasındaki TL hastane sayısını il bazında, dönem Ağustos 2026, taslak olarak kaydet; birim adet, ölçüm tipi sayım",
+        {"hastane_il.csv": pipe})
+    r = tool.validate_and_run({"locator": str(incoming / "hastane_il.csv"), "name": "Hastane", "unit": "adet", "measure_type": "count",
+                               "period": "Ağustos 2026", "value_column": "TL Hastane", "entity_column": "il"})
+    assert r.content.startswith("EKLENDİ"), r.content
+    cmd = runner.calls[-1][0]
+    assert _flag(cmd, "--delimiter") == "," and _flag(cmd, "--value-column") == "TL | Hastane/Hospital (adet)"
+    assert Path(cmd[cmd.index("ingest-file") + 1]).name.startswith("derived_hastane_il_")
+
+
 def test_tarihsiz_kesit_tablosu_beyan_edilen_donemle_kaydedilir(tmp_path: Path) -> None:
     tool, runner, incoming = _tool(
         tmp_path, "hastane_il.csv dosyasındaki hastane sayısını il bazında, dönem Ağustos 2026, taslak olarak kaydet; birim adet, ölçüm tipi sayım",

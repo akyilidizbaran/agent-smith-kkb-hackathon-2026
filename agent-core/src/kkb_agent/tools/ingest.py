@@ -292,6 +292,32 @@ class ColumnChoiceError(ValueError):
     """Kullanıcının seçtiği kolon dosyada yok ya da istenen role uymuyor; kayıt yapılmadan söylenir."""
 
 
+def _column_tokens(name: str) -> frozenset[str]:
+    return frozenset(t for t in _slug(name).split("_") if t)
+
+
+def _resolve_column(profile, name: str, kind: str):
+    """Kullanıcının/modelin yazdığı kolon adını dosyadaki kolona bağlar: önce birebir, sonra büyük/küçük ve
+    Türkçe harf farkı, sonra sözcük kapsaması ("TL Hacim" → "TL | Hacim/Volume (TL)"). Birden çok kolona
+    uyuyorsa seçmez, adayları sayar; hiçbirine uymuyorsa kolon listesiyle reddeder."""
+    col = profile.column(name)
+    if col is not None:
+        return col
+    wanted = name.strip().casefold()
+    hits = [c for c in profile.columns if c.name.strip().casefold() == wanted or _slug(c.name) == _slug(name)]
+    if not hits:
+        tokens = _column_tokens(name)
+        if tokens:
+            hits = [c for c in profile.columns if tokens <= _column_tokens(c.name)]
+    if len(hits) == 1:
+        return hits[0]
+    if len(hits) > 1:
+        raise ColumnChoiceError(f"{kind} kolonu {name!r} birden çok kolona uyuyor: "
+                                + ", ".join(repr(c.name) for c in hits) + " — tam adını ver")
+    raise ColumnChoiceError(f"{kind} kolonu {name!r} dosyada yok; kolonlar: "
+                            + ", ".join(c.name for c in profile.columns))
+
+
 def _apply_columns(mapping, profile, params: IngestParams):
     """Kullanıcının seçtiği tarih/değer/varlık kolonlarını öneriye uygular; uymayanı açıkça reddeder."""
     from dataclasses import replace
@@ -308,10 +334,7 @@ def _apply_columns(mapping, profile, params: IngestParams):
         evidence.append(Evidence(field_name, value, reason, "strong"))
 
     if params.date_column:
-        col = profile.column(params.date_column)
-        if col is None:
-            raise ColumnChoiceError(f"tarih kolonu {params.date_column!r} dosyada yok; kolonlar: "
-                                    + ", ".join(c.name for c in profile.columns))
+        col = _resolve_column(profile, params.date_column, "tarih")
         if not col.date_formats:
             raise ColumnChoiceError(f"{params.date_column!r} tarih olarak ayrışmıyor; tarih adayları: "
                                     + (", ".join(c.name for c in profile.date_candidates) or "yok"))
@@ -319,10 +342,7 @@ def _apply_columns(mapping, profile, params: IngestParams):
         if not params.date_format:
             _swap("date_format", col.date_formats[0], f"{col.name} kolonunun biçimi")
     if params.value_column:
-        col = profile.column(params.value_column)
-        if col is None:
-            raise ColumnChoiceError(f"değer kolonu {params.value_column!r} dosyada yok; kolonlar: "
-                                    + ", ".join(c.name for c in profile.columns))
+        col = _resolve_column(profile, params.value_column, "değer")
         if not col.numeric_under:
             raise ColumnChoiceError(f"{params.value_column!r} sayı olarak ayrışmıyor; sayısal kolonlar: "
                                     + (", ".join(c.name for c in profile.value_candidates) or "yok"))
@@ -331,10 +351,7 @@ def _apply_columns(mapping, profile, params: IngestParams):
         _swap("decimal_separator", decimal, f"{col.name} kolonu bu ayraçla ayrışıyor")
         updates["thousands_separator"] = thousands
     if params.entity_column:
-        col = profile.column(params.entity_column)
-        if col is None:
-            raise ColumnChoiceError(f"varlık kolonu {params.entity_column!r} dosyada yok; kolonlar: "
-                                    + ", ".join(c.name for c in profile.columns))
+        col = _resolve_column(profile, params.entity_column, "varlık")
         _swap("entity_id_column", col.name, "kullanıcı seçimi (varlık/boyut)")
     if updates:
         mapping = replace(mapping, **updates, evidence=tuple(evidence))
@@ -759,6 +776,7 @@ class IngestFromUrlTool(Tool):
                 locator=cli_locator, dataset_id=f"{self.dataset_prefix}_{key}",
                 mapping=mapping, semantics=semantics, name=catalog_name, description=description,
                 allowed_root=self.allowed_root,
+                delimiter="," if cli_locator != params.locator else None,   # kendi yazdığımız CSV: ayraç bilinir
             )
         finally:
             self.lakehouse.reload()

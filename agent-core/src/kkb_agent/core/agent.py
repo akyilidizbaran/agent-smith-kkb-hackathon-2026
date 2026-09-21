@@ -1656,7 +1656,9 @@ class AnalyticsAgent:
         kalite/uygunluk uyarıları cevabın İLK satırında, deterministik. Modelin hatırlamasına bırakılmaz: ölçüldü (UEB B02),
         uyarı cevabın sonuna not olarak düştü, kullanıcı sayıları önce okudu."""
         fits = [a for a in artifacts if a.get("kind") == "fitness"]
-        if not fits:
+        if not fits or any(a.get("kind") == "record" for a in artifacts):
+            # Kayıt turunda (ingest/terfi) kapsam satırı yanıltır: uygunluk kapısı tabloyu ANALİZ için ölçer,
+            # kullanıcı ise kaydettirdi; kart zaten dönem/satır/birimi söylüyor (ölçüldü, 21 Eyl, altın PDF'i).
             return text
         f = fits[-1]
         warn = list(f.get("quality") or [])
