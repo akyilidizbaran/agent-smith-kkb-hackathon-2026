@@ -14,6 +14,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from .facets import extract_facets, province_of
+
 CONTEXT_FIELDS = (
     "domain",
     "source",
@@ -83,6 +85,8 @@ _GENERIC_METRICS = (
     "basvuru",
     "hastane",
     "kredi",
+    "mevduat",
+    "faiz",
 )
 _GEO_COLUMN = re.compile(r"il|şehir|sehir|province|district|location|region|bölge|bolge", re.IGNORECASE)
 _PERCENT_CHANGE = re.compile(r"%|yüzde|yuzde|percent(?:age)?|pct|growth\s+rate|büyüme\s+hızı|buyume\s+hizi", re.IGNORECASE)
@@ -122,6 +126,16 @@ _GENERIC_SERIES_TERMS = frozenset({
     "yil", "yillik", "yearly", "donem", "tarih", "date", "veri", "veriler", "seri", "seriler",
     "degisim", "degisimleri", "bakiye", "bakiyeler", "analiz", "tablo", "tablolar",
 })
+# A single generic metric word ("mevduat", "kredi", "faiz") appears in the
+# tags/aliases of hundreds of series. Measured (PR #18 jenerik, 21 Sep):
+# the catalog is alphabetical, so "mevduat" bound the hint to the first
+# match, `bddk_finturk:ADANA_DigerMevduat`, and 20 national questions
+# drifted to Adana. Such a word is a metric facet, never a series identity.
+_GENERIC_SERIES_WORDS = frozenset({
+    "mevduat", "kredi", "krediler", "kredisi", "faiz", "faizi", "kur", "kuru", "bakiye", "bakiyesi",
+    "toplam", "sektor", "banka", "bankacilik", "oran", "orani", "endeks", "endeksi", "dolar", "usd",
+    "tufe", "enflasyon", "basvuru", "hastane", "il", "iller",
+})
 _ACTIVE_TABLE_REFERENCE = re.compile(
     r"\b(?:mevcut|aktif|önceki|onceki|bu)\s+(?:(?:aktif|analiz)\s+)?tablo(?:ya|yu|daki|dan|nun|da|de)?\b",
     re.IGNORECASE,
@@ -134,7 +148,10 @@ _TABLE_COMPOSITION = re.compile(
 
 def _specific_series_term(value: object) -> bool:
     folded = _fold(str(value or "")).strip()
-    return bool(folded) and folded not in _GENERIC_SERIES_TERMS
+    if not folded or folded in _GENERIC_SERIES_TERMS:
+        return False
+    tokens = folded.split()
+    return not (len(tokens) == 1 and tokens[0] in _GENERIC_SERIES_WORDS)
 
 
 def _fold(text: str) -> str:
@@ -286,20 +303,36 @@ def _spec_attr(spec: object, name: str, default: Any = None) -> Any:
     return getattr(spec, name, default)
 
 
-def _catalog_hints(catalog: Iterable[object]) -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[str]]:
-    """Return series candidates, source candidates, and dimension values."""
+def _catalog_hints(
+    catalog: Iterable[object],
+    *,
+    provinces: tuple[str, ...] | None = None,
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[str]]:
+    """Return series candidates, source candidates, and dimension values.
+
+    ``provinces`` is the set of provinces named in the current question.
+    When it is given, a province-scaled series (FinTürk style, province in
+    the id or name) is a series candidate only for its own province: a
+    question without a province must not be bound to Adana because Adana is
+    alphabetically first. ``None`` keeps every series (legacy callers).
+    """
     series: list[tuple[str, str]] = []
     sources: list[tuple[str, str]] = []
     dimensions: list[str] = []
     for spec in catalog:
         dataset_id = str(_spec_attr(spec, "dataset_id", ""))
+        name = str(_spec_attr(spec, "name", "") or "")
         tags = list(_spec_attr(spec, "tags", []) or [])
-        for raw in (_spec_attr(spec, "name", ""), dataset_id, *tags):
-            if _specific_series_term(raw):
-                series.append((str(raw), dataset_id or str(raw)))
         for raw in (_spec_attr(spec, "source", ""), _spec_attr(spec, "source_detail", "")):
             if raw:
                 sources.append((str(raw), str(raw)))
+        series_allowed = True
+        if provinces is not None:
+            spec_province = province_of(f"{dataset_id} {name}")
+            series_allowed = not spec_province or spec_province in provinces
+        for raw in (name, dataset_id, *tags):
+            if series_allowed and _specific_series_term(raw):
+                series.append((str(raw), dataset_id or str(raw)))
         for column in _spec_attr(spec, "columns", []) or []:
             role = str(_spec_attr(column, "role", "")).casefold()
             # Time/metadata aliases describe the schema (`dönem`, `tarih`,
@@ -314,17 +347,27 @@ def _catalog_hints(catalog: Iterable[object]) -> tuple[list[tuple[str, str]], li
             for value in values:
                 if is_geo:
                     dimensions.append(str(value))
-                elif _specific_series_term(value):
+                elif series_allowed and _specific_series_term(value):
                     series.append((str(value), dataset_id or str(value)))
             if is_geo:
                 dimensions.extend(str(v) for v in values)
-            elif "dimension" in role:
+            elif "dimension" in role and series_allowed:
                 # Entity examples are useful only when explicitly mentioned.
                 series.extend((str(v), dataset_id or str(v)) for v in values)
+            if not series_allowed:
+                continue
             for alias in _spec_attr(column, "aliases", []) or []:
                 if _specific_series_term(alias):
                     series.append((str(alias), dataset_id or str(alias)))
     return series, sources, list(_unique(dimensions))
+
+
+# A one-word catalog term that names more than this many distinct series is a
+# facet shared by a family ("stok", "takip", "kar", "bddk"), not a series
+# identity. Measured on the 6.311-series demo catalog (22 Sep): such words
+# pointed to 19–1.575 series each and bound the hint to the alphabetically
+# first one. Multi-word names and aliases keep the previous behaviour.
+_MAX_SERIES_PER_SINGLE_WORD = 3
 
 
 def _best_match(question: str, candidates: Iterable[tuple[str, str]]) -> tuple[str, str] | None:
@@ -335,11 +378,25 @@ def _best_match(question: str, candidates: Iterable[tuple[str, str]]) -> tuple[s
     ]
     if not matches:
         return None
+    targets_by_term: dict[str, set[str]] = {}
+    for term, value in matches:
+        targets_by_term.setdefault(_fold(term).strip(), set()).add(value)
+    matches = [
+        (term, value)
+        for term, value in matches
+        if " " in _fold(term).strip() or len(targets_by_term[_fold(term).strip()]) <= _MAX_SERIES_PER_SINGLE_WORD
+    ]
+    if not matches:
+        return None
     return max(matches, key=lambda item: len(_fold(item[0])))
 
 
 def _extract(question: str, catalog: Iterable[object]) -> FollowUpContext:
-    series_candidates, source_candidates, dimensions = _catalog_hints(catalog)
+    try:
+        provinces: tuple[str, ...] = tuple(extract_facets(question).provinces)
+    except Exception:  # noqa: BLE001 — facet extraction must never break the resolver
+        provinces = ()
+    series_candidates, source_candidates, dimensions = _catalog_hints(catalog, provinces=provinces)
     domain = next(
         (name for name, terms in _DOMAIN_TERMS.items() if any(_has_term(question, term) for term in terms)),
         None,

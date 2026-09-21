@@ -873,3 +873,73 @@ def test_chart_and_verified_table_survive_narration_timeout(tmp_path) -> None:
     xlsx_frame = pd.read_excel(BytesIO(table_xlsx_bytes(exported)), engine="openpyxl")
     assert list(csv_frame.columns) == list(xlsx_frame.columns) == list(exported.columns)
     assert len(csv_frame) == len(xlsx_frame) == 60
+
+
+def _provincial_catalog() -> list[SimpleNamespace]:
+    """Alphabetically first FinTürk series plus a national total, as in the demo catalog."""
+    return [
+        SimpleNamespace(
+            dataset_id="bddk_finturk:ADANA_DigerMevduat",
+            name="Diğer Mevduat, ADANA (Bireysel Bankacılık, Sektör)",
+            source="bddk_finturk",
+            source_detail=None,
+            tags=["mevduat", "aylık", "il"],
+            columns=[
+                SimpleNamespace(name="observation_date", role="time", example_values=[], aliases=["dönem"]),
+                SimpleNamespace(name="value", role="measure", example_values=[], aliases=["diğer mevduat"]),
+            ],
+        ),
+        SimpleNamespace(
+            dataset_id="bddk_finturk:IZMIR_DigerMevduat",
+            name="Diğer Mevduat, İZMİR (Bireysel Bankacılık, Sektör)",
+            source="bddk_finturk",
+            source_detail=None,
+            tags=["mevduat", "aylık", "il"],
+            columns=[
+                SimpleNamespace(name="value", role="measure", example_values=[], aliases=["diğer mevduat"]),
+            ],
+        ),
+        SimpleNamespace(
+            dataset_id="bddk_monthly:1200_Toplam",
+            name="Toplam Mevduat",
+            source="bddk_monthly",
+            source_detail=None,
+            tags=["mevduat", "aylık"],
+            columns=[
+                SimpleNamespace(name="value", role="measure", example_values=[], aliases=["toplam mevduat"]),
+            ],
+        ),
+    ]
+
+
+def test_generic_metric_word_does_not_bind_first_provincial_series() -> None:
+    """PR #18 jenerik (21 Eyl): 'mevduat' alfabetik ilk seri olan ADANA'ya bağlanıyor, 20 ulusal soru il'e kayıyordu."""
+    question = "2022 ile 2024 arasında mevduat ve kredi serilerini çeyrek sonu değerleriyle karşılaştır."
+    explicit = _extract(question, _provincial_catalog())
+
+    assert explicit.series is None
+    assert explicit.metric == "kredi"
+    assert explicit.geography == ()
+    resolution = resolve_follow_up(question, catalog=_provincial_catalog())
+    assert "series=" not in resolution.prompt()
+    assert "ADANA" not in resolution.prompt()
+
+
+def test_named_province_binds_only_that_province_series() -> None:
+    catalog = _provincial_catalog()
+
+    izmir = _extract("İzmir diğer mevduat bakiyesini 2024 için getir", catalog)
+    assert izmir.series == "bddk_finturk:IZMIR_DigerMevduat"
+
+    adana = _extract("Adana diğer mevduat bakiyesini 2024 için getir", catalog)
+    assert adana.series == "bddk_finturk:ADANA_DigerMevduat"
+
+    national = _extract("Toplam mevduat bakiyesini 2024 için getir", catalog)
+    assert national.series == "bddk_monthly:1200_Toplam"
+
+
+def test_multi_word_catalog_name_still_binds_on_new_question() -> None:
+    """Tek genel sözcük kuralı çok sözcüklü katalog adlarını (ör. 'USD satış kuru') etkilemez."""
+    first = resolve_follow_up("2026 USD satış kuru", catalog=_catalog())
+    assert first.context.series == "evds:usd_satis"
+
