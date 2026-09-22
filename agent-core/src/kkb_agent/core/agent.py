@@ -1185,7 +1185,7 @@ class AnalyticsAgent:
                 # Tamamlanma sözleşmesi (core/completion, 22 Eyl): istenen dönem kapsamı, seri kimlikleri ve türetilmiş
                 # kolonlar teslim edilen tabloda var mı; aday listesi istendiyse tablo olarak sunuldu mu. Eksikse bir kez
                 # modele geri gider (araçlarla tamamlasın); ikinci kez de eksikse cevaba deterministik not düşer.
-                completion = self._completion_check(steps, produced_data)
+                completion = self._completion_check(steps, produced_data, artifacts)
                 if completion.gaps and not contract_nudged and i < self.max_steps and not self._absence_stated(answer_text, completion):
                     contract_nudged = True
                     steps.append(AgentStep(index=i, role="validate", ok=False,
@@ -1491,7 +1491,7 @@ class AnalyticsAgent:
                 text = self._strip_reasoning(final.content)
                 text, rejected = self._checked_final(question, text, tool_texts, steps, i)
                 text = self._coverage_note(self._source_note(text, steps, artifacts), artifacts)
-                completion = self._completion_check(steps, produced_data)
+                completion = self._completion_check(steps, produced_data, artifacts)
                 text = self._completion_close(text, completion, artifacts, produced_data)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=text))
@@ -1519,7 +1519,7 @@ class AnalyticsAgent:
         text, rejected = self._checked_final(question, text, tool_texts, steps, self.max_steps + 1)
         text = self._no_tool_claim_exit(question, text, steps)
         text = self._coverage_note(self._source_note(text, steps, artifacts), artifacts)
-        completion = self._completion_check(steps, produced_data)
+        completion = self._completion_check(steps, produced_data, artifacts)
         text = self._completion_close(text, completion, artifacts, produced_data)
         if budget_hit:
             # K02-T10 (A27): sınır kullanıcıya deterministik söylenir; modelin bunu yazmasına bırakılmaz.
@@ -1592,8 +1592,15 @@ class AnalyticsAgent:
                           "queries": list(getattr(ledger, "queries", []) or []) if ledger is not None else []})
         return int(len(frame))
 
-    def _completion_check(self, steps: list, produced_data: bool) -> CompletionReport:
+    def _completion_check(self, steps: list, produced_data: bool, artifacts: list | None = None) -> CompletionReport:
         expectation = getattr(self, "_expectation", None) or derive_expectation("")
+        # Kayıt/terfi turu (ingest, promote): teslim edilen şey tablo değil kayıttır; "tablo 2026 yılına ait" gibi beyanlar
+        # dönem beklentisi üretir ama denetlenecek tablo yoktur (ölçüldü 22 Eyl: sahte "tablo yok" notu). Kayıt turunda
+        # sözleşme sessizdir; kayıt kartı ve kanıt paneli (record) zaten satır sayısını söyler.
+        write_turn = any(a.get("kind") in ("record", "clarify") for a in (artifacts or [])) or any(
+            s.tool_name in ("ingest_from_url", "promote_draft", "ingest_source") for s in steps)
+        if write_turn:
+            return CompletionReport(expectation=derive_expectation(""))
         artifacts_seen: list = []
         candidate_count = None
         if getattr(self, "_candidate_rows", None):
