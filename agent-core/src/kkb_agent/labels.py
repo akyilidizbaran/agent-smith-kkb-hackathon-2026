@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Iterable
+from typing import Any, Iterable, Mapping
 from urllib.parse import urlparse
 
 from .contracts.catalog import ColumnRole
@@ -40,6 +40,15 @@ _LAYER_SUFFIX = {  # "Silver katmanından" → "kaynak verisinden"
 _LAYER_SUFFIX["raw"] = _LAYER_SUFFIX["bronze"]
 _GOLD_SUFFIX = re.compile(r"(?<![\w.])Gold'?(dan|den|da|de|a|e|ye)(?![\w])")
 _GOLD_BARE = re.compile(r"(?<![\w.])Gold(?![\w.'])")
+_DISPLAY_DATE_COLUMNS = frozenset({"date", "tarih", "donem", "dönem", "period_end", "observation_date"})
+_DISPLAY_VALUE_SUFFIXES = {
+    "value": "",
+    "cumulative_value": " — birikimli değer",
+    "change": " — değişim",
+    "pct_change": " — yüzde değişim",
+    "growth": " — büyüme",
+    "difference": " — fark",
+}
 
 
 def _names() -> dict[str, str]:
@@ -129,6 +138,101 @@ def humanize_internal(text: str, specs: Iterable[object] = ()) -> tuple[str, lis
     return out, list(dict.fromkeys(changed))
 
 
+def _display_unit(unit: object) -> str:
+    """Catalog unit code → short user-facing unit, with a safe generic fallback."""
+    value = str(unit or "").strip()
+    if not value:
+        return ""
+    known = {
+        "TRY_mn": "milyon TL",
+        "TRY_thousand": "bin TL",
+        "TRY": "TL",
+        "USD_mn": "milyon USD",
+        "EUR_mn": "milyon EUR",
+        "percent": "%",
+        "yüzde": "%",
+    }
+    return known.get(value, value.replace("_", " "))
+
+
+def _spec_measure_label(spec: object) -> tuple[str, str]:
+    """Return a catalog-backed measure label and unit without inventing semantics."""
+    measures = [c for c in getattr(spec, "columns", []) or []
+                if getattr(getattr(c, "role", None), "value", getattr(c, "role", None)) == "measure"]
+    measure = measures[0] if measures else None
+    aliases = [str(alias).strip() for alias in (getattr(measure, "aliases", []) or []) if str(alias).strip()]
+    raw_name = str(getattr(measure, "name", "") or "")
+    label = next((alias for alias in aliases if alias.casefold() != raw_name.casefold()), "")
+    label = label or str(getattr(spec, "name", "") or getattr(spec, "dataset_id", ""))
+    return label.strip(), _display_unit(getattr(measure, "unit", None))
+
+
+def display_column_labels(
+    frame: Any,
+    *,
+    workspace: object | None = None,
+    specs: Iterable[object] = (),
+) -> dict[str, str]:
+    """Map technical lakehouse columns to stable human labels for UI/export only.
+
+    The DataFrame and provenance remain untouched. Labels are resolved from the
+    catalog and column provenance, so the rule works for any source using the
+    shared ``<series>@<entity>::<measure>`` Gold naming contract.
+    """
+    if frame is None or not hasattr(frame, "columns"):
+        return {}
+    specs = list(specs or [])
+    by_id = {str(getattr(spec, "dataset_id", "")): spec for spec in specs}
+    technical_frame = any("::" in str(column) for column in frame.columns)
+    labels: dict[str, str] = {}
+    used: dict[str, int] = {}
+    for column in frame.columns:
+        raw = str(column)
+        provenance = None
+        if workspace is not None and hasattr(workspace, "column_provenance"):
+            provenance = workspace.column_provenance(raw)
+        ids = [str(value) for value in (getattr(provenance, "dataset_ids", []) or [])]
+        prefix, separator, tail = raw.rpartition("::")
+        series_id = prefix.split("@", 1)[0] if prefix else ""
+        structured = bool(separator and prefix)
+        spec = by_id.get(series_id) if structured else None
+        if spec is None:
+            spec = next((by_id[dataset_id] for dataset_id in ids if dataset_id in by_id), None) if structured else None
+
+        label = ""
+        unit = ""
+        if spec is not None and (prefix or ids):
+            label, unit = _spec_measure_label(spec)
+        elif technical_frame and raw.casefold() in _DISPLAY_DATE_COLUMNS:
+            label = "Dönem"
+
+        suffix = tail if structured else ""
+        display_suffix = suffix.removeprefix("value_")
+        if label and display_suffix in _DISPLAY_VALUE_SUFFIXES:
+            label += _DISPLAY_VALUE_SUFFIXES[display_suffix]
+            if unit:
+                label += f" ({unit})"
+        elif label and suffix:
+            # Preserve an explicitly named derived measure while removing the
+            # machine-only separators and series id.
+            label += " — " + suffix.replace("_", " ")
+        if not label or label == raw:
+            continue
+        count = used.get(label, 0) + 1
+        used[label] = count
+        labels[raw] = label if count == 1 else f"{label} ({count})"
+    return labels
+
+
+def rename_frame_columns(frame: Any, labels: Mapping[str, str] | None = None):
+    """Return a copy with display labels, keeping names unique and values intact."""
+    if frame is None or not hasattr(frame, "columns") or not labels:
+        return frame.copy() if hasattr(frame, "copy") else frame
+    out = frame.copy()
+    out.columns = [str(labels.get(str(column), column)) for column in frame.columns]
+    return out
+
+
 # ---------------------------------------------------------------- kaynak adı ve konu özeti (15 Eyl, kullanıcı kararı)
 # "Elimizde hangi veriler var" cevabı içeriği her soruda canlı katalogdan okur. İki sınır kullanıcıyla konuşuldu:
 # (1) source_hints.json'da okunur adı olmayan yeni kaynak ham kimlikle görünüyordu ("tuik: 5 seri");
@@ -209,5 +313,5 @@ def topics_summary(specs: Iterable[object], limit: int = 6) -> str:
     return ("konu: " if len(topics) == 1 else "konular: ") + listed
 
 
-__all__ = ["GOLD_FUNCTIONS", "humanize_internal", "readable_source", "source_display_name", "spec_origin", "topic_of",
-           "topics_summary"]
+__all__ = ["GOLD_FUNCTIONS", "display_column_labels", "humanize_internal", "readable_source", "rename_frame_columns",
+           "source_display_name", "spec_origin", "topic_of", "topics_summary"]

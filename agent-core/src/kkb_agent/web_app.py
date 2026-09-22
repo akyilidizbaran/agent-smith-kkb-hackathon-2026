@@ -35,7 +35,7 @@ from pydantic import BaseModel, Field
 
 from .conversations import ConversationStore, conversation_title, new_conversation_id, now_iso
 from .core.workspace import AnalysisWorkspace
-from .labels import readable_source
+from .labels import display_column_labels, readable_source, rename_frame_columns
 from .live_steps import args_detail, live_hooks, tool_label
 
 log = logging.getLogger(__name__)
@@ -89,13 +89,15 @@ def _json_safe(value: Any) -> Any:
     return str(value)
 
 
-def frame_to_dict(frame: pd.DataFrame | None, *, max_rows: int = MAX_ROWS) -> dict[str, Any] | None:
+def frame_to_dict(frame: pd.DataFrame | None, *, max_rows: int = MAX_ROWS,
+                  column_labels: dict[str, str] | None = None) -> dict[str, Any] | None:
     if frame is None or frame.empty:
         return None
     head = frame.head(max_rows)
     # Each cell is keyed by the schema entry that owns it. This prevents a missing value
     # in one derived column from shifting every following value under another header.
-    columns = [{"key": f"c{index}", "label": str(column)} for index, column in enumerate(frame.columns)]
+    columns = [{"key": f"c{index}", "label": str((column_labels or {}).get(str(column), column))}
+               for index, column in enumerate(frame.columns)]
     rows = []
     for row in head.itertuples(index=False, name=None):
         if len(row) != len(columns):
@@ -454,6 +456,30 @@ def _strip_markdown_tables(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
 
 
+def _active_display_specs(agent: Any) -> list[Any]:
+    getter = getattr(agent, "_active_table_specs", None)
+    if not callable(getter):
+        return []
+    try:
+        return list(getter() or [])
+    except Exception:  # noqa: BLE001 — label rendering cannot affect answer delivery
+        return []
+
+
+def _payload_display_frame(frame: pd.DataFrame, payload: dict[str, Any]) -> pd.DataFrame:
+    """Apply labels already shown in the answer payload to its download snapshot."""
+    table = payload.get("table") or {}
+    columns = table.get("columns") or []
+    if len(columns) != len(frame.columns):
+        return frame.copy()
+    labels = {
+        str(raw): str(item.get("label", raw))
+        for raw, item in zip(frame.columns, columns)
+        if isinstance(item, dict)
+    }
+    return rename_frame_columns(frame, labels)
+
+
 def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None, question: str = "") -> dict[str, Any]:
     steps = []
     for s in getattr(answer, "steps", []):
@@ -483,6 +509,11 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None, questio
         # markdown table from the narrative so omitted cells in a shortened
         # model preview cannot contradict the canonical artifact/export.
         display_text = _strip_markdown_tables(display_text)
+    display_labels = display_column_labels(
+        result_table,
+        workspace=getattr(agent, "workspace", None),
+        specs=_active_display_specs(agent),
+    ) if result_table is not None else {}
     ev = getattr(answer, "evidence", None)
     sources = [str(src) for c in (getattr(ev, "columns", []) or []) for src in (getattr(c, "sources", []) or [])]
     if not sources:
@@ -497,7 +528,7 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None, questio
     return {
         "text": display_text,
         "steps": steps,
-        "table": frame_to_dict(result_table) if result_table is not None else None,
+        "table": frame_to_dict(result_table, column_labels=display_labels) if result_table is not None else None,
         "table_title": (getattr(agent.workspace, "title", "") or "") if show_table else "",
         "table_scope": scope if show_table else None,
         "access_options": access_options(answer),
@@ -1254,10 +1285,11 @@ def create_app(agent_factory: Callable[..., Any], *, profile: str = "analyst", a
 
     @app.get("/api/answers/{index}/table.csv")
     def table_csv(index: int) -> Response:
-        _answer_or_404(index)
+        payload = _answer_or_404(index)
         frame = session.tables.get(index)
         if frame is None:
             raise HTTPException(status_code=404, detail="bu cevabın tablosu yok")
+        frame = _payload_display_frame(frame, payload)
         return Response(table_csv_bytes(frame), media_type="text/csv; charset=utf-8",
                         headers={"Content-Disposition": f'attachment; filename="agent-smith-cevap-{index}.csv"'})
 
@@ -1267,6 +1299,7 @@ def create_app(agent_factory: Callable[..., Any], *, profile: str = "analyst", a
         frame = session.tables.get(index)
         if frame is None:
             raise HTTPException(status_code=404, detail="bu cevabın tablosu yok")
+        frame = _payload_display_frame(frame, p)
         ev = p.get("evidence") or {}
         warns = list(ev.get("gaps") or []) + [w for c in ev.get("columns") or [] for w in (c.get("warnings") or [])]
         data = table_xlsx_bytes(frame, title=p.get("table_title") or p.get("question", "")[:120], warnings=warns)
