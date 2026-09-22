@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import replace
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Literal
 from urllib.parse import urlparse
 
@@ -269,8 +269,12 @@ def _bare_locator(locator: str) -> bool:
 
 
 def _source_display_name(locator: str) -> str:
-    """Kataloğa giren kaynak adı: yükleme kopyasının rastgele ön eki (`3bcc4cc9_`) kullanıcının dosya adı değildir."""
-    return _UPLOAD_PREFIX.sub("", Path(locator.split("?")[0]).name)
+    """Kataloğa giren kaynak adı: yükleme kopyasının rastgele ön eki (`3bcc4cc9_`) kullanıcının dosya adı değildir.
+
+    `PureWindowsPath` her platformda hem eğik hem ters eğik çizgi ayracını tanır: Linux CI'da Windows yolu tek parça kalıyordu
+    (PR #21 ilk koşusu), Windows'ta Linux yolu zaten çalışır.
+    """
+    return _UPLOAD_PREFIX.sub("", PureWindowsPath(locator.split("?")[0]).name)
 
 
 #: Ölçüm tipinden türeyen varsayılan toplama yöntemi (katalog sözleşmesindeki anlam: stok dönem sonu değeri,
