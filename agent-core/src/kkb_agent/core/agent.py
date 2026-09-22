@@ -2366,11 +2366,11 @@ class AnalyticsAgent:
                 # result is a valid answer to a transformation follow-up even
                 # though it does not fetch a new source.
                 prior_query_context = self._has_confirmed_follow_up_context()
-                # Başarılı web_search harici bağlam getirir (ADR-0075: veri değil, bağlam); eski tabloyu
-                # anlatmak değildir, o yüzden stale-tablo reddinden muaf (Option A: açık web isteği yolu).
+                # web_search yalnızca kaynak adayı/bağlam getirir (ADR-0075); sayfa okunmadan
+                # eski aktif tabloyu cevaplamak için taze kanıt sayılmaz. Stale-table kapısını
+                # ancak web_url (FRESH_DATA_TOOLS içinde) başarılı okuması aşabilir.
                 fresh_or_active_action = any(
-                    s.ok and (s.tool_name in (self.FRESH_DATA_TOOLS | self.ACTIVE_TABLE_ACTION_TOOLS)
-                              or s.tool_name == "web_search")
+                    s.ok and s.tool_name in (self.FRESH_DATA_TOOLS | self.ACTIVE_TABLE_ACTION_TOOLS)
                     for s in steps
                 )
                 if (self.workspace.has_table and prior_query_context
@@ -2797,7 +2797,6 @@ class AnalyticsAgent:
                     and self._has_confirmed_follow_up_context()
                     and not any(s.ok and s.tool_name in self.FRESH_DATA_TOOLS for s in steps)
                     and not any(s.ok and s.tool_name in self.ACTIVE_TABLE_ACTION_TOOLS for s in steps)
-                    and not any(s.ok and s.tool_name == "web_search" for s in steps)  # web bağlamı eski tablo değildir
                 )
                 if stale_follow_up:
                     text = (
