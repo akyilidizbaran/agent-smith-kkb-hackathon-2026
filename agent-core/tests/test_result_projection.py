@@ -288,3 +288,48 @@ def test_fastpath_multi_column_step_projects_and_exports_derived_only() -> None:
     csv_frame = pd.read_csv(io.BytesIO(table_csv_bytes(projected)), sep=";", decimal=",", encoding="utf-8-sig")
     xlsx_frame = pd.read_excel(io.BytesIO(table_xlsx_bytes(projected, title="fastpath")), sheet_name="tablo", engine="openpyxl")
     assert list(csv_frame.columns) == list(projected.columns) == list(xlsx_frame.columns)
+
+
+def test_deterministic_fastpath_uses_scoped_result_for_exports() -> None:
+    """The active 60-row LAG base must not leak into a 24-row answer artifact."""
+    dates = pd.date_range("2021-01-31", periods=60, freq="ME")
+    base = pd.DataFrame({"date": dates, "metric": range(60)})
+    workspace = AnalysisWorkspace()
+    workspace.set_table(base, description="monthly fixture")
+    change = pd.Series([None, *[1.0] * 59], index=workspace.table.index)
+    workspace.add_column(
+        "metric_change",
+        change,
+        description="monthly change",
+        provenance=QueryProvenance(
+            sql="türetilmiş: metric - LAG(metric) OVER (ORDER BY date)",
+            dataset_ids=[],
+        ),
+    )
+    scoped = workspace.table.iloc[12:36].copy()
+    answer = AgentAnswer(
+        text="ok",
+        steps=[AgentStep(
+            index=1,
+            role="execute",
+            tool_name="workspace_compute_column",
+            tool_args={
+                "column_name": "metric_change",
+                "expression": "metric - LAG(metric) OVER (ORDER BY date)",
+                "deterministic": True,
+            },
+            result_data=scoped,
+        )],
+        workspace=workspace,
+    )
+    agent = SimpleNamespace(workspace=workspace)
+
+    projected = project_result_table(answer, agent, question="aylık değişimleri göster")
+
+    assert projected is not None
+    assert len(projected) == 24
+    assert projected.iloc[0]["date"] == dates[12]
+    assert projected.iloc[-1]["date"] == dates[35]
+    csv_frame = pd.read_csv(io.BytesIO(table_csv_bytes(projected)), sep=";", decimal=",", encoding="utf-8-sig")
+    xlsx_frame = pd.read_excel(io.BytesIO(table_xlsx_bytes(projected, title="scoped")), sheet_name="tablo", engine="openpyxl")
+    assert len(csv_frame) == len(xlsx_frame) == 24

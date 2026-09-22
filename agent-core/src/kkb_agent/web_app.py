@@ -266,6 +266,53 @@ def _existing_derived_projection(frame: pd.DataFrame, workspace: Any, question: 
     return frame.loc[:, list(dict.fromkeys(selected))].copy()
 
 
+def _period_scoped_frame(frame: pd.DataFrame, date_column: str | None, period_start: Any, period_end: Any) -> pd.DataFrame:
+    """Return the user-facing period view without mutating the active workspace."""
+    if (not isinstance(frame, pd.DataFrame) or date_column is None
+            or period_start is None or period_end is None or date_column not in frame.columns):
+        return frame.copy() if isinstance(frame, pd.DataFrame) else frame
+    dates = pd.to_datetime(frame[date_column], errors="coerce")
+    return frame.loc[dates.between(pd.Timestamp(period_start), pd.Timestamp(period_end), inclusive="both")].copy()
+
+
+def _compute_result_projection(frame: pd.DataFrame, compute_steps: list[Any], question: str) -> pd.DataFrame:
+    """Project a compute-column result, preserving its own row scope."""
+    if not compute_steps:
+        return _clean_user_projection(frame, question)
+    added: list[str] = []
+    expressions: list[str] = []
+    operations: dict[str, str] = {}
+    for step in compute_steps:
+        args = getattr(step, "tool_args", {}) or {}
+        names = args.get("column_names")
+        expressions_for_step = args.get("expressions")
+        pairs = zip(names, expressions_for_step) if isinstance(names, list) and isinstance(expressions_for_step, list) else [(args.get("column_name", ""), args.get("expression", ""))]
+        for raw_name, raw_expression in pairs:
+            name = str(raw_name)
+            expression = str(raw_expression)
+            if name in frame.columns and name not in added:
+                added.append(name)
+                expressions.append(expression)
+                operations[name] = _derived_operation(expression)
+    if not added:
+        return _clean_user_projection(frame, question)
+    requested_operation = "percent_change" if _PERCENT_REQUEST.search(question or "") else (
+        "change" if _CHANGE_REQUEST.search(question or "") else None
+    )
+    selected = [name for name in added if requested_operation is None or operations.get(name) == requested_operation]
+    if not selected:
+        selected = added
+    identity = _identity_columns(frame, expressions)
+    referenced = [
+        str(column) for column in frame.columns
+        if str(column) not in added
+        and any(str(column) in _expression_columns(expression, list(frame.columns)) for expression in expressions)
+    ]
+    base = referenced if _BASE_AND_DERIVED_REQUEST.search(question or "") else []
+    columns = list(dict.fromkeys([*identity, *base, *selected]))
+    return _clean_user_projection(frame.loc[:, columns] if columns else frame, question)
+
+
 def project_result_table(answer: Any, agent: Any, *, question: str = "", table_before: Any = None) -> pd.DataFrame | None:
     """Choose the answer table without mutating the full workspace.
 
@@ -287,28 +334,45 @@ def project_result_table(answer: Any, agent: Any, *, question: str = "", table_b
         None,
     )
     if reuse_proof:
+        reuse_frame = _period_scoped_frame(
+            current,
+            str(reuse_proof.get("date_column") or "") or None,
+            reuse_proof.get("period_start"),
+            reuse_proof.get("period_end"),
+        )
         derived = [
             str(column) for column in reuse_proof.get("derived_columns", [])
-            if str(column) in current.columns
+            if str(column) in reuse_frame.columns
         ]
         source = [
             str(column) for column in reuse_proof.get("source_columns", [])
-            if str(column) in current.columns
+            if str(column) in reuse_frame.columns
         ]
         expressions = [
             str(getattr(workspace.column_provenance(column), "sql", "") or "").removeprefix("türetilmiş:").strip()
             for column in derived
         ]
-        identity = _identity_columns(current, expressions)
+        identity = _identity_columns(reuse_frame, expressions)
         selected = [*identity]
         if _BASE_AND_DERIVED_REQUEST.search(question or ""):
             selected.extend(source)
         selected.extend(derived)
         if selected:
             return _clean_user_projection(
-                current.loc[:, list(dict.fromkeys(selected))], question
+                reuse_frame.loc[:, list(dict.fromkeys(selected))], question
             )
     compute_steps = [s for s in steps if getattr(s, "tool_name", None) == "workspace_compute_column"]
+    # Deterministic fast paths retain the full active workspace for future LAG
+    # bases, but their result_data is already the requested output view. Use it
+    # for UI/CSV/XLSX instead of silently falling back to the full workspace.
+    deterministic_step = next(
+        (step for step in reversed(compute_steps)
+         if (getattr(step, "tool_args", {}) or {}).get("deterministic")
+         and isinstance(getattr(step, "result_data", None), pd.DataFrame)),
+        None,
+    )
+    if deterministic_step is not None:
+        return _compute_result_projection(deterministic_step.result_data, [deterministic_step], question)
     last_compute = max((i for i, s in enumerate(steps)
                         if getattr(s, "tool_name", None) == "workspace_compute_column"), default=-1)
     last_query = max((i for i, s in enumerate(steps)
@@ -354,41 +418,7 @@ def project_result_table(answer: Any, agent: Any, *, question: str = "", table_b
                 return base_projection
         return _clean_user_projection(current, question)
 
-    added: list[str] = []
-    expressions: list[str] = []
-    operations: dict[str, str] = {}
-    for step in compute_steps:
-        args = getattr(step, "tool_args", {}) or {}
-        names = args.get("column_names")
-        expressions_for_step = args.get("expressions")
-        if isinstance(names, list) and isinstance(expressions_for_step, list):
-            pairs = zip(names, expressions_for_step)
-        else:
-            pairs = [(args.get("column_name", ""), args.get("expression", ""))]
-        for raw_name, raw_expression in pairs:
-            name = str(raw_name)
-            expression = str(raw_expression)
-            if name in current.columns and name not in added:
-                added.append(name)
-                expressions.append(expression)
-                operations[name] = _derived_operation(expression)
-    if not added:
-        return current.copy()
-
-    requested_operation = "percent_change" if _PERCENT_REQUEST.search(question or "") else (
-        "change" if _CHANGE_REQUEST.search(question or "") else None
-    )
-    selected = [name for name in added if requested_operation is None or operations.get(name) == requested_operation]
-    if not selected:
-        selected = added
-    identity = _identity_columns(current, expressions)
-    referenced = [
-        str(column) for column in current.columns
-        if str(column) not in added and any(str(column) in _expression_columns(expression, list(current.columns)) for expression in expressions)
-    ]
-    base = referenced if _BASE_AND_DERIVED_REQUEST.search(question or "") else []
-    columns = list(dict.fromkeys([*identity, *base, *selected]))
-    return _clean_user_projection(current.loc[:, columns] if columns else current, question)
+    return _compute_result_projection(current, compute_steps, question)
 
 
 ACCESS_CODES = frozenset({"NEEDS_CREDENTIAL", "ACCESS_BLOCKED", "SOURCE_NOT_FOUND"})
