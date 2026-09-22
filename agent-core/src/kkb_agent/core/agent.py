@@ -633,7 +633,7 @@ class AnalyticsAgent:
         max_tokens: int | None = None,
         time_budget_s: float | None = None,
         token_budget_policy: TokenBudgetPolicy | None = None,
-        narration_timeout_s: float | None = 30.0,
+        narration_timeout_s: float | None = 100.0,
         tool_timeout_s: float | None = 90.0,
         stream_narration: bool = False,
         max_catalog_search_calls: int = MAX_CATALOG_SEARCH_CALLS,

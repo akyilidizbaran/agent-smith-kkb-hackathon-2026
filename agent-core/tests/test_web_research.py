@@ -209,7 +209,7 @@ def test_agent_keeps_web_tool_decisions_in_tool_phase_until_synthesis() -> None:
     assert answer.usage["web_research"]["unique_pages_read"] == 1
     assert answer.steps[-1].role == "narrate"
     assert llm.deadlines[0][0] is None
-    # Tool calls use their own 90 s budget; the default narration timeout is 30 s.
+    # Tool calls use their own 90 s budget; narration has a separate 100 s default.
     bounded_deadlines = [
         deadline - started_at for deadline, started_at in llm.deadlines if deadline is not None
     ]

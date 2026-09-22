@@ -16,7 +16,8 @@ make serve                    # http://127.0.0.1:8765
 
 `.env` zorunlu değişkenleri (değerleri yazmayın): `MIA_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, `EVDS_API_KEY`,
 `TAVILY_API_KEY` (web araması için), `ARCHITECT_TOKEN` (jüri profil geçişi için; boşsa geçiş kapalı).
-İsteğe bağlı: `AGENT_PROFILE` (analyst), `LLM_TIMEOUT` (90), `LLM_MAX_TOKENS` (1500), `AGENT_TIME_BUDGET_S` (300),
+İsteğe bağlı: `AGENT_PROFILE` (analyst), `LLM_TIMEOUT` (100), `LLM_NARRATION_TIMEOUT_S` (100), `LLM_TOOL_TIMEOUT_S` (90),
+`LLM_MAX_TOKENS` (1500), `AGENT_TIME_BUDGET_S` (300),
 `WEB_SEARCH_BUDGET` (20), `LLM_NARRATE_TEMPERATURE` (0,5), `DATA_ROOT` (data).
 
 `.env` dosyasını uygulama okur (python-dotenv: `LLM_API_KEY=${MIA_API_KEY}` referansı ve boşluklu değer desteklenir); kabukta
@@ -84,4 +85,3 @@ lakehouse CLI, web uygulaması ve arayüz gerçektir. Asıl `data/` yalnız okun
 | `uv run python scripts/acceptance_m16.py` | canlı model çok turlu kabul | demo DB | `docs/experiments/acceptance_m16_*.json` |
 
 Betikli kabul canlı model başarısı değildir; canlı oranlar `acceptance_m16.py` koşularında ayrı raporlanır.
-
