@@ -4,7 +4,8 @@ The FinTürk province-level application exposes a JSON endpoint its own report s
 Verified live on 2026-09-10 against ``https://www.bddk.org.tr``:
 
 - ``POST /BultenFinturk/tr/Home/VeriGetir`` returns one province/period/table combination as a
-  single-row grid in one call. Observed tables (``tabloNo``): ``1`` = Krediler (aggregate
+  single-row grid in one call, or all provinces when ``sehirList[0]=HEPSİ``. Observed tables
+  (``tabloNo``): ``1`` = Krediler (aggregate
   cash/non-cash totals, no product breakdown), ``3`` = Bireysel Bankacılık (retail lending,
   includes a ``Konut Kredisi`` column — **this is the table this connector requests**), ``4`` =
   Seçilmiş Sektörel Krediler (borrower's industry sector, e.g. İnşaat/Turizm/Ziraat — this is
@@ -106,9 +107,10 @@ def _periods_in_range(start: date, end: date) -> list[tuple[int, int]]:
 class BddkFinTurkConnector(BaseConnector):
     """Fetch BDDK FinTürk province-level reports and store their exact response bytes.
 
-    The connector applies no parsing and no financial transformation. One FetchSpec (one
-    province, one date range) yields one FetchedAsset per quarter in that range, because the
-    source endpoint itself has no range concept and only publishes quarterly data.
+    The connector applies no parsing and no financial transformation. One FetchSpec yields one
+    FetchedAsset per quarter in that range, because the source endpoint itself has no range
+    concept and only publishes quarterly data. ``sehir=HEPSİ`` is supported for the source's
+    all-province response mode; the parser then emits one row per returned province.
     """
 
     def __init__(

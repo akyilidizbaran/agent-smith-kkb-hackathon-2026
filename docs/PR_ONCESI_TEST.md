@@ -1,63 +1,45 @@
-# PR öncesi test — 18 Eylül 2026'dan itibaren
+# PR test doğrulaması
 
-Repo 18 Eylül'de Pro hesaba taşındı; GitHub Actions yeniden açık (3.000 dk/ay). Testler PR açılınca ve
-main'e merge sonrası **otomatik koşar**; bir PR ancak yeşilse merge edilir.
+GitHub Actions yeniden kullanılabilir durumda. Aşağıdaki workflow'lar PR açıldığında, `main`'e merge sonrası ve elle `workflow_dispatch` ile çalışır:
 
-Kotayı korumak için koşu yalnız değişen pakette yapılır:
+- `.github/workflows/tests-agent.yml`: `agent-core` birim ve sözleşme testleri
+- `.github/workflows/tests-lakehouse.yml`: `lakehouse-core` testleri; A–H olarak paralel parçalanır
 
-- **Ajan testleri** (`tests-agent`, ~1 dk): PR `agent-core/` içinde bir şey değiştirdiyse.
-- **Veri testleri** (`tests-lakehouse`, 3 paralel parça, her biri ~15–25 dk): PR `lakehouse-core/` içinde bir
-  şey değiştirdiyse. Toplam dakika tek işle aynı; parçalama 60 dk sınırına takılmamak için.
-- Feature dalına push tek başına koşu başlatmaz; PR açık olmalı. Aynı dala yeni push eskisini iptal eder.
+Lakehouse testleri 6.304 serilik katalogda 60 dakikalık job sınırına yaklaşabildiğinden test dizinleri sekiz parçaya dağıtılır. Her test dizini workflow içindeki bir parçaya açıkça atanır; yeni bir test dizini eklenirse ilgili `SHARD_*` listesine eklenmelidir.
 
-Bir dakika hesabı: veri PR'ı ≈ 45–70 dk, ajan PR'ı ≈ 1 dk. Ay sonuna kadar rahat; yine de deneme push'larını
-azaltın, büyük veri değişikliklerini önce yerelde koşun.
+Merge kararı GitHub Actions sonucuna dayanır. Yerel sonuçlar iz bırakmak ve PR gövdesine ölçüm koymak için tutulur.
 
-## Yerelde koşmak (isteğe bağlı, veri tarafında tavsiye edilir)
+## CI ile aynı yerel komutlar
 
-`uv` kurulu olsun (CI de bunu kullanır; Python'u kendisi indirir): https://docs.astral.sh/uv/
-
-Ajan tarafı, ~1 dk:
-
-```
+```bash
 cd agent-core
 uv sync --frozen --extra dev
 uv run --frozen --extra dev pytest -q -p no:cacheprovider
-```
 
-Veri tarafı, tam paket, 30–70 dk (bilgisayara göre):
-
-```
-cd lakehouse-core
+cd ../lakehouse-core
 uv sync --frozen
 uv run --frozen pytest -q -p no:cacheprovider
 ```
 
-Veri tarafı, yalnız hızlı kısım, ~3 dk (katalog, script, sözleşme, güvenlik, parser; ara kontrol için):
+## 18 Eylül 2026 yerel doğrulama
 
-```
-cd lakehouse-core
-uv run --frozen pytest -q -p no:cacheprovider tests/catalog tests/scripts tests/contract tests/security tests/parsers
-```
+- `agent-core`: **802 geçti**, 1 Starlette deprecation uyarısı, **6,77 s**.
+- `lakehouse-core` conflict sonrası hedefli kapsam (katalog, relation, ingestion registry, FinTürk parser/connector, Silver build ve catalog bootstrap): **131 geçti**, **261,69 s**.
+- `lakehouse-core` tam paket: CI ile aynı komut yerelde başlatıldı; 6.304 serilik katalog bootstrap maliyeti nedeniyle yaklaşık 14 dakika sonra %6 ilerlemede durduruldu. Bu koşuda assertion/test hatası görülmedi; tam paket sonucu `tests-lakehouse` Actions işinin otoritatif sonucudur.
+- `git diff --check`: başarılı.
+- `.env`: değiştirilmedi; SHA-256 `3d9edab0b35a33c3c0b99c4e1dec457f54d8cc8abe03ba160ddcced59d74e516`.
 
-## Windows'ta bilinen kırıklar (main'de de aynı, Linux CI'da geçiyor)
+## 21 Eylül 2026 CI zaman aşımı incelemesi
 
-Yerelde Windows'ta koşarken bunlar sizin değişikliğinizden değildir. Bunların dışında kalan her kırık
-değişiklikten kaynaklıdır.
+- PR/head `7d0009e` için Actions koşusu `35538510918` assertion hatası göstermedi. Lakehouse A ve C job'ları 60 dakikada kesildi; A son logda %29, C %62 ilerlemişti. B tamamlandı fakat süre sınırına yakındı. Bu bir kod/test başarısızlığı değil, eski üçlü parça dağılımının 6.304 serilik katalogda artık dengeli olmamasıdır.
+- Workflow A–H olarak yeniden bölündü ve sonraki yeşil koşuda yavaş testleri görünür kılmak için `--durations=20` eklendi. Yeni dağılımın gerçek GitHub süresi henüz ölçülmedi; güncel head'e push/PR koşusu gerekir.
+- Ayrıca katalog değişmediyse ilişki grafiği satırları tekrar yazılmıyor; yazılacak ilişkiler tek hazırlanmış DuckDB batch statement ile upsert ediliyor. Katalog bootstrap/regresyon testleri **22 geçti**, acceptance grubu **37 geçti**. Tam lakehouse paketi bu değişikliklerle tamamlanmadı.
 
-| Paket | Test | Sebep |
-|---|---|---|
-| agent-core | `test_adim_yolculugu` (3), `test_kanit_yolculugu` (7) | `node -e` komut satırı Windows sınırını aşıyor (WinError 206) |
-| agent-core | `test_evidence.py::test_adaptor_gozlemden_artifact_ve_raw_a_iner` | yol ayracı `/` bekleniyor |
-| lakehouse-core | `tests/adhoc/test_end_to_end.py::test_local_csv_reaches_the_agent_through_the_adhoc_table` | `write_text` satır sonunu `\r\n` yapıyor, sha256 uyuşmuyor |
-| lakehouse-core | `tests/contract/test_contracts.py::test_raw_path_is_deterministic_and_uses_the_contract` | yol ayracı |
-| lakehouse-core | `tests/generic/test_connector.py::test_a_symlink_pointing_outside_the_root_is_refused` | Windows'ta symlink yetkisi |
-| lakehouse-core | `tests/generic/test_connector.py::test_a_fifo_is_not_a_regular_file` | Windows'ta FIFO yok |
+## Conflict çözümünün test kapsamı
 
-Beklenen Windows sonucu: agent-core **690 geçti, 11 kaldı**; lakehouse-core **1.122 geçti, 4 kaldı** (17 Eyl,
-PR #9 dahil ağaçta ölçüldü).
+`main` ile birleştirme sırasında şu kararlar uygulandı:
 
-## Yeni test dizini eklerken
-
-`lakehouse-core/tests/` altına yeni bir dizin açılırsa `.github/workflows/tests-lakehouse.yml` içindeki
-`SHARD_A/B/C` listelerinden birine yazılmalı; yoksa "Parça kapsamı" adımı kırılır ve PR kırmızı olur.
+- PR #9'daki 4.536 serilik FinTürk kataloğu korundu; o tarihteki üç parçalı Actions dağılımı 21 Eylül ölçümünden sonra A–H olarak yenilendi.
+- `ingestion_registry.py`, PR #9'un tablo eşleme haritasını korurken gelecekteki `<tabloNo>|<SEHIR>` bulk adres biçimini de destekleyecek şekilde birleştirildi.
+- Agent/lakehouse workflow'larında PR tetikleyicileri ve `main` push tetikleyicileri korundu.
+- Bu belge, yerel test ölçümlerini ve Actions'ın merge kapısı olduğunu birlikte kaydeder.

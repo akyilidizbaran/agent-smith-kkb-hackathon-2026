@@ -15,7 +15,8 @@ from typing import Any
 
 DEFAULT_PATH = Path(__file__).resolve().parent / "config_data" / "source_hints.json"
 EMPTY: dict[str, Any] = {"source_words": {}, "credential_env_by_host": {}, "institutions": (), "source_names": {},
-                         "derived_sources": (), "official_hosts": (), "url_patterns": ()}
+                         "derived_sources": (), "official_hosts": (), "url_patterns": (),
+                         "institution_hosts": {}, "public_source_domains": {}}
 
 
 @lru_cache(maxsize=4)
@@ -35,6 +36,10 @@ def _load(path: str) -> dict[str, Any]:
         "derived_sources": tuple(map(str, data.get("derived_sources") or ())),
         "official_hosts": tuple(str(x).lower() for x in data.get("official_hosts") or ()),
         "url_patterns": tuple(map(str, data.get("url_patterns") or ())),
+        "institution_hosts": {str(k).casefold(): tuple(str(h).lower() for h in v)
+                              for k, v in (data.get("institution_hosts") or {}).items()},
+        "public_source_domains": {str(k).casefold(): tuple(str(h).lower() for h in v)
+                                  for k, v in (data.get("public_source_domains") or {}).items()},
     }
 
 

@@ -28,7 +28,7 @@ import weakref
 import pandas as pd
 
 from ..contracts.catalog import DatasetSpec
-from ..contracts.lakehouse import LakehouseError, QueryProvenance, QueryResult
+from ..contracts.lakehouse import LakehouseError, QueryProvenance, QueryResult, SQLSyntaxError
 
 # Agent'ın ürettiği SQL için bağlantı yapılandırması. lock_configuration en sonda
 # kilitlenir; sonrasında hiçbir SET çalışmaz.
@@ -125,7 +125,7 @@ def guard_sql(sql: str) -> str:
     try:
         statements = duckdb.extract_statements(text)
     except duckdb.Error as exc:
-        raise LakehouseError(f"SQL ayrıştırılamadı: {exc}") from exc
+        raise SQLSyntaxError(f"SQL sözdizimi ayrıştırılamadı: {exc}") from exc
     if len(statements) != 1:
         raise LakehouseError(
             f"Tek bir sorgu bekleniyor, {len(statements)} ifade geldi. "

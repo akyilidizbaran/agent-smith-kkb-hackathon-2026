@@ -34,7 +34,10 @@ def test_arama_artefakti_adres_ve_baslik_tasir() -> None:
     r = WebSearchTool(TavilySearch(environ={"TAVILY_API_KEY": "k"}, session=Session()), registry=reg).validate_and_run({"query": "PPK 2023"})
     art = r.artifacts["web_search"]
     assert r.ok and art["hits"] == [PPK, HABER]
-    assert art["results"] == [{"url": PPK, "title": "PPK kararı"}, {"url": HABER, "title": "Konut talebi"}]
+    assert art["results"] == [
+        {"url": PPK, "title": "PPK kararı", "direct_data": False},
+        {"url": HABER, "title": "Konut talebi", "direct_data": False},
+    ]
 
 
 def test_arama_sonucu_baglam_kaynagi_acilip_tabloya_giren_sayfa_veri_kaynagi_kalir() -> None:

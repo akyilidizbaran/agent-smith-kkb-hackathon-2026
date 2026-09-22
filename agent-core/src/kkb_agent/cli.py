@@ -49,6 +49,7 @@ from .tools.clarify import CLARIFY_PROMPT_RULES, ClarifyTool
 from .vision.ocr import OcrClient
 from .adapters.mia_embedder import EmbeddingCache, MiaEmbedder
 from .core.retriever import RetrievalPolicy
+from .core.token_budget import TokenBudgetPolicy
 from .tools.analytics import ANALYTICS_PROMPT_RULES, AnomalyDetectTool, ChangePointsTool, LeadLagTool
 from .tools.web import (
     WEB_PROMPT_RULES, WEB_SEARCH_PROMPT_RULES, WEB_SEARCH_UNAVAILABLE_RULES, WebSearchTool, WebUrlTool, official_source_rules,
@@ -237,7 +238,8 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
         base_url=settings.llm_base_url,
         api_key=settings.llm_api_key,
         model=settings.llm_model,
-        disable_thinking=settings.disable_thinking, timeout=settings.llm_timeout)
+        disable_thinking=settings.disable_thinking, timeout=settings.llm_timeout,
+        max_retries=settings.llm_max_retries)
     print(
         f"[motor] sağlayıcı={settings.provider_label} model={settings.llm_model} "
         f"alan={profile.domain!r} araçlar={len(registry)} profil={agent_profile_name}",
@@ -257,6 +259,17 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
         tool_gate=settings.tool_gate, narrate_temperature=settings.narrate_temperature,
         profile_factory=profile_factory,
         max_tokens=settings.llm_max_tokens, time_budget_s=settings.agent_time_budget_s,
+        token_budget_policy=TokenBudgetPolicy(
+            global_max=settings.llm_max_tokens,
+            planning=settings.llm_plan_max_tokens,
+            tool=settings.llm_tool_max_tokens,
+            narration=settings.llm_narrate_max_tokens,
+            long_narration=settings.llm_long_narrate_max_tokens,
+            recovery=settings.llm_recovery_max_tokens,
+        ),
+        narration_timeout_s=settings.llm_narration_timeout_s,
+        tool_timeout_s=settings.llm_tool_timeout_s,
+        stream_narration=settings.llm_stream_narration,
     )
     agent.profile_name = agent_profile_name          # analyst | architect (M04)
     agent.upload_root = settings.ingest_allowed_root

@@ -29,7 +29,7 @@ from typing import Any, Callable, Literal
 
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -135,6 +135,7 @@ def evidence_to_dict(panel: Any) -> dict[str, Any] | None:
         "observation_count": len(getattr(panel, "observations", [])),
         "artifacts": _json_safe(getattr(panel, "artifacts", {})),
         "web_sources": _json_safe(getattr(panel, "web_sources", [])),
+        "web_reads": _json_safe(getattr(panel, "web_reads", [])),
         "web_unused": _json_safe(getattr(panel, "web_unused", [])),
         "context_sources": _json_safe(getattr(panel, "context_sources", [])),
         "consulted_unused": list(getattr(panel, "consulted_unused", [])),
@@ -150,6 +151,8 @@ def _table_touched(answer: Any, before: Any, after: Any) -> bool:
     """Tablo bu cevapta üretildi ya da ele alındı mı? Aksi hâlde eski tablo cevaba iliştirilmez."""
     if after is None:
         return False
+    if bool(getattr(answer, "reused_verified_table", False)):
+        return True
     if before is not after:
         return True
     return any(s.tool_name and s.ok and s.tool_name.startswith(DATA_TOOLS_PREFIX) for s in getattr(answer, "steps", []))
@@ -191,7 +194,56 @@ def _identity_columns(frame: pd.DataFrame, expressions: list[str]) -> list[str]:
         series = frame[column]
         if pd.api.types.is_datetime64_any_dtype(series) or (str(column) in refs and not pd.api.types.is_numeric_dtype(series)):
             identity.append(str(column))
+    if "period_start" in identity and "period_end" in identity:
+        identity.remove("period_start")
     return identity
+
+
+_EVIDENCE_COLUMN_SUFFIXES = (
+    "::series_id",
+    "::quality_flag",
+    "::measure_type",
+    "::unit",
+    "::aggregation",
+    "::observations",
+    "::missing_observations",
+    "::warned_observations",
+    "::source_observation_dates",
+    "::artifact_sha256_list",
+    "::vintage_id_list",
+    "::run_id_list",
+)
+_EVIDENCE_COLUMNS = frozenset({
+    "quality_flag", "observations", "missing_observations", "warned_observations",
+    "source_observation_dates", "artifact_sha256_list", "vintage_id_list", "run_id_list",
+    "contributing_series", "absent_series", "is_complete_period", "gold_metric_id", "gold_function",
+    "gold_build_id", "gold_built_at", "gold_catalog_content_sha256", "silver_fingerprint",
+})
+
+
+def _has_evidence_columns(frame: pd.DataFrame) -> bool:
+    return any(
+        str(column) in _EVIDENCE_COLUMNS or str(column).endswith(_EVIDENCE_COLUMN_SUFFIXES)
+        for column in frame.columns
+    )
+
+
+def _clean_user_projection(frame: pd.DataFrame, question: str = "") -> pd.DataFrame:
+    """Hide lineage helper columns from the user table, keeping them in evidence."""
+    if _ALL_COLUMNS_REQUEST.search(question or "") or not _has_evidence_columns(frame):
+        return frame.copy()
+    selected = [
+        column for column in frame.columns
+        if not (
+            str(column) in _EVIDENCE_COLUMNS
+            or str(column).endswith(_EVIDENCE_COLUMN_SUFFIXES)
+        )
+    ]
+    # Gold interval tables carry both technical bounds; monthly user output
+    # uses the period end as its single canonical date axis.
+    if "period_start" in selected and "period_end" in selected:
+        selected.remove("period_start")
+    return frame.loc[:, selected].copy() if selected else frame.copy()
 
 
 def _existing_derived_projection(frame: pd.DataFrame, workspace: Any, question: str) -> pd.DataFrame | None:
@@ -237,24 +289,78 @@ def project_result_table(answer: Any, agent: Any, *, question: str = "", table_b
         return current.copy()
 
     steps = [s for s in getattr(answer, "steps", []) if getattr(s, "ok", False)]
+    reuse_proof = next(
+        (artifact for artifact in (getattr(answer, "artifacts", []) or [])
+         if isinstance(artifact, dict) and artifact.get("kind") == "verified_workspace_reuse"),
+        None,
+    )
+    if reuse_proof:
+        derived = [
+            str(column) for column in reuse_proof.get("derived_columns", [])
+            if str(column) in current.columns
+        ]
+        source = [
+            str(column) for column in reuse_proof.get("source_columns", [])
+            if str(column) in current.columns
+        ]
+        expressions = [
+            str(getattr(workspace.column_provenance(column), "sql", "") or "").removeprefix("türetilmiş:").strip()
+            for column in derived
+        ]
+        identity = _identity_columns(current, expressions)
+        selected = [*identity]
+        if _BASE_AND_DERIVED_REQUEST.search(question or ""):
+            selected.extend(source)
+        selected.extend(derived)
+        if selected:
+            return _clean_user_projection(
+                current.loc[:, list(dict.fromkeys(selected))], question
+            )
     compute_steps = [s for s in steps if getattr(s, "tool_name", None) == "workspace_compute_column"]
-    for step in reversed(steps):
-        if getattr(step, "tool_name", None) != "workspace_query":
-            continue
-        frame = getattr(step, "result_data", None)
-        if isinstance(frame, pd.DataFrame) and (len(frame) != len(current) or list(frame.columns) != list(current.columns)):
-            return frame.copy()
-        break
+    last_compute = max((i for i, s in enumerate(steps)
+                        if getattr(s, "tool_name", None) == "workspace_compute_column"), default=-1)
+    last_query = max((i for i, s in enumerate(steps)
+                      if getattr(s, "tool_name", None) == "workspace_query"), default=-1)
+    # A query before compute_column is only the input slice. Returning it here
+    # used to discard every derived column from CSV/XLSX even though the final
+    # workspace_show and the narrative contained them. A query after the
+    # calculations remains a legitimate final projection.
+    if last_query > last_compute:
+        query_step = steps[last_query]
+        frame = getattr(query_step, "result_data", None)
+        if isinstance(frame, pd.DataFrame):
+            # ``workspace_query(as_active_table=false)`` is a read-only peek.
+            # Narration commonly uses it to verify a few example rows after a
+            # full retrieval. It must never replace the canonical active table
+            # in the UI/export payload; only an explicit base-value request may
+            # project that peek.
+            query_args = getattr(query_step, "tool_args", {}) or {}
+            is_peek = query_args.get("as_active_table") is False
+            if is_peek and not _BASE_REQUEST.search(question or ""):
+                return _clean_user_projection(current, question)
+            if len(frame) != len(current) or list(frame.columns) != list(current.columns):
+                return _clean_user_projection(frame, question)
+
+    # workspace_show is an explicit final verification of the table the user
+    # asked to inspect. When it occurs after transformations, export that full
+    # snapshot so the downloadable table matches the verified table.
+    last_show = max((i for i, s in enumerate(steps)
+                     if getattr(s, "tool_name", None) == "workspace_show"), default=-1)
+    if (max(last_compute, last_query) >= 0 and last_show > max(last_compute, last_query)
+            and (not compute_steps or not _has_evidence_columns(current))):
+        frame = getattr(steps[last_show], "result_data", None)
+        if isinstance(frame, pd.DataFrame) and len(frame) == len(current):
+            return _clean_user_projection(frame, question)
     if not compute_steps:
         for step in reversed(steps):
             frame = getattr(step, "result_data", None)
             if isinstance(frame, pd.DataFrame) and getattr(step, "tool_name", None) != "workspace_show":
-                return frame.copy()
+                return _clean_user_projection(frame, question)
         if _BASE_REQUEST.search(question or ""):
             base_projection = _existing_derived_projection(current, workspace, question)
             if base_projection is not None:
                 return base_projection
-        return current.copy()
+        return _clean_user_projection(current, question)
 
     added: list[str] = []
     expressions: list[str] = []
@@ -290,7 +396,7 @@ def project_result_table(answer: Any, agent: Any, *, question: str = "", table_b
     ]
     base = referenced if _BASE_AND_DERIVED_REQUEST.search(question or "") else []
     columns = list(dict.fromkeys([*identity, *base, *selected]))
-    return current.loc[:, columns].copy() if columns else current.copy()
+    return _clean_user_projection(current.loc[:, columns] if columns else current, question)
 
 
 ACCESS_CODES = frozenset({"NEEDS_CREDENTIAL", "ACCESS_BLOCKED", "SOURCE_NOT_FOUND"})
@@ -305,6 +411,27 @@ def access_options(answer: Any) -> list[str]:
     return []
 
 
+def _strip_markdown_tables(text: str) -> str:
+    """Drop model-echoed pipe tables when a canonical table artifact exists."""
+    lines = str(text or "").splitlines()
+    out: list[str] = []
+    i = 0
+    # Markdown alignment may be written as :---, ---: or :---:. The old
+    # expression only accepted the first form.
+    separator = re.compile(r"^\s*\|?\s*:?-{3,}:?(?:\s*\|\s*:?-{3,}:?)+\s*\|?\s*$")
+    pipe = re.compile(r"^\s*\|.*\|\s*$")
+    while i < len(lines):
+        line = lines[i]
+        if pipe.match(line) and i + 1 < len(lines) and separator.match(lines[i + 1]):
+            i += 2
+            while i < len(lines) and pipe.match(lines[i]):
+                i += 1
+            continue
+        out.append(line)
+        i += 1
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
+
+
 def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None, question: str = "") -> dict[str, Any]:
     steps = []
     for s in getattr(answer, "steps", []):
@@ -313,6 +440,8 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None, questio
             "label": tool_label(s.tool_name), "detail": args_detail(s.tool_name, s.tool_args),
             "args": _json_safe(s.tool_args), "ok": bool(s.ok), "error_code": s.error_code,
             "summary": (s.result_summary or "")[:400], "duration_ms": round(float(getattr(s, "duration_ms", 0.0) or 0.0)),
+            "llm_duration_ms": round(float(getattr(s, "llm_duration_ms", 0.0) or 0.0)),
+            "tool_duration_ms": round(float(getattr(s, "tool_duration_ms", 0.0) or 0.0)),
             "candidates": list(getattr(s, "candidates", []) or []),
         })
     charts = []
@@ -326,6 +455,12 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None, questio
     table = getattr(agent.workspace, "table", None)
     show_table = _table_touched(answer, table_before, table)
     result_table = project_result_table(answer, agent, question=question, table_before=table_before) if show_table else None
+    display_text = answer.text
+    if result_table is not None:
+        # The verified table is rendered separately below. Remove a model-echoed
+        # markdown table from the narrative so omitted cells in a shortened
+        # model preview cannot contradict the canonical artifact/export.
+        display_text = _strip_markdown_tables(display_text)
     ev = getattr(answer, "evidence", None)
     sources = [str(src) for c in (getattr(ev, "columns", []) or []) for src in (getattr(c, "sources", []) or [])]
     if not sources:
@@ -338,7 +473,7 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None, questio
     search = getattr(getattr(agent.registry.get("web_search"), "search", None), "remaining", None) if agent.registry.get("web_search") else None
     follow_up = getattr(agent, "follow_up_resolution", None)
     return {
-        "text": answer.text,
+        "text": display_text,
         "steps": steps,
         "table": frame_to_dict(result_table) if result_table is not None else None,
         "table_title": (getattr(agent.workspace, "title", "") or "") if show_table else "",

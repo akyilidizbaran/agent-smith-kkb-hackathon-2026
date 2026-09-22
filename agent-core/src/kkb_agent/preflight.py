@@ -121,10 +121,16 @@ def _live_llm(settings: Settings) -> Check:
     try:
         from .llm.base import ChatMessage
         from .llm.openai_compat import OpenAICompatClient
+        # Sağlık kontrolü modelin reasoning bütçesini ölçmemeli. Qwen reasoning
+        # açıkken 5 token'ın tamamını düşünmeye harcayıp görünür içerik üretmez;
+        # bu provider erişilebilir olsa bile yanlış negatif verirdi. Demo agent'ın
+        # reasoning ayarı burada değiştirilmez, yalnız bu salt-okunur ping kısa ve
+        # deterministik tutulur.
         client = OpenAICompatClient(base_url=settings.llm_base_url, api_key=settings.llm_api_key, model=settings.llm_model,
-                                    disable_thinking=settings.disable_thinking, timeout=30.0)
-        r = client.chat([ChatMessage(role="user", content="Yalnız 'hazır' yaz.")], max_tokens=5)
-        return Check("MIA canlı", bool(r.content), f"cevap: {r.content.strip()[:20]!r}")
+                                    disable_thinking=True, timeout=30.0)
+        r = client.chat([ChatMessage(role="user", content="Yalnız 'hazır' yaz.")], max_tokens=32)
+        detail = f"cevap: {r.content.strip()[:20]!r} · finish={r.finish_reason or '—'}"
+        return Check("MIA canlı", bool(r.content or r.tool_calls), detail)
     except Exception as exc:  # noqa: BLE001
         return Check("MIA canlı", False, f"{type(exc).__name__}: {str(exc)[:120]}")
 

@@ -9,8 +9,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from kkb_agent.core.errors import NOT_RETRYABLE, ToolError  # noqa: E402
@@ -59,17 +57,28 @@ def test_not_retryable_kumesi_beklendigi_gibi() -> None:
     değiştirmez; alternatif kaynak ayrı bir çağrıdır ve kararı harness verir.
     ADR-0031 GOLD_REFUSED ekledi — kural katalogda yazılı; aynı çağrıyı tekrarlamak
     kuralı değiştirmez, kullanıcıya sebebi söylemek gerekir.
+    ADR-0096 web araştırma bütçesi ve aynı sorgu tekrarları ekledi — tur sınırını
+    veya yinelenen sorguyu tekrar çağırmak kanıtı değiştirmez.
+    ADR-0100 katalog keşif bütçesi de aynı turda tekrar aramayla aşılamaz.
     """
     assert NOT_RETRYABLE == {
         "OUT_OF_COVERAGE", "UNSAFE_SQL",
         "NEEDS_CREDENTIAL", "ACCESS_BLOCKED", "SOURCE_NOT_FOUND",
         "GOLD_REFUSED", "INTENT_REQUIRED",
+        # Web fetch reached the source but exceeded the safe byte budget; same URL/budget cannot recover.
+        "CONTENT_TOO_LARGE",
+        # Same document bytes and extraction settings cannot recover from a parser/OCR failure.
+        "DOCUMENT_EXTRACTION_FAILED",
         # Büşra'nın ilgi kapısı (V3 §3.9, 14 Eyl): aynı dosya aynı soruyla yine ilgisiz; onay ayrı çağrıdır.
         "FILE_IRRELEVANT",
         # K02-T09 (A24): bayat Gold tablosunu tekrar sorgulamak eski sonucu verir; yeniden hesaplama ayrı çağrıdır.
         "GOLD_STALE",
         # K02-T06 (A12): aynı düşük kaliteli görüntü yine aynı kalitede okunur.
         "LOW_QUALITY_SOURCE",
+        # ADR-0096/0100: tur içi arama bütçeleri aynı aracı tekrar çağırarak aşılamaz.
+        "WEB_RESEARCH_BUDGET", "CATALOG_SEARCH_BUDGET",
+        # ADR-0096: aynı sorgu normalize edilerek yakalanır; tekrar arama yeni kanıt üretmez.
+        "WEB_RESEARCH_DUPLICATE_QUERY",
     }
     # UNKNOWN_TOOL tekrar denenebilir: ad uyduran model aday listesiyle düzeltir (ADR-0036).
 

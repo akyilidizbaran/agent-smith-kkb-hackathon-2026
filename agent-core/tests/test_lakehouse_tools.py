@@ -138,6 +138,23 @@ def test_donem_filtresi_varsa_uyarmaz() -> None:
     assert res.ok and "dönem filtresi yok" not in res.content
 
 
+def test_ic_ice_anchor_yillari_dis_pencere_filtresine_eklenmez() -> None:
+    class SahteRegistry:
+        active_question = ("2021-01 ile 2025-12 arasındaki 60 aylık dönemde "
+                           "2022-2023 alt aralığını içeren verileri getir")
+
+    df = pd.DataFrame({
+        "donem": pd.date_range("2021-01-31", periods=60, freq="ME"),
+        "deger": range(60),
+    })
+    tool = LakehouseQueryTool(StubLakehouse(df), AnalysisWorkspace(), SahteRegistry())
+    res = tool.validate_and_run({
+        "sql": "SELECT donem, deger FROM test_tablo WHERE EXTRACT(year FROM donem) BETWEEN 2021 AND 2025",
+        "purpose": "60 aylık dış pencere",
+    })
+    assert res.ok and (res.error is None or res.error.error_code != "MISSING_PERIOD_FILTER")
+
+
 def test_sonucta_birimler_bildirilir() -> None:
     """Model birim çevirisi yapmasın diye birim etiketi sonuca eklenir."""
     df = pd.DataFrame({"donem": pd.to_datetime(["2025-01-01"]), "deger": [42.0]})
@@ -156,6 +173,98 @@ def test_basarili_sorgu_analiz_tablosunu_kurar() -> None:
          "as_active_table": True}
     )
     assert ws.has_table and len(ws.table) == 1
+
+
+def test_aylik_pencere_yillik_anchor_satirlarina_indirgenemez() -> None:
+    """60 aylık istek, yalnızca 2022 ve 2023 Aralık satırlarını kabul etmez."""
+
+    class SahteRegistry:
+        active_question = (
+            "Türkiye ulusal örnek 60 aylık penceresinde kredi ve kart serilerini getir "
+            "[Otomatik dönem sınırı: 2021-04 ile 2026-03 arasındaki 60 aylık pencereyi kullan]"
+        )
+
+    df = pd.DataFrame({
+        "period_end": pd.to_datetime(["2022-12-31", "2023-12-31"]),
+        "ihtiyac": [674.803, 983.284],
+        "kart": [452.478, 1185.215],
+    })
+    ws = AnalysisWorkspace()
+    tool = LakehouseQueryTool(StubLakehouse(df), ws, SahteRegistry())
+    result = tool.validate_and_run({
+        "sql": ("SELECT period_end, ihtiyac, kart FROM test_tablo "
+                "WHERE period_end BETWEEN '2021-04-01' AND '2026-03-31'"),
+        "purpose": "60 aylık BDDK aylık sonuç",
+    })
+
+    assert not result.ok
+    assert result.error is not None
+    assert result.error.error_code == "PERIOD_GRAIN_MISMATCH"
+    assert result.error.is_retryable
+    assert not ws.has_table
+
+
+def test_aylik_pencere_tam_ay_sayisini_kabul_eder() -> None:
+    class SahteRegistry:
+        active_question = (
+            "Örnek 60 aylık ulusal penceredeki verileri getir "
+            "[Otomatik dönem sınırı: 2021-04 ile 2026-03 arasındaki 60 aylık pencereyi kullan]"
+        )
+
+    dates = pd.date_range("2021-04-30", periods=60, freq="ME")
+    df = pd.DataFrame({"period_end": dates, "deger": range(60)})
+    tool = LakehouseQueryTool(StubLakehouse(df), AnalysisWorkspace(), SahteRegistry())
+    result = tool.validate_and_run({
+        "sql": ("SELECT period_end, deger FROM test_tablo "
+                "WHERE period_end BETWEEN '2021-04-01' AND '2026-03-31'"),
+        "purpose": "60 aylık sonuç",
+    })
+
+    assert result.ok
+    assert result.error is None
+
+
+def test_compact_ay_araligi_disina_tasan_sonuc_reddedilir() -> None:
+    class SahteRegistry:
+        active_question = "Tüm serileri 202301–202412 döneminde aylık bazda aynı eksende hizala"
+
+    dates = pd.date_range("2023-01-31", periods=24, freq="ME")
+    # One extra month makes the result violate the explicit compact range.
+    dates = dates.append(pd.DatetimeIndex([pd.Timestamp("2025-01-31")]))
+    df = pd.DataFrame({"period_end": dates, "deger": range(len(dates))})
+    tool = LakehouseQueryTool(StubLakehouse(df), AnalysisWorkspace(), SahteRegistry())
+    result = tool.validate_and_run({
+        "sql": ("SELECT period_end, deger FROM test_tablo "
+                "WHERE period_end BETWEEN '2023-01-01' AND '2024-12-31'"),
+        "purpose": "2023-01–2024-12 aylık sonuç",
+    })
+
+    assert not result.ok
+    assert result.error is not None and result.error.error_code == "PERIOD_GRAIN_MISMATCH"
+    assert "pencere dışı" in result.content
+
+
+def test_aylik_pencere_60_sayiya_ulasip_ay_atlarsa_reddedilir() -> None:
+    class SahteRegistry:
+        active_question = (
+            "2021-01 ile 2025-12 arasındaki 60 aylık dönemde verileri getir "
+            "[Otomatik dönem sınırı: 2021-01 ile 2025-12 arasındaki 60 aylık pencereyi kullan]"
+        )
+
+    # 60 satır var, ancak bir ay eksik ve başka bir ay iki kez tekrarlanıyor.
+    dates = list(pd.date_range("2021-01-31", periods=59, freq="ME"))
+    dates.append(pd.Timestamp("2021-01-31"))
+    df = pd.DataFrame({"period_end": dates, "deger": range(60)})
+    tool = LakehouseQueryTool(StubLakehouse(df), AnalysisWorkspace(), SahteRegistry())
+    result = tool.validate_and_run({
+        "sql": ("SELECT period_end, deger FROM test_tablo "
+                "WHERE period_end BETWEEN '2021-01-01' AND '2025-12-31'"),
+        "purpose": "eksik aylı sonuç",
+    })
+
+    assert not result.ok
+    assert result.error is not None and result.error.error_code == "PERIOD_GRAIN_MISMATCH"
+    assert "eksik" in result.content
 
 
 def _ay_araci(question: str) -> LakehouseQueryTool:

@@ -97,7 +97,7 @@ class BddkFinTurkParser:
         warnings: list[str] = []
 
         column_names = self._column_names(asset, payload)
-        row = self._single_row(asset, payload, column_names)
+        rows = self._rows(asset, payload, column_names)
         measure_indexes = [
             index
             for index, name in enumerate(column_names)
@@ -111,39 +111,52 @@ class BddkFinTurkParser:
         positions = {name: index for index, name in enumerate(column_names)}
         self._check_display_default(payload, measure_indexes, warnings)
 
-        sehir = self._cell_at(row, positions.get("Sehir"))
-        grup = self._cell_at(row, positions.get("Grup"))
-        year_raw = self._cell_at(row, positions.get("Yil"))
-        month_raw = self._cell_at(row, positions.get("Ay"))
-
         requested_sehir = asset.metadata.get("requested_sehir")
-        if requested_sehir and sehir and str(requested_sehir).strip().upper() != str(sehir).strip().upper():
-            raise self._error(
-                asset,
-                "SCHEMA_MISMATCH",
-                f"requested sehir {requested_sehir!r} does not match response Sehir {sehir!r}",
-            )
-
         records: list[dict[str, Any]] = []
-        for index in measure_indexes:
-            column_name = column_names[index]
-            records.append(
-                {
-                    "source_id": asset.source_id,
-                    "dataset_id": asset.dataset_id,
-                    "series_id": f"{asset.source_id}:{self._slug(str(sehir))}_{self._slug(column_name)}",
-                    "measure_column": column_name,
-                    "measure_label": column_name,
-                    "entity_label": sehir,
-                    "party_label": grup,
-                    "year_raw": year_raw,
-                    "month_raw": month_raw,
-                    "value_raw": row[index],
-                    "artifact_sha256": asset.artifact_sha256,
-                    "fetched_at": asset.fetched_at,
-                    "locator": asset.locator,
-                }
-            )
+        bulk = str(requested_sehir or "").strip().upper() == "HEPSİ"
+        for row_number, row in enumerate(rows):
+            sehir = self._cell_at(row, positions.get("Sehir"))
+            grup = self._cell_at(row, positions.get("Grup"))
+            year_raw = self._cell_at(row, positions.get("Yil"))
+            month_raw = self._cell_at(row, positions.get("Ay"))
+            if requested_sehir and sehir:
+                requested = str(requested_sehir).strip().upper()
+                actual = str(sehir).strip().upper()
+                # ``HEPSİ`` is the endpoint's all-provinces mode.  Tables 1–4
+                # include an extra ``YURT DIŞI`` row in that mode; it is outside
+                # this project's 81-province scope and is deliberately dropped.
+                if bulk:
+                    if actual == "YURT DIŞI":
+                        continue
+                elif requested != actual:
+                    raise self._error(
+                        asset,
+                        "SCHEMA_MISMATCH",
+                        f"requested sehir {requested_sehir!r} does not match response Sehir {sehir!r}",
+                    )
+
+            for index in measure_indexes:
+                column_name = column_names[index]
+                records.append(
+                    {
+                        "source_id": asset.source_id,
+                        "dataset_id": asset.dataset_id,
+                        "series_id": f"{asset.source_id}:{self._slug(str(sehir))}_{self._slug(column_name)}",
+                        "measure_column": column_name,
+                        "measure_label": column_name,
+                        "entity_label": sehir,
+                        "party_label": grup,
+                        "year_raw": year_raw,
+                        "month_raw": month_raw,
+                        "value_raw": row[index],
+                        "artifact_sha256": asset.artifact_sha256,
+                        "fetched_at": asset.fetched_at,
+                        "locator": asset.locator,
+                    }
+                )
+
+        if not records:
+            raise self._error(asset, "EMPTY_DATASET", "BDDK FinTürk response contains no in-scope rows")
 
         # ``dtype=object`` keeps a source ``null`` as ``None`` rather than ``NaN`` and keeps
         # raw values exactly as BDDK returned them.
@@ -222,14 +235,14 @@ class BddkFinTurkParser:
             names.append(str(model["name"]))
         return names
 
-    def _single_row(
+    def _rows(
         self, asset: FetchedAsset, payload: dict[str, Any], column_names: list[str]
-    ) -> list[Any]:
-        """Return the one data row this endpoint's (sehir, donem, tabloNo) triple addresses.
+    ) -> list[list[Any]]:
+        """Return response rows, preserving single-city strictness and all-city mode.
 
-        Unlike the monthly/weekly endpoints, a FinTürk request maps to exactly one row (one
-        city, one period). More or fewer than one row is a schema surprise, not a windowing
-        question — this parser does not aggregate or pick a row.
+        A request for one city must still contain exactly one row.  The source also supports
+        the UI's ``HEPSİ`` selection; in that mode one response contains one row per province
+        (and, for some tables, an extra ``YURT DIŞI`` row), which the caller handles explicitly.
         """
 
         data = payload.get("data")
@@ -244,7 +257,8 @@ class BddkFinTurkParser:
             )
         if not rows:
             raise self._error(asset, "EMPTY_DATASET", "BDDK FinTürk response contains no rows")
-        if len(rows) > 1:
+        requested_sehir = str(asset.metadata.get("requested_sehir", "")).strip().upper()
+        if len(rows) > 1 and requested_sehir != "HEPSİ":
             raise self._error(
                 asset,
                 "SCHEMA_MISMATCH",
@@ -252,18 +266,19 @@ class BddkFinTurkParser:
                 "for a single (sehir, donem, tabloNo) request",
             )
 
-        row_obj = rows[0]
-        if not isinstance(row_obj, dict) or not isinstance(row_obj.get("cell"), list):
-            raise self._error(asset, "SCHEMA_MISMATCH", "BDDK FinTürk row 0 has no 'cell' array")
-        cells = row_obj["cell"]
-        if len(cells) != len(column_names):
-            raise self._error(
-                asset,
-                "SCHEMA_MISMATCH",
-                f"BDDK FinTürk row has {len(cells)} cells but {len(column_names)} columns "
-                "are declared",
-            )
-        return cells
+        cells_rows: list[list[Any]] = []
+        for index, row_obj in enumerate(rows):
+            if not isinstance(row_obj, dict) or not isinstance(row_obj.get("cell"), list):
+                raise self._error(asset, "SCHEMA_MISMATCH", f"BDDK FinTürk row {index} has no 'cell' array")
+            cells = row_obj["cell"]
+            if len(cells) != len(column_names):
+                raise self._error(
+                    asset,
+                    "SCHEMA_MISMATCH",
+                    f"BDDK FinTürk row {index} has {len(cells)} cells but {len(column_names)} columns are declared",
+                )
+            cells_rows.append(cells)
+        return cells_rows
 
     @staticmethod
     def _cell_at(cells: list[Any], index: int | None) -> Any:

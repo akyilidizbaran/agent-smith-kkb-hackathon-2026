@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from kkb_agent.analytics.methods import (  # noqa: E402
     binary_segmentation, choose_basis, cross_correlation, detect_anomalies, detect_change_points,
-    granger_test, lead_lag, pct_changes,
+    detect_seasonal_anomalies, granger_test, lead_lag, pct_changes,
 )
 
 
@@ -92,6 +92,29 @@ def test_iqr_sifirsa_zskoruna_duser() -> None:
     x[24:] = x[24:] * 1.15
     r = detect_anomalies(x)
     assert r.method.startswith("zscore") and r.flags[24] and r.count == 1
+
+
+def test_seasonal_mad_ayni_takvim_ayini_yillar_arasinda_karsilastirir() -> None:
+    months = np.tile(np.arange(1, 13), 5)
+    values = np.tile(np.arange(1, 13, dtype=float) * 10, 5)
+    january_indices = np.flatnonzero(months == 1)
+    values[january_indices[-1]] = 110.0
+
+    result = detect_seasonal_anomalies(values, months, threshold=3, min_periods=4)
+
+    assert result.method == "seasonal_mad" and result.basis == "level"
+    assert result.flags[january_indices[-1]]
+    assert not result.flags[january_indices[0]]
+    assert result.count == 1
+    assert not np.isnan(result.scores[0])
+
+
+def test_seasonal_mad_yetersiz_takvim_ayi_gozlemlerini_puanlamaz() -> None:
+    result = detect_seasonal_anomalies(
+        np.array([10.0, 11.0, 12.0, 40.0]), np.array([1, 2, 3, 4]), min_periods=4,
+    )
+    assert np.isnan(result.scores).all()
+    assert not result.flags.any()
 
 
 def test_a33_trendli_seride_duzey_sicramasi_yuzde_tabaninda_dogru_ayda() -> None:
