@@ -48,7 +48,7 @@ from .period_intent import choose_containing_window, parse_period_intent
 from .table_summary import deterministic_table_summary
 from .narration_facts import NarrationFacts, build_narration_facts
 from .token_budget import TokenBudgetPolicy
-from .web_routing import catalog_ids_in_sql, public_fallback_plan
+from .web_routing import catalog_ids_in_sql, general_public_fallback_plan, public_fallback_plan, web_requested
 from .workspace_fastpath import (
     execute_verified_workspace_transform,
     inspect_existing_verified_transform,
@@ -2004,7 +2004,15 @@ class AnalyticsAgent:
             if dataset_ids:
                 provenance = SimpleNamespace(dataset_ids=dataset_ids)
         search_terms = str((call.arguments or {}).get("query") or "") if call.name == "lakehouse_search" else None
-        return public_fallback_plan(question, provenance, lakehouse, search_terms=search_terms)
+        plan = public_fallback_plan(question, provenance, lakehouse, search_terms=search_terms)
+        if plan is not None:
+            return plan
+        # Kullanıcı web'i AÇIKÇA istediyse (internet/web/araştır/URL) ve yerel yokluk doğrulandıysa,
+        # yapılandırılmış resmi kaynak pini olmasa da genel bir web aramasını zorla (Option A).
+        # web_requested kapısı out-of-scope reddini korur: web istenmeyen soruda bu yol hiç açılmaz.
+        if web_requested(question):
+            return general_public_fallback_plan(question)
+        return None
 
     def _ask(self, question: str) -> AgentAnswer:
         planning_question = self._retry_source_question or self._period_resolved_question or question
@@ -2358,8 +2366,11 @@ class AnalyticsAgent:
                 # result is a valid answer to a transformation follow-up even
                 # though it does not fetch a new source.
                 prior_query_context = self._has_confirmed_follow_up_context()
+                # Başarılı web_search harici bağlam getirir (ADR-0075: veri değil, bağlam); eski tabloyu
+                # anlatmak değildir, o yüzden stale-tablo reddinden muaf (Option A: açık web isteği yolu).
                 fresh_or_active_action = any(
-                    s.ok and s.tool_name in (self.FRESH_DATA_TOOLS | self.ACTIVE_TABLE_ACTION_TOOLS)
+                    s.ok and (s.tool_name in (self.FRESH_DATA_TOOLS | self.ACTIVE_TABLE_ACTION_TOOLS)
+                              or s.tool_name == "web_search")
                     for s in steps
                 )
                 if (self.workspace.has_table and prior_query_context
@@ -2702,16 +2713,29 @@ class AnalyticsAgent:
                 )
                 self._usage["verified_public_fallbacks"] = self._usage.get("verified_public_fallbacks", 0) + 1
                 plan_query = str(public_fallback_pending.get("query") or "")
-                plan_domains = ", ".join(public_fallback_pending.get("include_domains") or [])
+                plan_domain_list = public_fallback_pending.get("include_domains") or []
+                plan_domains = ", ".join(plan_domain_list)
+                if plan_domain_list:
+                    # Yapılandırılmış resmi kaynak pini var: aramayı o alan adlarıyla sınırla.
+                    scope_line = (
+                        f"Tam olarak şu arama konusunu ve alan adı sınırını kullan: query={plan_query!r}; "
+                        f"include_domains=[{plan_domains}]. Uygun resmi kaydı web_url ile aç; başka domaine kendiliğinden geçme."
+                    )
+                else:
+                    # Genel web araması (Option A): domain pini yok, ama güvenilir/resmi kaynakları tercih et.
+                    scope_line = (
+                        f"Şu arama konusunu kullan: query={plan_query!r} (domain sınırı yok). Güvenilir ve mümkünse resmi "
+                        "kaynakları tercih et; açtığın sayfayı web_url ile oku."
+                    )
                 messages.append(ChatMessage(
                     role="user",
                     content=(
                         "Harness, yerel veri havuzunda bu isteği karşılayan verinin bulunmadığını yetkili araç çıktısıyla "
-                        "doğruladı. Yalnızca bir kez web_search kullanabilirsin. Tam olarak şu arama konusunu ve alan adı "
-                        f"sınırını kullan: query={plan_query!r}; include_domains=[{plan_domains}]. "
-                        "Arama parçacıkları sayısal kanıt değildir; uygun resmi kaydı web_url ile aç, tabloyu yükle ve "
-                        "yalnız okunan tablodaki veriyi kullan. Sonuç yoksa ya da kaynak erişimi engelliyse bunu açıkça belirt; "
-                        "başka domaine veya kaynağa kendiliğinden geçme."
+                        "doğruladı. Kullanıcı web'i açıkça istedi. Yalnızca bir kez web_search kullanabilirsin. "
+                        + scope_line +
+                        " Arama parçacıkları sayısal kanıt değildir; yalnız okunan sayfadaki/tablodaki veriyi kullan. "
+                        "Cevabında bu bilginin yerel veri havuzunda bulunmadığını, bu yüzden internetten araştırdığını açıkça belirt. "
+                        "Sonuç yoksa ya da kaynak erişimi engelliyse bunu açıkça söyle; sayı uydurma."
                     ),
                 ))
                 steps.append(AgentStep(
@@ -2773,6 +2797,7 @@ class AnalyticsAgent:
                     and self._has_confirmed_follow_up_context()
                     and not any(s.ok and s.tool_name in self.FRESH_DATA_TOOLS for s in steps)
                     and not any(s.ok and s.tool_name in self.ACTIVE_TABLE_ACTION_TOOLS for s in steps)
+                    and not any(s.ok and s.tool_name == "web_search" for s in steps)  # web bağlamı eski tablo değildir
                 )
                 if stale_follow_up:
                     text = (
