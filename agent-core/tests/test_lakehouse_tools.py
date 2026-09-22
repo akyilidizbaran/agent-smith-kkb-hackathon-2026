@@ -224,6 +224,63 @@ def test_aylik_pencere_tam_ay_sayisini_kabul_eder() -> None:
     assert result.error is None
 
 
+def test_secili_seri_pencereyi_kapsamiyorsa_sql_calismadan_reddedilir() -> None:
+    """Kısa türetilmiş kart serisi, tam kapsama sahip doğrulanmış parent'ın yerine geçemez."""
+    from types import SimpleNamespace
+
+    def spec(dataset_id: str, name: str, start: date, *, confidence: str | None) -> DatasetSpec:
+        return DatasetSpec(
+            dataset_id=dataset_id,
+            name=name,
+            description="BDDK aylık ulusal toplam seri",
+            source="bddk_monthly",
+            frequency=Frequency.MONTHLY,
+            time_column="period_end",
+            grain=["period_end"],
+            columns=[
+                ColumnSpec(name="period_end", role=ColumnRole.TIME, dtype="DATE", description="dönem"),
+                ColumnSpec(name="value", role=ColumnRole.MEASURE, dtype="DOUBLE", description="bakiye", unit="milyon TL"),
+            ],
+            coverage=Coverage(start=start, end=date(2026, 6, 30)),
+            semantic_confidence=confidence,
+        )
+
+    need = spec("bddk_monthly:need", "Tüketici Kredileri - İhtiyaç, Toplam (Sektör)", date(2016, 1, 31), confidence="verified")
+    bad_card = spec("bddk_monthly:bad_card", "Kredi Kartları (Krediler, Sektör)", date(2022, 1, 31), confidence="derived")
+    good_card = spec("bddk_monthly:good_card", "Bireysel Kredi Kartları, Toplam (Sektör)", date(2016, 1, 31), confidence="verified")
+
+    class Lake:
+        def list_datasets(self):
+            return [need, bad_card, good_card]
+
+        def get_dataset(self, dataset_id: str):
+            return next(item for item in self.list_datasets() if item.dataset_id == dataset_id)
+
+        def execute_sql(self, sql: str, *, max_rows: int = 10_000):  # pragma: no cover - guard must stop before this
+            raise AssertionError("kapsam hatasında SQL çalıştırılmamalı")
+
+    registry = SimpleNamespace(
+        active_question=(
+            "2022-2023 yıllarını kapsayan 60 aylık dönemde Türkiye'deki ihtiyaç kredisi "
+            "ve bireysel kredi kartı verilerini BDDK verilerinden getir. "
+            "[Otomatik dönem sınırı: 2021-01 ile 2025-12 arasındaki 60 aylık pencereyi kullan]"
+        )
+    )
+    workspace = AnalysisWorkspace()
+    tool = LakehouseQueryTool(Lake(), workspace, registry)
+    result = tool.validate_and_run({
+        "sql": 'SELECT "period_end", "value" FROM "bddk_monthly:need" JOIN "bddk_monthly:bad_card" USING ("period_end")',
+        "purpose": "60 aylık BDDK sonuç",
+    })
+
+    assert not result.ok
+    assert result.error is not None
+    assert result.error.error_code == "SERIES_COVERAGE_MISMATCH"
+    assert result.error.is_retryable
+    assert "bddk_monthly:good_card" in result.error.candidates
+    assert not workspace.has_table
+
+
 def test_compact_ay_araligi_disina_tasan_sonuc_reddedilir() -> None:
     class SahteRegistry:
         active_question = "Tüm serileri 202301–202412 döneminde aylık bazda aynı eksende hizala"

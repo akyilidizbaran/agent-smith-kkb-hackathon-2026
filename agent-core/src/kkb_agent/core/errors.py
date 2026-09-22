@@ -39,6 +39,10 @@ ErrorCode = Literal[
     # Aylık pencere sorusunda model sonucu anchor yıllarına indirgedi; çıktı
     # beklenen farklı ay sayısını taşımadığında araç sonucu kabul edilmez.
     "PERIOD_GRAIN_MISMATCH",
+    # Seçilen seri istenen pencereyi kapsamıyor ya da aynı kavram için daha
+    # güçlü doğrulanmış alternatif varken türetilmiş seriye düşülmüş.
+    "SERIES_COVERAGE_MISMATCH",
+    "SERIES_SEMANTIC_MISMATCH",
     # Gold katmanının semantik reddi: katalog kuralı bu dönüşümü güvenli bulmuyor
     # (stok seride decompose, doğrulanmamış semantik, üst örnekleme...). Kural
     # kataloğun, seçim modelin değil (ADR-0031).

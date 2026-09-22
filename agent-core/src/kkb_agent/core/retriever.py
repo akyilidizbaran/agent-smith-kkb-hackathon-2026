@@ -38,6 +38,10 @@ DEFAULT_SMALL_MAX = 60        # bu sayıya kadar katalog kart olarak sığar (�
 DEFAULT_HYBRID_MIN = 5000     # bu sayıdan sonra BM25 tek başına yetmez (ölçülecek)
 CANDIDATE_MULTIPLIER = 50     # yüz filtrelerinden önce aday havuzu; il serileri filtrelenmeden önce kaybolmasın
 _QUERY_SPLIT = re.compile(r"\b(?:ve|ile|veya)\b|[,;]", re.IGNORECASE)
+_PHRASE_CONTEXT_TERMS = frozenset({
+    "aralik", "ay", "aylik", "donem", "donemde", "getir", "getirin", "kapsayan",
+    "kapsam", "pencere", "veri", "veriler", "yil", "yillar", "yillarini",
+})
 _BREAKDOWN_INTENT = re.compile(
     r"\b(?:alt\s+kalem(?:ler)?(?:i|ı)?|kırılım(?:lar)?(?:ı|i)?|kirilim(?:lar)?(?:i|ı)?|detay(?:lar)?(?:ı|i)?|"
     r"dağılım(?:ı|i)?|dagilim(?:i)?|bileşen(?:ler)?|bilesen(?:ler)?|"
@@ -467,6 +471,20 @@ class CatalogRetriever:
         variants = [query]
         variants.extend(part.strip() for part in _QUERY_SPLIT.split(query)
                         if len(part.strip().split()) >= 2)
+        # Multi-concept questions are common in a generic lakehouse.  The full
+        # sentence can let one concept consume the lexical pool, especially
+        # when the other concept has a verified parent and many provincial
+        # children.  Add short noun-phrase windows as recall probes; the final
+        # result still passes through the same facets and top-k cut.
+        topic_terms = [
+            term for term in _query_topic_terms(query, facets)
+            if term not in _PHRASE_CONTEXT_TERMS
+        ]
+        for width in (2, 3):
+            variants.extend(
+                " ".join(topic_terms[index:index + width])
+                for index in range(len(topic_terms) - width + 1)
+            )
         lexical_by_id: dict[str, Candidate] = {}
         for variant in dict.fromkeys(variants):
             # Apply the user's hard facets before taking the clause pool. A

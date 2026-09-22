@@ -26,6 +26,7 @@ from ..core.sql_identifiers import quote_known_identifiers
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
 from ..core.period_intent import parse_period_intent
+from ..core.lexical import tokenize
 
 
 class SearchParams(BaseModel):
@@ -323,6 +324,9 @@ class LakehouseQueryTool(Tool):
         uyusmazlik = self._boyut_uyusmazligi(params.sql)
         if uyusmazlik:
             return uyusmazlik
+        uyusmazlik = self._seri_secim_uyusmazligi(params.sql)
+        if uyusmazlik:
+            return uyusmazlik
         eksik_donem = self._atlanmis_donem_filtresi(params.sql)
         if eksik_donem:
             yil = eksik_donem.split(",")[0].strip()
@@ -334,6 +338,158 @@ class LakehouseQueryTool(Tool):
                 layer="policy",
             )
         return None
+
+    @staticmethod
+    def _month_key(value: Any) -> tuple[int, int]:
+        return (value.year, value.month)
+
+    def _seri_secim_uyusmazligi(self, sql: str) -> ToolError | None:
+        """Validate selected series before SQL can install an active table.
+
+        A catalog hit is not automatically a valid input for the requested
+        window.  In particular, broad derived series can have a shorter
+        coverage (or a different concept) than a verified parent series.  The
+        check is intentionally metadata based and source agnostic: it applies
+        to BDDK, FinTürk, EVDS and future adapters alike.
+        """
+        question = getattr(self._registry, "active_question", "") or ""
+        if not question:
+            return None
+        intent = parse_period_intent(question)
+        if not (intent.outer_bounds_explicit and intent.outer_start and intent.outer_end):
+            # Without a resolved outer window there is no deterministic period
+            # contract to enforce.  Existing single-period queries keep their
+            # previous behaviour and the result-grain guard remains in place.
+            return None
+        try:
+            specs = list(self.lakehouse.list_datasets())
+        except Exception:  # noqa: BLE001 — a catalog outage must not break SQL execution
+            return None
+        used = [
+            spec for spec in specs
+            if re.search(rf"(?<![\w.]){re.escape(spec.dataset_id)}(?![\w])", sql or "", re.I)
+        ]
+        if not used:
+            return None
+        start = self._month_key(intent.outer_start)
+        end = self._month_key(intent.outer_end)
+        incomplete = [
+            spec for spec in used
+            if self._month_key(spec.coverage.start) > start
+            or self._month_key(spec.coverage.end) < end
+        ]
+        candidates = self._seri_alternatifleri(question, specs, used, start, end)
+        if incomplete:
+            details = "; ".join(
+                f"{spec.dataset_id} ({spec.coverage.start:%Y-%m}→{spec.coverage.end:%Y-%m})"
+                for spec in incomplete
+            )
+            return ToolError(
+                error_code="SERIES_COVERAGE_MISMATCH",
+                layer="policy",
+                retryable=True,
+                message=(
+                    f"Sorgudaki seri seçimi istenen {intent.outer_start:%Y-%m}→"
+                    f"{intent.outer_end:%Y-%m} aylık pencereyi kapsamıyor: {details}. "
+                    "Kapsamı kısa olan seri diğer serinin yerine kullanılamaz."
+                ),
+                hint=(
+                    "Kapsamı pencerenin tamamını karşılayan ve aynı kavramı doğrulanmış "
+                    "olarak gösteren adaylardan yeniden seç; sonra SQL'i tekrar çalıştır."
+                ),
+                candidates=candidates,
+            )
+
+        # Coverage is complete, but a derived broad concept may still hide a
+        # verified, more specific parent.  Only reject when the catalog offers
+        # a materially better verified alternative; this avoids turning an
+        # unknown/derived series into a blanket ban.
+        verified_alternatives = [
+            spec for spec in self._candidate_specs(question, specs, used, start, end)
+            if getattr(spec, "semantic_confidence", None) == "verified"
+        ]
+        used_scores = {spec.dataset_id: self._seri_eslesme_skoru(question, spec) for spec in used}
+        for spec in used:
+            if getattr(spec, "semantic_confidence", None) != "derived":
+                continue
+            selected_score = used_scores.get(spec.dataset_id, 0)
+            better = [
+                candidate for candidate in verified_alternatives
+                if self._seri_eslesme_skoru(question, candidate) >= selected_score + 2
+            ]
+            if better:
+                ranked = sorted(better, key=lambda item: (-self._seri_eslesme_skoru(question, item), item.dataset_id))
+                return ToolError(
+                    error_code="SERIES_SEMANTIC_MISMATCH",
+                    layer="policy",
+                    retryable=True,
+                    message=(
+                        f"Sorgu {spec.dataset_id} adlı doğrulanmamış/türetilmiş seriyi seçiyor; "
+                        "katalog aynı kavram için daha güçlü doğrulanmış bir seri sunuyor."
+                    ),
+                    hint="Doğrulanmış parent/toplam seriyi seç ve aynı SQL'i onun kimliğiyle tekrar çalıştır.",
+                    candidates=[item.dataset_id for item in ranked[:5]],
+                )
+        return None
+
+    def _candidate_specs(self, question: str, specs: list[Any], used: list[Any], start: tuple[int, int], end: tuple[int, int]) -> list[Any]:
+        used_ids = {spec.dataset_id for spec in used}
+        facets = extract_facets(question)
+        wanted_frequency = facets.frequency
+        if wanted_frequency is None:
+            used_frequencies = {
+                getattr(getattr(spec, "frequency", None), "value", getattr(spec, "frequency", None))
+                for spec in used
+            }
+            if len(used_frequencies) == 1:
+                wanted_frequency = next(iter(used_frequencies))
+        out = []
+        for spec in specs:
+            if spec.dataset_id in used_ids:
+                continue
+            frequency = getattr(getattr(spec, "frequency", None), "value", getattr(spec, "frequency", None))
+            if wanted_frequency and frequency != wanted_frequency:
+                continue
+            if self._month_key(spec.coverage.start) > start or self._month_key(spec.coverage.end) < end:
+                continue
+            if facets.sources and not source_matches(str(getattr(spec, "source", "")), facets.sources):
+                continue
+            province = province_of(f"{spec.dataset_id} {spec.name}")
+            if facets.national and province is not None:
+                continue
+            if facets.provinces and province not in facets.provinces:
+                continue
+            out.append(spec)
+        return out
+
+    def _seri_alternatifleri(self, question: str, specs: list[Any], used: list[Any], start: tuple[int, int], end: tuple[int, int]) -> list[str]:
+        candidates = self._candidate_specs(question, specs, used, start, end)
+        ranked = sorted(
+            candidates,
+            key=lambda item: (
+                0 if getattr(item, "semantic_confidence", None) == "verified" else 1,
+                -self._seri_eslesme_skoru(question, item),
+                item.dataset_id,
+            ),
+        )
+        return [item.dataset_id for item in ranked[:8]]
+
+    @staticmethod
+    def _seri_eslesme_skoru(question: str, spec: Any) -> int:
+        """Small deterministic lexical score used only to rank repair candidates."""
+        q = set(tokenize(question, prefixes=False))
+        text = " ".join(
+            [
+                str(getattr(spec, "name", "")),
+                str(getattr(spec, "description", "")),
+                " ".join(getattr(spec, "tags", []) or []),
+                " ".join(alias for column in getattr(spec, "columns", []) for alias in getattr(column, "aliases", []) or []),
+            ]
+        )
+        tokens = set(tokenize(text, prefixes=False))
+        # Concept words are worth more than generic source/frequency terms.
+        generic = {"bddk", "aylik", "ay", "donem", "sonu", "toplam", "sektor", "veri", "kredi"}
+        return sum(2 if token not in generic else 1 for token in q.intersection(tokens))
 
     def _boyut_uyusmazligi(self, sql: str) -> ToolError | None:
         """Reject silent geography/source substitutions during recovery.

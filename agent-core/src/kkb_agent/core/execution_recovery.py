@@ -46,6 +46,8 @@ RECOVERABLE_CODES = frozenset({
     "GEOGRAPHY_MISMATCH",
     "SOURCE_MISMATCH",
     "PERIOD_GRAIN_MISMATCH",
+    "SERIES_COVERAGE_MISMATCH",
+    "SERIES_SEMANTIC_MISMATCH",
 })
 ACCESS_CODES = frozenset({"NEEDS_CREDENTIAL", "ACCESS_BLOCKED", "SOURCE_NOT_FOUND"})
 ABSENCE_CODES = frozenset({"OUT_OF_COVERAGE"})
@@ -75,6 +77,8 @@ def classify_error(error: ToolError) -> FailureClass:
     if code == "GOLD_REQUIRED":
         return "semantic_guard"
     if code == "PERIOD_GRAIN_MISMATCH":
+        return "semantic_guard"
+    if code in {"SERIES_COVERAGE_MISMATCH", "SERIES_SEMANTIC_MISMATCH"}:
         return "semantic_guard"
     if code == "JOIN_MISMATCH":
         return "join_alignment"

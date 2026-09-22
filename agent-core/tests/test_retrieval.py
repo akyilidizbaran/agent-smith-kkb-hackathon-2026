@@ -268,6 +268,21 @@ def test_bddk_turkiye_geneli_aylik_pencere_il_serilerini_eleme_ile_ayirir() -> N
     assert "bddk_finturk:ADANA_Ihtiyac" not in hits
 
 
+def test_coklu_kavram_baglacsiz_sorguda_kisa_ifadeleri_birleştirir() -> None:
+    """"ve" yazılmasa bile iki istenen kavram aynı aday havuzuna girmeli."""
+    catalog = [
+        _rec("bddk_monthly:1536_Toplam", "İhtiyaç Kredileri, Toplam (Sektör)", aliases=("ihtiyaç kredisi",)),
+        _rec("bddk_monthly:1539_Toplam", "Bireysel Kredi Kartları, Toplam (Sektör)", aliases=("bireysel kredi kartı",)),
+    ]
+    catalog.extend(
+        _rec(f"bddk_finturk:{index}_child", "İhtiyaç Kredileri, ADANA alt kırılım", source="bddk_finturk", province="Adana")
+        for index in range(30)
+    )
+    retriever = CatalogRetriever(catalog, policy=RetrievalPolicy(mode="bm25"))
+    hits = [hit.id for hit in retriever.search("aylık ihtiyaç kredisi bireysel kredi kartı BDDK", k=2)]
+    assert set(hits) == {"bddk_monthly:1536_Toplam", "bddk_monthly:1539_Toplam"}
+
+
 def test_politika_kademeleri() -> None:
     p = RetrievalPolicy()
     assert p.resolve(40, embedder_available=False) == "preload_all"

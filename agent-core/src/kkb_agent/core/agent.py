@@ -2674,6 +2674,7 @@ class AnalyticsAgent:
                     "SQL_FAILED", "SQL_SYNTAX_ERROR", "INVALID_ARGS", "GOLD_REQUIRED", "JOIN_MISMATCH",
                     "DATASET_NOT_FOUND", "TOOL_FAILED", "UNKNOWN_TOOL", "EMPTY_RESULT",
                     "GEOGRAPHY_MISMATCH", "SOURCE_MISMATCH", "PERIOD_GRAIN_MISMATCH",
+                    "SERIES_COVERAGE_MISMATCH", "SERIES_SEMANTIC_MISMATCH",
                     "CATALOG_SEARCH_BUDGET",
                 }
                 if (result.error is not None and public_fallback_pending is None and not recovery.pending_recovery
