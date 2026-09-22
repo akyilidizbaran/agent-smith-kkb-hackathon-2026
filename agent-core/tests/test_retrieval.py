@@ -408,3 +408,19 @@ def test_sayili_vade_frekans_yuzu_degildir_ve_embedding_dusunce_bm25_kalir() -> 
     r = CatalogRetriever(CATALOG, policy=RetrievalPolicy(mode="hybrid"), embedder=Broken())
     hits = [h.id for h in r.search("konut kredisi bakiyesi", k=3)]
     assert hits[0] == "bddk_monthly:1534_Toplam" and r.last_error and "uç kapalı" in r.last_error
+
+
+def test_acik_il_ulusal_yuzu_ezer_ulusal_soruda_il_serileri_geride_kalir() -> None:
+    """İnceleme (22 Eyl): 'Türkiye'de Ankara …' sorusunda `national` açık ili eziyordu; ulusal soruda il
+    serileri tamamen atılmak yerine geride sıralanır (eski davranış)."""
+    facets = extract_facets("Türkiye'de Ankara konut kredisi bakiyesi")
+    assert facets.provinces == ("Ankara",) and facets.national is False
+
+    r = CatalogRetriever(CATALOG, policy=RetrievalPolicy(mode="bm25"))
+    ankara = [h.id for h in r.search("Türkiye'de Ankara konut kredisi bakiyesi", k=4)]
+    assert ankara[0] == "bddk_finturk:ANKARA_KonutKredisi"
+    assert "bddk_finturk:IZMIR_KonutKredisi" not in ankara
+
+    national = [h.id for h in r.search("Türkiye geneli konut kredisi bakiyesi", k=8)]
+    assert national[0] == "bddk_monthly:1534_Toplam"
+    assert any(h.startswith("bddk_finturk") for h in national)
