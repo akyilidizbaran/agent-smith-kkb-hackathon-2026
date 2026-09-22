@@ -427,9 +427,11 @@ def test_narration_timeout_commits_verified_context_for_monthly_follow_up() -> N
     assert second.usage["calls"] == 0, "takip deterministik fast path ile tamamlanmalı"
     assert tool.calls == 1, "takip yeni katalog/sorgu çağrısı yapmamalı"
     assert second.steps[0].tool_name == "workspace_compute_column"
-    assert len(workspace.table) == 24
-    assert workspace.table.iloc[0]["need_change"] == 1
-    assert workspace.table.iloc[0]["card_change"] == 10
+    view = second.steps[0].result_data
+    assert len(view) == 24
+    assert view.iloc[0]["need_change"] == 1
+    assert view.iloc[0]["card_change"] == 10
+    assert len(workspace.table) == 60, "pencere görünümü aktif tablonun yerine geçmez"
 
 
 def test_web_narration_timeout_keeps_sources_and_does_not_attach_stale_table() -> None:
