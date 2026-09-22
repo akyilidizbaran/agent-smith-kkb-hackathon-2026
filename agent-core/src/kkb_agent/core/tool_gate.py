@@ -45,7 +45,9 @@ PREMISE = frozenset({"check_premise"})
 
 _CHART = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
 _ANALYTICS = re.compile(r"anomali|aykır|sapan|sapma|olağan ?dışı|sıra ?dışı|kırılma|rejim değişi|öncül|önden mi|korelasyon|granger|ilişki|mevsimsel|seasonal|\bmad\b|medyan mutlak", re.I)
-_WEB = re.compile(r"https?://|www\.|\.pdf\b|\.png\b|\.jpe?g\b|\.csv\b|\.xlsx?\b|sayfa|siteden|linkten|adres|internet|web|\barama\b|\bara\b|bul\b", re.I)
+# Dış-bağlam sinyalleri (dünya/küresel/uluslararası…) de web ailesini açar: yerel havuz Türkiye
+# bankacılık/EVDS verisi; bu ifadeler veri havuzunda karşılığı olmayan, web'den bulunabilir bilgiyi ister.
+_WEB = re.compile(r"https?://|www\.|\.pdf\b|\.png\b|\.jpe?g\b|\.csv\b|\.xlsx?\b|sayfa|siteden|linkten|adres|internet|web|\barama\b|\bara\b|bul\b|dünya|küresel|global|uluslararası|yurt ?dışı|yurtdışı|dış piyasa", re.I)
 _ARCHITECT = re.compile(r"taslak|onayl|kataloğa al|kataloga al|ekle\b|yükle|yukle|kaydet|ingest|terfi|yayınla", re.I)
 _WORKSPACE_HINT = re.compile(
     r"birleştir|birles|\bjoin\b|iki (?:ayrı )?tablo|sütun|kolon|tabloyu|tabloya|"
