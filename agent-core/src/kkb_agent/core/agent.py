@@ -833,6 +833,13 @@ class AnalyticsAgent:
             self.workspace.has_table and is_active_table_composition(question, self._follow_up_resolution)
         )
         self._attach_active_series_identities()
+        # Per-turn proof of an already-applied transform. It used to be reset
+        # only in `reset()`, so a previous turn's "dönüşüm" flag leaked into
+        # the next question and `_is_structured_transform_complete` could
+        # finish a new topic without any transformation tool having run.
+        self._verified_workspace_satisfaction = None
+        self._verified_reuse_snapshot = None
+        self._pre_satisfied_capabilities = set()
         if self._active_table_reuse_allowed:
             self._verified_workspace_satisfaction = inspect_existing_verified_transform(
                 question,

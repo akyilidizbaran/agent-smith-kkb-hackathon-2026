@@ -1016,3 +1016,35 @@ def test_bare_tool_name_answer_is_replaced_by_deterministic_summary() -> None:
     assert "60 satır" in answer.text
     assert answer.usage["empty_final_response_fallbacks"] == 1
     assert any("yalnız araç adı" in (step.thought or "") for step in answer.steps)
+
+
+def test_pre_satisfied_transform_flag_is_cleared_for_the_next_turn() -> None:
+    """İnceleme (22 Eyl): `_pre_satisfied_capabilities` yalnız reset()'te sıfırlanıyordu. İlk turda hızlı yol
+    'dönüşüm'ü ön-karşılanmış sayınca, yeni konudaki ikinci soru dönüşüm aracı çalışmadan
+    'dönüşüm uygulandı' teslimiyle bitebiliyordu."""
+    workspace, context, specs = _two_series_monthly_workspace()
+    _add_fixture_changes(workspace, context, specs)
+    registry = ToolRegistry()
+    registry.register(_WorkspaceQueryTool(workspace))
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[_call(2025, "q1")]),
+        LLMResponse(content="2025 için hastane başvuru oranı tabloda."),
+    ])
+    agent = AnalyticsAgent(llm, registry, workspace=workspace, max_steps=4)
+    agent._catalog_specs = lambda: specs
+    agent._follow_up_context = context
+
+    first = agent.ask("Bu aktif tablodaki aylık değişimleri hesapla.")
+    assert first.reused_verified_table and llm.calls == 0
+    assert "dönüşüm" in agent._pre_satisfied_capabilities
+
+    # "artışı" closes the plain delivery fast path; "oran" keeps the
+    # transformation gate in play, which is where the stale flag was read.
+    second = agent.ask("2025 yılı hastane başvuru oranındaki artışı getir.")
+
+    assert agent._pre_satisfied_capabilities == set()
+    assert agent._verified_reuse_snapshot is None
+    assert llm.calls == 2
+    assert second.text == "2025 için hastane başvuru oranı tabloda."
+    assert "dönüşüm" not in second.text
+    assert not any("model anlatım turu atlandı" in (step.thought or "") for step in second.steps)
