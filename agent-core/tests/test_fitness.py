@@ -142,3 +142,20 @@ def test_tipli_web_tablosu_da_imzalanir() -> None:
 def test_kredi_karti_sorusu_kredi_kavramini_gerektirmez(question: str) -> None:
     frame = _monthly("islem_tutari", [1] * 12)
     assert assess(question, signature_of(frame, "kredi_karti_islemleri.csv"), LEX).decision == "accept"
+
+
+def test_yinelenen_ve_sayisal_kolon_etiketi_kapiyi_dusurmez() -> None:
+    """Arkadaş bulgusu (22 Eyl): TCMB today.xml tablosunda yinelenen/float etiketler `frame[c]`'yi DataFrame yapıyor,
+    yıl taraması 'cannot assemble with duplicate keys' ile patlıyor, kapı sessizce atlanıyordu."""
+    frame = pd.DataFrame([[1.5, "x", "2025-09-22"], [2.5, "y", "2025-09-22"]], columns=[1.0, 1.0, "Tarih"])
+    sig = signature_of(frame, "today.xml")
+    assert sig.rows == 2 and sig.headers == ("1.0", "1.0_1", "Tarih")
+    assert sig.years == (2025, 2025)
+
+
+def test_dolar_alis_satis_sorusu_ingilizce_basliklarla_eslesir() -> None:
+    """Sözlük köprüsü (concepts.json): alış↔ForexBuying, satış↔ForexSelling, dolar↔USD; kod değil kelime hazinesi."""
+    frame = pd.DataFrame({"CurrencyCode": ["USD", "EUR"], "ForexBuying": ["41.2", "48.1"], "ForexSelling": ["41.3", "48.2"], "Tarih": ["2026-09-22", "2026-09-22"]})
+    f = assess("Bugün dolar alış ve satış kuru ne?", signature_of(frame, "today.xml"), LEX)
+    assert f.decision in ("accept", "partial"), (f.decision, f.reasons)
+    assert not any("aranan ölçüm" in r and "yok" in r for r in f.reasons), f.reasons

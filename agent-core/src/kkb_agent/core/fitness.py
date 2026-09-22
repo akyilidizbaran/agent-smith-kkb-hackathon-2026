@@ -253,6 +253,18 @@ def signature_of(frame: pd.DataFrame, locator: str, *, mapping: Any = None, sema
     (yil/yıl/year) → yıllık tablo."""
     name = str(locator or "").split("?")[0].replace("\\", "/").rsplit("/", 1)[-1]
     name = name.rsplit(".", 1)[0] if "." in name else name
+    # Yinelenen ya da sayısal kolon etiketi (TCMB today.xml, başlıksız Excel): `frame[c]` DataFrame döner ve tarih/yıl
+    # taraması "cannot assemble with duplicate keys" ile patlar; kapı sessizce atlanıyordu (22 Eyl, arkadaş bulgusu).
+    # İmza için etiketler tekil dizeye çevrilir; çağıranın tablosu değişmez.
+    if len(set(map(str, frame.columns))) != len(frame.columns) or any(not isinstance(c, str) for c in frame.columns):
+        seen: dict[str, int] = {}
+        labels = []
+        for c in map(str, frame.columns):
+            n = seen.get(c, 0)
+            labels.append(c if n == 0 else f"{c}_{n}")
+            seen[c] = n + 1
+        frame = frame.copy()
+        frame.columns = labels
     headers = tuple(str(c) for c in frame.columns)
     years: tuple[int, int] | None = None
     freq: str | None = getattr(semantics, "frequency", None) if semantics is not None else None
@@ -289,7 +301,11 @@ def signature_of(frame: pd.DataFrame, locator: str, *, mapping: Any = None, sema
                 years, date_col = (int(parsed.dt.year.min()), int(parsed.dt.year.max())), str(best)
                 freq = freq or _infer_frequency(parsed)
         if years is None:
-            ys = sorted({int(y) for c in frame.columns for y in _YEAR.findall(" ".join(frame[c].astype(str)))})
+            # Scan every cell as text for 4-digit years. Coerce each value with str():
+            # duplicate/float column labels make frame[c] a DataFrame and leak non-str
+            # into the join (e.g. TCMB XML tables), so .astype(str) alone is not safe.
+            cells = " ".join(str(v) for v in frame.to_numpy().ravel().tolist())
+            ys = sorted({int(y) for y in _YEAR.findall(cells)})
             years = (ys[0], ys[-1]) if ys else None
 
     med: dict[str, float] = {}

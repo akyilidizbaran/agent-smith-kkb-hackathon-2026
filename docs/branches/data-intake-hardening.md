@@ -212,6 +212,21 @@ R02 50 adaylık tablo teslim edildi; R02b (konu belirten liste) 68 aday; R04 bo�
 kısmi pencere: eksik dönemler adlandırıldı. Birim: `test_completion_contract.py` (24 vaka), gold ve small_talk testleri;
 tam paket 855.
 
+### 1i. Ekip bulgularından alınanlar (22 Eylül öğle)
+
+Bir ekip arkadaşının PR #18 taramasından bize düşen üç küçük düzeltme:
+- **Uygunluk kapısı çökmesi** (`fitness.py`): yinelenen/float kolon etiketli tabloda (TCMB today.xml) `frame[c]` DataFrame
+  dönüyor, tarih/yıl taraması patlıyor, kapı sessizce atlanıyordu. Arkadaşın `" ".join` yaması alındı; ek olarak imza
+  başında etiketler tekil dizeye çevriliyor (her yol için). Test: yinelenen float etiket.
+- **Sözlük** (`config_data/concepts.json`, kod değil): `doviz` kavramı (döviz/dolar/usd/euro/forex…) ve `alis` ölçümü
+  (alış ↔ ForexBuying/BanknoteBuying), `satis`'e sell/forexsell/banknotesell kökleri. "Dolar alış ve satış kuru" sorusu
+  İngilizce başlıklı TCMB tablosuyla artık eşleşiyor; konut satışları ve kredi soruları değişmedi (ölçüldü).
+- **PDF bayt sınırı** (`web/fetch.py`): medya türü PDF ise 8 MiB yerine 32 MiB (BDDK faaliyet raporu); HTML sınırı aynı.
+
+Bize düşmeyenler: web araştırma bütçesi yaması ve arama sonucundaki gerçek linki önceliklendirme (`web_research.py`,
+yalnız #18 dalında); change-point çıktısının anlatı özetinde kırpılması (#18'in özet katmanı, bizde tam tablo yazılır).
+Ayrı eksik: XML dosyası okuma/kaydetme yolu bizde yok.
+
 Değişmeyenler, bilinçli: beyan kapısı (birim/ölçüm tipi kullanıcıdan gelir, doğrulanmaz), aynı anahtar farklı içerik reddi
 (veri ekibinin sözleşmesi), tarihsiz tablonun kalıcı kaydedilmemesi, `unknown` ölçüm tipinde toplama türetilmemesi.
 

@@ -22,6 +22,9 @@ from ..core.access_policy import classify_access
 
 USER_AGENT = "kkb-agent/0.1 (KKB Hackathon 2026; robots.txt'ye uyar)"
 MAX_BYTES_DEFAULT = 8 * 1024 * 1024
+#: PDF belgeleri (faaliyet raporu, bülten) 8 MiB'i kolayca aşar; ölçüldü (22 Eyl, arkadaş bulgusu): BDDK yıllık faaliyet
+#: raporu CONTENT_TOO_LARGE ile açılamadı. Akış parça parça okunur, bellek sınırı bu; yalnız medya türü PDF ise geçerli.
+PDF_MAX_BYTES = 32 * 1024 * 1024
 DATA_SUFFIXES = (".csv", ".tsv", ".xlsx", ".xls", ".json")
 
 
@@ -239,11 +242,14 @@ def fetch_url(
                            elapsed_ms=(time.perf_counter() - started) * 1000)
     chunks: list[bytes] = []
     size = 0
+    resp_headers = {str(k).lower(): str(v) for k, v in (getattr(resp, "headers", {}) or {}).items()}
+    is_pdf = resp_headers.get("content-type", "").split(";")[0].strip().lower() == "application/pdf"         or str(final_url or url).split("?")[0].lower().endswith(".pdf")
+    limit = max(max_bytes, PDF_MAX_BYTES) if is_pdf else max_bytes
     try:
         for chunk in resp.iter_content(65536):
             size += len(chunk)
-            if size > max_bytes:
-                raise FetchRefused(f"kaynak {max_bytes} bayt sınırını aşıyor")
+            if size > limit:
+                raise FetchRefused(f"kaynak {limit} bayt sınırını aşıyor")
             chunks.append(chunk)
     except FetchRefused:
         resp.close()
