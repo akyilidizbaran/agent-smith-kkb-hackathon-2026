@@ -1212,3 +1212,9 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
 - Canlı takip akışında 24 satır kapsamı düzeldikten sonra BDDK Gold kanıt kolonları (`::observations`, `::missing_observations`) da numeric oldukları için `*_change` kolonlarına dönüştürülüyordu. Bunlar ölçüm serisi değil lineage metadata'sıdır ve kullanıcı projeksiyonuna girmemelidir.
 - `plan_verified_workspace_transform` artık ortak provenance kolon filtresini kullanıyor; gerçek ölçü kolonları üzerinde dönüşüm yapılırken kanıt kolonları hesaplanmıyor. Bu generic kural BDDK dışındaki Gold/workspace tablolarında aynı suffix sözleşmesine sahip metadata için de geçerlidir.
 - Yeni regresyon testi numeric provenance kolonlarının plan dışı kaldığını doğruluyor. Önceki 947 teste ek hedefli test çalıştırılacak; commit ve demo yeniden başlatması bu ek değişiklikten sonra yapılmalı.
+
+### 2.134 24 satırlı takip çıktısının canlı doğrulaması (22 Eylül)
+- UI/export kapsamı düzeltmesi `92dae5f` ve kanıt filtresi `6cb35f3` commitleriyle yerel dala alındı; untracked benchmark/deney dosyaları commit kapsamına alınmadı.
+- Tam `agent-core` suite **949 geçti** (tek mevcut Starlette/AnyIO deprecation uyarısı); hedefli projection/follow-up/workspace suite **64 geçti**. `ruff --select F` ve `git diff --check` temiz.
+- Yeni demo kontrollü biçimde PID 11233 ile `127.0.0.1:8765` üzerinde çalışıyor; DeepSeek `deepseek-ai/DeepSeek-V4.1-Flash`, 6.304 seri ve 21 araç aktif. Aynı iki sorunun canlı akışında ilk tablo 60 satır; takip dönüşümü 2022-01-31–2023-12-31 arasında 24 satır, yalnız iki gerçek `value_change` kolonu, 0 başarısız LLM çağrısı verdi. `table.csv` 24 veri satırı, `table.xlsx` 24 veri satırı olarak ayrıca doğrulandı.
+- Aktif workspace tam 60 aylık pencere olarak korunuyor; bu, sonraki takiplerde Aralık 2021 tabanıyla LAG hesaplamasını ve kapsam değişikliğini bozmuyor. Cloudflare, `.env`, lakehouse ve provider ayarları değiştirilmedi; PR/push yapılmadı.
