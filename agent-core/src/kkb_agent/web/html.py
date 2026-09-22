@@ -151,7 +151,7 @@ def convert_numbers(frame: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     ambiguous: list[tuple[str, dict[tuple[str, str | None], list[float | None]], str]] = []
     resolved_pairs: Counter[tuple[str, str | None]] = Counter()
     for col in profile.columns:
-        if not col.numeric_under or col.date_formats:
+        if not col.numeric_under or (col.date_formats and col.date_formats != ("%Y",)):
             continue
         values = frame[col.name].map(lambda t: "" if t is None else str(t))
         parsed: dict[tuple[str, str | None], list[float | None]] = {}
@@ -219,6 +219,10 @@ def convert_dates(frame: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     notes: list[str] = []
     for col in profile_table(frame).columns:
         if not col.date_formats or col.non_empty != col.rows or pd.api.types.is_datetime64_any_dtype(frame[col.name]):
+            continue
+        if col.date_formats == ("%Y",):
+            # Çıplak yıl sütunu web tablosunda sayı kalır (2024 → 2024.0): kullanıcı "2024-01-01" görmemeli; kayıt yolu
+            # (tools/ingest) yılı ayrıca yıl sonu tarihine çevirir.
             continue
         if col.date_ambiguous:
             notes.append(f"'{col.name}' tarih ama gün/ay ayrımı belirsiz ({', '.join(col.date_formats)}); metin bırakıldı, kullanıcıya sorulmalı")

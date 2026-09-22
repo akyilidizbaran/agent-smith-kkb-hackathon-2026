@@ -192,6 +192,22 @@ yalnız `make demo-data` sonrası doludur; ekipte dolu dosya `data/lakehouse.duc
 Endpoint ayrıntıları ve doğrulanmış tablo haritası:
 [docs/LAKEHOUSE_CONTRACT.md](docs/LAKEHOUSE_CONTRACT.md) § 5.
 
+## Başka alanla çalıştırma (jeneriklik)
+
+Motor alan bilgisini kodda değil katalogda ve yapılandırmada tutar. Finans dışı veriyle çalıştırmak için (22 Eylül'de
+Dünya Bankası ülke × yıl nüfus verisiyle canlı prova edildi; bkz. `docs/branches/data-intake-hardening.md` §1j):
+
+```bash
+# ayrı veri kökü ve boş katalog
+uv run python -m lakehouse bootstrap --database <kök>/lakehouse.duckdb --catalog none      # lakehouse-core içinden
+# sunucu: DATA_ROOT/LAKEHOUSE_PATH/INGEST_ALLOWED_ROOT o köke, alan tanımı yapılandırmadan
+DOMAIN_DESCRIPTION="ülke ve yıl bazında demografik göstergeler" AGENT_PROFILE=architect uv run python -m kkb_agent.serve
+```
+
+Sonra Architect'te bir dosya ya da adres verip "… bazında yıllık taslak seri olarak kaydet; birim …, ölçüm tipi …" demek
+yeter; onayla kataloğa alınır, sorgu/takip/grafik/karşılaştırma aynı motorla çalışır. Kavram sözlüğü
+(`agent-core/src/kkb_agent/config_data/concepts.json`) ve kaynak ipuçları (`source_hints.json`) alana göre değiştirilir.
+
 ## Çalışma düzeni
 
 - `main` — korumalı. Doğrudan geliştirme yapılmaz; ana dala birleştirme ekip kararıyla ve PR üzerinden yapılır.

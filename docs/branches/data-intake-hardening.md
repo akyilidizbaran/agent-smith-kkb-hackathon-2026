@@ -227,6 +227,25 @@ Bize düşmeyenler: web araştırma bütçesi yaması ve arama sonucundaki gerç
 yalnız #18 dalında); change-point çıktısının anlatı özetinde kırpılması (#18'in özet katmanı, bizde tam tablo yazılır).
 Ayrı eksik: XML dosyası okuma/kaydetme yolu bizde yok.
 
+### 1j. Boş katalog + finans dışı veri provası (22 Eylül öğleden sonra)
+
+Jürinin "içini boşaltıp sağlık verisiyle çalışsın" kriteri (12:33) şimdiye kadar canlıda denenmemişti (M16-T04 kısmi).
+Ayrı veri kökü, `bootstrap --catalog none` (0 seri), `DOMAIN_DESCRIPTION` demografi, Architect, gerçek MIA, gerçek veri:
+Dünya Bankası ülke × yıl nüfus CSV'si (17.195 satır, 265 varlık, 1960–2024) — GitHub'daki `datasets/population` deposu.
+
+| Adım | İlk koşu | Bulunan | Düzeltme | Son koşu |
+|---|---|---|---|---|
+| Sızıntı: boş katalogda "konut kredisi faizi" | Dürüst "havuzda yok" | — | — | ✓ (9 sn) |
+| URL'den kayıt (ülke bazında, yıllık) | **Red: "Year" tarih değil** | Profilci çıplak yıl sütununu tanımıyor | `%Y` yalnız 1900–2100 dört haneli tam sayılarda; kayıt yolu yılı yıl sonu tarihine çevirip sahneler; HTML tablosunda yıl sayı kalır | ✓ 17.195 satır, yıllık |
+| Terfi | — | — | — | ✓ 17.195 gözlem Silver'a |
+| Türkiye 1990–2020 | **"Türkiye kaydı yok"** | `lakehouse_distinct_values` seri kimliğini tablo adı sanıyor (her Silver serisinde patlıyordu) | Adaptör `series_scope` (ilişki + series_id filtresi) | ✓ 31/31 |
+| Takip: yüzde değişim + grafik | ✓ | — | — | ✓ |
+| Almanya ile Türkiye 2000–2020 | **GOLD_REQUIRED** (pivot frekans dönüşümü sanıldı); sonra "Türkiye bulunamadı" | Dönem ifadesi WHERE'de sayılıyordu; varlık araması aksana duyarlı ("Türkiye" ≠ "Turkiye") | Yalnız GROUP BY/SELECT'teki dönem ifadesi sayılır; `strip_accents(lower())` ile arama | ✓ 21 satır yan yana |
+| "Hangi ülkeler var, 'stan' geçenleri listele" | ✓ ama sahte "aday listesi" boşluğu | Sözleşme "listele"yi katalog adayı sandı | Teslim edilen herhangi bir tablo listeyi karşılar | ✓ 9 varlık |
+
+Beş jenerik kusur finans verisiyle görünmüyordu (tarihler tam, varlıklar il adı, pivot nadir). Hepsi soruya/alana özel
+kural olmadan düzeltildi; toplam 4 yeni test. Prova reçetesi README "Başka alanla çalıştırma" bölümünde.
+
 Değişmeyenler, bilinçli: beyan kapısı (birim/ölçüm tipi kullanıcıdan gelir, doğrulanmaz), aynı anahtar farklı içerik reddi
 (veri ekibinin sözleşmesi), tarihsiz tablonun kalıcı kaydedilmemesi, `unknown` ölçüm tipinde toplama türetilmemesi.
 

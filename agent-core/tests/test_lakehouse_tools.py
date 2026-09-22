@@ -317,3 +317,76 @@ def test_aylik_soruya_ceyreklik_tablo_okunmaz_incesi_serbest() -> None:
     # iki frekans sözcüğü: guard susar
     t3 = tool("Haftalık faizi aylık göster, 2021'den bu yana")
     assert t3.check_policy(t3.Params(sql="SELECT * FROM gold.konut_kredisi_ceyreklik WHERE period_end >= '2021-01-01'", purpose="x")) is None
+
+
+def test_varlik_pivotu_frekans_donusumu_degildir_where_filtresi_kutu_sayilmaz() -> None:
+    """Boş katalog provası (22 Eyl): iki ülkeyi aynı tarih taneli satırda yan yana koyan pivot GOLD_REQUIRED yedi."""
+    from kkb_agent.tools.lakehouse import LakehouseQueryTool
+
+    class Lake:
+        def get_dataset(self, *a, **k):
+            raise LookupError
+
+    tool = LakehouseQueryTool(Lake(), AnalysisWorkspace(), None, gold_available=True)
+    pivot = ("SELECT observation_date, MAX(CASE WHEN entity_id='Germany' THEN value END) AS almanya, "
+             "MAX(CASE WHEN entity_id='Turkiye' THEN value END) AS turkiye FROM silver.fact_observation "
+             "WHERE series_id='adhoc:nufus' AND EXTRACT(year FROM observation_date) BETWEEN 2000 AND 2020 GROUP BY observation_date")
+    assert not tool._is_period_aggregation(pivot)
+    assert tool._is_period_aggregation("SELECT strftime(observation_date, '%Y-%m') AS ay, AVG(value) FROM t GROUP BY 1")
+    assert tool._is_period_aggregation("SELECT EXTRACT(year FROM observation_date) AS y, SUM(value) FROM t GROUP BY EXTRACT(year FROM observation_date)")
+
+
+def test_distinct_degerler_seri_kimligini_tablo_adi_sanmaz() -> None:
+    """Boş katalog provası (22 Eyl): 'adhoc:dunya_nufus' FROM'a yazılınca 'Table … does not exist'; adaptörün kapsamı kullanılır."""
+    import pandas as pd
+    from types import SimpleNamespace
+    from kkb_agent.tools.lakehouse import LakehouseDistinctValuesTool
+
+    class Lake:
+        def __init__(self):
+            self.sql: list[str] = []
+
+        def get_dataset(self, dataset_id):
+            return SimpleNamespace(dataset_id=dataset_id, columns=[SimpleNamespace(name="entity_id"), SimpleNamespace(name="value")],
+                                   column=lambda name: SimpleNamespace(name=name) if name in ("entity_id", "value") else None)
+
+        def series_scope(self, dataset_id):
+            return "silver.fact_observation", "series_id = '" + dataset_id + "'"
+
+        def execute_sql(self, sql):
+            self.sql.append(sql)
+            data = pd.DataFrame({"n": [2]}) if "COUNT(DISTINCT" in sql else pd.DataFrame({"entity_id": ["Germany", "Turkiye"]})
+            return SimpleNamespace(is_empty=False, data=data)
+
+    lake = Lake()
+    r = LakehouseDistinctValuesTool(lake).validate_and_run({"dataset_id": "adhoc:nufus", "column": "entity_id", "limit": 5})
+    assert r.ok and "Germany" in r.content and "Turkiye" in r.content, r.content
+    assert lake.sql[0].startswith("SELECT DISTINCT entity_id FROM silver.fact_observation WHERE series_id = 'adhoc:nufus'"), lake.sql[0]
+
+
+def test_distinct_degerler_aksana_ve_buyuk_kucuk_harfe_duyarsiz_arar() -> None:
+    """Boş katalog provası (22 Eyl): kullanıcı "Türkiye" yazdı, kaynak "Turkiye" tutuyor; ILIKE bulamadı."""
+    import pandas as pd
+    from types import SimpleNamespace
+    from kkb_agent.tools.lakehouse import LakehouseDistinctValuesTool
+
+    class Lake:
+        def __init__(self):
+            self.sql: list[str] = []
+
+        def get_dataset(self, dataset_id):
+            return SimpleNamespace(dataset_id=dataset_id, columns=[SimpleNamespace(name="entity_id")],
+                                   column=lambda name: SimpleNamespace(name=name) if name == "entity_id" else None)
+
+        def series_scope(self, dataset_id):
+            return "silver.fact_observation", "series_id = '" + dataset_id + "'"
+
+        def execute_sql(self, sql):
+            self.sql.append(sql)
+            data = pd.DataFrame({"n": [1]}) if "COUNT(DISTINCT" in sql else pd.DataFrame({"entity_id": ["Turkiye"]})
+            return SimpleNamespace(is_empty=False, data=data)
+
+    lake = Lake()
+    r = LakehouseDistinctValuesTool(lake).validate_and_run({"dataset_id": "adhoc:nufus", "column": "entity_id", "contains": "Türkiye", "limit": 5})
+    assert r.ok and "Turkiye" in r.content
+    assert "strip_accents(lower(entity_id)) LIKE '%' || strip_accents(lower('Türkiye')) || '%'" in lake.sql[0], lake.sql[0]

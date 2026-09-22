@@ -24,6 +24,7 @@ import pandas as pd
 
 # Tarih biçimleri: ISO önce (belirsizlik yok), sonra Türkçe ve Anglosakson yazımlar.
 # Sıra kanıt sırası değil; hangi biçimlerin %100 ayrıştırdığı ölçülür, sonra karar.
+_YEAR_TOKEN = re.compile(r"(19\d{2}|20\d{2}|2100)")
 DATE_FORMATS: tuple[str, ...] = (
     "%Y-%m-%d", "%Y-%m", "%Y%m%d",
     "%d.%m.%Y", "%d/%m/%Y", "%d-%m-%Y",
@@ -151,6 +152,12 @@ def profile_table(frame: pd.DataFrame, *, max_sample: int = 5) -> TableProfile:
                 fmts.append(fmt)
                 if not parsed_dates:
                     parsed_dates = parsed
+        # Çıplak yıl sütunu (1960, 1961 …): yıllık tabloların tarihi (Dünya Bankası, TÜİK). Ölçüldü (22 Eyl, boş katalog
+        # provası): "Year" kolonu tarih sayılmayınca kayıt reddedildi. Yalnız her değer 1900–2100 arası dört haneli tam
+        # sayıysa; başka dört haneli sayı kolonları (kod, adet) bu aralığa nadiren tam oturur, oturursa kullanıcı seçimi karar verir.
+        if non_empty and not fmts and all(_YEAR_TOKEN.fullmatch(t) for t in non_empty):
+            fmts.append("%Y")
+            parsed_dates = [date(int(t), 12, 31) for t in non_empty]
         # Tamamı boş bir kolon tarih adayı değildir.
         if not non_empty:
             fmts = []
