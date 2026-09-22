@@ -287,3 +287,25 @@ def test_yariyil_ve_sifatli_liste_istegi_ve_donem_sonu_tarih_kolonu() -> None:
     gold_like = pd.DataFrame({"period_start": [date(2025, 1, 1), date(2025, 4, 1)], "period_end": [date(2025, 3, 31), date(2025, 6, 30)], "v": [1.0, 2.0]})
     assert _date_column(gold_like) == "period_end"          # Gold satırının etiketi dönem sonudur (P04 yanlış çelişki notu)
     assert _date_column(pd.DataFrame({"observation_date": [date(2025, 1, 31)], "v": [1.0]})) == "observation_date"
+
+
+def test_kayit_turunda_sozlesme_sessizdir() -> None:
+    """Ölçüldü (22 Eyl): 'tablo 2026 yılına ait' beyanı dönem beklentisi üretti, kayıt turuna sahte 'tablo yok' notu düştü."""
+    class P(BaseModel):
+        locator: str = ""
+        name: str = ""
+
+    class FakeIngest(Tool):
+        name = "ingest_from_url"; description = "t"; Params = P
+
+        def run(self, params):
+            out = SimpleNamespace(artifact_sha256="ab", run_id="r", rows_written=12, rows_unchanged=0)
+            return ToolResult(content="EKLENDİ: adhoc:altin_tl — Altın\nsatır: 12 eşlendi", artifacts={"ingest": out})
+
+    reg = ToolRegistry(); reg.register(FakeIngest())
+    llm = _ScriptedLLM([LLMResponse(content="", tool_calls=[ToolCall(id="1", name="ingest_from_url", arguments={"locator": "kmp_au.pdf", "name": "Altın"})]),
+                        LLMResponse(content="Kayıt tamamlandı: 12 satır yazıldı.")])
+    ans = AnalyticsAgent(llm=llm, registry=reg, workspace=AnalysisWorkspace(), max_steps=6).ask(
+        "kmp_au.pdf dosyasındaki TL Hacim kolonunu aylık taslak olarak kaydet; tablo 2026 yılına ait, dönem 2026")
+    assert "Kapsam kontrolü" not in ans.text and ans.completion == {}
+    assert not any((s.thought or "").startswith("tamamlanma") for s in ans.steps)
