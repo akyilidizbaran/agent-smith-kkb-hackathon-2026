@@ -214,3 +214,21 @@ def test_agent_keeps_web_tool_decisions_in_tool_phase_until_synthesis() -> None:
         deadline - started_at for deadline, started_at in llm.deadlines if deadline is not None
     ]
     assert all(remaining > 60 for remaining in bounded_deadlines), bounded_deadlines
+
+
+def test_rereading_a_known_page_after_a_search_counts_as_a_read() -> None:
+    """İnceleme (22 Eyl): daha önce okunmuş sayfa ikinci aramadan sonra yeniden okununca 'yeni okuma'
+    sayılmıyor, üçüncü arama NEEDS_READ ile dönüyordu."""
+    state = WebResearchState(max_searches=3)
+    hits = SimpleNamespace(ok=True, artifacts={"web_search": {"results": [{"url": "https://stats.example/tufe"}]}})
+    page = SimpleNamespace(ok=True, artifacts={"web": {"visited": [{"url": "https://stats.example/tufe", "status": 200}]}})
+
+    assert state.authorize_search("TÜFE 2025") is None
+    state.record_tool_result("web_search", hits)
+    state.record_tool_result("web_url", page)
+    assert state.authorize_search("TÜFE 2025 yıllık", research_gap="yıllık değer eksik") is None
+    state.record_tool_result("web_search", hits)
+    state.record_tool_result("web_url", page)
+
+    assert state.remaining_pages == state.max_unique_pages - 1
+    assert state.authorize_search("TÜFE 2025 aylık", research_gap="aylık değer eksik") is None

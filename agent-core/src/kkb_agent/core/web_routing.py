@@ -12,9 +12,17 @@ from urllib.parse import urlparse
 
 from ..source_hints import load_source_hints
 from .access_policy import detect_source_constraint
+from .lexical import fold
 
+# A bare domain needs a known top-level label: `[a-z]{2,}` accepted Turkish
+# ordinal suffixes such as "5.sayfadaki" as a host name.
+_TLD = (
+    r"(?:com|org|net|gov|edu|int|mil|info|biz|io|co|eu|tr|de|uk|fr|us|nl|ch|at|it|es|be|se|no|dk|fi|"
+    r"pl|cz|ru|jp|cn|kr|in|br|ca|au|nz|za|ae|sa|az|kz|ua|gr|pt|ie|hu|ro|bg|hr|rs|ba|mk|al|me|cy|mt|"
+    r"lu|li|is|ee|lv|lt|sk|si|ai|app|dev|xyz|online|cloud|news|tv|example)"
+)
 _ADDRESS = re.compile(
-    r"https?://[^\s<>\"'()]+|(?<![\w/@])(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s<>\"'()]*)?",
+    r"https?://[^\s<>\"'()]+|(?<![\w/@])(?:[a-z0-9-]+\.)+" + _TLD + r"(?![\wçğıöşü])(?:/[^\s<>\"'()]*)?",
     re.IGNORECASE,
 )
 _WEB_REQUEST = re.compile(
@@ -82,7 +90,10 @@ def source_domains(question: str) -> list[str]:
     if not constraint.pinned or not constraint.source_ref:
         return []
     mapping = load_source_hints().get("institution_hosts", {})
-    return list(mapping.get(constraint.source_ref.casefold(), ()))
+    # Keys are casefolded at load time, but "Tüik"/"Bist" and "TÜİK"/"BİST"
+    # casefold differently (dotted İ); fold both sides to ASCII instead.
+    wanted = fold(constraint.source_ref)
+    return list(next((hosts for name, hosts in mapping.items() if fold(name) == wanted), ()))
 
 
 def web_forbidden(question: str) -> bool:
