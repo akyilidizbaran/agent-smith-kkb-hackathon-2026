@@ -44,10 +44,15 @@ _SQL_OR_CODE = re.compile(r"\b(?:select|from|where|join|union|insert|update|dele
 _EMAIL = re.compile(r"\b[^\s@]+@[^\s@]+\.[^\s@]+\b")
 _WORDS = re.compile(r"[a-zçğıöşü]+", re.I)
 _QUERY_STOP = frozenset({
-    "getir", "getirsin", "bul", "ara", "araştır", "arastir", "internetten", "internet",
+    "getir", "getirsin", "bul", "ara", "araştır", "arastir", "araştırır", "arastirir",
+    "araştırabilir", "internetten", "internet", "internette",
     "web", "veri", "verileri", "verisini", "kaynak", "kaynağından", "kaynaklar",
     "lütfen", "lutfen", "için", "icin", "olan", "bana", "göster", "goster",
     "tablo", "tablosu", "hangi", "nedir", "yılında", "yillari", "döneminde", "doneminde",
+    # işlev sözcükleri: arama konusuna katkısı yok, kaliteyi düşürür
+    "bunu", "bunları", "şunu", "sunu", "peki", "mısın", "misin", "musun", "müsün",
+    "ne", "neler", "nasıl", "nasil", "oldu", "olmuş", "olmus", "yaşandı", "yasandi",
+    "yaşanmış", "yasanmis", "o", "bu", "şu", "su", "ile", "de", "da",
 })
 
 
@@ -250,7 +255,9 @@ def general_public_fallback_plan(question: str) -> dict[str, list[str] | str] | 
     query = " ".join(parts)[:500]
     if not query:
         return None
-    return {"query": query, "include_domains": [], "topic": "finance", "max_results": 5}
+    # scope="general": web aracına bu planın domain-pinsiz (boş include_domains) meşru yetkili
+    # arama olduğunu bildirir; web aracı boş domaini yalnız bu bayrakta kabul eder.
+    return {"query": query, "include_domains": [], "topic": "finance", "max_results": 5, "scope": "general"}
 
 
 __all__ = [

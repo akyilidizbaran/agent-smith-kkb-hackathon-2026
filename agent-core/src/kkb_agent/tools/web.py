@@ -671,7 +671,11 @@ class WebSearchTool(Tool):
             domains = [domain for raw in raw_domains if (domain := self._allowed_domain(raw))]
             max_results = min(int(fallback_plan.get("max_results", 5)), 10)
             topic = str(fallback_plan.get("topic") or "finance")
-            if not query or not domains or len(domains) != len(raw_domains):
+            # "general": harness'in ürettiği, kullanıcı web'i açıkça istediğinde açılan yetkili genel
+            # arama (Option A). Domain pini olmadan tek arama meşrudur — ama YALNIZ bu bayrakta.
+            # Diğer (resmi-kaynak) fallback'lar hâlâ dolu, tümü geçerli domain listesini şart koşar.
+            is_general = str(fallback_plan.get("scope") or "") == "general"
+            if not query or len(domains) != len(raw_domains) or (not domains and not is_general):
                 return ToolResult.fail(
                     "INTENT_REQUIRED", "Doğrulanmış ve kaynakla sınırlandırılmış arama planı bulunamadı.",
                     layer="policy", retryable=False,
