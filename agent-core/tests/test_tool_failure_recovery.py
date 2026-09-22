@@ -243,7 +243,42 @@ def test_terminal_duplicate_loop_skips_unrecoverable_narration_call() -> None:
     assert answer.error_codes()["DUPLICATE_CALL"] >= 1
 
 
-def test_catalog_search_budget_returns_truthful_status_without_extra_model_call() -> None:
+def test_catalog_search_budget_first_refusal_lets_model_continue_with_candidates() -> None:
+    """PR #18 jenerik (21 Eyl): ilk sınır reddi turu bitirince 10 vakada kalıp cevap çıktı; adaylar eldeyken
+    model describe/query ile devam edebilmeli."""
+    search = _QueueTool(
+        "lakehouse_search",
+        [ToolResult(content="Aday seri: toplam kredi aylık")],
+    )
+    describe = _QueueTool("lakehouse_describe", [ToolResult(content="Şema: dönem, değer")])
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[_call("lakehouse_search", "toplam kredi", "s1")]),
+        LLMResponse(content="", tool_calls=[_call("lakehouse_search", "ulusal aylık kredi", "s2")]),
+        LLMResponse(content="", tool_calls=[_call("lakehouse_describe", "toplam kredi", "d1")]),
+        LLMResponse(content="Aday seri şeması doğrulandı; veri çekilmedi."),
+    ])
+    registry = ToolRegistry()
+    registry.register_all([search, describe])
+    agent = AnalyticsAgent(
+        llm=llm,
+        registry=registry,
+        workspace=AnalysisWorkspace(),
+        tool_gate=False,
+        max_catalog_search_calls=1,
+    )
+
+    answer = agent.ask("Katalogda ulusal aylık toplam kredi serisini seç")
+
+    assert search.calls == ["toplam kredi"]
+    assert describe.calls == ["toplam kredi"], "sınır sonrası arama dışı araçlara izin verilmeli"
+    assert llm.calls == 4
+    assert answer.error_codes()["CATALOG_SEARCH_BUDGET"] == 1
+    assert "arama sınırına ulaşıldığı" not in answer.text
+    assert answer.text.startswith("Aday seri şeması doğrulandı")
+    assert "deterministic_recovery_shortcuts" not in answer.usage
+
+
+def test_catalog_search_budget_second_refusal_returns_truthful_status_without_extra_model_call() -> None:
     search = _QueueTool(
         "lakehouse_search",
         [ToolResult(content="Aday seri: toplam kredi aylık")],
@@ -251,7 +286,8 @@ def test_catalog_search_budget_returns_truthful_status_without_extra_model_call(
     llm = _ScriptedLLM([
         LLMResponse(content="", tool_calls=[_call("lakehouse_search", "toplam kredi", "s1")]),
         LLMResponse(content="", tool_calls=[_call("lakehouse_search", "ulusal aylık kredi", "s2")]),
-        # A third response would be the redundant terminal narration call.
+        LLMResponse(content="", tool_calls=[_call("lakehouse_search", "kredi toplamı ulusal", "s3")]),
+        # A fourth response would be the redundant terminal narration call.
         LLMResponse(content="Yanıt üretildi."),
     ])
     registry = ToolRegistry()
@@ -266,13 +302,13 @@ def test_catalog_search_budget_returns_truthful_status_without_extra_model_call(
 
     answer = agent.ask("Katalogda ulusal aylık toplam kredi serisini seç")
 
-    assert llm.calls == 2
+    assert llm.calls == 3
     assert search.calls == ["toplam kredi"]
     assert answer.availability_status == "RETRIEVAL_FAILED"
     assert answer.usage["deterministic_recovery_shortcuts"] == 1
     assert "arama sınırına ulaşıldığı" in answer.text
     assert "verinin havuzda bulunmadığı anlamına gelmez" in answer.text
-    assert answer.error_codes()["CATALOG_SEARCH_BUDGET"] >= 1
+    assert answer.error_codes()["CATALOG_SEARCH_BUDGET"] == 2
 
 
 def test_blank_final_response_gets_nonempty_deterministic_status() -> None:
@@ -452,11 +488,12 @@ def test_catalog_search_budget_bounds_discovery_without_extra_recovery_call() ->
 
     recovery = next(item for item in answer.artifacts if item["kind"] == "execution_recovery")
     assert len(search.calls) == 2
-    assert answer.error_codes().get("CATALOG_SEARCH_BUDGET") == 1
+    # İlk red turu bitirmez (model adaylarla devam edebilir); ikinci red döngüdür, tur deterministik kapanır.
+    assert answer.error_codes().get("CATALOG_SEARCH_BUDGET") == 2
     assert answer.availability_status == "RETRIEVAL_FAILED"
     assert recovery["catalog_search_calls"] == 2
     assert recovery["catalog_search_budget_exhausted"] is True
-    assert llm.calls == 3
+    assert llm.calls == 4
     assert answer.usage["deterministic_recovery_shortcuts"] == 1
 
 

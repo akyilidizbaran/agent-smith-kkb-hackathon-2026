@@ -873,3 +873,146 @@ def test_chart_and_verified_table_survive_narration_timeout(tmp_path) -> None:
     xlsx_frame = pd.read_excel(BytesIO(table_xlsx_bytes(exported)), engine="openpyxl")
     assert list(csv_frame.columns) == list(xlsx_frame.columns) == list(exported.columns)
     assert len(csv_frame) == len(xlsx_frame) == 60
+
+
+def _provincial_catalog() -> list[SimpleNamespace]:
+    """Alphabetically first FinTürk series plus a national total, as in the demo catalog."""
+    return [
+        SimpleNamespace(
+            dataset_id="bddk_finturk:ADANA_DigerMevduat",
+            name="Diğer Mevduat, ADANA (Bireysel Bankacılık, Sektör)",
+            source="bddk_finturk",
+            source_detail=None,
+            tags=["mevduat", "aylık", "il"],
+            columns=[
+                SimpleNamespace(name="observation_date", role="time", example_values=[], aliases=["dönem"]),
+                SimpleNamespace(name="value", role="measure", example_values=[], aliases=["diğer mevduat"]),
+            ],
+        ),
+        SimpleNamespace(
+            dataset_id="bddk_finturk:IZMIR_DigerMevduat",
+            name="Diğer Mevduat, İZMİR (Bireysel Bankacılık, Sektör)",
+            source="bddk_finturk",
+            source_detail=None,
+            tags=["mevduat", "aylık", "il"],
+            columns=[
+                SimpleNamespace(name="value", role="measure", example_values=[], aliases=["diğer mevduat"]),
+            ],
+        ),
+        SimpleNamespace(
+            dataset_id="bddk_monthly:1200_Toplam",
+            name="Toplam Mevduat",
+            source="bddk_monthly",
+            source_detail=None,
+            tags=["mevduat", "aylık"],
+            columns=[
+                SimpleNamespace(name="value", role="measure", example_values=[], aliases=["toplam mevduat"]),
+            ],
+        ),
+    ]
+
+
+def test_generic_metric_word_does_not_bind_first_provincial_series() -> None:
+    """PR #18 jenerik (21 Eyl): 'mevduat' alfabetik ilk seri olan ADANA'ya bağlanıyor, 20 ulusal soru il'e kayıyordu."""
+    question = "2022 ile 2024 arasında mevduat ve kredi serilerini çeyrek sonu değerleriyle karşılaştır."
+    explicit = _extract(question, _provincial_catalog())
+
+    assert explicit.series is None
+    assert explicit.metric == "kredi"
+    assert explicit.geography == ()
+    resolution = resolve_follow_up(question, catalog=_provincial_catalog())
+    assert "series=" not in resolution.prompt()
+    assert "ADANA" not in resolution.prompt()
+
+
+def test_named_province_binds_only_that_province_series() -> None:
+    catalog = _provincial_catalog()
+
+    izmir = _extract("İzmir diğer mevduat bakiyesini 2024 için getir", catalog)
+    assert izmir.series == "bddk_finturk:IZMIR_DigerMevduat"
+
+    adana = _extract("Adana diğer mevduat bakiyesini 2024 için getir", catalog)
+    assert adana.series == "bddk_finturk:ADANA_DigerMevduat"
+
+    national = _extract("Toplam mevduat bakiyesini 2024 için getir", catalog)
+    assert national.series == "bddk_monthly:1200_Toplam"
+
+
+def test_multi_word_catalog_name_still_binds_on_new_question() -> None:
+    """Tek genel sözcük kuralı çok sözcüklü katalog adlarını (ör. 'USD satış kuru') etkilemez."""
+    first = resolve_follow_up("2026 USD satış kuru", catalog=_catalog())
+    assert first.context.series == "evds:usd_satis"
+
+
+def test_direct_table_delivery_text_carries_rows_period_and_source() -> None:
+    """PR #18 jenerik (21 Eyl): 12 vakada iki sabit cümle; kullanıcıya satır/dönem/kaynak bilgisi gitmiyordu."""
+    workspace = AnalysisWorkspace()
+    tool = _WorkspaceQueryTool(workspace)
+    registry = ToolRegistry()
+    registry.register(tool)
+    llm = _ScriptedLLM([LLMResponse(content="", tool_calls=[_call(2024, "retrieve")])])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=workspace, max_steps=4)
+    agent._catalog_specs = lambda: [
+        SimpleNamespace(
+            dataset_id="bddk_monthly:1536_Toplam", name="İhtiyaç kredisi", source="bddk_monthly",
+            source_detail="Tablo 5", source_url=None, frequency=SimpleNamespace(value="monthly"),
+            columns=[SimpleNamespace(name="need", role="measure", unit="milyon TL", semantic_type="stock",
+                                     aliases=["ihtiyaç kredisi"], example_values=[])],
+        ),
+        SimpleNamespace(
+            dataset_id="bddk_monthly:1539_Toplam", name="Bireysel kredi kartları", source="bddk_monthly",
+            source_detail="Tablo 5", source_url=None, frequency=SimpleNamespace(value="monthly"),
+            columns=[SimpleNamespace(name="card", role="measure", unit="milyon TL", semantic_type="stock",
+                                     aliases=["kredi kartı"], example_values=[])],
+        ),
+    ]
+
+    answer = agent.ask("2024 yılına ait aylık konut kredisi bakiyelerini tablo olarak göster.")
+
+    assert llm.calls == 1, "anlatım turu yine atlanmalı (token kazancı korunur)"
+    assert "veri tablosu hazırlandı" in answer.text
+    assert "60 satır" in answer.text
+    assert "2021-04-30" in answer.text and "2026-03-31" in answer.text
+    assert "period_end, need, card" in answer.text
+    assert "İhtiyaç kredisi" in answer.text and "Bireysel kredi kartları" in answer.text
+    assert "birim milyon TL" in answer.text
+    assert "dönem sonu stok" in answer.text
+
+
+def test_comparison_request_is_not_finished_by_transform_fast_path() -> None:
+    workspace = AnalysisWorkspace()
+    tool = _WorkspaceQueryTool(workspace)
+    registry = ToolRegistry()
+    registry.register(tool)
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[_call(2024, "retrieve")]),
+        LLMResponse(content="İki seri aynı eksende: need 0 → 59, card 0 → 590."),
+    ])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=workspace, max_steps=4)
+
+    answer = agent.ask("İki serinin aylık değişimlerini aynı tarih ekseninde karşılaştır.")
+
+    assert llm.calls == 2, "karşılaştırma isteyen soruda anlatım turu atlanmamalı"
+    assert answer.steps[-1].role == "narrate"
+    assert "dönüşüm doğrulanmış aktif tabloya uygulandı" not in answer.text
+
+
+def test_bare_tool_name_answer_is_replaced_by_deterministic_summary() -> None:
+    """C04 (PR #18 jenerik): anlatım turu yalnız 'workspace_compute_column' döndürdü, harness cevap saydı."""
+    workspace = AnalysisWorkspace()
+    tool = _WorkspaceQueryTool(workspace)
+    registry = ToolRegistry()
+    registry.register(tool)
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[_call(2024, "retrieve")]),
+        LLMResponse(content="lakehouse_query"),
+    ])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=workspace, max_steps=4)
+
+    answer = agent.ask("2024 verilerinin genel yönünü değerlendir.")
+
+    assert answer.text.strip() != "lakehouse_query"
+    assert "Doğrulanmış sonuç tablosu ve indirmeler hazır" in answer.text
+    assert "60 satır" in answer.text
+    assert answer.usage["empty_final_response_fallbacks"] == 1
+    assert any("yalnız araç adı" in (step.thought or "") for step in answer.steps)
