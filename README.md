@@ -158,7 +158,7 @@ Repo kökünde (M01, ADR-0049):
 make setup                    # iki ortam, kilit dosyalarından
 cp .env.example .env          # değerleri doldurun — .env asla commit edilmez
 make preflight                # salt-okunur ön kontrol; HAZIR DEĞİL ise sebebini söyler
-make demo-data                # veri DEĞİŞTİRİR: 681 seri 2016+ canlı ingest → silver → gold (~30 dk)
+make demo-data                # veri DEĞİŞTİRİR: zorunlu set canlı ingest → silver → gold (≈6.300 seri; FinTürk 81 il yüzünden saatler sürer)
 make serve                    # arayüz: http://127.0.0.1:8765
 make ci                       # CI ile aynı deterministik testler
 ```
@@ -169,16 +169,25 @@ Ayrıntı: [docs/AGENT.md](docs/AGENT.md) · demo günü ve kabul betikleri: [do
 
 ## Veri kaynakları
 
-| Kaynak | Kapsam | Erişim |
-|---|---|---|
-| BDDK Aylık Bülten | 2016-01 → 2026-06, 20 kalem (4 kalem kaynakta 2018'den) | Kimlik doğrulaması olmayan JSON endpoint |
-| BDDK Haftalık Bülten | 2016-01 → 2026-06 | dönem bazlı sorgu |
-| BDDK FinTürk (il bazlı) | 2016-Ç1 → 2026-Ç2, 81 il × 8 ölçüm | form POST, yalnız çeyrek sonu |
-| TCMB EVDS 3 | 2016-01 → 2026-06, 12 seri | `key` başlığıyla REST, ≤365 günlük pencere |
-| Ad-hoc dosya / URL | demo anında | CSV / Excel / PDF / görsel (MIA OCR) / HTML |
+Yarışma kapsamı (kick-off, 09:48): BDDK haftalık/aylık bülten ve FinTürk il verileri ile EVDS, 2021-01 → 2026-06.
+Yüklü katalog (22 Eylül 2026, `meta.series`): **6.306 aktif seri**, Silver 236.118 gözlem, 7 Gold tablosu.
 
-Yüklü dönemin dışı istenirse Analyst mevcut aralığı söyler; Architect kaynaktan çekebilir. Kapsam ve mutabakat:
-[docs/M08_KAPSAM_RAPORU.md](docs/M08_KAPSAM_RAPORU.md).
+| Kaynak | Yüklü | Kapsam | Erişim |
+|---|---|---|---|
+| BDDK Aylık Bülten | 498 seri (bültenin birimi doğrulanabilen kalemleri; 76 kalem birimsiz/boş diye dışarıda) | 2021-01 → 2026-06; şema değişen 63 kalemde eski aylar eski kimlikten (`catalog/bddk_monthly_history.yml`), 7 kalemi kaynak 2021 başında yayımlamıyor | Kimlik doğrulaması olmayan JSON endpoint |
+| BDDK Haftalık Bülten | 34 seri | 2016-01 → 2026-06-26 (Cuma) | dönem bazlı sorgu |
+| BDDK FinTürk (il bazlı) | 4.536 seri = 81 il × 56 ölçüm (4 tablo) | 2021-Ç1 → 2026-Ç2, yalnız çeyrek sonu | form POST |
+| TCMB EVDS 3 | 1.238 seri: krediler, faizler (akım/stok), kur, TÜFE alt kalemleri, konut fiyat endeksleri ve satışları, BIST 100/XTUMY | 2021-01 → 2026-06 (günlük seriler 2026-07-03) | `key` başlığıyla REST, ≤365 günlük pencere |
+| Ad-hoc dosya / URL | demo anında | Architect taslak seri olarak kaydeder, onayla kataloğa alır | CSV / TSV / Excel (.xlsx, .xls) / JSON / PDF / görsel (MIA OCR) / HTML |
+
+EVDS'nin "Tüm Seriler" sayfasında 2021 sonrası veri taşıyan 31.797 seri var; 1.238'i yüklü, kalanı katalog dışı
+(yükleme kararı ekipte). Yüklü dönemin dışı istenirse Analyst mevcut aralığı söyler; Architect katalogdaki bir seriyi
+kaynaktan çekebilir (`ingest_source`), kataloğa girmemiş seri için dosya/URL yolu kullanılır. Kapsam ve mutabakat:
+[docs/M08_KAPSAM_RAPORU.md](docs/M08_KAPSAM_RAPORU.md); 21–22 Eylül genişletme ve düzeltmeleri:
+[docs/branches/data-intake-hardening.md](docs/branches/data-intake-hardening.md).
+
+**Veritabanı dosyası:** `.env`'deki `LAKEHOUSE_PATH` dolu veritabanını göstermeli. `data/lakehouse.duckdb` varsayılanı
+yalnız `make demo-data` sonrası doludur; ekipte dolu dosya `data/lakehouse.duckdb.breadth_test` adıyla dolaşıyor.
 
 Endpoint ayrıntıları ve doğrulanmış tablo haritası:
 [docs/LAKEHOUSE_CONTRACT.md](docs/LAKEHOUSE_CONTRACT.md) § 5.
