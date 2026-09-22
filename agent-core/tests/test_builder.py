@@ -163,3 +163,17 @@ def test_rapor_okunabilir() -> None:
     mapping, _ = propose(profile_table(TR), TR, series_id="adhoc:konut")
     text = verify_mapping(TR, mapping).render()
     assert text.startswith("DOĞRULAMA: geçti") and "6/6 satır eşlendi" in text
+
+
+def test_ciplak_yil_sutunu_yillik_tarih_adayidir_sayi_kolonu_degil() -> None:
+    """Boş katalog provası (22 Eyl, Dünya Bankası nüfus): 'Year' = 1960, 1961 … tarih sayılmayınca kayıt reddedildi."""
+    frame = pd.DataFrame({"Country Name": ["Aruba", "Aruba", "Aruba"], "Year": ["1960", "1961", "1962"], "Value": ["54922", "55578", "56320"]})
+    prof = profile_table(frame)
+    year = prof.column("Year")
+    assert year.date_formats == ("%Y",) and year in prof.date_candidates and year not in prof.value_candidates
+    assert prof.column("Value").date_formats == () and prof.column("Value") in prof.value_candidates
+    mapping, semantics = propose(prof, frame, series_id="adhoc:nufus")
+    assert mapping.observation_date_column == "Year" and mapping.value_column == "Value" and semantics.frequency == "yearly"
+    # 1900–2100 dışı ya da beş haneli sayılar yıl değildir
+    assert profile_table(pd.DataFrame({"a": ["1850", "1900"]})).column("a").date_formats == ()
+    assert profile_table(pd.DataFrame({"a": ["12024", "12025"]})).column("a").date_formats == ()

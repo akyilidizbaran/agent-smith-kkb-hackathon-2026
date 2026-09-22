@@ -254,6 +254,14 @@ def month_names_to_dates(frame: Any, year: int) -> tuple[Any, str] | None:
     return None
 
 
+def year_column_to_dates(frame: Any, column: str) -> tuple[Any, str]:
+    """Çıplak yıl sütunu → ISO yıl sonu tarihi (1960 → 1960-12-31); yıllık serinin dönem sonu kuralı (aylıkta ay sonu gibi).
+    Veri ekibinin CLI'ı yalnız tam tarih alır; dönüşüm sahnelenen CSV'de, kaynak dosya değişmez."""
+    out = frame.copy()
+    out[column] = [f"{int(str(v).strip()):04d}-12-31" for v in out[column].tolist()]
+    return out, f"'{column}' sütunundaki yıllar yıl sonu tarihine çevrildi (1960 → 1960-12-31); frekans yıllık."
+
+
 def _bare_locator(locator: str) -> bool:
     """Adres ne http(s), ne file:, ne mutlak yol: yalnız bir dosya adı. Kullanıcı dosyayı eklemeden adını yazmıştır
     (ölçüldü 20 Eyl: 'bist_altin_2023.csv dosyasını kaydet' → araç düz adla arandı, ACCESS_BLOCKED)."""
@@ -567,6 +575,14 @@ class IngestFromUrlTool(Tool):
             derived_notes.append("Eski Excel (.xls) xlrd ile okundu ve CSV'ye çevrildi; veri havuzu .xls almaz, "
                                  "kaynak dosya değiştirilmedi.")
         profile = profile_table(frame)
+        year_cols = [c for c in profile.date_candidates if c.date_formats == ("%Y",)]
+        if year_cols and local_matrix is None:      # yerel dosya da adres de: web kaynağında çerçeve stage() ile gider
+            chosen = params.date_column if params.date_column in {c.name for c in year_cols} else year_cols[0].name
+            frame, note = year_column_to_dates(frame, chosen)
+            derived_notes.append(note)
+            if not params.frequency:
+                params = params.model_copy(update={"frequency": "yearly"})
+            profile = profile_table(frame)
         if period is not None and not profile.date_candidates:
             by_month = month_names_to_dates(frame, int(period[0][:4])) if local_matrix is None else None
             if by_month is not None:

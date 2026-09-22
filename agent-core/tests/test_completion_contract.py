@@ -316,3 +316,11 @@ def test_seri_kimligi_deseni_kaynak_adina_bagli_degildir() -> None:
     e = derive_expectation("saglik_il:ANKARA_Yatak ve tuik:NUFUS.2024 ile 1357_Toplam ve TP.KTF12 serileri")
     assert e.series_ids == ("saglik_il:ANKARA_Yatak", "tuik:NUFUS.2024", "1357_Toplam", "TP.KTF12")
     assert derive_expectation("2024 yılında ankara: neler oldu").series_ids == ()
+
+
+def test_varlik_listesi_teslim_edilen_tabloyla_karsilanir() -> None:
+    """Boş katalog provası (22 Eyl): "hangi ülkeler var, listele" → sorgu tablosu geldi ama sözleşme aday tablosu istedi."""
+    e = derive_expectation("Nüfus serisinde hangi ülkeler var, adında 'stan' geçenleri listele.")
+    assert e.listing
+    assert check_completion(e, pd.DataFrame({"entity_id": ["Afghanistan", "Pakistan"]})).ok
+    assert not check_completion(e, None).ok

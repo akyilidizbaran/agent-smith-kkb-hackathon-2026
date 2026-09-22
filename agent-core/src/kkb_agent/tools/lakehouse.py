@@ -490,8 +490,17 @@ class LakehouseQueryTool(Tool):
         return ToolResult(content=content, data=df, provenance=result.provenance)
 
     def _is_period_aggregation(self, sql: str) -> bool:
+        """Dönem kutusuna (ay/çeyrek/yıl) toplama: dönem ifadesi GROUP BY'da ya da SELECT listesinde olmalı.
+
+        WHERE'deki `EXTRACT(year …) BETWEEN` bir filtredir, kutu değil. Ölçüldü (22 Eyl, boş katalog provası): iki ülkeyi
+        aynı tarih taneli satırlarda yan yana koyan pivot (`MAX(CASE WHEN entity_id=…)` + `GROUP BY observation_date`,
+        yıl filtresi WHERE'de) yanlışlıkla frekans dönüşümü sayılıp GOLD_REQUIRED ile reddedildi."""
         text = sql.lower()
-        return bool(self._PERIOD_AGG.search(text) and self._AGG_FN.search(text) and "group by" in text)
+        if "group by" not in text or not self._AGG_FN.search(text):
+            return False
+        group_part = text.rsplit("group by", 1)[1]
+        select_part = text[text.find("select"):text.find(" from ")] if " from " in text else text
+        return bool(self._PERIOD_AGG.search(group_part) or self._PERIOD_AGG.search(select_part))
 
     _FREKANS_SOZ = (
         ("günlük", Frequency.DAILY), ("gunluk", Frequency.DAILY),
@@ -709,13 +718,20 @@ class LakehouseDistinctValuesTool(Tool):
         # Alt toplam bayrağı varsa birlikte göster: mükerrer sayımı önleyen sinyal.
         has_flag = spec.column("is_alt_toplam") is not None
         select = f"{col}, is_alt_toplam" if has_flag else col
-        where = ""
+        conditions = []
+        relation, base_where = self._scope(params.dataset_id)
+        if base_where:
+            conditions.append(base_where)
         if params.contains:
+            # Aksana ve büyük/küçük harfe duyarsız: kaynaklar varlık adını kendi dilinde yazar ("Turkiye", "IZMIR");
+            # kullanıcı Türkçe yazar ("Türkiye", "İzmir"). Ölçüldü (22 Eyl, boş katalog provası): "Türkiye", "Turkey"
+            # ve "Tür" aramaları "Turkiye" kaydını bulamadı, karşılaştırma yapılamadı. Dil listesi yok: strip_accents.
             safe = params.contains.replace("'", "''")
-            where = f"WHERE {col} ILIKE '%{safe}%'"
+            conditions.append(f"strip_accents(lower({col})) LIKE '%' || strip_accents(lower('{safe}')) || '%'")
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
         sql = (
-            f"SELECT DISTINCT {select} FROM {params.dataset_id} {where} "
+            f"SELECT DISTINCT {select} FROM {relation} {where} "
             f"ORDER BY 1 LIMIT {int(params.limit)}"
         )
         try:
@@ -768,11 +784,25 @@ class LakehouseDistinctValuesTool(Tool):
         )
         return ToolResult(content="\n".join(lines), data=result.data)
 
+    def _scope(self, dataset_id: str) -> tuple[str, str]:
+        """(ilişki, temel WHERE): seri kimliği tablo adı olmayan yerleşimlerde adaptör söyler (Silver: uzun tablo + series_id
+        filtresi; Gold: tablonun kendisi). Adaptör bilmiyorsa (seed) kimlik tablo adıdır. Ölçüldü (22 Eyl): 'adhoc:dunya_nufus'
+        FROM'a yazılınca "Table … does not exist", varlık listesi hiç alınamadı."""
+        scope = getattr(self.lakehouse, "series_scope", None)
+        if callable(scope):
+            try:
+                relation, where = scope(dataset_id)
+                return str(relation), str(where or "")
+            except Exception:  # noqa: BLE001 — kapsam üretilemezse eski davranış
+                pass
+        return dataset_id, ""
+
     def _toplam_deger_sayisi(self, dataset_id: str, column: str) -> int:
         """Kolondaki toplam distinct değer sayısı — limit uygulanmadan önceki hâli."""
+        relation, base_where = self._scope(dataset_id)
         try:
             r = self.lakehouse.execute_sql(
-                f"SELECT COUNT(DISTINCT {column}) AS n FROM {dataset_id}"
+                f"SELECT COUNT(DISTINCT {column}) AS n FROM {relation}" + (f" WHERE {base_where}" if base_where else "")
             )
             return int(r.data.iloc[0, 0]) if not r.is_empty else 0
         except LakehouseError:

@@ -668,6 +668,14 @@ class SilverLakehouse:
             f"WHERE series_id = '{dataset_id}' ORDER BY observation_date LIMIT {int(n)}"
         )
 
+    def series_scope(self, dataset_id: str) -> tuple[str, str]:
+        """(ilişki, temel WHERE) — bir seriye ait satırların yaşadığı yer. Gold tablosu gerçek tablodur (filtre yok); Silver ve
+        adhoc serileri uzun tabloda `series_id` filtresiyle. Araçlar FROM'a kimlik yazmak yerine bunu kullanır."""
+        self.get_dataset(dataset_id)          # yoksa LakehouseError: kimlik tablo adı sanılmaz
+        if self._is_gold(dataset_id):
+            return dataset_id, ""
+        return self._relation_for(dataset_id), "series_id = '" + dataset_id.replace("'", "''") + "'"
+
     def series_sql(
         self,
         dataset_id: str,

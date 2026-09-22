@@ -205,3 +205,46 @@ def test_altin_pdf_benzeri_tablo_yilla_kaydedilir(tmp_path: Path) -> None:
     frame = pd.read_csv(staged, sep=",")
     assert len(frame) == 6 and frame["AY/MONTH"].tolist()[0] == "2026-01-31" and _flag(cmd, "--frequency") == "monthly"
     assert _flag(cmd, "--unit") in ("TL", "TRY") and "TOPLAM" in r.content
+
+
+def test_yil_sutunlu_tablo_yil_sonu_tarihiyle_sahnelenir_ve_yillik_kaydedilir(tmp_path: Path) -> None:
+    """Boş katalog provası (22 Eyl): ülke × yıl nüfus tablosu; 'Year' tam sayı. Yıl → 12-31, frekans yıllık, varlık ülke."""
+    csv = "Country Name,Country Code,Year,Value\nAruba,ABW,1960,54922\nAruba,ABW,1961,55578\nAruba,ABW,1962,56320\nTurkey,TUR,1960,27472331\nTurkey,TUR,1961,28146893\nTurkey,TUR,1962,28832805\n"
+    tool, runner, incoming = _tool(tmp_path, "population.csv dosyasındaki nüfus verisini ülke bazında yıllık taslak seri olarak kaydet; birim kişi, ölçüm tipi stok, değer kolonu Value, tarih kolonu Year, varlık kolonu Country Name", {"population.csv": csv})
+    r = tool.validate_and_run({"locator": str(incoming / "population.csv"), "name": "Dünya nüfusu", "unit": "kişi", "measure_type": "stock",
+                               "value_column": "Value", "date_column": "Year", "entity_column": "Country Name", "series_key": "dunya_nufus"})
+    assert r.content.startswith("EKLENDİ"), r.content
+    cmd = runner.calls[-1][0]
+    staged = Path(cmd[cmd.index("ingest-file") + 1])
+    assert staged.name.startswith("derived_population_")
+    frame = pd.read_csv(staged, dtype=str)
+    assert set(frame["Year"]) == {"1960-12-31", "1961-12-31", "1962-12-31"}
+    assert _flag(cmd, "--date-column") == "Year" and _flag(cmd, "--date-format") == "%Y-%m-%d" and _flag(cmd, "--frequency") == "yearly"
+    assert _flag(cmd, "--entity-column") == "Country Name" and _flag(cmd, "--delimiter") == ","
+
+
+def test_adresten_gelen_yil_sutunlu_tablo_da_yil_sonuna_cevrilir(tmp_path: Path, monkeypatch) -> None:
+    """Canlı prova (22 Eyl): adres yolunda yıl dönüşümü atlanmış, taslak 1960-01-01 ile yazılmıştı; kural dönem sonu."""
+    import pandas as pd
+    from kkb_agent.builder import web_source as ws_mod
+    from kkb_agent.tools import ingest as ingest_mod
+
+    class _Src:
+        def __init__(self):
+            self.frame = pd.DataFrame({"Country Name": ["Aruba", "Aruba", "Aruba"], "Year": ["1960", "1961", "1962"], "Value": ["1", "2", "3"]})
+            from kkb_agent.core.access_policy import classify_access
+            self.outcome = classify_access("https://example.org/population.csv", http_status=200)
+            self.note = "sahte web kaynağı"; self.entity_column = None; self.assets = []
+            self.frequency = None; self.turkish_numbers = False
+        def stage(self, root):
+            root.mkdir(parents=True, exist_ok=True)
+            path = root / "web_table_test.csv"; self.frame.to_csv(path, index=False)
+            return str(path), self.note
+    monkeypatch.setattr(ingest_mod, "read_web_source", lambda *a, **k: _Src())
+    tool, runner, incoming = _tool(tmp_path, "https://example.org/population.csv adresindeki nüfus verisini ülke bazında yıllık taslak olarak kaydet; birim kişi, ölçüm tipi stok, değer kolonu Value, tarih kolonu Year, varlık kolonu Country Name", {})
+    r = tool.validate_and_run({"locator": "https://example.org/population.csv", "name": "Nüfus", "unit": "kişi", "measure_type": "stock",
+                               "value_column": "Value", "date_column": "Year", "entity_column": "Country Name", "series_key": "nufus"})
+    assert r.content.startswith("EKLENDİ"), r.content
+    cmd = runner.calls[-1][0]
+    staged = pd.read_csv(Path(cmd[cmd.index("ingest-file") + 1]), dtype=str)
+    assert set(staged["Year"]) == {"1960-12-31", "1961-12-31", "1962-12-31"} and _flag(cmd, "--frequency") == "yearly"

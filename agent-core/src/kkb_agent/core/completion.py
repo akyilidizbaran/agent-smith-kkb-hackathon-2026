@@ -260,7 +260,9 @@ def check_completion(
     exp_periods = expectation.expected_periods
     if expectation.listing:
         report.checked.append("aday listesi")
-        if candidate_count is None:
+        # Liste isteği katalog adaylarıyla (arama defteri) ya da herhangi bir teslim edilen tabloyla karşılanır:
+        # "hangi ülkeler var, listele" bir varlık listesidir, sorgu tablosu onu verir (22 Eyl provası: sahte boşluk).
+        if candidate_count is None and (table is None or len(table) == 0):
             report.gaps.append("aday listesi istendi ama arama adayları tablo olarak sunulmadı")
     if table is None or len(table) == 0:
         if expectation.start or expectation.derivations or expectation.series_ids:
