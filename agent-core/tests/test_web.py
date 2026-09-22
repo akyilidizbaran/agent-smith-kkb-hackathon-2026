@@ -675,3 +675,51 @@ def test_k02_t10_tavily_http_hatasi_ve_baglanti_kopmasi_kontrollu_doner() -> Non
             raise ConnectionError("bağlantı koptu")
     r = WebSearchTool(TavilySearch(environ={"TAVILY_API_KEY": "k"}, session=Broken(), budget=3)).validate_and_run({"query": "enflasyon"})
     assert not r.ok and r.error.error_code == "ACCESS_BLOCKED" and "unreachable" in r.content
+
+
+def test_fallback_is_not_consumed_when_research_state_denies_the_search() -> None:
+    """İnceleme (22 Eyl): fallback planı authorize_search reddinden ÖNCE 'consumed' işaretleniyordu."""
+    from kkb_agent.core.web_research import WebResearchState
+
+    seen: list[dict] = []
+
+    class S:
+        def post(self, url, json=None, headers=None, timeout=None):
+            seen.append({"json": json})
+            return SimpleNamespace(status_code=200, json=lambda: {"results": []})
+
+    plan = {"query": "BDDK aylık kredi 2024", "include_domains": ["bddk.gov.tr"], "topic": "finance", "max_results": 5}
+    registry = SimpleNamespace(
+        active_question="2024 BDDK kredi verilerini getir",
+        public_web_fallback_plan=plan,
+        public_web_fallback_consumed=False,
+        sanctioned_locators=set(),
+        web_research=WebResearchState(max_searches=0),
+    )
+    tool = WebSearchTool(TavilySearch(environ={"TAVILY_API_KEY": "k"}, session=S()), registry=registry)
+
+    denied = tool.validate_and_run({"query": "x"})
+
+    assert not denied.ok and denied.error.error_code == "WEB_RESEARCH_BUDGET"
+    assert registry.public_web_fallback_consumed is False
+    assert seen == []
+
+
+def test_web_url_page_budget_clamp_keeps_turn_cache_key() -> None:
+    """İnceleme (22 Eyl): page_budget max_pages'i kırpınca tur önbelleği anahtarı değişiyor, aynı sayfa
+    yeniden indiriliyordu."""
+    from kkb_agent.core.web_research import WebResearchState
+
+    s = Session({"https://site.example/tufe": Resp(200, HTML.encode(), url="https://site.example/tufe")})
+    tool, _ = _tool(s, "Şu sayfayı oku: https://site.example/tufe")
+    state = WebResearchState(max_unique_pages=2)
+    tool._registry.web_research = state
+
+    first = tool.validate_and_run({"url": "https://site.example/tufe", "purpose": "2025 TÜFE", "max_pages": 2})
+    state.record_tool_result("web_url", first)
+    assert first.ok and state.page_budget("https://site.example/tufe", 2) == 1
+
+    second = tool.validate_and_run({"url": "https://site.example/tufe", "purpose": "2025 TÜFE", "max_pages": 2})
+
+    assert second.ok and second.artifacts["web"]["cache_reused"] is True
+    assert s.calls.count("https://site.example/tufe") == 1

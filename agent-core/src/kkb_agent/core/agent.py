@@ -52,6 +52,7 @@ from .web_routing import catalog_ids_in_sql, public_fallback_plan
 from .workspace_fastpath import (
     execute_verified_workspace_transform,
     inspect_existing_verified_transform,
+    period_view,
     plan_verified_workspace_transform,
     repair_invalid_previous_transform,
     requested_month_range,
@@ -833,6 +834,13 @@ class AnalyticsAgent:
             self.workspace.has_table and is_active_table_composition(question, self._follow_up_resolution)
         )
         self._attach_active_series_identities()
+        # Per-turn proof of an already-applied transform. It used to be reset
+        # only in `reset()`, so a previous turn's "dönüşüm" flag leaked into
+        # the next question and `_is_structured_transform_complete` could
+        # finish a new topic without any transformation tool having run.
+        self._verified_workspace_satisfaction = None
+        self._verified_reuse_snapshot = None
+        self._pre_satisfied_capabilities = set()
         if self._active_table_reuse_allowed:
             self._verified_workspace_satisfaction = inspect_existing_verified_transform(
                 question,
@@ -1538,6 +1546,9 @@ class AnalyticsAgent:
                 frame = self.workspace.table
                 if not isinstance(frame, pd.DataFrame) or frame.empty:
                     return None
+                frame = period_view(frame, proof.date_column, proof.period_start, proof.period_end)
+                if frame.empty:
+                    return None
                 self._begin_registry_turn(question, self._retry_source_question or question)
                 self.last_gate = None
                 step = AgentStep(
@@ -1661,9 +1672,11 @@ class AnalyticsAgent:
         label = "yüzde değişim" if operation == "percent_change" else "dönemsel değişim"
         action = "zaten doğrulanmış tabloda bulundu" if already_present else "hesaplandı"
         scope = ""
+        preserved = ""
         if period_start is not None and period_end is not None:
             months = (period_end.year - period_start.year) * 12 + period_end.month - period_start.month + 1
             scope = f" {period_start:%Y-%m}–{period_end:%Y-%m} aralığında {months} dönemlik çıktı olarak"
+            preserved = " Aktif tablo tam penceresiyle korundu; yeni sütunlar ona eklendi."
         selected = [column for column in derived_columns if column in frame.columns]
         first_values = frame.loc[:, selected].head(1) if selected else pd.DataFrame()
         if not first_values.empty and first_values.notna().to_numpy().any():
@@ -1672,7 +1685,7 @@ class AnalyticsAgent:
             lag_note = "Önceki gözlemi bulunmayan başlangıç değerleri boş bırakıldı."
         return (
             f"Doğrulanmış aktif tablodaki {len(derived_columns)} seri için {label}{scope} {action}; "
-            f"toplam {len(frame)} satır. {lag_note}"
+            f"toplam {len(frame)} satır. {lag_note}{preserved}"
         )
 
     def _verified_delivery_summary(self, steps: list[AgentStep], *, is_transform: bool) -> str:

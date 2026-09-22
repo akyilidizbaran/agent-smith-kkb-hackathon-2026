@@ -427,9 +427,11 @@ def test_narration_timeout_commits_verified_context_for_monthly_follow_up() -> N
     assert second.usage["calls"] == 0, "takip deterministik fast path ile tamamlanmalı"
     assert tool.calls == 1, "takip yeni katalog/sorgu çağrısı yapmamalı"
     assert second.steps[0].tool_name == "workspace_compute_column"
-    assert len(workspace.table) == 24
-    assert workspace.table.iloc[0]["need_change"] == 1
-    assert workspace.table.iloc[0]["card_change"] == 10
+    view = second.steps[0].result_data
+    assert len(view) == 24
+    assert view.iloc[0]["need_change"] == 1
+    assert view.iloc[0]["card_change"] == 10
+    assert len(workspace.table) == 60, "pencere görünümü aktif tablonun yerine geçmez"
 
 
 def test_web_narration_timeout_keeps_sources_and_does_not_attach_stale_table() -> None:
@@ -1016,3 +1018,111 @@ def test_bare_tool_name_answer_is_replaced_by_deterministic_summary() -> None:
     assert "60 satır" in answer.text
     assert answer.usage["empty_final_response_fallbacks"] == 1
     assert any("yalnız araç adı" in (step.thought or "") for step in answer.steps)
+
+
+def _province_in_id_catalog() -> list[SimpleNamespace]:
+    """İl adı yalnız seri kimliğinde (alt çizgili), görünen adda değil."""
+    return [
+        SimpleNamespace(
+            dataset_id="bddk_finturk:VAN_TasitKredisi",
+            name="Taşıt Kredisi (Bireysel Bankacılık, Sektör)",
+            source="bddk_finturk",
+            source_detail=None,
+            tags=["kredi", "aylık", "il"],
+            columns=[
+                SimpleNamespace(name="value", role="measure", example_values=[], aliases=["taşıt kredisi"]),
+            ],
+        ),
+        SimpleNamespace(
+            dataset_id="bddk_monthly:1535_Toplam",
+            name="Tüketici Kredileri - Taşıt, Toplam (Sektör)",
+            source="bddk_monthly",
+            source_detail=None,
+            tags=["kredi", "aylık"],
+            columns=[
+                SimpleNamespace(name="value", role="measure", example_values=[], aliases=["taşıt kredisi"]),
+            ],
+        ),
+    ]
+
+
+def test_province_is_read_from_underscored_dataset_id() -> None:
+    """İnceleme (22 Eyl): `\\b` alt çizgiyi sözcük sayar; il 'VAN_TasitKredisi' kimliğinden okunmuyordu."""
+    catalog = _province_in_id_catalog()
+
+    national = _extract("Taşıt kredisi bakiyesini 2024 için getir", catalog)
+    assert national.series == "bddk_monthly:1535_Toplam"
+
+    van = _extract("Van taşıt kredisi bakiyesini 2024 için getir", catalog)
+    assert van.series == "bddk_finturk:VAN_TasitKredisi"
+
+
+def test_facet_extraction_failure_keeps_legacy_candidates(monkeypatch) -> None:
+    """extract_facets hata verirse il serileri toptan elenmez; filtresiz eski aday listesine dönülür."""
+    import kkb_agent.core.follow_up as follow_up_module
+
+    def _boom(_question: str):
+        raise RuntimeError("facet fixture failure")
+
+    monkeypatch.setattr(follow_up_module, "extract_facets", _boom)
+    explicit = _extract("Van taşıt kredisi bakiyesini 2024 için getir", _province_in_id_catalog())
+    assert explicit.series == "bddk_finturk:VAN_TasitKredisi"
+
+
+def test_single_word_topics_are_metrics_not_series() -> None:
+    """'stok', 'kar', 'kur', 'endeks', 'oran', 'takip' yeni konu olarak metric'e yazılır; gövde/ek karışmaz."""
+    assert _extract("Şimdi stok serisini getir", []).metric == "stok"
+    assert _extract("Kâr marjını 2024 için göster", []).metric == "kar"
+    assert _extract("Takipteki alacakları getir", []).metric == "takip"
+    assert _extract("Endeksi aylık göster", []).metric == "endeks"
+    assert _extract("Kur farkını getir", []).metric == "kur"
+    assert _extract("Bunu 2024 ile karşılaştır", []).metric is None
+    assert _extract("Kurumsal segmenti getir", []).metric is None
+    assert _extract("Aylık değişim oranını hesapla", []).metric is None
+
+    previous = FollowUpContext(domain="finance", metric="mevduat", series="bddk_monthly:1200_Toplam")
+    resolution = resolve_follow_up("Stok değişimini hesapla", previous)
+    assert resolution.explicit.metric == "stok"
+    assert "metric" in resolution.overridden
+
+
+def test_aggregation_words_tolerate_turkish_suffixes_and_need_word_start() -> None:
+    assert _extract("Bu serinin 2024 ortalamasını hesapla", []).aggregation == "average"
+    assert _extract("2024 döneminde toplamını ver", []).aggregation == "sum"
+    assert _extract("En düşüğünü bul", []).aggregation == "minimum"
+    assert _extract("En yüksek değeri göster", []).aggregation == "maximum"
+    assert _extract("2025 için tahmin et", []).aggregation is None
+    assert _extract("2024 döneminde", []).aggregation is None
+    assert _extract("Çeyrekleri toplamadan aylık ver", []).aggregation is None
+
+
+def test_pre_satisfied_transform_flag_is_cleared_for_the_next_turn() -> None:
+    """İnceleme (22 Eyl): `_pre_satisfied_capabilities` yalnız reset()'te sıfırlanıyordu. İlk turda hızlı yol
+    'dönüşüm'ü ön-karşılanmış sayınca, yeni konudaki ikinci soru dönüşüm aracı çalışmadan
+    'dönüşüm uygulandı' teslimiyle bitebiliyordu."""
+    workspace, context, specs = _two_series_monthly_workspace()
+    _add_fixture_changes(workspace, context, specs)
+    registry = ToolRegistry()
+    registry.register(_WorkspaceQueryTool(workspace))
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[_call(2025, "q1")]),
+        LLMResponse(content="2025 için hastane başvuru oranı tabloda."),
+    ])
+    agent = AnalyticsAgent(llm, registry, workspace=workspace, max_steps=4)
+    agent._catalog_specs = lambda: specs
+    agent._follow_up_context = context
+
+    first = agent.ask("Bu aktif tablodaki aylık değişimleri hesapla.")
+    assert first.reused_verified_table and llm.calls == 0
+    assert "dönüşüm" in agent._pre_satisfied_capabilities
+
+    # "artışı" closes the plain delivery fast path; "oran" keeps the
+    # transformation gate in play, which is where the stale flag was read.
+    second = agent.ask("2025 yılı hastane başvuru oranındaki artışı getir.")
+
+    assert agent._pre_satisfied_capabilities == set()
+    assert agent._verified_reuse_snapshot is None
+    assert llm.calls == 2
+    assert second.text == "2025 için hastane başvuru oranı tabloda."
+    assert "dönüşüm" not in second.text
+    assert not any("model anlatım turu atlandı" in (step.thought or "") for step in second.steps)

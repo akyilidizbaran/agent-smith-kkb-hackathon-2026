@@ -59,14 +59,24 @@ _FREQUENCY = (
     ("yearly", re.compile(r"\byıllık|yillik|yıl bazında|yil bazinda|yearly\b", re.IGNORECASE)),
     ("daily", re.compile(r"\bgünlük|gunluk|daily\b", re.IGNORECASE)),
 )
+# Aggregation words need a word start and Turkish noun-suffix tolerance: a
+# trailing `\b` alone missed "ortalamasını" / "toplamını", and `min` without a
+# leading boundary matched the `min` in "tahmin" and "döneminde". The suffix
+# list is explicit so verb negations ("toplamadan") do not count as a sum.
+_WORD_START = r"(?<![^\W\d_])"
+_NOUN_SUFFIX = (
+    r"(?:s?[ıiuü]|s?[ıiuü]n[ıiuü]?|s?[ıiuü]n[ae]|y?[ıiuü]|y?[ae]|l[ae]r[ıiuü]?|l[ae]r[ıiuü]n[ıiuü]?|l[ae]r[ıiuü]n[ae]|"
+    r"d[ae]|d[ae]n|nd[ae]|nd[ae]n|l[ae]|yl[ae])?"
+)
 _AGGREGATION = (
-    ("average", re.compile(r"(?:ortalama|average|mean)\b", re.IGNORECASE)),
-    ("sum", re.compile(r"(?:toplam|sum)\b", re.IGNORECASE)),
-    # `min`/`max` must be whole words: an unbounded `min` matched the
-    # `min` in Turkish words such as `döneminde`, turning a plain follow-up
-    # into a false minimum request.
-    ("minimum", re.compile(r"(?:en düşük|en dusuk|minimum|min)\b", re.IGNORECASE)),
-    ("maximum", re.compile(r"(?:en yüksek|en yuksek|maksimum|max)\b", re.IGNORECASE)),
+    ("average", re.compile(_WORD_START + r"(?:ortalama" + _NOUN_SUFFIX + r"|average|mean)\b", re.IGNORECASE)),
+    ("sum", re.compile(_WORD_START + r"(?:toplam" + _NOUN_SUFFIX + r"|sum)\b", re.IGNORECASE)),
+    ("minimum", re.compile(
+        _WORD_START + r"(?:en\s+d[üu][şs][üu][kğg]" + _NOUN_SUFFIX + r"|minimum" + _NOUN_SUFFIX + r"|min)\b",
+        re.IGNORECASE)),
+    ("maximum", re.compile(
+        _WORD_START + r"(?:en\s+y[üu]kse[kğg]" + _NOUN_SUFFIX + r"|maksimum" + _NOUN_SUFFIX + r"|max)\b",
+        re.IGNORECASE)),
 )
 _DOMAIN_TERMS = {
     "finance": ("finans", "finansal", "kredi", "banka", "döviz", "doviz", "kur", "faiz"),
@@ -88,6 +98,22 @@ _GENERIC_METRICS = (
     "mevduat",
     "faiz",
 )
+# Single-word topics that name a family of series ("stok", "kar", "kur",
+# "endeks", "oran", "takip"). They never bind a series (`_GENERIC_SERIES_WORDS`,
+# `_MAX_SERIES_PER_SINGLE_WORD`), so without a metric facet a follow-up such
+# as "stok değişimini hesapla" inherited the old metric and the workspace fast
+# path computed on the previous table. Matched on folded text with a word
+# start and a bounded Turkish suffix: "karşılaştır", "kurumsal" and
+# "değişim oranı" stay out.
+_TR_SUFFIX = (
+    r"(?:i|u|a|e|in|un|nin|nun|ni|nu|na|ne|da|de|ta|te|dan|den|tan|ten|daki|deki|taki|teki|"
+    r"la|le|yla|yle|lar|ler|lari|leri|larin|lerin|larini|lerini|larina|lerine|dir|dur)?"
+)
+_SINGLE_WORD_METRICS = re.compile(
+    r"(?<![a-z0-9])(?<!degisim )(?<!buyume )(?<!artis )(?<!azalis )"
+    r"(kar|kur|endeks|oran|takip|takib|stok)" + _TR_SUFFIX + r"(?![a-z0-9])"
+)
+_SINGLE_WORD_METRIC_STEMS = {"takib": "takip"}
 _GEO_COLUMN = re.compile(r"il|şehir|sehir|province|district|location|region|bölge|bolge", re.IGNORECASE)
 _PERCENT_CHANGE = re.compile(r"%|yüzde|yuzde|percent(?:age)?|pct|growth\s+rate|büyüme\s+hızı|buyume\s+hizi", re.IGNORECASE)
 _NON_SERIES_TERMS = frozenset({
@@ -328,7 +354,10 @@ def _catalog_hints(
                 sources.append((str(raw), str(raw)))
         series_allowed = True
         if provinces is not None:
-            spec_province = province_of(f"{dataset_id} {name}")
+            # `_` is a word character, so `\b` never fires inside
+            # `bddk_finturk:VAN_TasitKredisi`; the province used to be read
+            # from the display name only. Split the id before the lookup.
+            spec_province = province_of(f"{dataset_id.replace('_', ' ')} {name}")
             series_allowed = not spec_province or spec_province in provinces
         for raw in (name, dataset_id, *tags):
             if series_allowed and _specific_series_term(raw):
@@ -392,10 +421,13 @@ def _best_match(question: str, candidates: Iterable[tuple[str, str]]) -> tuple[s
 
 
 def _extract(question: str, catalog: Iterable[object]) -> FollowUpContext:
+    provinces: tuple[str, ...] | None
     try:
-        provinces: tuple[str, ...] = tuple(extract_facets(question).provinces)
+        provinces = tuple(extract_facets(question).provinces)
     except Exception:  # noqa: BLE001 — facet extraction must never break the resolver
-        provinces = ()
+        # `()` would mean "no province asked" and drop every provincial
+        # series; `None` keeps the legacy unfiltered candidate list instead.
+        provinces = None
     series_candidates, source_candidates, dimensions = _catalog_hints(catalog, provinces=provinces)
     domain = next(
         (name for name, terms in _DOMAIN_TERMS.items() if any(_has_term(question, term) for term in terms)),
@@ -409,6 +441,10 @@ def _extract(question: str, catalog: Iterable[object]) -> FollowUpContext:
         if _has_term(question, term):
             metric = term
             break
+    if metric is None:
+        single = _SINGLE_WORD_METRICS.search(_fold(question))
+        if single:
+            metric = _SINGLE_WORD_METRIC_STEMS.get(single.group(1), single.group(1))
     series = None
     if series_match:
         series = series_match[1]

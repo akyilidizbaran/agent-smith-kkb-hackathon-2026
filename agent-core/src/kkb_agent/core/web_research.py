@@ -146,7 +146,7 @@ class WebResearchState:
         if name != "web_url":
             return
         web_artifact = artifacts.get("web") or {}
-        newly_read = 0
+        pages_read = 0
         for page in web_artifact.get("visited") or []:
             try:
                 status = int(page.get("status") or 0)
@@ -154,13 +154,17 @@ class WebResearchState:
                 status = 0
             url = canonical_page_url(str(page.get("url") or ""))
             host = (urlparse(url).hostname or "").lower()
-            if 200 <= status < 300 and url and url not in self.pages_read:
-                self.pages_read.add(url)
-                if host:
-                    self.hosts_read.add(host)
-                newly_read += 1
-        if newly_read:
-            self._pages_read_after_search += newly_read
+            if 200 <= status < 300 and url:
+                # A re-read of a known page also satisfies "open a candidate
+                # before searching again"; only the unique-page budget is
+                # charged once per URL.
+                pages_read += 1
+                if url not in self.pages_read:
+                    self.pages_read.add(url)
+                    if host:
+                        self.hosts_read.add(host)
+        if pages_read:
+            self._pages_read_after_search += pages_read
             self.stage = "evidence_review"
 
     def bound_model_evidence(self, content: str) -> str:

@@ -72,7 +72,9 @@ def extract_facets(question: str) -> Facets:
     if re.search(r"(?<!\d)\d{1,3}\s*aylik\b", q) and re.search(r"donem|pencere|veri|gozlem|seri|cek|getir", q):
         if not re.search(r"vade|mevduat|repo", q):
             window_frequency = "monthly"
-    national = bool(re.search(
+    # An explicit province wins over a national phrase: "Türkiye'de Ankara …"
+    # asks for Ankara, and `national` used to make `apply_facets` drop it.
+    national = not provinces and bool(re.search(
         r"\bturkiye(?:['’ ]?(?:deki|geneli|genelindeki))?\b|"
         r"\bulke(?:['’ ]?(?:deki|geneli|genelindeki))?\b|\bulusal\b|\bnational\b",
         q,
