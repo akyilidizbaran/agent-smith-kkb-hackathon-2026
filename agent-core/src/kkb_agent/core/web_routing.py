@@ -233,9 +233,30 @@ def public_fallback_plan(
     return {"query": query, "include_domains": domains, "topic": "finance", "max_results": 5}
 
 
+def general_public_fallback_plan(question: str) -> dict[str, list[str] | str] | None:
+    """Açık web isteği + doğrulanmış yerel yokluk: domain-pini olmayan sınırlı bir arama.
+
+    Yalnız kullanıcı web'i AÇIKÇA istediğinde (``web_requested``) ve hiçbir yerel veri
+    isteği karşılamadığında kullanılır. Ham soru asla birebir kopyalanmaz; kısa ve güvenli
+    bir konu sorgusu damıtılır (SQL/gizli/e-posta biçimleri elenir). Domain kısıtı yoktur —
+    kullanıcı açık web istedi — ama harness yine tek bir aramayı zorlar.
+    """
+
+    if web_forbidden(question) or _PRIVATE.search(question or ""):
+        return None
+    terms = _safe_search_terms(question)
+    years = _YEAR.findall(question or "")
+    parts = list(dict.fromkeys(part for part in (*terms, *years) if part))
+    query = " ".join(parts)[:500]
+    if not query:
+        return None
+    return {"query": query, "include_domains": [], "topic": "finance", "max_results": 5}
+
+
 __all__ = [
     "addresses",
     "catalog_ids_in_sql",
+    "general_public_fallback_plan",
     "discovery_requested",
     "host_of",
     "public_db_fallback",
