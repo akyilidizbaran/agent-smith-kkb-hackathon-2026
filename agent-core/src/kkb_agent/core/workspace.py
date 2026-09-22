@@ -104,7 +104,7 @@ class AnalysisWorkspace:
         return list(reversed(self._peeks))
 
     def remember_web(self, artifact: dict[str, object]) -> None:
-        """web_url'in ziyaret ettiği sayfalar (sha256 + zaman) sonraki turların kanıt paneli için."""
+        """Okunan sayfa ve seçilmiş tablo metadatasını sonraki turların kanıt paneli için sakla."""
         for v in artifact.get("visited", []) or []:
             url = v.get("url") if isinstance(v, dict) else None
             if url:
@@ -131,6 +131,32 @@ class AnalysisWorkspace:
                 self._column_sources[col] = prov
         self._record("set_table", description, provenance, columns_added=list(df.columns))
         return self._register_source(description)
+
+    def replace_table(
+        self,
+        df: pd.DataFrame,
+        *,
+        description: str,
+        column_provenance: dict[str, QueryProvenance | None] | None = None,
+        columns_added: list[str] | None = None,
+    ) -> None:
+        """Replace the active frame while preserving column provenance.
+
+        This is intentionally separate from :meth:`set_table`: a verified
+        transformation may need to calculate on the full source window and
+        publish a filtered view afterwards.  The operation remains one
+        reversible workspace step and does not pretend that the filtered view
+        was a new lakehouse retrieval.
+        """
+        if self._table is None:
+            raise ValueError("Önce bir tablo oluşturulmalı (set_table).")
+        self._snapshot()
+        self._table = df.copy()
+        for column, provenance in (column_provenance or {}).items():
+            if provenance is not None:
+                self._column_sources[str(column)] = provenance
+        self._record("transform", description, None, columns_added=columns_added or [])
+        self._register_source(description)
 
     # ---------- kimlikli kaynak tablolar (M11) ----------
     def _register_source(self, title: str) -> str:
@@ -305,6 +331,11 @@ class AnalysisWorkspace:
         provenance: QueryProvenance | None,
         columns_added: list[str] | None = None,
     ) -> None:
+        # The active result title follows the current workspace state. Keeping
+        # the initial retrieval title after a filter/transform made the UI
+        # describe a 60-period source while exporting a 24-period derived view.
+        if description:
+            self.title = description
         self._history.append(
             WorkspaceStep(
                 order=len(self._history) + 1,

@@ -15,7 +15,7 @@ from kkb_agent.contracts.lakehouse import LakehouseError  # noqa: E402
 
 
 def _settings(monkeypatch, **env):
-    for k in ("DATA_ROOT", "LAKEHOUSE_PATH", "LAKEHOUSE_MODE", "LAKEHOUSE_CORE_DIR", "INGEST_ALLOWED_ROOT", "CHART_DIR"):
+    for k in ("DATA_ROOT", "LAKEHOUSE_PATH", "LAKEHOUSE_MODE", "LAKEHOUSE_CORE_DIR", "INGEST_ALLOWED_ROOT", "CHART_DIR", "LLM_TOOL_TIMEOUT_S"):
         monkeypatch.delenv(k, raising=False)
     for k, v in env.items():
         monkeypatch.setenv(k, str(v))
@@ -27,6 +27,9 @@ def test_yollar_repo_kokune_gore_ve_data_root_altinda(monkeypatch, tmp_path) -> 
     assert s.data_root == config.REPO_ROOT / "data" and s.lakehouse_path == config.REPO_ROOT / "data" / "lakehouse.duckdb"
     assert s.ingest_allowed_root == config.REPO_ROOT / "data" / "incoming" and s.lakehouse_core_dir == config.REPO_ROOT / "lakehouse-core"
     assert s.lakehouse_mode == "demo"
+    assert s.llm_tool_timeout_s == 90
+    s_timeout = _settings(monkeypatch, LLM_TOOL_TIMEOUT_S=17)
+    assert s_timeout.llm_tool_timeout_s == 17
     s2 = _settings(monkeypatch, LAKEHOUSE_PATH="data/lakehouse.duckdb")          # göreli → repo kökü, agent-core değil
     assert s2.lakehouse_path == config.REPO_ROOT / "data" / "lakehouse.duckdb"
     s3 = _settings(monkeypatch, DATA_ROOT=tmp_path, LAKEHOUSE_MODE="SEED")

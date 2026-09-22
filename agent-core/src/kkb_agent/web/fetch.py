@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import time
 import urllib.robotparser
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -25,11 +25,15 @@ MAX_BYTES_DEFAULT = 8 * 1024 * 1024
 #: PDF belgeleri (faaliyet raporu, bülten) 8 MiB'i kolayca aşar; ölçüldü (22 Eyl, arkadaş bulgusu): BDDK yıllık faaliyet
 #: raporu CONTENT_TOO_LARGE ile açılamadı. Akış parça parça okunur, bellek sınırı bu; yalnız medya türü PDF ise geçerli.
 PDF_MAX_BYTES = 32 * 1024 * 1024
-DATA_SUFFIXES = (".csv", ".tsv", ".xlsx", ".xls", ".json")
+DATA_SUFFIXES = (".csv", ".tsv", ".xlsx", ".xls", ".json", ".pdf")
 
 
 class FetchRefused(Exception):
     """Politika reddi: özel adres, izinsiz kök, şema, boyut. Erişim sonucu değil, yerel karar."""
+
+
+class ContentTooLarge(FetchRefused):
+    """Kaynağa ulaşıldı fakat içerik güvenli indirme bütçesini aştı."""
 
 
 @dataclass(frozen=True)
@@ -207,7 +211,7 @@ def fetch_url(
             return FetchResult(url=url, final_url=None, http_status=404, media_type="", content=b"",
                                sha256="", fetched_at=now, outcome=outcome, from_local_file=True)
         if path.stat().st_size > max_bytes:
-            raise FetchRefused(f"dosya {max_bytes} bayt sınırını aşıyor")
+            raise ContentTooLarge(f"dosya {max_bytes} bayt sınırını aşıyor")
         content = path.read_bytes()
         return FetchResult(
             url=url, final_url=str(path), http_status=200, media_type=_media_type(None, str(path)),
@@ -249,7 +253,7 @@ def fetch_url(
         for chunk in resp.iter_content(65536):
             size += len(chunk)
             if size > limit:
-                raise FetchRefused(f"kaynak {limit} bayt sınırını aşıyor")
+                raise ContentTooLarge(f"kaynak {limit} bayt sınırını aşıyor")
             chunks.append(chunk)
     except FetchRefused:
         resp.close()
@@ -284,5 +288,5 @@ def canonical(url: str) -> str:
     return urlunparse((p.scheme.lower(), p.netloc.lower(), p.path or "/", "", p.query, ""))
 
 
-__all__ = ["DATA_SUFFIXES", "FetchRefused", "FetchResult", "RedirectRefused", "RobotsCache", "USER_AGENT", "guarded_get",
+__all__ = ["ContentTooLarge", "DATA_SUFFIXES", "FetchRefused", "FetchResult", "RedirectRefused", "RobotsCache", "USER_AGENT", "guarded_get",
            "canonical", "fetch_url", "private_host", "same_domain"]

@@ -73,6 +73,10 @@ class Tool(ABC):
     #: Planner LLM'in kendisidir, Validator `core/validator.py`, Narrator son tur —
     #: dördü de rol olarak tutuluyor, ayrı agent olarak değil.
     role: str = "execute"
+    #: Optional phase hint for plugin tools that should be visible during the
+    #: first retrieval planning call. Family-specific tools (web/chart/etc.)
+    #: remain behind the intent gate even when their role is ``retrieve``.
+    initial_phase: bool = False
 
     @abstractmethod
     def run(self, params: BaseModel) -> ToolResult:

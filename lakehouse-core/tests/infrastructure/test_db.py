@@ -27,7 +27,7 @@ def test_bootstrap_creates_required_schemas_and_meta_tables(tmp_path: Path) -> N
     }
 
     assert {"meta", "bronze", "silver", "gold"} <= schemas
-    assert {"source", "artifact", "artifact_request", "run", "dataset_version"} <= tables
+    assert {"source", "artifact", "artifact_request", "run", "dataset_version", "series_relation"} <= tables
     connection.close()
 
 

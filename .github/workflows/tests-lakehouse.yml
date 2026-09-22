@@ -1,9 +1,8 @@
 # Deterministik testler (M15-T09, ADR-0061). Ağ ve EVDS gerektiren canlı koşular burada YOK.
 #
 # 18 Eyl: repo Pro hesaba taşındı (3.000 dk/ay). Koşu yalnız lakehouse-core değişince: PR'da ve main'e merge
-# sonrası. Paket tek işte 1,9k katalogla 36–47 dk sürüyordu; 6,7k katalogla (PR #9) 60 dk sınırını aşıp iptal
-# oldu. Üç parçaya bölündü: parçalar paralel koşar, her biri sınırın çok altında kalır; toplam dakika aynı
-# (+ 2 kurulum). Parçalar 17 Eyl CI ölçümüne göre dengelendi (~14 dk/parça, 1,9k katalog).
+# sonrası. 1,9k katalog için dengelenen A/B/C parçaları 6,7k katalogda 60 dk sınırına dayandı; A ve C kesildi.
+# Sekiz daha küçük parça kullanılır; katalog/DB kurulumunu yoğun kullanan dizinler ayrı tutulur.
 # Yeni bir tests/<dizin> eklenirse "Parça kapsamı" adımı kırılır: dizin bir parçaya yazılmalı.
 name: tests-lakehouse
 on:
@@ -21,9 +20,14 @@ concurrency:
   group: tests-lakehouse-${{ github.ref }}
   cancel-in-progress: true
 env:
-  SHARD_A: tests/acceptance tests/adhoc tests/catalog tests/cli
-  SHARD_B: tests/connectors tests/contract tests/generic tests/gold
-  SHARD_C: tests/infrastructure tests/ingestion tests/integration tests/parsers tests/scripts tests/security tests/silver
+  SHARD_A: tests/acceptance tests/cli tests/scripts tests/security
+  SHARD_B: tests/adhoc
+  SHARD_C: tests/catalog tests/infrastructure
+  SHARD_D: tests/connectors tests/contract
+  SHARD_E: tests/generic
+  SHARD_F: tests/gold
+  SHARD_G: tests/ingestion tests/integration
+  SHARD_H: tests/parsers tests/silver
 jobs:
   lakehouse-core:
     name: lakehouse-core (${{ matrix.shard }})
@@ -32,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [A, B, C]
+        shard: [A, B, C, D, E, F, G, H]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -40,7 +44,7 @@ jobs:
         working-directory: lakehouse-core
         shell: bash
         run: |
-          all="$SHARD_A $SHARD_B $SHARD_C"
+          all="$SHARD_A $SHARD_B $SHARD_C $SHARD_D $SHARD_E $SHARD_F $SHARD_G $SHARD_H"
           missing=""
           for d in tests/*/; do
             d="${d%/}"
@@ -60,6 +64,7 @@ jobs:
         shell: bash
         run: |
           case "${{ matrix.shard }}" in
-            A) dirs="$SHARD_A";; B) dirs="$SHARD_B";; C) dirs="$SHARD_C";;
+            A) dirs="$SHARD_A";; B) dirs="$SHARD_B";; C) dirs="$SHARD_C";; D) dirs="$SHARD_D";;
+            E) dirs="$SHARD_E";; F) dirs="$SHARD_F";; G) dirs="$SHARD_G";; H) dirs="$SHARD_H";;
           esac
-          uv run --frozen pytest -q -p no:cacheprovider $dirs
+          uv run --frozen pytest -q --durations=20 -p no:cacheprovider $dirs

@@ -656,14 +656,37 @@ async function askStream(question, live) {   // NDJSON: {type: step|ping|answer|
   return payload;
 }
 
+// A model may echo a shortened markdown table while the verified table card
+// below contains all rows. Keep the narrative, but use the canonical card for
+// tabular values so an omitted cell cannot look like missing data.
+function stripMarkdownTables(md) {
+  const lines = String(md || "").split("\n");
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const next = lines[i + 1] || "";
+    const header = /^\s*\|.*\|\s*$/.test(line);
+    const separator = /^\s*\|?\s*:?-{3,}(?:\s*\|\s*:?-{3,})+\s*\|?\s*$/.test(next);
+    if (header && separator) {
+      i += 2;
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) i++;
+      i--;
+      continue;
+    }
+    out.push(line);
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function renderAnswer(p, opts = {}) {
   const thread = $("thread");
   const q = document.createElement("div"); q.className = "q"; q.id = "ans-" + p.index;
   q.textContent = (p.question || "").replace(/\n\nDosya: (\S+)/g, (m, path) => "\n📎 " + path.split("/").pop().replace(/^[0-9a-f]{8}_/, "")); thread.appendChild(q);
   const a = document.createElement("div"); a.className = "a"; a.dataset.i = p.index;
-  let html = `<div class="text">${mdToHtml(p.text)}</div>`;
   const hasTable = p.table && p.table.rows && p.table.rows.length;
   const hasChart = p.charts && p.charts.length && p.charts.some((c) => c.png);
+  const displayText = hasTable ? stripMarkdownTables(p.text) : p.text;
+  let html = `<div class="text">${mdToHtml(displayText)}</div>`;
   if (hasTable || hasChart) {
     html += `<div class="${hasTable && hasChart ? "grid2" : ""}">`;
     if (hasTable) {
@@ -754,10 +777,23 @@ function evidenceStages(ev) {
     stages.push({layer: "RAW · kaynak", title: locs.length ? [...new Set(locs.map(hostOf))].join(", ") : "Kaynak adresi yok", link: httpUrl(locs[0]),
       meta: [{t: http.length ? `HTTP ${http.join(", ")}` : ""}, {t: fetched.length ? `çekim ${fmtWhen(fetched[fetched.length - 1])}` : ""}, {t: locs.length > 1 ? `${locs.length} adres` : ""}],
       ok: locs.length > 0 && fetched.length > 0});
-  } else if (web.length) {
-    web.forEach((w) => stages.push({layer: w.ocr ? "Belge · OCR" : "Web sayfası", title: hostOf(w.url), link: httpUrl(w.url),
-      meta: [{t: `sha256 ${shortSha(w.sha256)}`, mono: true}, {t: `çekim ${fmtWhen(w.fetched_at)}`}, ...(w.ocr ? [{t: `OCR ${w.ocr.model || ""} · sayfa ${(w.ocr.pages || []).join(",")} · kalite ${w.ocr.quality || "–"}`, warn: true}] : [])],
-      ok: !!(w.url && w.sha256) && !w.ocr}));
+  } else if (web.length || (ev.web_reads || []).length) {
+    const extractionName = (x) => ({pdf_text_layer: "PDF metin katmanı", ocr: "PDF OCR", "ocr+pdf_text_layer": "PDF metin katmanı + OCR"}[x?.method] || x?.method || "");
+    web.forEach((w) => stages.push({layer: w.ocr ? "Belge · OCR" : (w.extraction ? extractionName(w.extraction) : "Web sayfası"),
+      title: hostOf(w.url), link: httpUrl(w.url),
+      meta: [
+        {t: `sha256 ${shortSha(w.sha256)}`, mono: true}, {t: `çekim ${fmtWhen(w.fetched_at)}`},
+        {t: w.table_used ? `tablo #${w.table_index}${w.table_label ? ` · ${w.table_label}` : ""} seçildi${w.table_rows ? ` · ${fmtInt(w.table_rows)}×${fmtInt(w.table_columns)}` : ""}` : "tablo seçilmedi", warn: !w.table_used},
+        ...(w.extraction ? [{t: `çıkarım: ${extractionName(w.extraction)} · sayfa ${(w.extraction.pages || []).join(", ") || "—"}${w.extraction.total_pages ? `/${w.extraction.total_pages}` : ""}`, warn: true}] : []),
+        ...(w.cache_reused ? [{t: "aynı turdaki keşif önbelleği kullanıldı"}] : []),
+        ...(w.ocr ? [{t: `OCR ${w.ocr.model || ""} · sayfa ${(w.ocr.pages || []).join(",")} · kalite ${w.ocr.quality || "–"}`, warn: true}] : [])
+      ], ok: !!(w.url && w.sha256) && !w.ocr}));
+    (ev.web_reads || []).forEach((w) => stages.push({layer: w.extraction ? extractionName(w.extraction) : "URL okundu", title: `${hostOf(w.url)} · tablo seçilmedi`, link: httpUrl(w.url),
+      meta: [{t: `sha256 ${shortSha(w.sha256)}`, mono: true}, {t: `çekim ${fmtWhen(w.fetched_at)}`},
+        ...(w.extraction ? [{t: `çıkarım: ${extractionName(w.extraction)} · sayfa ${(w.extraction.pages || []).join(", ") || "—"}${w.extraction.total_pages ? `/${w.extraction.total_pages}` : ""}`, warn: true}] : []),
+        ...(w.cache_reused ? [{t: "aynı turdaki keşif önbelleği kullanıldı"}] : []),
+        ...(w.ocr ? [{t: `OCR ${w.ocr.model || ""} · sayfa ${(w.ocr.pages || []).join(",")} · kalite ${w.ocr.quality || "–"}`, warn: true}] : [])
+      ], ok: !!(w.url && w.sha256) && !w.ocr}));
   } else {
     stages.push({layer: "Silver · gözlem", title: "Gözlem izi yok", meta: [{t: "seed adaptörü ya da hesaplanmış kolon"}], ok: false});
   }
@@ -771,9 +807,11 @@ function renderEvidence(p, animate) {
   const st = ev.states || {};
   badge.title = Object.entries(st).map(([k, v]) => `${k}: ${v ? "✓" : "✗"}`).join(" · ");
   const stages = evidenceStages(ev); const broken = stages.findIndex((s) => !s.ok);
-  $("ev-summary").textContent = broken === -1
-    ? ((ev.observations || []).length ? "Cevap tabloya, tablo sorguya, sorgu kaynaktan çekilmiş ham dosyaya bağlı." : "Cevap tabloya, tablo sorguya ve okunan kaynağa bağlı.")
-    : `Zincir “${stages[broken].layer}” halkasında kopuyor; sonrası doğrulanmış sayılmaz.`;
+  $("ev-summary").textContent = !(ev.table_rows) && (ev.web_reads || []).length
+    ? "URL içeriği okundu; yapılandırılmış tablo seçilmedi. Arama adayları veri kanıtı sayılmaz."
+    : broken === -1
+      ? ((ev.observations || []).length ? "Cevap tabloya, tablo sorguya, sorgu kaynaktan çekilmiş ham dosyaya bağlı." : "Cevap tabloya, tablo sorguya ve okunan kaynağa bağlı.")
+      : `Zincir “${stages[broken].layer}” halkasında kopuyor; sonrası doğrulanmış sayılmaz.`;
   $("ev-summary").title = ev.summary || "";
   let html = "";
   if (Object.keys(st).length) html += `<div class="meter" title="${esc(badge.title)}">${Object.entries(st).map(([k, v]) => `<span class="${v ? "" : "no"}">${esc(k)} ${v ? "✓" : "✗"}</span>`).join("")}</div>`;
@@ -1007,14 +1045,30 @@ function journeyStops(ev, idx) {
   } else if (web.length) {
     const w = web[0]; const ocr = w.ocr || null; const hasId = !!(w.url && w.sha256);
     stops.push({kind: ocr ? "belge" : "web", state: !hasId ? "broken" : (ocr || ev.ocr_unverified) ? "warn" : "ok",
-      status: !hasId ? "özet kaydı yok" : ocr ? "OCR tahmini" : `sha256 ${String(w.sha256).slice(0, 8)}…`,
+      status: !hasId ? "özet kaydı yok" : ocr ? "OCR tahmini" : w.table_used ? `tablo #${w.table_index} seçildi · sha256 ${String(w.sha256).slice(0, 8)}…` : `okundu · tablo seçilmedi · sha256 ${String(w.sha256).slice(0, 8)}…`,
       fields: [jf(ocr ? "Dosya" : "Başlık", ocr ? hostOf(w.url) : (w.title || "")), jf("sha256", w.sha256, {mono: 1, copy: 1}),
         jf(ocr ? "Okundu" : "Çekim", w.fetched_at ? fmtWhen(w.fetched_at) : ""),
+        jf("Tablo", w.table_used ? `#${w.table_index}${w.table_label ? ` · ${w.table_label}` : ""} · ${w.table_rows || "?"}×${w.table_columns || "?"}` : "seçilmedi"),
+        ...(w.extraction ? [jf("Çıkarım", `${w.extraction.method || "belge"} · sayfa ${(w.extraction.pages || []).join(", ") || "—"}${w.extraction.total_pages ? `/${w.extraction.total_pages}` : ""}`, {tone: "warn"})] : []),
+        ...(w.cache_reused ? [jf("Fetch", "aynı turdaki keşif önbelleği kullanıldı")] : []),
         ...(ocr ? [jf("Okuyan model", ocr.model, {mono: 1}), jf("Sayfa", (ocr.pages || []).join(", ")), jf("Okuma kalitesi", ocr.quality, {tone: "warn"})] : []),
         jf("Diğer kaynaklar", web.length > 1 ? `${web.length - 1} sayfa daha` : "")],
       alert: !hasId ? {tone: "bad", text: "Okunan sayfanın baytlarının özeti kayıtlı değil."}
         : ocr ? {tone: "warn", text: "Sayılar görüntüden okunmuş bir tablodan geliyor. Tabloda eşleşse de kesin sonuç sayılmaz; kaynağıyla karşılaştırın."} : null});
     if (httpUrl(w.url)) stops.push({kind: "url", state: "ok", status: hostOf(w.url), fields: [jf("Adres", w.url, {mono: 1, href: 1}), jf("HTTP yanıtı", w.status ?? w.http_status ?? "", {mono: 1})]});
+  } else if ((ev.web_reads || []).length) {
+    for (const w of ev.web_reads) {
+      const hasId = !!(w.url && w.sha256); const ocr = w.ocr || null;
+      stops.push({kind: ocr ? "belge" : "web", state: !hasId ? "broken" : ocr ? "warn" : "ok",
+        status: !hasId ? "özet kaydı yok" : ocr ? "OCR ile okundu · tablo seçilmedi" : "okundu · tablo seçilmedi",
+        fields: [jf("Başlık", w.title || hostOf(w.url)), jf("Adres", w.url, {mono: 1, href: !!httpUrl(w.url)}),
+          jf("sha256", w.sha256, {mono: 1, copy: 1}), jf("HTTP yanıtı", w.status ?? "", {mono: 1}),
+          jf("Çekim", w.fetched_at ? fmtWhen(w.fetched_at) : ""),
+          ...(w.extraction ? [jf("Çıkarım", `${w.extraction.method || "belge"} · sayfa ${(w.extraction.pages || []).join(", ") || "—"}${w.extraction.total_pages ? `/${w.extraction.total_pages}` : ""}`, {tone: "warn"})] : []),
+          ...(ocr ? [jf("Okuma kalitesi", ocr.quality || "belirsiz", {tone: "warn"})] : [])],
+        alert: !hasId ? {tone: "bad", text: "Okunan sayfanın baytlarının özeti kayıtlı değil."}
+          : ocr ? {tone: "warn", text: "PDF OCR ile okundu; tablo seçilmedi ve OCR hücreleri doğrulanmış veri sayılmaz."} : null});
+    }
   } else if (cols.length) {
     stops.push({kind: "silver", state: "broken", status: "gözlem izi yok", fields: [],
       alert: {tone: "bad", text: "Bu kolon kaynak gözlemine inmiyor (örnek veri adaptörü ya da türetilmiş kolon); zincir sorguda bitiyor."}});

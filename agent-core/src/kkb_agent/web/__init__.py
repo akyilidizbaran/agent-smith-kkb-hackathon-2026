@@ -8,11 +8,11 @@
 """
 
 from .crawl import CrawlBudget, CrawlResult, crawl
-from .fetch import FetchResult, RobotsCache, fetch_url
+from .fetch import ContentTooLarge, FetchResult, RobotsCache, fetch_url
 from .html import PageContent, extract_page
 from .search import SearchHit, TavilySearch, search_available
 
 __all__ = [
-    "CrawlBudget", "CrawlResult", "FetchResult", "PageContent", "RobotsCache", "SearchHit",
+    "CrawlBudget", "CrawlResult", "ContentTooLarge", "FetchResult", "PageContent", "RobotsCache", "SearchHit",
     "TavilySearch", "crawl", "extract_page", "fetch_url", "search_available",
 ]

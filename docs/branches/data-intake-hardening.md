@@ -246,6 +246,23 @@ Dünya Bankası ülke × yıl nüfus CSV'si (17.195 satır, 265 varlık, 1960–
 Beş jenerik kusur finans verisiyle görünmüyordu (tarihler tam, varlıklar il adı, pivot nadir). Hepsi soruya/alana özel
 kural olmadan düzeltildi; toplam 4 yeni test. Prova reçetesi README "Başka alanla çalıştırma" bölümünde.
 
+### 1k. main (PR #18 + #20 + #22) dalla birleştirildi (22 Eylül akşamı)
+
+PR #21 açıldıktan sonra Baran'ın `feature/agent-engine` dalı main'e girdi (153 dosya). Merge ile altı dosyada çakışma
+(`core/agent.py`, `core/retriever.py`, `web/fetch.py`, üç test dosyası); iki tarafın davranışı da korundu: bizden
+tamamlanma sözleşmesi + arama defteri, taze araç denemesi, eşitlik bandı, PDF bayt sınırı; main'den katalog arama
+bütçesi, anlatım fazı, doğrulanmış tablo yeniden kullanımı, seri ilişkileri. Birleşimin çıkardığı üç kusur:
+
+| Bulgu | Sebep | Düzeltme |
+|---|---|---|
+| Anlatım fazı testinde üçüncü model çağrısı | Sözleşme çalışma alanında tablo yokken "tablo yok" dedi (araç tablo döndürüp kurmamıştı) | Denetlenecek tablo yoksa son veri aracının çıktısı denetlenir |
+| PDF adresindeki HTML hata sayfası "veri dosyası" oldu | main `.pdf` uzantısını veri dosyası listesine ekledi | Gövde HTML koklandıysa veri dosyası branşına girilmez |
+| Katalog bootstrap >15 dk (önce ~30 sn) | main'in `_upsert_series_relations`'ı satır satır `INSERT OR REPLACE` `executemany` yapıyor; DuckDB 1.5.5'te süperlineer (100 satır 1,2 sn, 300 satır 5,9 sn) | Değişen ilişkiler DataFrame'den tek `INSERT … SELECT` (6.694 satır 0,2 sn); bootstrap 40 sn, değişmemiş katalog 7 sn; regresyon testi |
+
+Kalan bilinen Windows kırığı main'den: benchmark sözleşme testi D05 artifact hash'i CRLF checkout'ta tutmuyor
+(index LF, `core.autocrlf=true`); CI Linux'ta geçiyor. Kalıcı çözüm `.gitattributes` ile referans CSV'lerini `-text`
+işaretlemek (benchmark sahibinin kararı).
+
 Değişmeyenler, bilinçli: beyan kapısı (birim/ölçüm tipi kullanıcıdan gelir, doğrulanmaz), aynı anahtar farklı içerik reddi
 (veri ekibinin sözleşmesi), tarihsiz tablonun kalıcı kaydedilmemesi, `unknown` ölçüm tipinde toplama türetilmemesi.
 

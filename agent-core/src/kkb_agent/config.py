@@ -67,8 +67,18 @@ class Settings:
     architect_token: str
     # Bütçeler (M15): tek çağrı zaman aşımı, çıktı sınırı, soru başına toplam süre.
     llm_timeout: float
+    llm_max_retries: int
     llm_max_tokens: int
+    llm_narration_timeout_s: float
+    llm_tool_timeout_s: float
     agent_time_budget_s: float
+    # Çağrı türüne göre dinamik completion tavanları (global tavanın altında).
+    llm_plan_max_tokens: int = 1000
+    llm_tool_max_tokens: int = 1800
+    llm_narrate_max_tokens: int = 2800
+    llm_long_narrate_max_tokens: int = 3400
+    llm_recovery_max_tokens: int = 1400
+    llm_stream_narration: bool = False
 
     @property
     def provider_label(self) -> str:
@@ -113,6 +123,25 @@ def load_settings() -> Settings:
         agent_profile=os.getenv("AGENT_PROFILE", "analyst").strip().lower(),
         architect_token=os.getenv("ARCHITECT_TOKEN", "").strip(),
         llm_timeout=float(os.getenv("LLM_TIMEOUT", "90")),
-        llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "1500")),
-        agent_time_budget_s=float(os.getenv("AGENT_TIME_BUDGET_S", "300")),
+        llm_max_retries=int(os.getenv("LLM_MAX_RETRIES", "3")),
+        # The full table is kept as a structured UI artifact, but 1,500 tokens
+        # is too small for a legitimate 24/60-month narration. Keep the
+        # environment override and give the default final turn enough room.
+        llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "4000")),
+        # Anlatı tüm retry'larla birlikte kısa bir üst sınıra bağlıdır; veri
+        # aracıyla kurulmuş doğrulanmış tablo bu süreden etkilenmez.
+        llm_narration_timeout_s=float(os.getenv("LLM_NARRATION_TIMEOUT_S", "60")),
+        # Tool-selection calls share one bounded deadline across provider retries.
+        llm_tool_timeout_s=float(os.getenv("LLM_TOOL_TIMEOUT_S", "90")),
+        # Demo'da uzun çok-adımlı sorguların istemci tarafından erken kesilmemesi
+        # için varsayılan soru bütçesi 600 s. Ortam değişkeniyle daha düşük bir
+        # bütçe verilirse o değer önceliklidir.
+        agent_time_budget_s=float(os.getenv("AGENT_TIME_BUDGET_S", "600")),
+        llm_plan_max_tokens=int(os.getenv("LLM_PLAN_MAX_TOKENS", "1000")),
+        llm_tool_max_tokens=int(os.getenv("LLM_TOOL_MAX_TOKENS", "1800")),
+        llm_narrate_max_tokens=int(os.getenv("LLM_NARRATE_MAX_TOKENS", "2800")),
+        llm_long_narrate_max_tokens=int(os.getenv("LLM_LONG_NARRATE_MAX_TOKENS", "3400")),
+        llm_recovery_max_tokens=int(os.getenv("LLM_RECOVERY_MAX_TOKENS", "1400")),
+        # Streaming is opt-in until each OpenAI-compatible endpoint passes a canary.
+        llm_stream_narration=os.getenv("LLM_STREAM_NARRATION", "false").lower() == "true",
     )

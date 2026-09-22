@@ -30,7 +30,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from ..adapters.duckdb_lakehouse import guard_sql
-from ..contracts.lakehouse import LakehouseError
+from ..contracts.lakehouse import LakehouseError, SQLSyntaxError
 from .errors import ToolError
 from .tool import Tool, ToolResult
 
@@ -69,6 +69,14 @@ class BoundaryValidator:
         if isinstance(sql, str):
             try:
                 guard_sql(sql)
+            except SQLSyntaxError as exc:
+                return params, ToolError(
+                    error_code="SQL_SYNTAX_ERROR",
+                    message=str(exc),
+                    hint="Sözdizimini düzeltip tek bir SELECT/WITH sorgusu olarak yeniden dene. UNION ALL ile ORDER BY/LIMIT kullanılan kolları parantezle.",
+                    layer="data",
+                    retryable=True,
+                )
             except LakehouseError as exc:
                 return params, ToolError(
                     error_code="UNSAFE_SQL",

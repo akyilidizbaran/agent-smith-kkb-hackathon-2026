@@ -128,6 +128,51 @@ def detect_anomalies(values: np.ndarray, *, method: str = "iqr", basis: str = "a
     return AnomalyResult(flags, scores, x, "iqr", chosen, k, lower, upper, rho)
 
 
+def detect_seasonal_anomalies(
+    values: np.ndarray,
+    calendar_months: np.ndarray,
+    *,
+    threshold: float = 3.0,
+    min_periods: int = 4,
+) -> AnomalyResult:
+    """Compare each observation with the same calendar month across years.
+
+    Uses the robust modified z-score ``(x - median) / (1.4826 * MAD)``.
+    Calendar-month groups with fewer than ``min_periods`` valid observations
+    are left unscored instead of silently comparing different seasons.
+    """
+    x = np.asarray(values, dtype=float)
+    months = np.asarray(calendar_months)
+    if x.ndim != 1 or months.ndim != 1 or len(x) != len(months):
+        raise ValueError("values ve calendar_months aynı uzunlukta tek boyutlu diziler olmalı")
+    if min_periods < 3:
+        raise ValueError("min_periods en az 3 olmalı")
+    if np.any((months < 1) | (months > 12)):
+        raise ValueError("calendar_months 1–12 aralığında olmalı")
+
+    valid = np.isfinite(x)
+    scores = np.full(x.shape, np.nan)
+    flags = np.zeros(x.shape, dtype=bool)
+    for month in range(1, 13):
+        indices = np.flatnonzero(valid & (months == month))
+        if len(indices) < min_periods:
+            continue
+        sample = x[indices]
+        center = float(np.median(sample))
+        mad = float(np.median(np.abs(sample - center)))
+        deviations = sample - center
+        if mad < _EPS:
+            # With a zero MAD, any non-zero deviation is outside the repeated
+            # seasonal baseline. The score denotes only threshold exceedance.
+            scores[indices] = np.where(np.abs(deviations) > _EPS,
+                                       np.sign(deviations) * (threshold + 1.0), 0.0)
+        else:
+            scores[indices] = deviations / (1.4826 * mad)
+        flags[indices] = np.abs(scores[indices]) > threshold
+    return AnomalyResult(flags, scores, x.copy(), "seasonal_mad", "level", float(threshold),
+                         np.nan, np.nan, 0.0)
+
+
 # ----------------------------------------------------------------------------- kırılma
 @dataclass(frozen=True)
 class Segment:

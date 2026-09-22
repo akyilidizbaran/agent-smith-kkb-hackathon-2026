@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,6 +16,7 @@ from kkb_agent.core.workspace import AnalysisWorkspace  # noqa: E402
 from kkb_agent.tools.ingest import IngestFromUrlTool  # noqa: E402
 from kkb_agent.tools.web import WebUrlTool  # noqa: E402
 from kkb_agent.vision.ocr import OcrClient, clean_ocr_text, is_document, ocr_document, pdf_pages_to_png, prose_from_ocr, tables_from_ocr  # noqa: E402
+from kkb_agent.vision.pdf import extract_pdf_text_layer  # noqa: E402
 from kkb_agent.web.html import extract_page  # noqa: E402
 from tests.test_ingest_tool import FakeRunner, SpyLakehouse  # noqa: E402
 from tests.test_web import Resp, Session  # noqa: E402
@@ -49,6 +49,31 @@ def _blank_pdf(pages: int = 2) -> bytes:
     return buf.getvalue()
 
 
+def _text_pdf(text: str = "Monthly data 2024 value 12.5") -> bytes:
+    """Minimal one-page PDF with a native text object; no optional fixture dependency."""
+    escaped = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    stream = f"BT /F1 12 Tf 72 720 Td ({escaped}) Tj ET\n".encode("ascii")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"endstream",
+    ]
+    data = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for index, body in enumerate(objects, start=1):
+        offsets.append(len(data))
+        data.extend(f"{index} 0 obj\n".encode())
+        data.extend(body + b"\nendobj\n")
+    xref = len(data)
+    data.extend(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode())
+    for offset in offsets[1:]:
+        data.extend(f"{offset:010d} 00000 n \n".encode())
+    data.extend(f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
+    return bytes(data)
+
+
 def test_onek_atilir_tablolar_ve_metin_ayrilir() -> None:
     text = clean_ocr_text(OCR_RAW)
     assert text.startswith("<|det|>") and "ovi" not in text
@@ -64,6 +89,65 @@ def test_pdf_sayfalari_png_olur_ve_sayfa_siniri_uygulanir() -> None:
     assert total == 3 and len(pngs) == 2 and pngs[0][0] == 1 and pngs[0][1][:8] == b"\x89PNG\r\n\x1a\n"
     chosen, _ = pdf_pages_to_png(pdf, scale=1.0, pages=[3, 1, 9])
     assert [n for n, _ in chosen] == [3, 1]          # sınır dışı 9 atlandı, sıra korundu
+
+
+def test_pdf_native_text_layer_is_read_bounded_and_not_marked_as_table() -> None:
+    layer = extract_pdf_text_layer(_text_pdf())
+
+    assert layer.has_text and "Monthly data 2024 value 12.5" in layer.text
+    assert layer.selected_pages == [1] and layer.total_pages == 1
+    assert layer.metadata()["method"] == "pdf_text_layer"
+    assert layer.metadata()["structured_tables"] is False
+
+
+def test_pdf_text_layer_without_ocr_supplies_prose_but_no_structured_table() -> None:
+    page = extract_page(_text_pdf(), "application/pdf", "https://x/report.pdf")
+
+    assert page.kind == "document" and "Monthly data 2024" in page.text
+    assert page.tables == []
+    assert page.extraction["method"] == "pdf_text_layer" and page.extraction["structured_tables"] is False
+    assert any("tablo hücrelerini doğrulamaz" in note for note in page.notes)
+
+
+def test_scanned_pdf_without_ocr_is_not_reported_as_data_absence() -> None:
+    page = extract_page(_blank_pdf(1), "application/pdf", "https://x/scan.pdf")
+
+    assert page.kind == "document" and not page.tables
+    assert page.extraction["method"] == "unavailable"
+    assert any("taranmış belge olabilir" in note for note in page.notes)
+
+
+def test_ocr_table_remains_unverified_even_when_pdf_text_layer_exists() -> None:
+    client = OcrClient(base_url="https://mia.example/v1", api_key="k", model="ocr", session=OcrSession())
+    page = extract_page(_text_pdf(), "application/pdf", "https://x/text.pdf", ocr=client)
+
+    assert page.tables and page.extraction["method"] == "ocr+pdf_text_layer"
+    assert page.ocr and page.ocr["quality"] == "bilinmiyor"
+    assert any("hücre-hücre karşılaştırılmadı" in note for note in page.notes)
+
+
+def test_ocr_failure_falls_back_to_native_pdf_text_layer() -> None:
+    client = OcrClient(base_url="https://mia.example/v1", api_key="k", model="ocr", session=OcrSession(status=503))
+    page = extract_page(_text_pdf(), "application/pdf", "https://x/text.pdf", ocr=client)
+
+    assert page.kind == "document" and "Monthly data 2024" in page.text
+    assert page.extraction["method"] == "pdf_text_layer"
+    assert any("OCR başarısız" in note for note in page.notes)
+
+
+def test_pdf_metni_var_tablo_yapisi_yoksa_web_url_belge_cikarim_hatasi_doner() -> None:
+    url = "https://site.example/text.pdf"
+    session = Session({url: Resp(200, _text_pdf(), ctype="application/pdf", url=url)})
+    workspace = AnalysisWorkspace()
+    registry = SimpleNamespace(active_question=f"{url} içindeki tablo", user_text=f"{url} içindeki tablo", sanctioned_locators=set())
+    tool = WebUrlTool(workspace, registry=registry, session=session)
+
+    result = tool.validate_and_run({"url": url, "purpose": "PDF tablosu", "table_index": 0})
+
+    assert not result.ok and result.error.error_code == "DOCUMENT_EXTRACTION_FAILED"
+    assert "veri yokluğu değildir" in result.error.message
+    assert result.artifacts["web"]["visited"][0]["extraction"]["method"] == "pdf_text_layer"
+    assert not workspace.has_table
 
 
 def test_ocr_belgesi_rehberdeki_istekle_sayfa_sayfa() -> None:
@@ -90,7 +174,7 @@ def test_belge_sayfasi_profilci_dilbilgisiyle_sayiya_cevrilir_ocr_yoksa_okunamaz
     assert float(t.iloc[1, 1]) == 15000.0 and float(t.iloc[0, 2]) == 9876.5      # 15.000,0 ve 9.876,5: Türkçe biçim
     assert any("OCR ile" in n for n in page.notes)
     none = extract_page(_blank_pdf(1), "application/pdf", "https://x/ith_au.pdf")
-    assert none.kind == "document" and not none.tables and "OCR" in none.text
+    assert none.kind == "document" and not none.tables and any("OCR olmadan" in note for note in none.notes)
 
 
 def test_web_url_pdf_tablosunu_yukler_provenance_ocr_notu_tasir() -> None:
