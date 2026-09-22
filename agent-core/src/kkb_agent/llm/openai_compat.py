@@ -26,7 +26,7 @@ class OpenAICompatClient:
         model: str,
         *,
         timeout: float = 180.0,
-        max_retries: int = 2,
+        max_retries: int = 3,
         native_tools: bool = True,
         disable_thinking: bool = False,
     ) -> None:

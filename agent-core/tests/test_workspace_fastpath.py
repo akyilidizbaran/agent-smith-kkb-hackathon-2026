@@ -228,7 +228,9 @@ def test_explicit_month_range_filters_after_full_window_lag() -> None:
     assert result.frame.iloc[0]["need_change"] == approx(1.0)
     assert result.frame.iloc[0]["card_change"] == approx(10.0)
     assert result.frame.iloc[-1]["period_end"] == pd.Timestamp("2024-12-31")
-    assert len(workspace.table) == 24
+    # The active table keeps all 60 months and gains the derived columns.
+    assert len(workspace.table) == 60
+    assert "need_change" in workspace.table.columns and "card_change" in workspace.table.columns
 
 
 def test_invalid_generated_transform_is_repaired_and_repeat_reuses_verified_output() -> None:
@@ -297,17 +299,19 @@ def test_invalid_generated_transform_is_repaired_and_repeat_reuses_verified_outp
     repaired = agent.ask(question)
     assert repaired.usage["calls"] == 0
     assert repaired.steps[0].tool_name == "workspace_compute_column"
-    assert len(workspace.table) == 24
-    assert workspace.table.iloc[0]["metric_a_change"] == approx(1.0)
-    assert workspace.table.iloc[0]["metric_b_change"] == approx(10.0)
+    assert len(workspace.table) == 60
+    assert len(repaired.steps[0].result_data) == 24
+    assert repaired.steps[0].result_data.iloc[0]["metric_a_change"] == approx(1.0)
+    assert repaired.steps[0].result_data.iloc[0]["metric_b_change"] == approx(10.0)
+    assert workspace.table.iloc[1]["metric_a_change"] == approx(1.0)
     assert "2023-01" in workspace.title and "2024-12" in workspace.title
 
     repeated = agent.ask(question)
     assert repeated.usage["calls"] == 0
     assert repeated.reused_verified_table
     assert repeated.steps[0].role == "validate"
-    assert len(workspace.table) == 24
-    assert workspace.table.iloc[1]["metric_a_change"] == approx(1.0)
+    assert len(workspace.table) == 60
+    assert len(repeated.steps[0].result_data) == 24
 
 
 def test_explicit_month_range_follow_up_preserves_active_series_without_llm() -> None:
@@ -345,8 +349,58 @@ def test_explicit_month_range_follow_up_preserves_active_series_without_llm() ->
 
     assert answer.usage["calls"] == 0
     assert answer.steps[0].tool_name == "workspace_compute_column"
-    assert len(workspace.table) == 24
-    assert workspace.table.iloc[0]["metric_a_change"] == approx(1.0)
+    assert len(workspace.table) == 60
+    assert len(answer.steps[0].result_data) == 24
+    assert answer.steps[0].result_data.iloc[0]["metric_a_change"] == approx(1.0)
+
+
+def test_month_window_follow_up_keeps_full_table_and_answers_with_the_window() -> None:
+    """İnceleme (22 Eyl): '2024 Ocak–Mart için değişim' 60 satırlık tabloyu 3 satırla değiştiriyor, eski
+    tablo kayboluyordu. Artık sütun eklenir, cevap yalnız pencereyi taşır; tekrar soruda da aynı."""
+    dates = pd.date_range("2021-04-30", "2026-03-31", freq="ME")
+    workspace = AnalysisWorkspace()
+    workspace.set_table(
+        pd.DataFrame({"date": dates, "metric_a": range(len(dates)), "metric_b": range(len(dates))}),
+        description="verified 60 month fixture",
+        provenance=QueryProvenance(
+            sql="SELECT date, metric_a, metric_b FROM verified_fixture",
+            dataset_ids=["transport:passengers"],
+            sources=["transport"],
+        ),
+    )
+    before = workspace.table.copy()
+
+    class NeverCalledLLM:
+        model = "test"
+
+        def supports_native_tools(self) -> bool:
+            return True
+
+        def chat(self, *args, **kwargs):
+            raise AssertionError("explicit period transformation must reuse the active workspace")
+
+    agent = AnalyticsAgent(NeverCalledLLM(), ToolRegistry(), workspace=workspace)
+    agent._catalog_specs = lambda: [_spec()]
+    agent._follow_up_context = FollowUpContext(
+        domain="transport", source="transport", metric="passengers",
+        series="transport:passengers", date_range="2021-04–2026-03", frequency="monthly",
+    )
+
+    answer = agent.ask("Compute changes for 202401–202403 and align monthly dates.")
+
+    view = answer.steps[0].result_data
+    assert len(view) == 3
+    assert view.iloc[0]["date"] == pd.Timestamp("2024-01-31")
+    assert view.iloc[0]["metric_a_change"] == approx(1.0)
+    assert len(workspace.table) == 60
+    assert workspace.table[["date", "metric_a", "metric_b"]].equals(before)
+    assert answer.artifacts[0]["row_count"] == 3
+    assert "3 dönemlik çıktı" in answer.text and "korundu" in answer.text
+
+    repeated = agent.ask("Compute changes for 202401–202403 and align monthly dates.")
+    assert repeated.reused_verified_table
+    assert len(repeated.steps[0].result_data) == 3
+    assert len(workspace.table) == 60
 
 
 def test_all_verified_series_follow_up_reuses_the_workspace() -> None:

@@ -133,3 +133,9 @@ def test_tool_free_stream_narration_measures_first_token_and_usage():
     assert fake.kwargs["stream"] is True
     assert fake.kwargs["stream_options"] == {"include_usage": True}
     assert client.last_call_metrics["streaming"] is True
+
+
+def test_varsayilan_provider_deneme_sayisi_uctur():
+    """22 Eyl: PR #18 varsayılanı 2'ye indirmişti; paralel MIA koşusunda tek zaman aşımında vakalar düştü."""
+    client = OpenAICompatClient("http://example.invalid/v1", "x", "model")
+    assert client._max_retries == 3

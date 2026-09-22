@@ -52,6 +52,7 @@ from .web_routing import catalog_ids_in_sql, public_fallback_plan
 from .workspace_fastpath import (
     execute_verified_workspace_transform,
     inspect_existing_verified_transform,
+    period_view,
     plan_verified_workspace_transform,
     repair_invalid_previous_transform,
     requested_month_range,
@@ -96,6 +97,17 @@ _EXPLICIT_INTERPRETATION_ASK = re.compile(
     r"\b(?:neden|niçin|nicin)\b",
     re.IGNORECASE,
 )
+# A comparison request wants prose about the result, not only the table.
+# Measured (PR #18 jenerik, 21 Sep): transform/delivery fast paths answered
+# comparison questions with two fixed sentences and no interpretation.
+_COMPARISON_ASK = re.compile(
+    r"karşılaştır|karsilastir|kıyasla|kiyasla|\bvs\b|yorumla|değerlendir|degerlendir", re.IGNORECASE,
+)
+# Katalog semantic_type → kullanıcı dili (deterministik teslim özeti).
+_SEMANTIC_TYPE_TR = {
+    "stock": "dönem sonu stok", "flow": "dönem içi akım", "rate": "oran", "index": "endeks",
+    "ratio": "pay/oran", "count": "adet",
+}
 _TRANSFORMATION_TOOL_NAMES = frozenset({
     "workspace_add_column", "workspace_compute_column", "workspace_query", "workspace_join",
     "gold_align", "gold_decompose", "gold_join",
@@ -822,6 +834,13 @@ class AnalyticsAgent:
             self.workspace.has_table and is_active_table_composition(question, self._follow_up_resolution)
         )
         self._attach_active_series_identities()
+        # Per-turn proof of an already-applied transform. It used to be reset
+        # only in `reset()`, so a previous turn's "dönüşüm" flag leaked into
+        # the next question and `_is_structured_transform_complete` could
+        # finish a new topic without any transformation tool having run.
+        self._verified_workspace_satisfaction = None
+        self._verified_reuse_snapshot = None
+        self._pre_satisfied_capabilities = set()
         if self._active_table_reuse_allowed:
             self._verified_workspace_satisfaction = inspect_existing_verified_transform(
                 question,
@@ -1359,7 +1378,8 @@ class AnalyticsAgent:
         steps: list[AgentStep],
     ) -> bool:
         """Skip prose generation when verified structured work is the deliverable."""
-        if not _TRANSFORMATION_ASK.search(question) or _EXPLICIT_INTERPRETATION_ASK.search(question):
+        if (not _TRANSFORMATION_ASK.search(question) or _EXPLICIT_INTERPRETATION_ASK.search(question)
+                or _COMPARISON_ASK.search(question)):
             return False
         if any(not step.ok for step in steps):
             return False
@@ -1526,6 +1546,9 @@ class AnalyticsAgent:
                 frame = self.workspace.table
                 if not isinstance(frame, pd.DataFrame) or frame.empty:
                     return None
+                frame = period_view(frame, proof.date_column, proof.period_start, proof.period_end)
+                if frame.empty:
+                    return None
                 self._begin_registry_turn(question, self._retry_source_question or question)
                 self.last_gate = None
                 step = AgentStep(
@@ -1649,9 +1672,11 @@ class AnalyticsAgent:
         label = "yüzde değişim" if operation == "percent_change" else "dönemsel değişim"
         action = "zaten doğrulanmış tabloda bulundu" if already_present else "hesaplandı"
         scope = ""
+        preserved = ""
         if period_start is not None and period_end is not None:
             months = (period_end.year - period_start.year) * 12 + period_end.month - period_start.month + 1
             scope = f" {period_start:%Y-%m}–{period_end:%Y-%m} aralığında {months} dönemlik çıktı olarak"
+            preserved = " Aktif tablo tam penceresiyle korundu; yeni sütunlar ona eklendi."
         selected = [column for column in derived_columns if column in frame.columns]
         first_values = frame.loc[:, selected].head(1) if selected else pd.DataFrame()
         if not first_values.empty and first_values.notna().to_numpy().any():
@@ -1660,8 +1685,75 @@ class AnalyticsAgent:
             lag_note = "Önceki gözlemi bulunmayan başlangıç değerleri boş bırakıldı."
         return (
             f"Doğrulanmış aktif tablodaki {len(derived_columns)} seri için {label}{scope} {action}; "
-            f"toplam {len(frame)} satır. {lag_note}"
+            f"toplam {len(frame)} satır. {lag_note}{preserved}"
         )
+
+    def _verified_delivery_summary(self, steps: list[AgentStep], *, is_transform: bool) -> str:
+        """Deterministic delivery text: what the table is, where it comes from, unit and stock/flow.
+
+        Measured (PR #18 jenerik, 21 Sep): skipping the narration turn saves tokens, but two fixed
+        sentences gave the user no source, period, unit or stock/flow information (12 cases, A0 had 0).
+        Everything below is computed from the verified frame, provenance and catalog; no model call.
+        """
+        lead = (
+            "İstenen dönüşüm doğrulanmış aktif tabloya uygulandı; tam sonuç ve indirmeler aşağıda hazır."
+            if is_transform
+            else "İstenen veri tablosu hazırlandı; tam sonuç aşağıdaki tabloda yer alıyor."
+        )
+        frame = self._verified_active_result(steps)
+        if not isinstance(frame, pd.DataFrame) or frame.empty:
+            return lead
+        try:
+            facts = self._build_narration_facts(steps)
+        except Exception:  # noqa: BLE001 — özet cevabı düşürmez
+            facts = None
+        parts = [f"{len(frame):,}".replace(",", ".") + " satır"]
+        if facts is not None and facts.period_start and facts.period_end:
+            parts.append(f"dönem {facts.period_start} – {facts.period_end}")
+        columns = [str(column) for column in frame.columns]
+        shown = ", ".join(columns[:8]) + (f" (+{len(columns) - 8} sütun)" if len(columns) > 8 else "")
+        parts.append("sütunlar: " + shown)
+        lines = [lead, "", "Tablo: " + "; ".join(parts) + "."]
+
+        specs = self._active_table_specs()
+        source_lines: list[str] = []
+        for spec in specs[:4]:
+            origin = spec_origin(spec)
+            name = str(getattr(spec, "name", "") or getattr(spec, "dataset_id", ""))
+            unit = None
+            kind = None
+            for column in getattr(spec, "columns", []) or []:
+                role = getattr(getattr(column, "role", None), "value", getattr(column, "role", None))
+                if role != "measure":
+                    continue
+                unit = unit or getattr(column, "unit", None)
+                semantic = getattr(column, "semantic_type", None)
+                semantic = getattr(semantic, "value", semantic)
+                kind = kind or (_SEMANTIC_TYPE_TR.get(str(semantic)) if semantic else None)
+            detail = ", ".join(part for part in (origin, name, unit and f"birim {unit}", kind) if part)
+            if detail:
+                source_lines.append("- " + detail)
+        if len(specs) > 4:
+            source_lines.append(f"- ve {len(specs) - 4} seri daha")
+        if source_lines:
+            lines.append("Kaynak:")
+            lines.extend(source_lines)
+        elif facts is not None and facts.source_names:
+            lines.append("Kaynak: " + "; ".join(facts.source_names[:6]) + ".")
+        text = "\n".join(lines)
+        try:
+            text, _ = humanize_internal(text, specs)
+        except Exception as exc:  # noqa: BLE001 — kimlik çevirisi başarısızsa ham metin gider
+            log.debug("teslim özeti kimlik çevirisi atlandı: %s", exc)
+        return text
+
+    def _is_bare_tool_name(self, text: str) -> bool:
+        """A final answer that is only a tool name is a failed narration, not an answer (C04, PR #18 jenerik)."""
+        stripped = (text or "").strip().strip("`'\"*_ .:").strip()
+        if not stripped or len(stripped) > 48 or " " in stripped:
+            return False
+        names = {str(name).casefold() for name in self.registry.names()}
+        return stripped.casefold() in names
 
     def _prepare_follow_up(self, question: str) -> None:
         try:
@@ -1977,6 +2069,7 @@ class AnalyticsAgent:
         seen: set[tuple[str, str]] = set()   # (araç, argüman) — döngü kilidi
         seen.update(self._retry_failed_signatures)
         duplicates = 0                       # kilidin kaç kez devreye girdiği
+        budget_refusals = 0                  # katalog arama sınırı kaç kez reddetti (ilk red turu bitirmez)
         terminal: ToolError | None = None    # tekrar denemeyle çözülmeyen hata
         public_fallback_pending: dict[str, Any] | None = None
         stuck_note: str | None = None        # son tura verilecek özel yönerge
@@ -2236,7 +2329,8 @@ class AnalyticsAgent:
                     continue
 
                 answer_text = self._strip_reasoning(response.content)
-                if not answer_text.strip():
+                bare_tool_name = self._is_bare_tool_name(answer_text)
+                if not answer_text.strip() or bare_tool_name:
                     answer_text = self._empty_final_response_fallback(state=recovery, steps=steps)
                     self._usage["empty_final_response_fallbacks"] = (
                         self._usage.get("empty_final_response_fallbacks", 0) + 1
@@ -2244,7 +2338,9 @@ class AnalyticsAgent:
                     steps.append(AgentStep(
                         index=i,
                         role="narrate",
-                        thought="model boş/yalnız reasoning yanıtı verdi; doğrulanmış durum deterministik sunuldu",
+                        thought=("model yalnız araç adı yazdı; doğrulanmış durum deterministik sunuldu"
+                                 if bare_tool_name else
+                                 "model boş/yalnız reasoning yanıtı verdi; doğrulanmış durum deterministik sunuldu"),
                         ok=False,
                         result_summary=answer_text[:200],
                         duration_ms=(time.perf_counter() - started) * 1000,
@@ -2418,13 +2514,28 @@ class AnalyticsAgent:
                             "cevabın sonunda tek cümleyle söyle. Sayı uydurma."
                         )
                 elif call.name == "lakehouse_search" and recovery.catalog_search_budget_exhausted:
+                    budget_refusals += 1
                     result = ToolResult.fail(
                         "CATALOG_SEARCH_BUDGET",
                         f"Bu turda {recovery.catalog_search_budget} katalog araması yapıldı; yeni arama durduruldu.",
-                        hint="Mevcut aday ve şema çıktılarıyla devam et; yeterli kanıt yoksa doğrulanamayan kısmı açıkça belirt.",
+                        hint=("Yeni arama yapma. Önceki arama çıktılarındaki adaylarla devam et: lakehouse_describe ile "
+                              "şemayı doğrula, lakehouse_query ile veriyi çek; yeterli aday yoksa doğrulanamayan kısmı "
+                              "açıkça belirt."),
                         layer="harness",
                         retryable=False,
                     )
+                    # Measured (PR #18 jenerik, 21 Sep): treating the first refusal as terminal produced a
+                    # fixed "arama sınırına ulaşıldı" answer in 10 cases although candidates were already on
+                    # hand. The first refusal only blocks the search; the turn continues with the other
+                    # tools. A second refusal means the model is looping on search, and the turn closes.
+                    if budget_refusals < 2 and result.error is not None:
+                        result.error.terminal = False
+                        # The generic non-retryable footer ("kullanıcıya durumu açıkla") would end the
+                        # turn in the model's eyes; only the search is closed, the other tools stay open.
+                        result.content = "\n".join(
+                            line for line in result.content.split("\n")
+                            if not line.startswith("BU HATA TEKRAR DENEMEYLE")
+                        ) + "\nTur devam ediyor: lakehouse_describe / lakehouse_query / workspace araçları açık."
                     tool_started = time.perf_counter()
                 else:
                     seen.add(signature)
@@ -2623,11 +2734,7 @@ class AnalyticsAgent:
                 or self._is_structured_transform_complete(question, requested, steps)
             ):
                 is_transform = self._is_structured_transform_complete(question, requested, steps)
-                text = (
-                    "İstenen dönüşüm doğrulanmış aktif tabloya uygulandı; tam sonuç ve indirmeler aşağıda hazır."
-                    if is_transform
-                    else "İstenen veri tablosu hazırlandı; tam sonuç aşağıdaki tabloda yer alıyor."
-                )
+                text = self._verified_delivery_summary(steps, is_transform=is_transform)
                 text = self._coverage_note(self._source_note(text, steps, artifacts), artifacts)
                 steps.append(AgentStep(
                     index=len(steps) + 1,

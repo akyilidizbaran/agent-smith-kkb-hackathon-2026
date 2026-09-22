@@ -124,7 +124,7 @@ def load_settings() -> Settings:
         architect_token=os.getenv("ARCHITECT_TOKEN", "").strip(),
         # Sağlayıcı çağrı tavanı narration deadline'ını kırpmamalı (100 sn).
         llm_timeout=float(os.getenv("LLM_TIMEOUT", "100")),
-        llm_max_retries=int(os.getenv("LLM_MAX_RETRIES", "2")),
+        llm_max_retries=int(os.getenv("LLM_MAX_RETRIES", "3")),
         # The full table is kept as a structured UI artifact, but 1,500 tokens
         # is too small for a legitimate 24/60-month narration. Keep the
         # environment override and give the default final turn enough room.

@@ -613,7 +613,9 @@ def inspect_existing_verified_transform(
         )
         for part in group_frames:
             periods = pd.PeriodIndex(pd.to_datetime(part[date_column]).dt.to_period("M")).unique()
-            if set(periods) != set(expected):
+            # The active table keeps its full window; the requested months
+            # only need to be present in it.
+            if not set(expected).issubset(set(periods)):
                 return None
 
     return WorkspaceTransformSatisfaction(
@@ -677,55 +679,53 @@ def execute_verified_workspace_transform(
             else "Dönemsel mutlak değişim"
         ) + " [deterministik doğrulanmış workspace fast path]"
         if plan.period_start is not None and plan.period_end is not None:
-            published = frame.copy()
-            for name, series in values.items():
-                published[name] = series
-            published_dates = pd.to_datetime(published[plan.date_column], errors="coerce")
-            mask = published_dates.between(plan.period_start, plan.period_end, inclusive="both")
-            published = published.loc[mask].copy().reset_index(drop=True)
-            if published.empty:
+            # The requested months are an output view, not a new table: the
+            # derived columns are added to the full verified window so the
+            # user's table (and the LAG base) survive; the answer carries the
+            # filtered rows. Replacing the table shrank a 60-row workspace to
+            # the 3 requested rows and lost the original.
+            window_dates = pd.to_datetime(frame[plan.date_column], errors="coerce")
+            if not window_dates.between(plan.period_start, plan.period_end, inclusive="both").any():
                 return None
-            workspace.replace_table(
-                published,
-                description=description + f"; çıktı aralığı {plan.period_start:%Y-%m}–{plan.period_end:%Y-%m}",
-                column_provenance=provenance_by_column,
-                columns_added=list(plan.derived_columns),
-            )
-        else:
-            workspace.add_columns(
-                values,
-                description=description,
-                provenance_by_column=provenance_by_column,
-            )
+            description += f"; çıktı aralığı {plan.period_start:%Y-%m}–{plan.period_end:%Y-%m}"
+        workspace.add_columns(
+            values,
+            description=description,
+            provenance_by_column=provenance_by_column,
+        )
     except (AssertionError, ValueError, KeyError, TypeError):
         return None
 
     updated = workspace.table
     assert updated is not None
-    expected_rows = len(frame)
-    expected_mask = None
-    if plan.period_start is not None and plan.period_end is not None:
-        expected_mask = pd.to_datetime(frame[plan.date_column], errors="coerce").between(
-            plan.period_start, plan.period_end, inclusive="both"
-        )
-        expected_rows = int(expected_mask.sum())
-    if len(updated) != expected_rows or list(updated.columns[-len(plan.derived_columns) :]) != list(plan.derived_columns):
+    if len(updated) != len(frame) or list(updated.columns[-len(plan.derived_columns) :]) != list(plan.derived_columns):
         workspace.revert()
         return None
     for column in plan.derived_columns:
         actual = pd.to_numeric(updated[column], errors="coerce").to_numpy(dtype=float)
-        want_series = expected[column]
-        if expected_mask is not None:
-            want_series = want_series.loc[expected_mask].reset_index(drop=True)
-        want = pd.to_numeric(want_series, errors="coerce").to_numpy(dtype=float)
+        want = pd.to_numeric(expected[column], errors="coerce").to_numpy(dtype=float)
         if not np.allclose(actual, want, equal_nan=True, rtol=1e-12, atol=1e-12):
             workspace.revert()
             return None
     return WorkspaceFastPathResult(
         plan=plan,
-        frame=updated.copy(),
+        frame=period_view(updated, plan.date_column, plan.period_start, plan.period_end),
         validation="row_count, ordering, lag arithmetic, and NULL-first-period invariants passed",
     )
+
+
+def period_view(
+    frame: pd.DataFrame,
+    date_column: str,
+    period_start: pd.Timestamp | None,
+    period_end: pd.Timestamp | None,
+) -> pd.DataFrame:
+    """Rows of ``frame`` inside the requested window (a copy); the whole frame when no window."""
+    if period_start is None or period_end is None:
+        return frame.copy()
+    dates = pd.to_datetime(frame[date_column], errors="coerce")
+    mask = dates.between(period_start, period_end, inclusive="both")
+    return frame.loc[mask].copy().reset_index(drop=True)
 
 
 def repair_invalid_previous_transform(
@@ -790,9 +790,12 @@ def repair_invalid_previous_transform(
     ) + " [doğrulama sonrası yeniden hesaplandı]"
     if plan.period_start is not None and plan.period_end is not None:
         description += f"; çıktı aralığı {plan.period_start:%Y-%m}–{plan.period_end:%Y-%m}"
+    repaired = temporary.table
+    if repaired is None:
+        return None
     try:
         workspace.replace_table(
-            result.frame,
+            repaired.copy(),
             description=description,
             column_provenance=provenance,
             columns_added=list(plan.derived_columns),
@@ -807,6 +810,7 @@ def repair_invalid_previous_transform(
 
 
 __all__ = [
+    "period_view",
     "WorkspaceFastPathPlan",
     "WorkspaceFastPathResult",
     "WorkspaceTransformSatisfaction",

@@ -171,3 +171,15 @@ def test_empty_source_hints_configuration_remains_valid(tmp_path, monkeypatch):
         SimpleNamespace(dataset_ids=["loans"]),
         SimpleNamespace(get_dataset=lambda _id: SimpleNamespace(name="Loans", source="bddk_monthly")),
     ) is None
+
+
+def test_institution_pin_matches_dotted_capital_i_and_mixed_case():
+    """casefold: 'Tüik' ≠ 'TÜİK' (noktalı İ); kurum eşlemesi ASCII katlamayla yapılır."""
+    assert source_domains("Tüik'ten 2024 TÜFE verisini getir") == ["tuik.gov.tr"]
+    assert source_domains("Bist'ten endeks verisini getir") == ["borsaistanbul.com"]
+
+
+def test_turkish_ordinal_suffix_is_not_a_domain():
+    assert addresses("Raporun 5.sayfadaki tabloyu getir") == []
+    assert addresses("bddk.gov.tr sitesinden bülteni bul") == ["bddk.gov.tr"]
+    assert addresses("www.tcmb.gov.tr/evds adresini oku") == ["www.tcmb.gov.tr/evds"]

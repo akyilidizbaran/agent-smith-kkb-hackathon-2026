@@ -183,11 +183,7 @@ def apply_facets(records: Sequence[CatalogRecord], ranked: Sequence[Candidate], 
         rec = by_id.get(cand.id)
         if rec is None:
             continue
-        if facets.national:
-            if rec.province is not None:
-                continue
-            prov_key = 0
-        elif facets.provinces:
+        if facets.provinces:
             if rec.province is None or rec.province not in facets.provinces:
                 # il soruldu: başka ilin serisi elenir; ulusal seri geride kalır ama düşmez
                 if rec.province is not None:
@@ -196,6 +192,9 @@ def apply_facets(records: Sequence[CatalogRecord], ranked: Sequence[Candidate], 
             else:
                 prov_key = 0
         else:
+            # No province asked (including an explicit national request):
+            # provincial series rank behind national ones but are not dropped,
+            # so a catalog without a national parent still returns candidates.
             prov_key = 1 if rec.province is not None else 0
         wanted_frequency = facets.frequency or facets.window_frequency
         if wanted_frequency:

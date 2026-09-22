@@ -286,6 +286,12 @@ class WebUrlTool(Tool):
         constraint = detect_source_constraint(question or params.url)
         keywords = keywords_of(f"{params.purpose} {question}")
         research_state = getattr(self._registry, "web_research", None)
+        turn = getattr(self._registry, "turn", None)
+        self._begin_cache_turn(turn)
+        # Key the turn cache by the requested crawl, not the budget-clamped one:
+        # a re-read of a known page is clamped to a single page and must still
+        # find the document fetched earlier in this turn.
+        cache_key = self._cache_key(params)
         if research_state is not None:
             allowed_pages = research_state.page_budget(params.url, params.max_pages)
             if allowed_pages <= 0:
@@ -299,9 +305,6 @@ class WebUrlTool(Tool):
             if allowed_pages != params.max_pages:
                 params = params.model_copy(update={"max_pages": allowed_pages})
         budget = CrawlBudget(max_pages=params.max_pages, max_depth=params.max_depth)
-        turn = getattr(self._registry, "turn", None)
-        self._begin_cache_turn(turn)
-        cache_key = self._cache_key(params)
         if params.refresh:
             self._delivered_text.pop(cache_key, None)
         cached = None if params.refresh else self._cached_result(cache_key, turn=turn)
@@ -656,6 +659,7 @@ class WebSearchTool(Tool):
         domains: list[str] = []
         max_results = params.max_results
         topic = params.topic
+        consume_fallback = False
         if fallback_plan is not None:
             if getattr(self._registry, "public_web_fallback_consumed", False):
                 return ToolResult.fail(
@@ -672,7 +676,7 @@ class WebSearchTool(Tool):
                     "INTENT_REQUIRED", "Doğrulanmış ve kaynakla sınırlandırılmış arama planı bulunamadı.",
                     layer="policy", retryable=False,
                 )
-            self._registry.public_web_fallback_consumed = True
+            consume_fallback = True
         else:
             question = getattr(self._registry, "active_question", "") or ""
             pinned_domains = [domain for raw in source_domains(question)
@@ -702,6 +706,10 @@ class WebSearchTool(Tool):
                 }:
                     rejected.error.terminal = False
                 return rejected
+        if consume_fallback:
+            # The single sanctioned fallback search is spent only once the
+            # research state has admitted it; a denied call must not burn it.
+            self._registry.public_web_fallback_consumed = True
         # Bound candidate fan-out before it becomes repeated model context. Full
         # source content is still read through web_url and kept in provenance.
         max_results = min(max_results, 5)
