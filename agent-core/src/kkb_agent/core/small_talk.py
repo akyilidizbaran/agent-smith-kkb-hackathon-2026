@@ -108,7 +108,7 @@ _CAP_ASK = re.compile(r"m[ıiuü]s[ıiuü]n|yapabil|edebil|olur mu|mümkün mü|
 # Yalnız YETENEK sorusu ("… yapabiliyor musun?") deterministik cevaplanmalı; İSTEK ("bunu internetten
 # araştırır mısın", "şunu web'de ara") gerçek aramaya gitmeli. Ayrım: yetenek yardımcı fiili var mı.
 _CAP_ABILITY = re.compile(
-    r"yapabil|edebil|olur\s*mu\b|mümkün|mumkun|(?:ara|bak|bul|eriş|eris|gir)\w*abil|erişim\s+var", re.I
+    r"[ae]bil(?:ir|iyor|iyo|ecek)?|olur\s*mu\b|mümkün|mumkun|erişim\s+var", re.I
 )
 # "nasıl / ne tür / ne çeşit" ve "hangi verilerle çalışıyorsun" (15 Eyl arayüz denemesi): "Elinde nasıl veriler var" kalıba uymadı,
 # modele gitti; model 5 aramadan sonra "Hazır Gold tabloları" başlığı ve doğrulanmamış "687+ seri" yazdı (ADR-0082).
