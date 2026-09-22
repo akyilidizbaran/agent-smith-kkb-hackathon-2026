@@ -311,6 +311,54 @@ def test_kayit_turunda_sozlesme_sessizdir() -> None:
     assert not any((s.thought or "").startswith("tamamlanma") for s in ans.steps)
 
 
+class _WebP(BaseModel):
+    query: str = ""
+    url: str = ""
+    purpose: str = ""
+
+
+class _FakeSearch(Tool):
+    name = "web_search"; description = "t"; Params = _WebP
+
+    def run(self, params):
+        return ToolResult(content="ARAMA: 1 sonuç\n1. Fed 2024 — https://example.org/fed",
+                          artifacts={"web_search": {"query": params.query, "hits": ["https://example.org/fed"], "results": []}})
+
+
+class _FakeUrl(Tool):
+    name = "web_url"; description = "t"; Params = _WebP
+
+    def run(self, params):
+        return ToolResult(content="SAYFA: Fed 2024\nMETİN: Fed 2024'te faizi 100 baz puan indirdi.")
+
+
+def test_web_turunda_sozlesme_sessizdir() -> None:
+    """Ölçüldü (23 Eyl): '2024 yılında … internette araştır' dönem beklentisi üretti; web cevabı tablo üretmediğinden
+    doğru cevaba sahte '(Kapsam kontrolü: istenen veri için tablo yok.)' notu düştü ve bir kez boş geri gönderme oldu."""
+    reg = ToolRegistry(); reg.register(_FakeSearch()); reg.register(_FakeUrl())
+    llm = _ScriptedLLM([LLMResponse(content="", tool_calls=[ToolCall(id="1", name="web_search", arguments={"query": "fed 2024"})]),
+                        LLMResponse(content="", tool_calls=[ToolCall(id="2", name="web_url", arguments={"url": "https://example.org/fed", "purpose": "fed"})]),
+                        LLMResponse(content="2024'te Fed faizi 100 baz puan indirdi (kaynak: example.org).")])
+    ans = AnalyticsAgent(llm=llm, registry=reg, workspace=AnalysisWorkspace(), max_steps=6).ask(
+        "2024 yılında küresel piyasalarda neler oldu, internette araştır.")
+    assert "Kapsam kontrolü" not in ans.text and ans.completion == {}, ans.text
+    assert not any((s.thought or "").startswith("tamamlanma") for s in ans.steps)
+    assert "100 baz puan" in ans.text
+
+
+def test_web_ve_veri_araci_birlikte_calisinca_sozlesme_uygulanir() -> None:
+    """Web turu istisnası yalnız veri aracı tablo üretmediğinde: web + sorgu turunda dönem kapsamı yine denetlenir."""
+    ws = AnalysisWorkspace()
+    reg = ToolRegistry(); tool = _MonthsTool(ws); reg.register(tool); reg.register(_FakeUrl())
+    llm = _ScriptedLLM([LLMResponse(content="", tool_calls=[ToolCall(id="1", name="web_url", arguments={"url": "https://example.org/fed", "purpose": "fed"})]),
+                        LLMResponse(content="", tool_calls=[ToolCall(id="2", name="lakehouse_query", arguments={"months": 23})]),
+                        LLMResponse(content="Bakiye tabloda, 23 ay."),
+                        LLMResponse(content="Bakiye tabloda, 23 ay; Aralık 2024 kaynakta yok.")])
+    ans = AnalyticsAgent(llm=llm, registry=reg, workspace=ws, max_steps=8).ask(
+        "KOBİ kredileri aylık stok serisini 2023-01–2024-12 döneminde göster")
+    assert ans.completion["missing_periods"] == ["2024-12"]
+
+
 def test_seri_kimligi_deseni_kaynak_adina_bagli_degildir() -> None:
     """Jeneriklik: kimlik biçimi tanınır ("<kaynak>:<kod>", "<sayı>_<Sütun>", noktalı kod), kaynak adı listesi yok."""
     e = derive_expectation("saglik_il:ANKARA_Yatak ve tuik:NUFUS.2024 ile 1357_Toplam ve TP.KTF12 serileri")

@@ -642,6 +642,9 @@ class AnalyticsAgent:
     # to the current question.  Keeping them separate from FRESH_DATA_TOOLS
     # lets the stale-table guard distinguish a real transformation from a
     # model merely narrating the old table.
+    #: Web araçları: anlatı/bağlam kaynağıdır, tablo üretmez (ADR-0075). Tamamlanma sözleşmesi bu turlarda susar.
+    WEB_TOOLS = frozenset({"web_search", "web_url"})
+
     ACTIVE_TABLE_ACTION_TOOLS = frozenset({
         "workspace_add_column", "workspace_compute_column", "workspace_real_value",
         "workspace_join", "workspace_query", "anomaly_detect", "change_points", "lead_lag", "chart",
@@ -3090,6 +3093,16 @@ class AnalyticsAgent:
         write_turn = any(a.get("kind") in ("record", "clarify") for a in (artifacts or [])) or any(
             s.tool_name in ("ingest_from_url", "promote_draft", "ingest_source") for s in steps)
         if write_turn:
+            return CompletionReport(expectation=derive_expectation(""))
+        # Web turu (web_search / web_url ile cevaplanan, veri aracı tablo üretmeyen tur): teslim edilen şey anlatıdır,
+        # tablo değil. "2024 yılında … internette araştır" gibi tarihli web soruları dönem beklentisi üretir ama
+        # denetlenecek tablo yoktur; ölçüldü (23 Eyl, betik LLM): doğru web cevabına "(Kapsam kontrolü: istenen veri
+        # için tablo yok.)" notu düştü ve bir kez boş geri gönderme yapıldı. Kayıt turu istisnasının aynısı web için.
+        # Not: web_url DATA_PRODUCING_TOOLS içindedir (ADR-0034: sayfa metni de cevaptır), bu yüzden `produced_data`
+        # web turunda da True olur. Ölçüt: bu turda web dışı başarılı bir veri aracı (sorgu, gold_*, workspace_*) yok.
+        web_turn = (any(s.ok and s.tool_name in self.WEB_TOOLS for s in steps)
+                    and not any(s.ok and s.tool_name in (self.DATA_PRODUCING_TOOLS - self.WEB_TOOLS) for s in steps))
+        if web_turn:
             return CompletionReport(expectation=derive_expectation(""))
         artifacts_seen: list = []
         candidate_count = None
