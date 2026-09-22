@@ -4,7 +4,7 @@ Tek sınıf, üç kademe; adaptörler ve ölçüm koşucusu aynı nesneyi kullan
 üretimde çalışan şey olsun:
 
 * `preload_all`  — katalog bütçeye sığıyorsa arama yok, hepsi kart (küçük katalog).
-* `bm25`         — BM25 + yüzler (il / frekans / kaynak). Aday havuzu `k`'nın 10 katı,
+* `bm25`         — BM25 + yüzler (il / frekans / kaynak). Aday havuzu `k`'nın 50 katı,
                    yüzler önce eler ve sıralar, sonra ilk `k`.
 * `hybrid`       — BM25 ∪ embedding (kosinüs) → RRF → yüzler → ilk `k`. Embedder verilmemişse
                    bm25'e düşer ve bunu söyler.
@@ -15,19 +15,49 @@ eşikleri); eşikler `scripts/retrieval_golden.py` ile ölçülerek konur, sezgi
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import re
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 
 import numpy as np
-from typing import Iterable, Sequence
 
 from ..contracts.retrieval import Candidate, Embedder, reciprocal_rank_fusion
-from .facets import Facets, extract_facets, frequency_rank, province_of
-from .lexical import Bm25Index, candidate_text
+from ..source_hints import load_source_hints
+from .facets import (
+    FREQUENCY_WORDS,
+    Facets,
+    extract_facets,
+    frequency_rank,
+    province_of,
+    source_matches,
+)
+from .lexical import Bm25Index, candidate_text, fold, tokenize
 
 MODES = ("auto", "preload_all", "bm25", "hybrid")
 DEFAULT_SMALL_MAX = 60        # bu sayıya kadar katalog kart olarak sığar (≈ 6.000 token bütçesi)
 DEFAULT_HYBRID_MIN = 5000     # bu sayıdan sonra BM25 tek başına yetmez (ölçülecek)
-CANDIDATE_MULTIPLIER = 10     # yüz filtrelerinden önce aday havuzu k × bu
+CANDIDATE_MULTIPLIER = 50     # yüz filtrelerinden önce aday havuzu; il serileri filtrelenmeden önce kaybolmasın
+_QUERY_SPLIT = re.compile(r"\b(?:ve|ile|veya)\b|[,;]", re.IGNORECASE)
+_BREAKDOWN_INTENT = re.compile(
+    r"\b(?:alt\s+kalem(?:ler)?(?:i|ı)?|kırılım(?:lar)?(?:ı|i)?|kirilim(?:lar)?(?:i|ı)?|detay(?:lar)?(?:ı|i)?|"
+    r"dağılım(?:ı|i)?|dagilim(?:i)?|bileşen(?:ler)?|bilesen(?:ler)?|"
+    r"taksitli|taksitsiz|ayrıştır|ayristir)\b",
+    re.IGNORECASE,
+)
+_MEASURE_INTENTS = (
+    ("stock", re.compile(r"\b(?:stok\w*|bakiy\w*|balance|outstanding)\b|\bdonem\s+son\w*|\bay\s+son\w*|\byil\s+son\w*")),
+    ("flow", re.compile(r"\b(?:akim\w*|flow|kullandirim\w*|harcama\w*|ciro\w*|donem\s+ici)\b")),
+    ("rate", re.compile(r"\b(?:faiz\w*|interest\s+rate|yield|getiri\w*)\b")),
+    ("ratio", re.compile(r"(?:%|\b(?:rasyo\w*|ratio|oran\w*|yuzde\w*|payda)\b)")),
+    ("index", re.compile(r"\b(?:endeks\w*|index)\b")),
+    ("count", re.compile(r"\b(?:adet\w*|sayi\w*|count)\b")),
+)
+_CHANGE_INTENT = re.compile(r"\b(?:degisim\w*|fark\w*|artis\w*|azalis\w*|growth|change|return)\b")
+_RANKING_CONTEXT_TERMS = frozenset({
+    "veri", "veriler", "dataset", "data", "seri", "seriler", "tablo", "tablosu", "kaynak",
+    "bulten", "getir", "getirin", "listele", "goster", "gosterin", "bul", "find", "show",
+    "ulusal", "national", "turkiye", "turkey", "turkish", "sektor", "genel", "geneli",
+})
 
 
 @dataclass(frozen=True)
@@ -41,6 +71,16 @@ class CatalogRecord:
     frequency: str | None = None
     source: str | None = None
     province: str | None = None    # None → ulusal/il-dışı
+    concept_id: str | None = None
+    parent_series_id: str | None = None
+    relation_type: str = "standalone"
+    dimension_path: tuple[str, ...] = ()
+    additivity: str = "unknown"
+    relation_confidence: str | None = None
+    relation_source: str | None = None
+    semantic_confidence: str | None = None
+    measure_type: str | None = None
+    measure_types: tuple[str, ...] = ()
 
     @property
     def text(self) -> str:
@@ -51,9 +91,69 @@ class CatalogRecord:
 def record_from_spec(spec) -> CatalogRecord:
     aliases = tuple(a for c in spec.columns for a in c.aliases)
     freq = getattr(spec.frequency, "value", spec.frequency)
+    measure_types = tuple(sorted({
+        str(getattr(column.semantic_type, "value", column.semantic_type))
+        for column in spec.measures()
+        if getattr(column, "semantic_type", None)
+    }))
     return CatalogRecord(id=spec.dataset_id, name=spec.name, description=spec.description, aliases=aliases,
                          tags=tuple(spec.tags), frequency=str(freq) if freq else None, source=spec.source,
-                         province=province_of(f"{spec.dataset_id} {spec.name}"))
+                         province=province_of(f"{spec.dataset_id} {spec.name}"),
+                         concept_id=getattr(spec, "concept_id", None),
+                         parent_series_id=getattr(spec, "parent_series_id", None),
+                         relation_type=getattr(spec, "relation_type", "standalone"),
+                         dimension_path=tuple(getattr(spec, "dimension_path", ()) or ()),
+                         additivity=getattr(spec, "additivity", "unknown"),
+                         relation_confidence=getattr(spec, "relation_confidence", None),
+                         relation_source=getattr(spec, "relation_source", None),
+                         semantic_confidence=getattr(spec, "semantic_confidence", None),
+                         measure_type=getattr(spec, "measure_type", None) or (measure_types[0] if len(measure_types) == 1 else None),
+                         measure_types=measure_types)
+
+
+def _query_measure_intents(query: str) -> frozenset[str]:
+    """Return only explicit measurement semantics, never infer from a metric name."""
+    folded = fold(query)
+    found = {kind for kind, pattern in _MEASURE_INTENTS if pattern.search(folded)}
+    # A percent/fraction produced by a requested change calculation describes
+    # the output, not necessarily the source series' measurement type.
+    if "ratio" in found and _CHANGE_INTENT.search(folded):
+        found.remove("ratio")
+    # In Turkish, "faiz oranı" is a rate, not a generic ratio.
+    if "rate" in found:
+        found.discard("ratio")
+    return frozenset(found)
+
+
+def _query_topic_terms(query: str, facets: Facets) -> tuple[str, ...]:
+    """Remove retrieval context (source, frequency, geography, request verbs).
+
+    What remains are the terms that distinguish one requested concept from
+    another. Their order is retained so exact name/alias coverage is stable.
+    """
+    ignored = set(_RANKING_CONTEXT_TERMS)
+    ignored.update(token for values in FREQUENCY_WORDS.values() for phrase in values
+                   for token in tokenize(phrase, prefixes=False))
+    for source, words in load_source_hints().get("source_words", {}).items():
+        ignored.update(tokenize(source, prefixes=False))
+        ignored.update(token for phrase in words for token in tokenize(phrase, prefixes=False))
+    ignored.update(token for province in facets.provinces for token in tokenize(province, prefixes=False))
+    if facets.national:
+        ignored.update({"ulusal", "national", "turkiye", "turkey", "genel", "geneli", "sektor"})
+
+    terms: list[str] = []
+    for token in tokenize(query, prefixes=False):
+        if token.isdigit() or token in ignored or token in terms:
+            continue
+        terms.append(token)
+    return tuple(terms)
+
+
+def _measure_types(record: CatalogRecord | None) -> tuple[str, ...]:
+    if record is None:
+        return ()
+    values = record.measure_types or ((record.measure_type,) if record.measure_type else ())
+    return tuple(sorted({str(getattr(value, "value", value)).casefold() for value in values if value}))
 
 
 @dataclass
@@ -92,9 +192,13 @@ def apply_facets(records: Sequence[CatalogRecord], ranked: Sequence[Candidate], 
             else:
                 prov_key = 0
         else:
+            # No province asked (including an explicit national request):
+            # provincial series rank behind national ones but are not dropped,
+            # so a catalog without a national parent still returns candidates.
             prov_key = 1 if rec.province is not None else 0
-        if facets.frequency:
-            want, have = frequency_rank(facets.frequency), frequency_rank(rec.frequency)
+        wanted_frequency = facets.frequency or facets.window_frequency
+        if wanted_frequency:
+            want, have = frequency_rank(wanted_frequency), frequency_rank(rec.frequency)
             if want is None or have is None:
                 freq_key = 1
             elif have == want:
@@ -105,7 +209,7 @@ def apply_facets(records: Sequence[CatalogRecord], ranked: Sequence[Candidate], 
                 freq_key = 2       # daha kaba: istenen frekans üretilemez
         else:
             freq_key = 0
-        src_key = 0 if (not facets.sources or rec.source in facets.sources) else 1
+        src_key = 0 if (not facets.sources or source_matches(rec.source, facets.sources)) else 1
         kept.append(((prov_key, freq_key, src_key, pos), cand))
     kept.sort(key=lambda t: t[0])
     out = []
@@ -145,6 +249,25 @@ class CatalogRetriever:
             cached = vectors
         self._vectors = cached
 
+    def _load_cached_vectors(self) -> bool:
+        """Load a complete catalog vector cache without making a network call.
+
+        A catalog refresh must never turn the first user question into an
+        unbounded embedding migration. Large catalogs can be queried with the
+        deterministic lexical index while a cache warmer is run separately.
+        The explicit ``_ensure_vectors`` path remains available for warm-up.
+        """
+        if self._vectors is not None:
+            return True
+        if self.embedder is None or self._cache is None:
+            return False
+        texts = [f"{r.name}. {' '.join(r.aliases)}".strip() for r in self.records]
+        cached = self._cache.get(self.embedder.model, [r.id for r in self.records], texts)
+        if cached is None:
+            return False
+        self._vectors = cached
+        return True
+
     def embed_queries(self, queries: Sequence[str]) -> list[list[float]]:
         """Ölçüm koşucusu için: binlerce sorgunun vektörü tek tek değil 64'lük dilimlerle."""
         assert self.embedder is not None
@@ -170,6 +293,165 @@ class CatalogRetriever:
         return [Candidate(id=self.records[i].id, text=self.records[i].text, score=float(sims[i]), source="embedding")
                 for i in top]
 
+    def _relation_adjust(self, query: str, ranked: Sequence[Candidate]) -> list[Candidate]:
+        """Apply the canonical relation graph before the final top-k cut.
+
+        A broad concept resolves to its verified/derived parent total.  A query that asks
+        for a breakdown or names a child explicitly keeps the children and expands a parent
+        hit to its direct children.  This is source-independent; BDDK/FinTürk/EVDS only
+        provide the metadata graph.
+        """
+
+        by_id = self._by_id
+        if not any(record.relation_type != "standalone" for record in self.records):
+            return list(ranked)
+        explicit_breakdown = bool(_BREAKDOWN_INTENT.search(query or ""))
+        children: dict[str, list[CatalogRecord]] = {}
+        for record in self.records:
+            if record.parent_series_id and record.parent_series_id in by_id:
+                children.setdefault(record.parent_series_id, []).append(record)
+
+        by_candidate = {candidate.id: candidate for candidate in ranked}
+        output: dict[str, Candidate] = dict(by_candidate)
+        query_tokens = set(tokenize(query or "", prefixes=False))
+        for candidate in ranked:
+            record = by_id.get(candidate.id)
+            if record is None:
+                continue
+            if record.relation_type == "child_breakdown" and record.parent_series_id in by_id:
+                parent = by_id[record.parent_series_id]
+                if not explicit_breakdown:
+                    # A child found by a shared token must not hide the parent total.  Keep
+                    # the child available for explicit follow-up/breakdown queries, but rank
+                    # it below the parent for a broad concept.
+                    parent_candidate = output.get(parent.id)
+                    parent_score = max(candidate.score + 0.001, parent_candidate.score if parent_candidate else float("-inf"))
+                    output[parent.id] = Candidate(
+                        id=parent.id, text=parent.text, score=parent_score,
+                        source=parent.source,
+                        meta={"relation_promoted_from": candidate.id, "relation_type": parent.relation_type},
+                    )
+                continue
+            if explicit_breakdown and record.relation_type == "parent_total":
+                siblings = children.get(record.id, [])
+                # If the user names one child dimension (for example ``taksitli``),
+                # keep the parent as context but demote unrelated siblings.  A generic
+                # token comparison avoids a source-specific list of child labels.
+                # ``record.text`` also carries inherited catalog aliases, which may
+                # contain the child labels themselves (for example ``taksitli`` and
+                # ``taksitsiz`` on the card parent).  Use the canonical parent name
+                # here so an explicitly named dimension remains distinguishable.
+                parent_tokens = set(tokenize(record.name, prefixes=False))
+                specific_tokens = query_tokens - parent_tokens
+                targeted = [
+                    child for child in siblings
+                    if specific_tokens.intersection(set(tokenize(child.text, prefixes=False)))
+                ]
+                # If a child dimension is named explicitly, expand only that child.
+                # This avoids re-introducing an unrelated sibling merely because the
+                # parent was selected first.  With no named dimension ("alt kalemler"
+                # / "kırılım"), retain the complete direct breakdown.
+                expansion_children = targeted or siblings
+                for sibling in siblings:
+                    if targeted and sibling not in targeted and sibling.id in output:
+                        current = output[sibling.id]
+                        output[sibling.id] = Candidate(
+                            id=current.id, text=current.text, score=current.score - 0.25,
+                            source=current.source, meta={**current.meta, "relation_sibling_demoted": record.id},
+                        )
+                for child in expansion_children:
+                    expanded_score = candidate.score - 0.002
+                    existing = output.get(child.id)
+                    if existing is None or existing.score < expanded_score:
+                        output[child.id] = Candidate(
+                            id=child.id, text=child.text,
+                            # Keep parent relevance as a tie-breaker; lexical ranking inside
+                            # the child is still performed by the caller on a later query.
+                            score=expanded_score,
+                            source=child.source,
+                            meta={"relation_expanded_from": record.id, "relation_type": child.relation_type},
+                        )
+        return sorted(output.values(), key=lambda value: (-value.score, value.id))
+
+    def _semantic_tie_break(self, query: str, ranked: Sequence[Candidate], facets: Facets) -> list[Candidate]:
+        """Refine only close lexical cohorts with explicit semantic evidence.
+
+        BM25 can over-rank shared source/frequency words over the requested
+        concept. Inside a 15% score cohort, explicit measure intent and direct
+        name/alias coverage resolve that ambiguity. Verification is used only
+        for candidates with the same matched concept terms and measure type.
+        """
+        if len(ranked) < 2:
+            return list(ranked)
+        topic_terms = _query_topic_terms(query, facets)
+        measure_intents = _query_measure_intents(query)
+        output: list[Candidate] = []
+        cursor = 0
+        while cursor < len(ranked):
+            leader = ranked[cursor]
+            floor = leader.score * 0.85
+            cohort = [leader]
+            cursor += 1
+            while cursor < len(ranked) and ranked[cursor].score >= floor:
+                cohort.append(ranked[cursor])
+                cursor += 1
+            if len(cohort) > 1:
+                decorated: list[tuple[Candidate, tuple[int, tuple[int, ...]], tuple[str, ...]]] = []
+                for candidate in cohort:
+                    record = self._by_id.get(candidate.id)
+                    candidate_types = _measure_types(record)
+                    if not measure_intents or (candidate_types and measure_intents.intersection(candidate_types)):
+                        intent_rank = 0
+                    elif candidate_types:
+                        intent_rank = 2
+                    else:
+                        intent_rank = 1
+                    name_tokens = set(tokenize(
+                        " ".join((record.name, *record.aliases)) if record else candidate.text,
+                        prefixes=False,
+                    ))
+                    topic_signature = tuple(int(term in name_tokens) for term in topic_terms)
+                    decorated.append((candidate, (intent_rank, topic_signature), candidate_types))
+
+                # Stable sort keeps BM25 order when explicit semantic evidence
+                # is equal. The booleans use descending order for term coverage.
+                decorated.sort(key=lambda item: (item[1][0], tuple(-hit for hit in item[1][1])))
+
+                # Verification only breaks ties between the same topic match
+                # and measurement kind; it cannot promote an unrelated series.
+                start = 0
+                while start < len(decorated):
+                    end = start + 1
+                    group_key = (decorated[start][1], decorated[start][2])
+                    while end < len(decorated) and (decorated[end][1], decorated[end][2]) == group_key:
+                        end += 1
+                    same_semantics = decorated[start:end]
+                    if any(group_key[0][1]):
+                        same_semantics.sort(key=lambda item: (
+                            0 if getattr(self._by_id.get(item[0].id), "semantic_confidence", None) == "verified" else 1
+                        ))
+                    decorated[start:end] = same_semantics
+                    start = end
+                output.extend(item[0] for item in decorated)
+            else:
+                output.extend(cohort)
+        return output
+
+    def _with_semantic_metadata(self, candidates: Sequence[Candidate]) -> list[Candidate]:
+        out: list[Candidate] = []
+        for candidate in candidates:
+            record = self._by_id.get(candidate.id)
+            meta = dict(candidate.meta)
+            if record is not None:
+                if record.semantic_confidence:
+                    meta["semantic_confidence"] = record.semantic_confidence
+                if record.measure_type:
+                    meta["measure_type"] = record.measure_type
+                if record.measure_types:
+                    meta["measure_types"] = record.measure_types
+            out.append(Candidate(candidate.id, candidate.text, candidate.score, candidate.source, meta))
+        return out
+
     # ---------- arama ----------
     def search(self, query: str, *, k: int = 8, mode: str | None = None, use_facets: bool = True,
                query_vector: Sequence[float] | None = None) -> list[Candidate]:
@@ -177,10 +459,45 @@ class CatalogRetriever:
         facets = extract_facets(query) if use_facets else Facets()
         self.last_facets = facets
         pool = max(k * CANDIDATE_MULTIPLIER, 50)
-        lexical = self._bm25.search(query, k=pool)
+        # A question can contain several requested concepts joined by "ve".
+        # Ranking the complete sentence lets the first concept fill the whole
+        # pool (for example, provincial child series hide a national parent).
+        # Search each clause as well and union the hits before applying the
+        # source/geography/frequency facets. This is domain independent.
+        variants = [query]
+        variants.extend(part.strip() for part in _QUERY_SPLIT.split(query)
+                        if len(part.strip().split()) >= 2)
+        lexical_by_id: dict[str, Candidate] = {}
+        for variant in dict.fromkeys(variants):
+            # Apply the user's hard facets before taking the clause pool. A
+            # large family of provincial children must not consume all 400
+            # lexical slots and hide the national parent that the next clause
+            # identifies.
+            # Repeated variants (e.g. 81 provinces) can still occupy the
+            # lexical top-k before filtering. With any hard facet, scanning
+            # the in-memory BM25 result set is cheaper and safer than losing
+            # the only national/target-frequency candidate.
+            raw_k = len(self.records) if use_facets and not facets.empty else pool
+            clause_hits = self._bm25.search(variant, k=raw_k)
+            if use_facets:
+                clause_hits = apply_facets(self.records, clause_hits, facets, k=pool)
+            for cand in clause_hits:
+                previous = lexical_by_id.get(cand.id)
+                if previous is None or cand.score > previous.score:
+                    lexical_by_id[cand.id] = cand
+        lexical = sorted(lexical_by_id.values(), key=lambda c: (-c.score, c.id))
         if mode == "hybrid" and self.embedder is not None:
             try:
-                dense = self._dense(query, k=pool, query_vector=query_vector)
+                # A cold full-catalog embedding pass is expensive (6k+ series
+                # means roughly a hundred remote batches). It is not allowed
+                # on the interactive request path for large catalogs. A warm
+                # cache remains fully hybrid; small seed/test catalogs retain
+                # the eager behaviour used by the retrieval tests.
+                if len(self.records) > 1000 and not self._load_cached_vectors():
+                    self.last_error = "embedding cache cold-start; BM25 fallback"
+                    dense = []
+                else:
+                    dense = self._dense(query, k=pool, query_vector=query_vector)
             except Exception as exc:  # noqa: BLE001 — embedding ucu düşerse BM25 ile devam, sessiz değil
                 self.last_error = f"embedding: {exc}"
                 dense = []
@@ -188,11 +505,23 @@ class CatalogRetriever:
             ranked = reciprocal_rank_fusion(lexical, dense) if dense else list(lexical)
         else:
             ranked = list(lexical)
+        ranked = self._relation_adjust(query, ranked)
+        ranked = self._with_semantic_metadata(ranked)
+        ranked = self._semantic_tie_break(query, ranked, facets)
         return apply_facets(self.records, ranked, facets, k=k)
 
     def __len__(self) -> int:
         return len(self.records)
 
 
-__all__ = ["CANDIDATE_MULTIPLIER", "CatalogRecord", "CatalogRetriever", "DEFAULT_HYBRID_MIN", "DEFAULT_SMALL_MAX",
-           "MODES", "RetrievalPolicy", "apply_facets", "record_from_spec"]
+__all__ = [
+    "CANDIDATE_MULTIPLIER",
+    "DEFAULT_HYBRID_MIN",
+    "DEFAULT_SMALL_MAX",
+    "MODES",
+    "CatalogRecord",
+    "CatalogRetriever",
+    "RetrievalPolicy",
+    "apply_facets",
+    "record_from_spec",
+]

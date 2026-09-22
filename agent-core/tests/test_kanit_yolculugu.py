@@ -107,6 +107,18 @@ def test_ocr_belgesinde_zincir_uc_durak_ve_uyarili() -> None:
     assert [(k, st) for k, st, _ in stops] == [("belge", "warn"), ("tablo", "ok"), ("cevap", "ok")]
 
 
+def test_okunan_url_ile_secilmeyen_tablo_kanit_yolculugunda_ayrilir() -> None:
+    ev = _ev(numbers=[], columns=[], observations=[], web_sources=[], table_rows=0,
+             web_reads=[{"url": "https://site.example/report.pdf", "title": "Finans raporu", "status": 200,
+                         "sha256": "ab" * 32, "fetched_at": "2026-09-19T11:00:00+03:00",
+                         "table_used": False, "extraction": {"method": "pdf_text_layer", "pages": [1, 2], "total_pages": 8}}])
+    stops = _stops(ev)
+
+    assert stops[0][0] == "web" and stops[0][1] == "ok"
+    assert "tablo seçilmedi" in stops[0][2]
+    assert next(s for s in stops if s[0] == "tablo")[1] == "broken"
+
+
 def test_hesaplanmis_tablo_kolonu_kendi_duragini_alir() -> None:
     col = {**_ev()["columns"][0], "sources": ["gold — Dönem eşlemeli birleştirme", "bddk_finturk — Konut Kredisi, ADANA"]}
     kinds = [s[0] for s in _stops(_ev(columns=[col]), 0)]

@@ -428,8 +428,15 @@ class EvidenceBuilder:
 
     @staticmethod
     def _web(panel: EvidencePanel, artifacts: list[dict[str, Any]], workspace: AnalysisWorkspace | None = None) -> None:
-        """Kullanılan sayfa kaynak; taranıp kullanılmayan ve erişilemeyen sayfalar panelde.
-        Sayfa önceki turda çekildiyse (tablo hâlâ o sayfadan) workspace'in hatırladığı sha256+zaman kullanılır."""
+        """Arama adayı, okunan URL ve tabloya seçilen web kaynağını ayrı kanıt durumlarında tut."""
+        def upsert(target: list[dict[str, Any]], entry: dict[str, Any]) -> None:
+            url = entry.get("url")
+            old = next((item for item in target if item.get("url") == url), None)
+            if old is None:
+                target.append(entry)
+            else:
+                old.update({key: value for key, value in entry.items() if value is not None})
+
         if workspace is not None and not any(a.get("kind") == "web" for a in artifacts):
             urls: list[str] = []
             for c in panel.columns:
@@ -440,9 +447,13 @@ class EvidenceBuilder:
                 if v:
                     entry = {"url": u, "sha256": v.get("sha256"), "fetched_at": v.get("fetched_at"),
                              "status": v.get("status"), "title": v.get("title"),
+                             "table_used": bool(v.get("table_used")),
+                             "table_index": v.get("table_index"), "table_label": v.get("table_label"),
+                             "table_rows": v.get("table_rows"), "table_columns": v.get("table_columns"),
+                             "cache_reused": v.get("cache_reused"),
+                             **({"extraction": v.get("extraction")} if v.get("extraction") else {}),
                              **({"ocr": v.get("ocr")} if v.get("ocr") else {})}
-                    if entry not in panel.web_sources:
-                        panel.web_sources.append(entry)
+                    upsert(panel.web_sources, entry)
         for art in artifacts:
             if art.get("kind") == "web_search":
                 # K02-T04 (A06, ADR-0075): arama sonucu dış bağlamdır; veri kaynaklarından ayrı ve "veri değil" diye kaydedilir.
@@ -454,21 +465,33 @@ class EvidenceBuilder:
             if art.get("kind") != "web":
                 continue
             used = art.get("used")
+            table_used = bool(art.get("table_loaded", used))
             for v in art.get("visited", []):
                 entry = {"url": v.get("url"), "sha256": v.get("sha256"), "fetched_at": v.get("fetched_at"),
                          "status": v.get("status"), "title": v.get("title"),
+                         "cache_reused": bool(art.get("cache_reused")),
+                         **({"extraction": v.get("extraction")} if v.get("extraction") else {}),
                          **({"ocr": v.get("ocr")} if v.get("ocr") else {})}
-                if used and v.get("url") == used:
-                    if entry not in panel.web_sources:
-                        panel.web_sources.append(entry)
+                if used and v.get("url") == used and table_used:
+                    entry.update({"table_used": True, "table_index": art.get("table_index"),
+                                  "table_label": art.get("table_label"), "table_rows": art.get("table_rows"),
+                                  "table_columns": art.get("table_columns")})
+                    upsert(panel.web_sources, entry)
+                    panel.web_reads[:] = [read for read in panel.web_reads if read.get("url") != used]
                 else:
-                    panel.web_unused.append({**entry, "note": "tarandı, tabloya girmedi"})
+                    entry["table_used"] = False
+                    upsert(panel.web_reads, entry)
             for b in art.get("blocked", []):
-                panel.web_unused.append({"url": b.get("url"), "note": f"erişilemedi: {b.get('status')} / {b.get('reason')}"})
+                upsert(panel.web_unused, {"url": b.get("url"), "note": f"erişilemedi: {b.get('status')} / {b.get('reason')}"})
+            for item in art.get("limit_exceeded", [])[:10]:
+                if isinstance(item, dict):
+                    upsert(panel.web_unused, {"url": item.get("url"), "note": f"boyut sınırı: {item.get('reason')}"})
             for url, reason in art.get("skipped", [])[:10]:
-                panel.web_unused.append({"url": url, "note": f"atlandı: {reason}"})
-        used = {w.get("url") for w in panel.web_sources}
-        panel.context_sources[:] = [c for c in panel.context_sources if c.get("url") not in used]   # açılıp tabloya giren sayfa veri kaynağıdır
+                upsert(panel.web_unused, {"url": url, "note": f"atlandı: {reason}"})
+        selected_urls = {w.get("url") for w in panel.web_sources}
+        panel.web_reads[:] = [w for w in panel.web_reads if w.get("url") not in selected_urls]
+        read_urls = selected_urls | {w.get("url") for w in panel.web_reads}
+        panel.context_sources[:] = [c for c in panel.context_sources if c.get("url") not in read_urls]
 
     # ------------------------------------------------------------------ giriş
     def build(
@@ -480,6 +503,7 @@ class EvidenceBuilder:
         if table is None or table.empty:
             panel.gaps.append("analiz tablosu yok")
             panel.numbers = [NumberEvidence(number=n, text=t) for t, n in _number_texts(answer)]
+            self._web(panel, artifacts or [], workspace)
             return panel
         panel.table_rows = len(table)
         panel.inspected_rows = min(len(table), self.max_rows)

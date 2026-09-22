@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Mapping
 from urllib.parse import urlparse
 
-from .fetch import DATA_SUFFIXES, FetchRefused, FetchResult, RobotsCache, canonical, fetch_url, same_domain
+from .fetch import ContentTooLarge, DATA_SUFFIXES, FetchRefused, FetchResult, RobotsCache, canonical, fetch_url, same_domain
 from .html import PageContent, extract_page
 
 _TOKEN = re.compile(r"[0-9A-Za-zÇĞİÖŞÜçğıöşü]{3,}")
@@ -56,6 +56,7 @@ class CrawlResult:
     pages: list[VisitedPage] = field(default_factory=list)          # başarıyla okunan
     blocked: list[VisitedPage] = field(default_factory=list)        # erişim sözleşmesi reddi
     skipped: list[tuple[str, str]] = field(default_factory=list)    # (url, sebep) — bütçe / alan adı / politika
+    limit_exceeded: list[tuple[str, str]] = field(default_factory=list)  # erişildi, ancak içerik boyut sınırı aşıldı
     elapsed_ms: float = 0.0
     budget: CrawlBudget = field(default_factory=CrawlBudget)
 
@@ -69,7 +70,7 @@ class CrawlResult:
 
     def summary(self) -> str:
         return (f"tarama: {len(self.pages)} sayfa okundu, {len(self.blocked)} erişilemedi, "
-                f"{len(self.skipped)} atlandı; bütçe {self.budget.max_pages} sayfa / derinlik "
+                f"{len(self.limit_exceeded)} boyut sınırı, {len(self.skipped)} atlandı; bütçe {self.budget.max_pages} sayfa / derinlik "
                 f"{self.budget.max_depth} / {self.budget.max_seconds:.0f} s; süre {self.elapsed_ms / 1000:.1f} s")
 
 
@@ -122,6 +123,9 @@ def crawl(
         try:
             fetched = fetcher(url, session=session, robots=robots, allowed_local_roots=allowed_local_roots,
                               max_bytes=budget.max_bytes_per_page, environ=environ, allow_private=allow_private)
+        except ContentTooLarge as exc:
+            result.limit_exceeded.append((url, str(exc)))
+            continue
         except FetchRefused as exc:
             result.skipped.append((url, f"politika: {exc}"))
             continue

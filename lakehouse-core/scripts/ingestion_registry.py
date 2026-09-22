@@ -227,14 +227,39 @@ _FINTURK_COLUMN_TABLES: dict[str, str] = _load_finturk_tables()
 
 
 def _bddk_finturk_spec(row: SeriesRow, start: date, end: date) -> FetchSpec:
-    try:
-        sehir, column = row.native_code.rsplit("_", 1)
-    except ValueError as exc:
-        raise ValueError(
-            f"{row.series_id}: bddk_finturk native_code must be '<SEHIR>_<column>'"
-        ) from exc
-    if not sehir:
-        raise ValueError(f"{row.series_id}: could not derive sehir from native_code")
+    """Build a request for both catalog address forms.
+
+    PR9's catalog keeps one ``<SEHIR>_<column>`` row per province and measure; the
+    table map selects the correct BDDK table and the request remains one-province so
+    the runner can attribute the response to that row.  The generic bulk form,
+    ``<tabloNo>|<SEHIR>``, is also accepted for future catalogs: the endpoint's
+    ``HEPSİ`` mode returns all provinces and the parser removes the out-of-scope
+    ``YURT DIŞI`` row.
+    """
+
+    native = row.native_code.strip()
+    if not native:
+        raise ValueError(f"{row.series_id}: bddk_finturk native_code must not be empty")
+
+    if "|" in native:
+        table_no, city = native.split("|", 1)
+        table_no = table_no.strip()
+        city = city.strip()
+        if not table_no or not city:
+            raise ValueError(
+                f"{row.series_id}: bulk native_code must be '<tabloNo>|<SEHIR>'"
+            )
+        sehir = "HEPSİ"
+    else:
+        try:
+            sehir, column = native.rsplit("_", 1)
+        except ValueError as exc:
+            raise ValueError(
+                f"{row.series_id}: bddk_finturk native_code must be '<SEHIR>_<column>'"
+            ) from exc
+        if not sehir:
+            raise ValueError(f"{row.series_id}: could not derive sehir from native_code")
+        table_no = _FINTURK_COLUMN_TABLES.get(column, BDDK_FINTURK_TABLO_BIREYSEL)
 
     return FetchSpec(
         source_id=row.source_id,
@@ -245,7 +270,7 @@ def _bddk_finturk_spec(row: SeriesRow, start: date, end: date) -> FetchSpec:
         parameters={
             "sehir": sehir,
             "tarafKodu": "10001",
-            "tabloNo": _FINTURK_COLUMN_TABLES.get(column, BDDK_FINTURK_TABLO_BIREYSEL),
+            "tabloNo": table_no,
         },
     )
 

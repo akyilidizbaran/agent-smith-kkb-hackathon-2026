@@ -153,6 +153,7 @@ class EvidencePanel:
     table_rows: int = 0
     chart_paths: list[str] = field(default_factory=list)
     web_sources: list[dict[str, Any]] = field(default_factory=list)   # kullanılan sayfa: url, sha256, fetched_at
+    web_reads: list[dict[str, Any]] = field(default_factory=list)      # okunmuş URL, ancak tabloya seçilmemiş
     web_unused: list[dict[str, Any]] = field(default_factory=list)    # taranıp kullanılmayan / erişilemeyen
     context_sources: list[dict[str, Any]] = field(default_factory=list)  # K02-T04: web araması sonucu — bağlam, veri değil (ADR-0075)
     inspected_rows: int = 0         # kaç satır incelendi (ilk N); tablo daha büyükse kapsam notu
@@ -188,8 +189,8 @@ class EvidencePanel:
         chained = [c for c in self.columns if not (c.sql or "").startswith("türetilmiş:")]
         if self.columns and not chained:
             return not gaps             # tablo yalnız türetilmiş kolonlardan oluşuyor (olağan dışı)
-        if self.web_sources and not self.observations:
-            return not gaps               # zincir web sayfasının baytlarında biter: URL + sha256 + zaman
+        if (self.web_sources or self.web_reads) and not self.observations:
+            return not gaps               # web kanıtı URL baytlarında biter; tablo seçimi ayrıca görünür
         if self.supports_artifacts:
             if not self.observations or not all(o.complete and o.chain_state == CHAIN_FULL for o in self.observations):
                 return False
@@ -228,6 +229,9 @@ class EvidencePanel:
             parts.append(f"ilk {self.inspected_rows}/{self.table_rows} satır incelendi")
         if self.web_sources:
             parts.append(f"{len(self.web_sources)} web sayfası (sha256+zaman)")
+        if self.web_reads:
+            selected = sum(bool(w.get("table_used")) for w in self.web_sources)
+            parts.append(f"{len(self.web_reads)} URL okundu, {selected} tablo seçildi")
         else:
             parts.append(f"{len(self.observations)} gözlem → {arts} artifact")
             breakdown = self.chain_breakdown()
@@ -262,7 +266,6 @@ class EvidencePanel:
         lines.append("")
         lines.append("GÖZLEMLER (satır → artifact → RAW):")
         for o in self.observations[:max_observations]:
-            art = self.artifacts.get(o.artifact_sha256, {})
             when = o.fetched_at.strftime("%Y-%m-%d %H:%M") if o.fetched_at else "?"
             lines.append(
                 f"  {o.series_id} @ {o.observation_date}"
@@ -285,9 +288,20 @@ class EvidencePanel:
             lines.append("  (gözlem izi yok)")
         if self.web_sources:
             lines.append("")
-            lines.append("WEB KAYNAĞI (kullanılan sayfa):")
+            lines.append("WEB KAYNAĞI (tabloya seçilen sayfa):")
             for w in self.web_sources:
+                table = (f" | tablo #{w.get('table_index')} ({w.get('table_rows')}×{w.get('table_columns')})"
+                         if w.get("table_used") else " | tablo seçilmedi")
+                lines.append(f"  {w.get('url')} | sha256 {str(w.get('sha256'))[:12]}… | çekim {w.get('fetched_at')} | HTTP {w.get('status')}{table}")
+                if w.get("extraction"):
+                    lines.append(f"      çıkarım: {w['extraction']}")
+        if self.web_reads:
+            lines.append("")
+            lines.append("WEB OKUNDU, TABLOYA SEÇİLMEDİ:")
+            for w in self.web_reads:
                 lines.append(f"  {w.get('url')} | sha256 {str(w.get('sha256'))[:12]}… | çekim {w.get('fetched_at')} | HTTP {w.get('status')}")
+                if w.get("extraction"):
+                    lines.append(f"      çıkarım: {w['extraction']}")
         if self.web_unused:
             lines.append("")
             lines.append("TARANDI, KULLANILMADI / ERİŞİLEMEDİ:")
@@ -333,6 +347,7 @@ class EvidencePanel:
             "supports_artifacts": self.supports_artifacts,
             "chart_paths": self.chart_paths,
             "web_sources": self.web_sources,
+            "web_reads": self.web_reads,
             "web_unused": self.web_unused,
             "context_sources": self.context_sources,
         }

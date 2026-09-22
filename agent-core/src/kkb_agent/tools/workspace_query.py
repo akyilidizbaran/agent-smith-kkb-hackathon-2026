@@ -17,7 +17,7 @@ import re
 from pydantic import BaseModel, Field
 
 from ..adapters.duckdb_lakehouse import guard_sql, hardened_connection
-from ..contracts.lakehouse import LakehouseError, QueryProvenance
+from ..contracts.lakehouse import LakehouseError, QueryProvenance, SQLSyntaxError
 from ..core.errors import ToolError
 from ..core.sql_identifiers import quote_known_identifiers
 from ..core.tool import Tool, ToolResult
@@ -77,6 +77,11 @@ class WorkspaceQueryTool(Tool):
         assert table is not None
         try:
             text = guard_sql(params.sql)
+        except SQLSyntaxError as exc:
+            return ToolResult.fail(
+                "SQL_SYNTAX_ERROR", str(exc), layer="data", retryable=True,
+                hint="Sözdizimini düzeltip tek bir SELECT/WITH sorgusu olarak yeniden dene; UNION ALL kollarındaki ORDER BY/LIMIT ifadelerini parantezle.",
+            )
         except LakehouseError as exc:
             return ToolResult.fail("UNSAFE_SQL", str(exc), layer="policy", retryable=False)
         con = hardened_connection(None)

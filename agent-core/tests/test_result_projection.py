@@ -127,6 +127,132 @@ def test_direct_query_projection_can_show_base_values_without_deleting_derived_c
     assert "metric_a_change" in agent.workspace.table.columns
 
 
+def test_read_only_peek_does_not_replace_full_active_table() -> None:
+    """Narration's four-row verification query must not shrink a 60-row export."""
+    answer, agent, before = _derived_answer()
+    answer.steps.append(AgentStep(
+        index=3,
+        role="execute",
+        tool_name="workspace_query",
+        tool_args={"as_active_table": False},
+        result_data=agent.workspace.table.iloc[[0, 1]].copy(),
+        ok=True,
+    ))
+
+    projected = project_result_table(answer, agent, question="60 aylık veriyi getir", table_before=before)
+
+    assert projected is not None
+    assert len(projected) == len(agent.workspace.table)
+    assert list(projected.columns) == list(agent.workspace.table.columns)
+
+
+def test_final_workspace_show_exports_the_post_transform_snapshot() -> None:
+    answer, agent, before = _derived_answer()
+    answer.steps.insert(0, AgentStep(
+        index=0,
+        role="execute",
+        tool_name="workspace_query",
+        result_data=before.copy(),
+        ok=True,
+    ))
+    answer.steps.append(AgentStep(
+        index=99,
+        role="retrieve",
+        tool_name="workspace_show",
+        result_data=agent.workspace.table.copy(),
+        ok=True,
+    ))
+
+    projected = project_result_table(
+        answer,
+        agent,
+        question="bakiye yapısını aylık değişimleri analiz etmeye uygun hale getir",
+        table_before=before,
+    )
+
+    assert projected is not None
+    assert list(projected.columns) == list(agent.workspace.table.columns)
+    assert "metric_a_change" in projected.columns and "metric_b_change" in projected.columns
+    assert frame_to_dict(projected)["columns"][-1]["label"] == "metric_b_change"
+
+
+def test_evidence_columns_stay_out_of_user_projection_after_compute_and_show() -> None:
+    base = pd.DataFrame({
+        "period_start": pd.to_datetime(["2022-01-01", "2022-02-01"]),
+        "period_end": pd.to_datetime(["2022-01-31", "2022-02-28"]),
+        "bddk_monthly:1536::value": [100.0, 110.0],
+        "bddk_monthly:1536::quality_flag": ["ok", "ok"],
+        "contributing_series": [["bddk_monthly:1536"], ["bddk_monthly:1536"]],
+        "is_complete_period": [True, True],
+    })
+    workspace = AnalysisWorkspace()
+    workspace.set_table(base, description="gold join fixture")
+    workspace.add_column(
+        "bddk_monthly:1536::value_change",
+        pd.Series([None, 10.0]),
+        description="change",
+        provenance=QueryProvenance(
+            sql='türetilmiş: "bddk_monthly:1536::value" - LAG("bddk_monthly:1536::value")',
+            dataset_ids=["bddk_monthly:1536"],
+        ),
+    )
+    answer = AgentAnswer(
+        text="ok",
+        steps=[
+            AgentStep(
+                index=1,
+                role="execute",
+                tool_name="workspace_compute_column",
+                tool_args={
+                    "column_name": "bddk_monthly:1536::value_change",
+                    "expression": '"bddk_monthly:1536::value" - LAG("bddk_monthly:1536::value")',
+                },
+                result_data=workspace.table.copy(),
+            ),
+            AgentStep(
+                index=2,
+                role="retrieve",
+                tool_name="workspace_show",
+                result_data=workspace.table.copy(),
+            ),
+        ],
+        workspace=workspace,
+    )
+    agent = SimpleNamespace(workspace=workspace)
+
+    projected = project_result_table(answer, agent, question="aylık değişimleri göster", table_before=base)
+
+    assert projected is not None
+    assert list(projected.columns) == [
+        "period_end",
+        "bddk_monthly:1536::value_change",
+    ]
+
+
+def test_direct_gold_projection_hides_lineage_columns_but_all_columns_keeps_them() -> None:
+    frame = pd.DataFrame({
+        "period_end": pd.to_datetime(["2022-01-31"]),
+        "metric": [100.0],
+        "metric::quality_flag": ["ok"],
+        "contributing_series": [["bddk:metric"]],
+        "is_complete_period": [True],
+    })
+    workspace = AnalysisWorkspace()
+    workspace.set_table(frame, description="gold join")
+    answer = AgentAnswer(
+        text="ok",
+        steps=[AgentStep(index=1, role="execute", tool_name="gold_join", result_data=frame.copy())],
+        workspace=workspace,
+    )
+    agent = SimpleNamespace(workspace=workspace)
+
+    clean = project_result_table(answer, agent, question="veriyi göster", table_before=pd.DataFrame())
+    full = project_result_table(answer, agent, question="tüm sütunları göster", table_before=pd.DataFrame())
+
+    assert clean is not None and list(clean.columns) == ["period_end", "metric"]
+    assert full is not None and list(full.columns) == list(frame.columns)
+
+
 def test_follow_up_base_request_can_recover_source_columns_from_provenance() -> None:
     _, agent, before = _derived_answer()
     follow_up = AgentAnswer(

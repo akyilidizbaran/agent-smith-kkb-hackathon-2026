@@ -48,8 +48,9 @@ def test_status_ask_reset_dongusu() -> None:
     s = client.get("/api/status").json()
     assert s["model"] == "sahte" and s["tool_gate"] is True and s["history"] == []
     r = client.post("/api/ask", json={"question": "2025 Aralık konut kredisi bakiyesi?"}).json()
-    assert r["text"].startswith("2025 Aralık") and r["table"]["columns"] == [{"key": "c0", "label": "donem"}, {"key": "c1", "label": "bakiye"}] and r["table"]["rows"][1]["c1"] == 678970.0
+    assert r["text"].startswith("2025 Aralık") and "| Dönem |" not in r["text"] and r["table"]["columns"] == [{"key": "c0", "label": "donem"}, {"key": "c1", "label": "bakiye"}] and r["table"]["rows"][1]["c1"] == 678970.0
     assert r["steps"][0]["tool"] == "lakehouse_query" and r["steps"][0]["ok"] is True and r["steps"][0]["duration_ms"] == 12
+    assert r["steps"][0]["llm_duration_ms"] == 0 and r["steps"][0]["tool_duration_ms"] == 0
     assert r["evidence"]["complete"] is True and r["evidence"]["numbers"][0]["text"] == "678.970"
     assert r["usage"]["prompt"] == 26240 and r["gate"]["closed"] == ["grafik"] and r["elapsed_s"] >= 0
     assert client.get("/api/status").json()["history"][0]["question"].startswith("2025 Aralık")

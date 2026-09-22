@@ -1,0 +1,8 @@
+record_type,segment,start_period,end_period,n,mean_change_basis,basis,min_size,max_breaks,break_number,break_period,index
+segment,1.0,2021-02-28,2021-10-31,9.0,2.708337828439065,change,4,3,,,
+segment,2.0,2021-11-30,2022-02-28,4.0,2.325654987572122,change,4,3,,,
+segment,3.0,2022-03-31,2023-12-31,22.0,4.620288820909048,change,4,3,,,
+segment,4.0,2024-01-31,2025-12-31,24.0,2.5666459204874448,change,4,3,,,
+break,,,,,,change,4,3,1.0,2021-11-30,10.0
+break,,,,,,change,4,3,2.0,2022-03-31,14.0
+break,,,,,,change,4,3,3.0,2024-01-31,36.0

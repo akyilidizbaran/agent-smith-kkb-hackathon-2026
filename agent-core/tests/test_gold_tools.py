@@ -14,6 +14,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -226,6 +227,46 @@ def test_join_prefixli_kolonlar_ve_eksik_donem_uyarisi(env) -> None:
     assert f"{a}: stock → last" in r.content and f"{b}: rate → avg" in r.content
 
 
+def test_gold_ambiguous_anchor_donemini_ust_pencereye_tasiyor(env) -> None:
+    """60 aylık istek anchor yılları Gold filtresiyle 24 aya daraltılamaz."""
+    lake, ws, runner = env
+    monthly_columns = [
+        "series_id", "entity_id", "period_start", "period_end", "value", "quality_flag",
+        "measure_type", "unit", "aggregation", "source_frequency", "target_frequency",
+        "observations", "missing_observations", "warned_observations",
+        "source_observation_dates", "artifact_sha256_list", "vintage_id_list", "run_id_list",
+    ]
+    rows = []
+    for i, period in enumerate(pd.date_range("2021-04-30", periods=60, freq="ME")):
+        start = period.replace(day=1).date().isoformat()
+        rows.append([
+            "bddk_monthly:konut", None, start, period.date().isoformat(), float(i), "ok",
+            "stock", "TRY_mn", "last", "monthly", "monthly", 1, 0, 0,
+            [period.date().isoformat()], ["ab" * 32], ["v1"], ["r1"],
+        ])
+    runner.document = {
+        "gold_document_version": "1.0", "function": "align_frequency",
+        "arguments": {}, "columns": monthly_columns, "rows": rows,
+    }
+
+    class ResolvedRegistry:
+        active_question = (
+            "Anchor yıllarını içeren 60 aylık sentetik rapor penceresindeki verileri getir. "
+            "[Otomatik dönem sınırı: 2021-04 ile 2026-03 arasındaki 60 aylık pencereyi kullan]"
+        )
+
+    tool = GoldAlignTool(lake, ws, registry=ResolvedRegistry())
+    result = tool.validate_and_run({
+        "series_id": "bddk_monthly:konut", "target_frequency": "monthly",
+        "purpose": "60 aylık sonuç", "period_from": "2022-01", "period_to": "2023-12",
+    })
+
+    assert result.ok, result.content
+    assert ws.table is not None and len(ws.table) == 60
+    assert ws.table["period_end"].min() == date(2021, 4, 30)
+    assert ws.table["period_end"].max() == date(2026, 3, 31)
+
+
 def test_decompose_basarili_flagleri_ozetler(env) -> None:
     lake, ws, runner = env
     cols = ["series_id", "entity_id", "period_start", "period_end", "value", "decomposition_flag",
@@ -279,3 +320,14 @@ def test_parse_period_ve_workspace_view() -> None:
         parse_period("Q1", end=False)
     view = workspace_view(document_to_frame(ALIGN_DOC))
     assert "run_id_list" not in view.columns and "source_observation_dates" in view.columns
+
+
+def test_workspace_view_json_tarihlerini_gercek_tarih_tipine_dondurur() -> None:
+    frame = pd.DataFrame({
+        "period_start": ["2024-01-01", "2024-02-01"],
+        "period_end": ["2024-01-31", "2024-02-29"],
+        "value": [10.0, 12.0],
+    })
+    view = workspace_view(frame)
+    assert view["period_end"].iloc[0] == date(2024, 1, 31)
+    assert all(isinstance(value, date) for value in view["period_end"])

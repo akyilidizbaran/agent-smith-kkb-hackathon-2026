@@ -225,6 +225,10 @@ class SilverLakehouse:
                 )
         # adhoc isteğe bağlı: seed/test veritabanlarında olmayabilir.
         self._has_adhoc = ADHOC_RELATION in found
+        # The relation graph was added after the first PR9 database. Keep old read-only
+        # databases compatible; when it is absent, catalog rows simply use standalone
+        # defaults until the migration script is run.
+        self._has_series_relation = "meta.series_relation" in found
         # Gold defteri de isteğe bağlı: `python -m lakehouse gold` hiç koşmadıysa yoktur.
         self._has_gold_ledger = GOLD_BUILD_TABLE in found
 
@@ -253,6 +257,26 @@ class SilverLakehouse:
             ORDER BY series_id
             """
         ).fetchall()
+        relation_rows: dict[str, dict[str, Any]] = {}
+        if getattr(self, "_has_series_relation", False):
+            relation_rows = {
+                row[0]: {
+                    "concept_id": row[1],
+                    "parent_series_id": row[2],
+                    "relation_type": row[3],
+                    "dimension_path": list(row[4] or []),
+                    "additivity": row[5],
+                    "relation_confidence": row[6],
+                    "relation_source": row[7],
+                }
+                for row in self._conn().execute(
+                    """
+                    SELECT series_id, concept_id, parent_series_id, relation_type,
+                           dimension_path, additivity, relation_confidence, relation_source
+                    FROM meta.series_relation
+                    """
+                ).fetchall()
+            }
         # Gözlem sayısı ve dönem aralığı birlikte okunur: onaylanan kullanıcı serisinde meta.series first_obs/last_obs boş
         # kalıyor (kimlik deneyi, 15 Eyl: kapsam 1900-01 → 1900-01 görünüyordu); aralık gözlemlerden gelir.
         span_sql = "SELECT series_id, count(*), min(observation_date), max(observation_date) FROM {} GROUP BY 1"
@@ -276,7 +300,9 @@ class SilverLakehouse:
             n = adhoc_counts.get(series_id) if relation == ADHOC_RELATION else counts.get(series_id)
             if n:
                 span = (adhoc_spans if relation == ADHOC_RELATION else spans).get(series_id, (n, None, None))
-                catalog[series_id] = self._to_spec(row, n, span=(span[1], span[2]))
+                catalog[series_id] = self._to_spec(
+                    row, n, span=(span[1], span[2]), relation=relation_rows.get(series_id)
+                )
             else:
                 self._uningested[series_id] = name_tr
         catalog.update(self._load_gold_catalog(catalog))
@@ -446,7 +472,13 @@ class SilverLakehouse:
             last_refreshed=None,
         )
 
-    def _to_spec(self, row: tuple, row_count: int | None, span: tuple = (None, None)) -> DatasetSpec:
+    def _to_spec(
+        self,
+        row: tuple,
+        row_count: int | None,
+        span: tuple = (None, None),
+        relation: dict[str, Any] | None = None,
+    ) -> DatasetSpec:
         (series_id, source_id, native_code, dataset_id, name_tr, description, aliases, tags,
          frequency, week_anchor, unit, measure_type, default_agg, cumulative_reset,
          confidence, first_obs, last_obs, metadata_url, status) = row
@@ -478,10 +510,10 @@ class SilverLakehouse:
             notes.append(f"Haftalık seri, dönem çapası: {week_anchor}.")
         if default_agg:
             notes.append(f"Frekans indirgemede kullanılacak kural: {default_agg}.")
-        relation = ADHOC_RELATION if source_id == "adhoc" else SILVER_RELATION
+        physical_relation = ADHOC_RELATION if source_id == "adhoc" else SILVER_RELATION
         notes.append(
             "Fiziksel sorgu: "
-            f"SELECT observation_date, value FROM {relation} "
+            f"SELECT observation_date, value FROM {physical_relation} "
             f"WHERE series_id = '{series_id}'"
         )
 
@@ -491,7 +523,7 @@ class SilverLakehouse:
             description=description,
             source=source_id,
             source_url=metadata_url,
-            source_detail=f"{relation} WHERE series_id = '{series_id}' (kaynak kodu: {native_code})",
+            source_detail=f"{physical_relation} WHERE series_id = '{series_id}' (kaynak kodu: {native_code})",
             frequency=_FREQUENCY.get(frequency, Frequency.IRREGULAR),
             time_column="observation_date",
             grain=["observation_date"],
@@ -527,6 +559,13 @@ class SilverLakehouse:
             notes=notes,
             last_refreshed=None,
             semantic_confidence=confidence,
+            concept_id=(relation or {}).get("concept_id"),
+            parent_series_id=(relation or {}).get("parent_series_id"),
+            relation_type=(relation or {}).get("relation_type", "standalone"),
+            dimension_path=list((relation or {}).get("dimension_path", [])),
+            additivity=(relation or {}).get("additivity", "unknown"),
+            relation_confidence=(relation or {}).get("relation_confidence"),
+            relation_source=(relation or {}).get("relation_source"),
         )
 
     # ---------- Katalog ----------

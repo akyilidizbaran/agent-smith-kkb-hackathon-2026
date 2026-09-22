@@ -1,0 +1,3 @@
+series,series_id,period_start,period_end,n,first_value,last_value,minimum,minimum_period,maximum,maximum_period,largest_1_period,largest_1_abs_change
+ihtiyac,bddk_monthly:1536_Toplam,2021-04-30,2026-03-31,60,403333.0,2379292.0,403333.0,2021-04-30,2379292.0,2026-03-31,2025-12-31,128528.0
+kart,bddk_monthly:1539_Toplam,2021-04-30,2026-03-31,60,155609.0,3032396.0,155609.0,2021-04-30,3032396.0,2026-03-31,2025-05-31,136255.0
