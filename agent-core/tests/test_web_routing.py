@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from kkb_agent.core.web_routing import (
     addresses,
     discovery_requested,
+    general_public_fallback_plan,
     host_of,
     public_db_fallback,
     public_fallback_plan,
@@ -183,3 +184,32 @@ def test_turkish_ordinal_suffix_is_not_a_domain():
     assert addresses("Raporun 5.sayfadaki tabloyu getir") == []
     assert addresses("bddk.gov.tr sitesinden bülteni bul") == ["bddk.gov.tr"]
     assert addresses("www.tcmb.gov.tr/evds adresini oku") == ["www.tcmb.gov.tr/evds"]
+
+
+# --- Option A: açık web isteği + yerel yokluk → genel (domain-pinsiz) fallback planı -------------
+
+def test_general_fallback_distills_query_and_flags_general():
+    """Genel fallback: junk sözcükler elenir, yıl/konu kalır, scope=general ve boş domain."""
+    plan = general_public_fallback_plan(
+        "Peki bunu internetten araştırır mısın: 2024'te dünya faiz piyasalarında ne yaşandı?"
+    )
+    assert plan is not None
+    assert plan["scope"] == "general"
+    assert plan["include_domains"] == []
+    tokens = str(plan["query"]).lower().split()
+    assert "2024" in tokens
+    assert any(t.startswith("faiz") for t in tokens) and any(t.startswith("piyasa") for t in tokens)
+    for junk in ("bunu", "araştırır", "mısın", "internetten", "yaşandı", "peki", "ne"):
+        assert junk not in tokens, junk
+
+
+def test_general_fallback_gate_protects_out_of_scope():
+    """web_requested kapısı out-of-scope reddini korur: web istenmeyen soruda genel yol açılmaz."""
+    assert web_requested("2015 yılında konut kredisi bakiyesi ne kadardı?") is False
+    assert web_requested("Bunu internetten araştırır mısın?") is True
+
+
+def test_general_fallback_respects_web_forbidden():
+    assert general_public_fallback_plan(
+        "yalnızca veritabanı kullan, internete çıkma: 2024 konut faizi"
+    ) is None

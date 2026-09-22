@@ -723,3 +723,52 @@ def test_web_url_page_budget_clamp_keeps_turn_cache_key() -> None:
 
     assert second.ok and second.artifacts["web"]["cache_reused"] is True
     assert s.calls.count("https://site.example/tufe") == 1
+
+
+def test_general_scope_fallback_allows_empty_domains_and_runs_once() -> None:
+    """Option A: harness'in 'general' planı domain-pinsiz (boş include_domains) tek aramayı çalıştırır.
+    Boş domain artık INTENT_REQUIRED değil — YALNIZ scope=general bayrağında."""
+    seen: list[dict] = []
+
+    class S:
+        def post(self, url, json=None, headers=None, timeout=None):
+            seen.append({"json": json})
+            return SimpleNamespace(status_code=200, json=lambda: {"results": []})
+
+    plan = {"query": "küresel faiz konut piyasası 2024", "include_domains": [],
+            "topic": "finance", "max_results": 5, "scope": "general"}
+    registry = SimpleNamespace(
+        active_question="o dönemde dünya piyasalarında ne yaşandı internetten araştır",
+        public_web_fallback_plan=plan,
+        public_web_fallback_consumed=False,
+        sanctioned_locators=set(),
+    )
+    tool = WebSearchTool(TavilySearch(environ={"TAVILY_API_KEY": "k"}, session=S()), registry=registry)
+
+    result = tool.validate_and_run({"query": "ignore the plan", "include_domains": ["evil.example"]})
+
+    assert result.ok, result.error and result.error.error_code
+    assert len(seen) == 1
+    assert seen[0]["json"]["query"] == plan["query"]
+    assert not seen[0]["json"].get("include_domains")  # genel arama: domain kısıtı yok
+    assert registry.public_web_fallback_consumed is True
+
+
+def test_empty_domain_fallback_without_general_scope_is_rejected() -> None:
+    """scope=general olmayan bir fallback planında boş domain hâlâ reddedilir (resmi-kaynak zorunlu)."""
+
+    class S:
+        def post(self, *args, **kwargs):
+            raise AssertionError("kaynakla sınırlandırılmamış arama çalıştırılmamalı")
+
+    plan = {"query": "x", "include_domains": [], "topic": "finance", "max_results": 5}  # scope yok
+    registry = SimpleNamespace(
+        active_question="q", public_web_fallback_plan=plan,
+        public_web_fallback_consumed=False, sanctioned_locators=set(),
+    )
+    tool = WebSearchTool(TavilySearch(environ={"TAVILY_API_KEY": "k"}, session=S()), registry=registry)
+
+    result = tool.validate_and_run({"query": "q"})
+
+    assert not result.ok and result.error.error_code == "INTENT_REQUIRED"
+    assert registry.public_web_fallback_consumed is False
