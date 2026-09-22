@@ -409,6 +409,7 @@ def plan_verified_workspace_transform(
         if column != date_column
         and pd.api.types.is_numeric_dtype(frame[column])
         and not pd.api.types.is_bool_dtype(frame[column])
+        and not _is_provenance_column(column)
         and not str(getattr(workspace.column_provenance(column), "sql", "") or "").startswith(
             "türetilmiş:"
         )

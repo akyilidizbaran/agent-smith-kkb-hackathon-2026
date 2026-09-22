@@ -414,6 +414,30 @@ def test_all_verified_series_follow_up_reuses_the_workspace() -> None:
     assert plan.value_columns == ("metric_a", "metric_b")
 
 
+def test_verified_transform_skips_numeric_provenance_columns() -> None:
+    workspace = AnalysisWorkspace()
+    workspace.set_table(
+        pd.DataFrame(
+            {
+                "date": pd.to_datetime(["2022-01-31", "2022-02-28", "2022-03-31"]),
+                "metric": [100.0, 110.0, 121.0],
+                "metric::observations": [1, 1, 1],
+                "metric::missing_observations": [0, 0, 0],
+            }
+        ),
+        description="verified fixture with lineage metadata",
+        provenance=QueryProvenance(sql="SELECT", dataset_ids=["transport:metric"]),
+    )
+    resolution = _resolution("Bu serinin aylık değişimini göster.")
+
+    plan = plan_verified_workspace_transform(
+        resolution.question, resolution, workspace, active_specs=[_spec()]
+    )
+
+    assert plan is not None
+    assert plan.value_columns == ("metric",)
+
+
 def test_no_workspace_is_not_eligible() -> None:
     resolution = _resolution("Bunların aylık değişimini göster")
     assert (
