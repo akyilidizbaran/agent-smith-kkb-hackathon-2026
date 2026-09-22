@@ -66,7 +66,9 @@ _DERIVATIONS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("diff", re.compile(r"(önceki|bir önceki|geçen)\s+(aya|döneme|yıla|çeyreğe|haftaya)\s+göre[^.;]*?(mutlak\s+)?fark|mutlak\s+fark|aylık\s+fark", re.I)),
     ("pct", re.compile(r"yüzde\s+değişim|yüzdelik\s+değişim|%\s*değişim|yüzde\s+(fark|artış|azalış)", re.I)),
 )
-_SERIES_ID = re.compile(r"\b(?:bddk_\w+|evds|gold|adhoc):[\w.\-]+|\b\d{3,4}_[A-Za-z]+\b|\bTP\.[A-Z0-9.]+\b")
+#: Katalog kimliği biçimleri, kaynak adından bağımsız: "<kaynak>:<kod>" (bddk_monthly:1534_Toplam, evds:TP.KTF12,
+#: adhoc:x), "<sayı>_<Sütun>" biçimli kalem kodu ve noktalı büyük harfli kod (TP.KTF12, DE.ABC.1). Sözcük listesi yok.
+_SERIES_ID = re.compile(r"\b[a-z][a-z0-9_]*:[A-Za-z0-9][\w.\-]*|\b\d{3,4}_[A-Za-z]\w*\b|\b[A-Z]{2,}\.[A-Z0-9][A-Z0-9.]*[A-Z0-9]\b")
 _LISTING = re.compile(r"\blistele|adaylar[ıi]|eşleşen\s+(aktif\s+)?seril|hangi\s+(\w+\s+)?seriler|mevcut\s+serileri", re.I)
 
 

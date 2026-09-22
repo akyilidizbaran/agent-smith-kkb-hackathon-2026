@@ -309,3 +309,10 @@ def test_kayit_turunda_sozlesme_sessizdir() -> None:
         "kmp_au.pdf dosyasındaki TL Hacim kolonunu aylık taslak olarak kaydet; tablo 2026 yılına ait, dönem 2026")
     assert "Kapsam kontrolü" not in ans.text and ans.completion == {}
     assert not any((s.thought or "").startswith("tamamlanma") for s in ans.steps)
+
+
+def test_seri_kimligi_deseni_kaynak_adina_bagli_degildir() -> None:
+    """Jeneriklik: kimlik biçimi tanınır ("<kaynak>:<kod>", "<sayı>_<Sütun>", noktalı kod), kaynak adı listesi yok."""
+    e = derive_expectation("saglik_il:ANKARA_Yatak ve tuik:NUFUS.2024 ile 1357_Toplam ve TP.KTF12 serileri")
+    assert e.series_ids == ("saglik_il:ANKARA_Yatak", "tuik:NUFUS.2024", "1357_Toplam", "TP.KTF12")
+    assert derive_expectation("2024 yılında ankara: neler oldu").series_ids == ()
