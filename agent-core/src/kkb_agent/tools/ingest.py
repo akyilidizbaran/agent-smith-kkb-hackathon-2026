@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from ..builder.ingest import LakehouseCLI
 from ..builder.profile import profile_table, propose
 from ..builder.read import (
-    ReadRefused, read_bytes_for_profiling, read_table_for_profiling, strip_preamble_rows,
+    ReadRefused, frame_from_grid, read_bytes_for_profiling, read_table_for_profiling,
 )
 from ..builder.crosscheck import cross_check, file_points
 from ..builder.quality import table_quality
@@ -252,23 +252,10 @@ class IngestFromUrlTool(Tool):
 
         # Dışa aktarma önsözü ("Dışa Aktarım Tarihi", "Toplam Kayıt Sayısı") tablo çizgisinin
         # içine düşmüşse başlık sanılmasın: CSV/XLSX ile aynı ölçütle ayrılır.
-        rows, preamble = strip_preamble_rows(table.rows)
-        if len(rows) < 2:
+        try:
+            frame, preamble = frame_from_grid(table.rows)
+        except ReadRefused:
             return None
-        width = max(len(row) for row in rows)
-        header = [
-            (str(row).strip() or f"sutun_{position + 1}")
-            for position, row in enumerate(list(rows[0]) + [""] * (width - len(rows[0])))
-        ]
-        seen: dict[str, int] = {}
-        for position, name in enumerate(header):
-            seen[name] = seen.get(name, 0) + 1
-            if seen[name] > 1:
-                header[position] = f"{name}_{seen[name]}"
-        body = [[(row[i] if i < len(row) else "") for i in range(width)] for row in rows[1:]]
-        frame = pd.DataFrame(body, columns=header, dtype=str).fillna("")
-        if preamble:
-            frame.attrs["preamble"] = preamble
 
         sha256 = hashlib.sha256(content).hexdigest()
         stem = f"pdf_{sha256[:12]}"
