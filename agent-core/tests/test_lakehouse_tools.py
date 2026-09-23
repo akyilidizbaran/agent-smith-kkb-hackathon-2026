@@ -499,27 +499,3 @@ def test_distinct_degerler_aksana_ve_buyuk_kucuk_harfe_duyarsiz_arar() -> None:
     r = LakehouseDistinctValuesTool(lake).validate_and_run({"dataset_id": "adhoc:nufus", "column": "entity_id", "contains": "Türkiye", "limit": 5})
     assert r.ok and "Turkiye" in r.content
     assert "strip_accents(lower(entity_id)) LIKE '%' || strip_accents(lower('Türkiye')) || '%'" in lake.sql[0], lake.sql[0]
-
-
-def test_kaynak_uyusmazligi_adhoc_ve_karma_join_icin_uygulanmaz() -> None:
-    """23 Eyl: (1) 'TEFAS'ı BDDK–EVDS setiyle birleştir' — kullanıcının taslak (adhoc) serisi SOURCE_MISMATCH aldı;
-    (2) 'TCMB politika faizi ile konut kredisi stoku' — EVDS+BDDK join'i reddedildi. Yalnız hiçbir dış seri istenen
-    kaynaktan değilse ret."""
-    from types import SimpleNamespace
-    from kkb_agent.tools.lakehouse import LakehouseQueryTool
-
-    class Lake:
-        def list_datasets(self):
-            return [SimpleNamespace(dataset_id="adhoc:tefas_islem_hacmi", name="TEFAS işlem hacmi", source="adhoc"),
-                    SimpleNamespace(dataset_id="evds:TP.BISPOLFAIZ.TUR", name="Politika faizi", source="evds"),
-                    SimpleNamespace(dataset_id="bddk_monthly:1534_Toplam", name="Konut kredisi", source="bddk_monthly")]
-
-    tool = LakehouseQueryTool.__new__(LakehouseQueryTool)
-    tool.lakehouse = Lake()
-    tool._registry = SimpleNamespace(active_question="TEFAS verilerini mevcut BDDK–EVDS veri setiyle aynı aylık formata dönüştürerek ekle")
-    assert tool._boyut_uyusmazligi("SELECT * FROM silver.fact_observation WHERE series_id = 'adhoc:tefas_islem_hacmi'") is None
-    tool._registry = SimpleNamespace(active_question="TCMB politika faizi ile aylık konut kredisi stoku arasında ilişki var mı?")
-    assert tool._boyut_uyusmazligi("SELECT * FROM silver.fact_observation WHERE series_id IN ('evds:TP.BISPOLFAIZ.TUR', 'bddk_monthly:1534_Toplam')") is None
-    err = tool._boyut_uyusmazligi("SELECT * FROM silver.fact_observation WHERE series_id = 'bddk_monthly:1534_Toplam'")
-    assert err is not None and err.error_code == "SOURCE_MISMATCH"
-

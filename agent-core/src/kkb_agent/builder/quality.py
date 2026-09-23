@@ -41,14 +41,7 @@ def _scale_of(text: str) -> str | None:
 def _to_dt(s: pd.Series) -> pd.Series:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        parsed = pd.to_datetime(s, errors="coerce")
-    if len(parsed) and parsed.isna().all():
-        # Dönem + tarih aralığı hücreleri ("2021/01 (04.01.21-08.01.21)"): aralığın bitiş günü (23 Eyl, TEFAS haftalık).
-        from ..builder.profile import range_end_date
-        ends = s.map(lambda v: range_end_date(str(v)) if v is not None else None)
-        if ends.notna().any():
-            return pd.to_datetime(ends, errors="coerce")
-    return parsed
+        return pd.to_datetime(s, errors="coerce")
 
 
 def table_quality(frame: pd.DataFrame, sig: DataSignature, question: str = "") -> list[str]:

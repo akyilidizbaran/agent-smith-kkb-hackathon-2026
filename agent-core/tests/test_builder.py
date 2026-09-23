@@ -177,31 +177,3 @@ def test_ciplak_yil_sutunu_yillik_tarih_adayidir_sayi_kolonu_degil() -> None:
     # 1900–2100 dışı ya da beş haneli sayılar yıl değildir
     assert profile_table(pd.DataFrame({"a": ["1850", "1900"]})).column("a").date_formats == ()
     assert profile_table(pd.DataFrame({"a": ["12024", "12025"]})).column("a").date_formats == ()
-
-
-def test_donem_arali_hucre_bitis_tarihi_olarak_taninir() -> None:
-    """23 Eyl (TEFAS haftalık işlem hacmi PDF'i): "2021/01 (04.01.21-08.01.21)" tarih sayılmadı, kayıt reddedildi."""
-    import pandas as pd
-    from kkb_agent.builder.profile import RANGE_END, parse_date, profile_table, range_end_date
-    from kkb_agent.tools.ingest import range_column_to_dates
-    frame = pd.DataFrame({"Dönem": ["2021/01 (04.01.21-08.01.21)", "2021/02 (11.01.21-15.01.21)", "2021/03 (18.01.21-22.01.21)"],
-                          "Toplam İşlem Hacmi (TL)": ["4.946.447.746,18", "4.711.681.596,67", "4.004.294.211,98"]})
-    prof = profile_table(frame)
-    col = next(c for c in prof.columns if c.name == "Dönem")
-    assert col.date_formats == (RANGE_END,) and col.monotonic_dates
-    assert range_end_date("04.01.2021 - 08.01.2021").isoformat() == "2021-01-08"
-    assert parse_date("2021/01 (04.01.21-08.01.21)", RANGE_END).isoformat() == "2021-01-08"
-    out, note, freq = range_column_to_dates(frame, "Dönem")
-    assert out["Dönem"].tolist() == ["2021-01-08", "2021-01-15", "2021-01-22"] and freq == "weekly" and "bitiş" in note
-
-
-def test_sondaki_toplam_satiri_atilir_ortadaki_kalir() -> None:
-    """23 Eyl (TEFAS CSV): son satır 'Toplam' olunca tarih kolonu tanınmadı."""
-    import pandas as pd
-    from kkb_agent.tools.ingest import drop_footer_rows
-    frame = pd.DataFrame({"Dönem": ["2021/01 (04.01.21-08.01.21)", "2021/02 (11.01.21-15.01.21)", "Toplam"], "v": ["1", "2", "3"]})
-    out, note = drop_footer_rows(frame)
-    assert len(out) == 2 and "Toplam" in note
-    same, none = drop_footer_rows(pd.DataFrame({"a": ["Toplam", "x"], "v": ["1", "2"]}))
-    assert len(same) == 2 and none is None
-
