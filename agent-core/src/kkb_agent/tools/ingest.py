@@ -100,6 +100,26 @@ def _locator_names(text: str) -> str:
     return _LOCATOR_RE.sub(name, text or "")
 
 
+_AGGREGATE_LABELS = {"toplam", "genel toplam", "ara toplam", "total", "grand total", "sum"}
+
+
+def _drop_aggregate_rows(frame):
+    """Dışa aktarmaların en altındaki 'Toplam' satır(lar)ını ayır: (tablo, düşen etiketler).
+
+    Yalnız SONDAKİ satırlar ve yalnız ilk dolu hücresi bilinen bir toplam sözcüğü olanlar; başka
+    hiçbir satıra dokunulmaz. Ölçüldü (23 Eyl, TEFAS): 61. satır 'Toplam' iken profilci tarih
+    kolonunu reddediyor ve ekleme "tarih ve değer kolonu birlikte bulunamadı" ile düşüyordu.
+    """
+    dropped: list[str] = []
+    while len(frame) > 1:
+        first = next((str(v).strip() for v in frame.iloc[-1].tolist() if str(v).strip()), "")
+        if first.rstrip(":").casefold() not in _AGGREGATE_LABELS:
+            break
+        dropped.append(first)
+        frame = frame.iloc[:-1]
+    return frame, dropped
+
+
 def _slug(text: str) -> str:
     tr = str.maketrans("çğıöşüÇĞİÖŞÜ ", "cgiosuCGIOSU_")
     s = re.sub(r"[^A-Za-z0-9_]+", "_", text.translate(tr)).strip("_").lower()
@@ -331,6 +351,24 @@ class IngestFromUrlTool(Tool):
         if not outcome.ok or frame is None:
             err = to_tool_error(outcome, decision)
             return ToolResult(content=err.render(), ok=False, error=err)
+
+        # 1b. rapor süsleri veri değildir: üstteki önsöz okuyucuda ayrıldı, alttaki 'Toplam' burada
+        # ayrılır. Veri ekibinin CLI'ı dosyayı ham okur; o da aynı şeyleri başlık/tarih sanmasın diye
+        # ikisinden biri varsa CLI'a temiz bir kopya gider, kaynağın kendisi yerinde kalır.
+        preamble = list(frame.attrs.get("preamble", []))
+        frame, dropped = _drop_aggregate_rows(frame)
+        if dropped or (preamble and cli_locator == params.locator):
+            self.allowed_root.mkdir(parents=True, exist_ok=True)
+            clean = self.allowed_root / f"{Path(cli_locator.split('?')[0]).stem}_temiz.csv"
+            frame.to_csv(clean, index=False)
+            cli_locator = str(clean)
+            prep = []
+            if preamble:
+                prep.append("tablo üstündeki rapor satırları veri sayılmadı: " + " | ".join(preamble))
+            if dropped:
+                prep.append(f"alttaki toplam satırı ({', '.join(dropped)}) veri sayılmadı")
+            prep_note = "; ".join(prep) + f". Havuza giden temiz kopya: {clean.name}."
+            doc_note = f"{doc_note} {prep_note}" if doc_note else prep_note
 
         # 2. profil + öneri
         stem = _UPLOAD_PREFIX.sub("", Path(params.locator.split("?")[0]).stem)
