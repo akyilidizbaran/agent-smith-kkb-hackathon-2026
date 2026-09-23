@@ -77,7 +77,33 @@ def _parse_number(text: str, decimal: str, thousands: str | None) -> float | Non
     return number
 
 
+#: "2021/01 (04.01.21-08.01.21)", "04.01.2021 - 08.01.2021": dönem etiketi + tarih aralığı. Değer aralığın BİTİŞ tarihidir
+#: (dönem sonu kuralı). Yıl iki ya da dört haneli, ayraç nokta/eğik çizgi/tire. Ölçüldü (23 Eyl, TEFAS haftalık işlem hacmi
+#: PDF'i): "Dönem" kolonu tarih sayılmadı, kayıt reddedildi.
+_RANGE_RE = re.compile(r"(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})\s*[-–]\s*(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})")
+RANGE_END = "range_end"
+
+
+def range_end_date(text: str) -> date | None:
+    """Hücredeki tarih aralığının bitiş günü; aralık yoksa None."""
+    m = _RANGE_RE.search(text or "")
+    if not m:
+        return None
+    d, mo, y = int(m.group(4)), int(m.group(5)), int(m.group(6))
+    if y < 100:
+        y += 2000 if y < 70 else 1900
+    try:
+        return date(y, mo, d)
+    except ValueError:
+        return None
+
+
 def parse_date(text: str, fmt: str) -> date:
+    if fmt == RANGE_END:
+        parsed = range_end_date(text)
+        if parsed is None:
+            raise ValueError(f"tarih aralığı yok: {text!r}")
+        return parsed
     return datetime.strptime(text.strip(), fmt).date()
 
 
@@ -158,6 +184,12 @@ def profile_table(frame: pd.DataFrame, *, max_sample: int = 5) -> TableProfile:
         if non_empty and not fmts and all(_YEAR_TOKEN.fullmatch(t) for t in non_empty):
             fmts.append("%Y")
             parsed_dates = [date(int(t), 12, 31) for t in non_empty]
+        # Dönem + tarih aralığı hücreleri ("2021/01 (04.01.21-08.01.21)"): her değerde aralık varsa bitiş tarihi alınır.
+        if non_empty and not fmts:
+            ends = [range_end_date(t) for t in non_empty]
+            if all(ends):
+                fmts.append(RANGE_END)
+                parsed_dates = ends
         # Tamamı boş bir kolon tarih adayı değildir.
         if not non_empty:
             fmts = []

@@ -388,7 +388,11 @@ class LakehouseQueryTool(Tool):
                 hint="İstenen il için doğru seriyi lakehouse_search ile bulup sorgula.",
                 candidates=[spec.dataset_id for spec, province in zip(used, used_provinces) if province in facets.provinces],
             )
-        if facets.sources and any(not source_matches(str(getattr(spec, "source", "")), facets.sources) for spec in used):
+        # İstenen kaynaktan EN AZ BİR seri sorgudaysa öbür kaynaklar ek bağlamdır (EVDS politika faizi + BDDK konut stoku);
+        # kullanıcının kendi getirdiği (adhoc) seri hiç ikame sayılmaz ("TEFAS'ı BDDK–EVDS setiyle birleştir": taslak TEFAS
+        # serisini okumak isteğin kendisidir). Yalnız dış kaynaklı serilerin hiçbiri istenen kaynaktan değilse ret (23 Eyl).
+        external = [spec for spec in used if str(getattr(spec, "source", "")) != "adhoc"]
+        if facets.sources and external and not any(source_matches(str(getattr(spec, "source", "")), facets.sources) for spec in external):
             return ToolError(
                 error_code="SOURCE_MISMATCH", layer="policy", retryable=True,
                 message="Sorgudaki kaynak kullanıcının istediği kaynakla uyuşmuyor; başka kaynağın verisi sessizce kullanılamaz.",

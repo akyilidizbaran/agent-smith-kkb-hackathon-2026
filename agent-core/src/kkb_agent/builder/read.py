@@ -77,8 +77,38 @@ def _table_from_bytes(content: bytes, name: str, *, sheet: str | int | None = No
         frame = pd.read_json(io.StringIO(text), dtype=False)
         return frame.astype(str).where(frame.notna(), "")
     sep = "\t" if suffix == ".tsv" else None  # None → sniff (',' ';' '\t' '|')
-    return pd.read_csv(io.StringIO(text), sep=sep, engine="python", dtype=str, keep_default_na=False).fillna("")
+    skip = _preamble_rows(text, sep)
+    return pd.read_csv(io.StringIO(text), sep=sep, engine="python", dtype=str, keep_default_na=False,
+                       skiprows=skip).fillna("")
 
+
+
+
+def _preamble_rows(text: str, sep: str | None) -> int:
+    """Başlık öncesi üst bilgi satırlarının sayısı ("Dışa Aktarım Tarihi:,23.09.2026", "Toplam Kayıt Sayısı:,261", boş).
+
+    Gerçek başlık, tablonun alan sayısına (satırların çoğunluğundaki alan sayısı) sahip ilk satırdır; ondan önceki
+    satırlar atlanır. Ölçüldü (23 Eyl, TEFAS CSV dışa aktarımı): ilk satır başlık sanıldı, "Dönem" kolonu görünmedi,
+    kayıt reddedildi. Düzenli dosyada 0 döner."""
+    import csv
+    from collections import Counter
+    lines = text.splitlines()[:200]
+    if len(lines) < 3:
+        return 0
+    delim = sep
+    if delim is None:
+        try:
+            delim = csv.Sniffer().sniff("\n".join(lines[-20:]), delimiters=",;\t|").delimiter
+        except csv.Error:
+            delim = ","
+    counts = [len(row) for row in csv.reader(lines, delimiter=delim)]
+    wide = [c for c in counts if c >= 2]
+    if not wide:
+        return 0
+    modal = Counter(wide).most_common(1)[0][0]
+    if sum(1 for c in counts if c == modal) < max(3, len(counts) // 2):
+        return 0
+    return next((i for i, c in enumerate(counts) if c == modal), 0)
 
 def _private_host(host: str) -> bool:
     """Web getirmeyle aynı kural (M05-T03); `web.addresses` paket içinden import etmez, döngü yok."""

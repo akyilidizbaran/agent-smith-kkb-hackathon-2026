@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import replace
+from datetime import date
 from pathlib import Path, PureWindowsPath
 from typing import Any, Literal
 from urllib.parse import urlparse
@@ -25,7 +26,7 @@ from pydantic import BaseModel, Field
 
 from ..adapters.duckdb_lakehouse import release_connections
 from ..builder.ingest import LakehouseCLI
-from ..builder.profile import profile_table, propose
+from ..builder.profile import profile_table, propose, RANGE_END
 from ..builder.read import ReadRefused, read_bytes_for_profiling, read_table_for_profiling
 from ..builder.crosscheck import cross_check, file_points
 from ..builder.quality import table_quality
@@ -262,6 +263,70 @@ def year_column_to_dates(frame: Any, column: str) -> tuple[Any, str]:
     return out, f"'{column}' sütunundaki yıllar yıl sonu tarihine çevrildi (1960 → 1960-12-31); frekans yıllık."
 
 
+def _week_anchor_from_dates(semantics, frame: Any, date_column: str | None):
+    """Haftalık seride hafta çapası (veri ekibi sözleşmesi: 'friday' gibi) tarihlerin haftanın gününden türetilir;
+    beyan varsa dokunulmaz. Ölçüldü (23 Eyl, TEFAS haftalık PDF'i): çapa yokken CLI kaydı reddetti."""
+    if getattr(semantics, "frequency", None) != "weekly" or getattr(semantics, "week_anchor", None) or not date_column:
+        return semantics
+    try:
+        import pandas as pd
+        days = pd.to_datetime(frame[date_column], errors="coerce").dropna().dt.day_name().str.lower()
+    except Exception:  # noqa: BLE001
+        return semantics
+    if days.empty:
+        return semantics
+    from ..builder.profile import Evidence
+    anchor = days.mode().iloc[0]
+    return replace(semantics, week_anchor=anchor,
+                   evidence=tuple(semantics.evidence) + (Evidence("week_anchor", anchor, "tarih sütunundaki haftanın günü (dönem sonu)", "strong"),))
+
+
+_FOOTER_RE = re.compile(r"^\s*(?:genel\s+)?(?:toplam|total|ortalama|average|sum|ara\s+toplam)\s*:?\s*$", re.I)
+
+
+def drop_footer_rows(frame: Any) -> tuple[Any, str | None]:
+    """Dışa aktarımların sonundaki 'Toplam' / 'Ortalama' satırları zaman serisi gözlemi değildir; ilk sütunu bu
+    etiketlerden biri olan SONDAKİ satırlar atılır (ölçüldü 23 Eyl, TEFAS CSV: 261. satır 'Toplam' yüzünden tarih
+    kolonu tanınmadı). Ortadaki satırlara dokunulmaz; kaynak dosya değişmez."""
+    if frame is None or len(frame) == 0 or len(frame.columns) == 0:
+        return frame, None
+    first = frame.columns[0]
+    labels = [str(v) for v in frame[first].tolist()]
+    n = 0
+    while n < len(labels) and n < 3 and _FOOTER_RE.match(labels[len(labels) - 1 - n] or ""):
+        n += 1
+    if not n:
+        return frame, None
+    dropped = ", ".join(repr(labels[len(labels) - 1 - i].strip()) for i in range(n))
+    return frame.iloc[: len(frame) - n].copy(), f"Sondaki özet satırı atıldı ({dropped}); zaman serisi gözlemi değil."
+
+
+def range_column_to_dates(frame: Any, column: str) -> tuple[Any, str, str | None]:
+    """Dönem + tarih aralığı sütunu ("2021/01 (04.01.21-08.01.21)") → ISO bitiş tarihi; frekans aralık genişliğinden
+    (≤ 7 gün haftalık, ≤ 31 aylık, ≤ 92 çeyreklik, yoksa yıllık). Sahnelenen CSV'de; kaynak dosya değişmez."""
+    from ..builder.profile import _RANGE_RE, range_end_date
+    out = frame.copy()
+    spans: list[int] = []
+    isos: list[str] = []
+    for v in out[column].tolist():
+        text = str(v)
+        end = range_end_date(text)
+        isos.append(end.isoformat() if end else "")
+        m = _RANGE_RE.search(text)
+        if m and end:
+            d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            y = y + (2000 if y < 70 else 1900) if y < 100 else y
+            try:
+                spans.append((end - date(y, mo, d)).days + 1)
+            except ValueError:
+                pass
+    out[column] = isos
+    span = sorted(spans)[len(spans) // 2] if spans else 0
+    freq = "weekly" if 0 < span <= 7 else "monthly" if span <= 31 else "quarterly" if span <= 92 else "yearly" if span else None
+    return out, (f"'{column}' sütunundaki dönem aralıklarının bitiş tarihi alındı (2021/01 (04.01.21-08.01.21) → 2021-01-08)"
+                 + (f"; aralık genişliği {span} gün, frekans {freq}." if freq else ".")), freq
+
+
 def _bare_locator(locator: str) -> bool:
     """Adres ne http(s), ne file:, ne mutlak yol: yalnız bir dosya adı. Kullanıcı dosyayı eklemeden adını yazmıştır
     (ölçüldü 20 Eyl: 'bist_altin_2023.csv dosyasını kaydet' → araç düz adla arandı, ACCESS_BLOCKED)."""
@@ -429,13 +494,20 @@ class IngestFromUrlTool(Tool):
         Veri ekibinin CLI'ı yalnız tablo dosyası alır; RAW'a OCR tablosunun CSV'si girer, belgenin
         sha256'sı ve OCR modeli katalog açıklamasında ve kartta taşınır. Belge bayt bayt izinli
         kökte saklanır ki kanıt zinciri geriye doğru izlenebilsin."""
-        if self.ocr is None:
-            raise OcrUnavailable("PDF/görsel belge OCR istemcisi olmadan okunamaz (VISION_MODEL yapılandırılmamış).")
         content, media, outcome = read_bytes_for_profiling(
             params.locator, allowed_roots=[self.allowed_root], session=self.session
         )
         if content is None or not outcome.ok:
             return None, outcome, None, params.locator
+        # Metin katmanlı PDF: önce pdfplumber tabloları (tüm sayfalar, aynı başlık birleşik), OCR yalnız yedek.
+        # Ölçüldü (23 Eyl, TEFAS haftalık işlem hacmi PDF'i, 8 sayfa / 261 satır): OCR yolu yalnız 2. sayfanın 34 satırını
+        # aldı ve sayıları "doğrulanmadı" diye işaretledi; metin katmanı sayıları birebir taşır.
+        if content[:5] == b"%PDF-":
+            native = self._native_pdf_table(params, content)
+            if native is not None:
+                return native[0], outcome, native[1], native[2]
+        if self.ocr is None:
+            raise OcrUnavailable("PDF/görsel belge OCR istemcisi olmadan okunamaz (VISION_MODEL yapılandırılmamış).")
         doc = ocr_document(content, media, client=self.ocr, url=params.locator.split("?")[0], pages=params.pages)
         page = extract_ocr_page(params.locator, doc)
         if not page.tables:
@@ -458,6 +530,32 @@ class IngestFromUrlTool(Tool):
         # OCR tablosu sayıya çevrilmiş DataFrame; profilci metin hücre bekler.
         frame = table.astype(str).where(table.notna(), "")
         return frame, outcome, note, str(csv_path)
+
+    def _native_pdf_table(self, params: IngestParams, content: bytes):
+        """PDF metin katmanından tablo: (çerçeve, not, csv_yolu) ya da None (tablo yok / okunamadı → OCR'a düşülür)."""
+        import hashlib
+        try:
+            from ..builder.web_source import _native_pdf
+            tables = _native_pdf(content, params.pages)
+        except Exception:  # noqa: BLE001 — bozuk/taranmış PDF: OCR yedeği denenir
+            return None
+        tables = [(label, frame) for label, frame in tables if len(frame) >= 2 and len(frame.columns) >= 2]
+        if not tables:
+            return None
+        idx = params.table_index if params.table_index is not None else max(
+            range(len(tables)), key=lambda i: tables[i][1].shape[0] * tables[i][1].shape[1])
+        if idx < 0 or idx >= len(tables):
+            return None
+        label, table = tables[idx]
+        sha = hashlib.sha256(content).hexdigest()
+        stem = f"pdf_{sha[:12]}"
+        self.allowed_root.mkdir(parents=True, exist_ok=True)
+        (self.allowed_root / f"{stem}.pdf").write_bytes(content)
+        csv_path = self.allowed_root / f"{stem}_t{idx}.csv"
+        table.to_csv(csv_path, index=False)
+        note = (f"Belge {params.locator} (sha256 {sha}) PDF metin katmanından okundu (pdfplumber): {label}, tablo #{idx} "
+                f"({len(table)}×{len(table.columns)}); OCR kullanılmadı. Belge kopyası: {stem}.pdf.")
+        return table.astype(str).where(table.notna(), ""), note, str(csv_path)
 
     def _stage_frame(self, frame: Any, locator: str) -> str:
         """Türetilen tabloyu (dönem eklenmiş kesit, satır-ölçüm matrisi) izinli köke içerik adresli CSV olarak yazar.
@@ -590,6 +688,9 @@ class IngestFromUrlTool(Tool):
         if web_source is None and Path(params.locator.split("?")[0]).suffix.lower() == ".xls":
             derived_notes.append("Eski Excel (.xls) xlrd ile okundu ve CSV'ye çevrildi; veri havuzu .xls almaz, "
                                  "kaynak dosya değiştirilmedi.")
+        frame, footer_note = drop_footer_rows(frame)
+        if footer_note:
+            derived_notes.append(footer_note)
         profile = profile_table(frame)
         year_cols = [c for c in profile.date_candidates if c.date_formats == ("%Y",)]
         if year_cols and local_matrix is None:      # yerel dosya da adres de: web kaynağında çerçeve stage() ile gider
@@ -598,6 +699,20 @@ class IngestFromUrlTool(Tool):
             derived_notes.append(note)
             if not params.frequency:
                 params = params.model_copy(update={"frequency": "yearly"})
+            profile = profile_table(frame)
+        range_cols = [c for c in profile.date_candidates if c.date_formats == (RANGE_END,)]
+        if range_cols and local_matrix is None:
+            chosen = params.date_column if params.date_column in {c.name for c in range_cols} else range_cols[0].name
+            frame, note, inferred = range_column_to_dates(frame, chosen)
+            derived_notes.append(note)
+            if inferred and params.frequency and params.frequency != inferred:
+                # Beyan (aylık) veriyle (haftalık aralıklar) çelişiyor: veri kazanır, beyan not düşülür; istenen frekans
+                # kayıt sonrası gold_align ile üretilir (ölçüldü 23 Eyl: haftalık TEFAS "monthly" beyanıyla yazılıyordu).
+                derived_notes.append(f"Beyan edilen frekans '{params.frequency}' dosyadaki dönem aralıklarıyla ({inferred}) "
+                                     f"çelişiyor; seri {inferred} olarak kaydedildi, istenen frekans gold_align ile üretilir.")
+                params = params.model_copy(update={"frequency": inferred})
+            elif not params.frequency and inferred:
+                params = params.model_copy(update={"frequency": inferred})
             profile = profile_table(frame)
         if period is not None and not profile.date_candidates:
             by_month = month_names_to_dates(frame, int(period[0][:4])) if local_matrix is None else None
@@ -656,6 +771,7 @@ class IngestFromUrlTool(Tool):
                 return ToolResult.fail("TOOL_FAILED", f"Kolon seçimi uygulanamadı: {exc}",
                                        hint="Kullanıcıya dosyadaki kolonları göster ve doğru kolonu sor.", layer="data", retryable=False)
             semantics = _default_agg_from_measure(semantics)
+            semantics = _week_anchor_from_dates(semantics, frame, getattr(mapping, "observation_date_column", None))
         if mapping is None or semantics is None:
             has_date = bool(getattr(profile, "date_candidates", ()))
             return ToolResult.fail(
@@ -766,10 +882,22 @@ class IngestFromUrlTool(Tool):
             asks.append("frekans: gözlemlerden düzenli aralık belirlenemedi; kaynak günlük, aylık veya hangi sıklıkta yayımlanıyor?")
         if crosscheck is not None and crosscheck.verdict == "ÇELİŞİYOR":
             asks.append("çapraz kontrol: " + crosscheck.lines()[0] + " — kullanıcıya söyle; dosya mı katalog mu doğru, o karar versin")
-        if invented:
-            asks.append("beyan kullanıcıdan gelmeli: " + ", ".join(invented) +
+        # Dayanaksız model beyanı (kullanıcı mesajında geçmeyen birim/ölçüm tipi/frekans) zaten yukarıda DÜŞÜRÜLDÜ; seri
+        # kanıttan gelen değerlerle (frekans tarihlerden, birim başlıktan, ölçüm tipi 'unknown') kaydedilir, uydurma değer
+        # saklanmaz. Kaydı durdurmak jüri sorusunu kilitliyordu (ölçüldü 23 Eyl, TEFAS: "haftalık/akım" model çıkarımıydı,
+        # kullanıcı yalnız "aylık … ekle" demişti; üç deneme "EKLENMEDİ"). Kart bu düşürmeyi açıkça yazar.
+        column_invented = [k for k in invented if k.split("=")[0] in ("value_column", "date_column", "entity_column")]
+        semantic_invented = [k for k in invented if k not in column_invented]
+        if column_invented:
+            # Kolon seçimi kanıttan türetilemez: kullanıcının anmadığı kolonu model seçtiyse sorulur (TLREF: kapanış yerine en düşük).
+            asks.append("beyan kullanıcıdan gelmeli: " + ", ".join(column_invented) +
                         " kullanıcı mesajında geçmiyor (model uydurmuş olabilir); kullanıcıya sor")
+        invented_note = ("beyan kullanıcıdan gelmeli — model beyanı (" + ", ".join(semantic_invented) + ") kullanıcı mesajında "
+                         "geçmiyor, KULLANILMADI; değerler kanıttan alındı — yanlışsa 'birim …/ölçüm tipi …/frekans …' diyerek "
+                         "düzeltin") if semantic_invented else None
         if asks:
+            if invented_note:
+                asks.append(invented_note)
             lines = ["EKLENMEDİ — önce kullanıcıya sorulmalı:"] + [f"  - {a}" for a in asks]
             lines.append("\nÖNERİ (kanıtıyla):")
             lines += [f"  {e.field} = {e.value!r}  [{e.confidence}] {e.reason}" for e in mapping.evidence]
@@ -844,6 +972,15 @@ class IngestFromUrlTool(Tool):
             "kanıt: " + " | ".join(f"{e.field}: {e.reason}" for e in semantics.evidence if e.confidence != "none"),
             *out.provenance_lines(),
         ]
+        # Dosyada başka ölçüm sütunları varsa modele söylenir: kullanıcı iki seri istediyse ikinci çağrı gerekir (ölçüldü
+        # 23 Eyl, TEFAS: "Toplam İşlem Hacmi ve Net Takas Tutarı" — ilk seri kaydedilince tur bitti, ikincisi kalmadı).
+        others = [c.name for c in profile.value_candidates if c.name != mapping.value_column]
+        if others:
+            card.append("dosyada kaydedilmeyen başka ölçüm sütunları: " + ", ".join(others)
+                        + " — kullanıcı bunları da istediyse her biri için ayrı ingest_from_url çağır (value_column=…), sorma; "
+                          "istenen frekans dosyadakinden farklıysa kayıt sonrası gold_align ile üret.")
+        if invented_note:
+            card.append(invented_note)
         if out.warnings:
             card.append(f"parser uyarısı: {out.warnings} (quality_flag='source_warning')")
         card.append(fit.lines()[0] + (" — kullanıcı onayıyla eklendi" if confirmed and irrelevant else ""))
