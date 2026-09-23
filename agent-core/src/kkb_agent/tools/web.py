@@ -442,6 +442,21 @@ class WebUrlTool(Tool):
             # Failed discoveries are never cached. The cache is turn-scoped and
             # bounded by both entry count and fetched bytes.
             self._remember_result(cache_key, result, turn=turn)
+        # Dinamik/JS sayfa statik okuyucuda boş bir uygulama kabuğuysa, aynı güvenli URL'yi
+        # opsiyonel gerçek-Chrome katmanıyla render et. Kaynağa özel etkileşim adapter kayıt
+        # defterinde yaşar; browser/Playwright yoksa mevcut güvenli davranış aynen sürer.
+        static_first = result.first
+        if static_first is not None and static_first.ok and static_first.page is not None:
+            static_text = (static_first.page.text or "").strip()
+            static_title = (static_first.page.title or "").strip()
+            if not static_first.page.tables and (not static_text or static_text == static_title):
+                from ..web.browser import browser_crawl_result
+
+                rendered = browser_crawl_result(params.url, question, environ=self.environ)
+                if rendered is not None and rendered.first is not None and rendered.first.ok:
+                    result = rendered
+                    reuse_discovery = False
+                    self._remember_result(cache_key, result, turn=turn)
         web_artifact = {
             "start_url": params.url,
             "used": None,

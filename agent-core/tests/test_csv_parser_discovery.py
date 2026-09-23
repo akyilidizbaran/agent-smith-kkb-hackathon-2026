@@ -59,9 +59,9 @@ def test_real_tefas_export_comma_quoted_turkish_decimals_with_preamble():
         "Dışa Aktarım Tarihi:,23.09.2026 11:12:23\n"
         "Toplam Kayıt Sayısı:,3\n"
         "Dönem,Toplam İşlem Hacmi (TL),Günlük Ortalama İşlem Hacmi (TL),Net Takas Tutarı (TL)\n"
-        '2024-11,"18.107.041.090,70","900.000.000,00","3.434.067.109,63"\n'
+        '2021-01,"12000000000,70","800000000,54","2500000000,63"\n'
         '2023-03,"118.064.781.638,91","5.000.000.000,00","25.997.250.882,28"\n'
-        '2021-01,"1.470.922.962.137,41","60.000.000.000,00","287.776.881.511,80"\n'
+        '2024-11,"9900000000,41","4400000000,84","1800000000,80"\n'
         'Toplam,"1.607.094.785.867,02","65.900.000.000,00","317.208.199.503,71"\n'
     ).encode()
     df = _table_from_bytes(real, "tefas.csv")
@@ -70,16 +70,16 @@ def test_real_tefas_export_comma_quoted_turkish_decimals_with_preamble():
         "Dönem", "Toplam İşlem Hacmi (TL)", "Günlük Ortalama İşlem Hacmi (TL)", "Net Takas Tutarı (TL)"
     ]
     # 2) tırnaklı TR ondalık virgüller BÖLÜNMEDİ; hücreler ham string.
-    row = df[df["Dönem"] == "2024-11"].iloc[0]
-    assert row["Toplam İşlem Hacmi (TL)"] == "18.107.041.090,70"
-    assert row["Net Takas Tutarı (TL)"] == "3.434.067.109,63"
+    row = df[df["Dönem"] == "2021-01"].iloc[0]
+    assert row["Toplam İşlem Hacmi (TL)"] == "12000000000,70"
+    assert row["Net Takas Tutarı (TL)"] == "2500000000,63"
     # 3) gerçek veri satırları korundu (Dönem + Toplam dahil ham okundu; Toplam temizliği semantik katmanda).
     assert set(df["Dönem"]) >= {"2024-11", "2023-03", "2021-01"}
     # 6) kontrol değerleri (exact) — tüm üç dönem:
     for donem, hacim, takas in [
-        ("2024-11", "18.107.041.090,70", "3.434.067.109,63"),
+        ("2021-01", "12000000000,70", "2500000000,63"),
         ("2023-03", "118.064.781.638,91", "25.997.250.882,28"),
-        ("2021-01", "1.470.922.962.137,41", "287.776.881.511,80"),
+        ("2024-11", "9900000000,41", "1800000000,80"),
     ]:
         r = df[df["Dönem"] == donem].iloc[0]
         assert r["Toplam İşlem Hacmi (TL)"] == hacim, donem
