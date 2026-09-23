@@ -66,7 +66,7 @@ _CHART_ASK = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harit
 _ANALYTICS_ASK = re.compile(r"anomali|aykır|sapan|sapma|olağan ?dışı|sıra ?dışı|kırılma|rejim değişi|öncül|önden mi|korelasyon|granger|mevsimsel|seasonal|\bmad\b|medyan mutlak", re.I)
 # Terfi onayı (tools/promote.py `_CONFIRM` ile aynı sözlük) ve dosya/adres kayıt isteği (mesajda ek + yazma fiili).
 _PROMOTE_ASK = re.compile(r"\b(onayl[ıi]yorum|onayla|onaylayalım|kataloğa al|kataloga al|terfi ettir|yayınla|yayinla)\b", re.I)
-_INGEST_ASK = re.compile(r"(?=.*(?:\n\s*Dosya:\s*\S|https?://))(?=.*\b(?:kaydet|kaydedelim|taslak (?:seri )?olarak|havuza|içe aktar|ingest)\b)", re.I | re.S)
+_INGEST_ASK = re.compile(r"(?=.*(?:\n\s*Dosya:\s*\S|https?://))(?=.*\b(?:kaydet|kaydedelim|taslak (?:seri )?olarak|havuza|içe aktar|ingest|lakehouse'?[ae]\s+(?:ekle|aktar|yaz)|havuzuna\s+(?:ekle|aktar)|katalo[ğg]a\s+ekle|seri\s+olarak\s+ekle)\b)", re.I | re.S)   # 23 Eyl (TEFAS): 'lakehouse'a ekle' de kayıt isteğidir
 #: Aktif tablo ya da üretilmiş veri gerektirmeyen yetenekler (yazma yolu): geri gönderme koşulu tabloya bakmaz.
 _TABLE_FREE_CAPABILITIES = frozenset({"terfi", "kayıt"})
 # A table transformation request is distinct from a new retrieval request.
@@ -140,7 +140,9 @@ _REQUESTED_CAPABILITIES: tuple[tuple[str, "re.Pattern[str]", frozenset[str], str
     ("kayıt", _INGEST_ASK, frozenset({"ingest_from_url"}),
      "Kullanıcı bir dosyanın/adresin havuza taslak olarak kaydedilmesini istedi ama ingest_from_url aracını çağırmadın. "
      "Mesajdaki 'Dosya: <yol>' satırındaki yolu ya da adresi locator olarak ver, beyanları (birim, frekans, ölçüm tipi, "
-     "seri anahtarı) aktar ve aracı çağır; sonucu araç kartından yaz."),
+     "seri anahtarı) aktar ve aracı çağır; sonucu araç kartından yaz. Kaynağın frekansı istenenden ince ya da kaba olsa da "
+     "(haftalık dosya, aylık istek) kullanıcıya SORMADAN olduğu gibi kaydet; frekansı gördüğün gibi beyan et, istenen "
+     "frekans sonra gold_align ile üretilir. Birden çok ölçüm sütunu varsa her biri için ayrı çağrı yap (value_column)."),
     ("dönüşüm", _TRANSFORMATION_ASK, _TRANSFORMATION_TOOL_NAMES,
      "Kullanıcı mevcut tablo üzerinde bir dönüşüm/analiz istedi ama dönüşüm aracı çağırmadın. "
      "Veri hazırsa yeni kaynak arama; aylık değişim veya oran için workspace_compute_column, "
@@ -1137,9 +1139,17 @@ class AnalyticsAgent:
                 source_names.extend(str(source) for source in (getattr(provenance, "sources", []) or []))
 
         discovery_tools = {"lakehouse_search", "lakehouse_describe", "lakehouse_distinct_values"}
-        notes = [
+        write_tools = {"ingest_from_url", "promote_draft", "ingest_source"}
+        # Kayıt/terfi kartları olguların BAŞINA: anlatım "yalnız aşağıdaki olguları kullan" der, not sınırı 6'dır; kartlar
+        # sona düşünce kesiliyordu ve model iki seri EKLENDİ demişken "eklenmedi" anlattı (ölçüldü 23 Eyl, TEFAS).
+        record_notes = [
+            "KAYIT: " + step.result_summary.split("\n")[0] + (" | " + " | ".join(
+                line for line in step.result_summary.split("\n")[1:6] if line.startswith(("satır:", "anlam:", "katman:"))))
+            for step in steps if step.ok and step.tool_name in write_tools and step.result_summary
+        ]
+        notes = record_notes + [
             step.result_summary for step in steps
-            if step.ok and step.tool_name not in discovery_tools and step.result_summary
+            if step.ok and step.tool_name not in discovery_tools and step.tool_name not in write_tools and step.result_summary
             and (step.result_data is None or step.tool_name not in self.DATA_PRODUCING_TOOLS)
         ]
         facts = build_narration_facts(
@@ -1373,6 +1383,13 @@ class AnalyticsAgent:
                     identities.append(value)
         self._follow_up_resolution = replace(resolution, active_series_ids=tuple(identities))
 
+    @staticmethod
+    def _is_write_turn(steps: list[AgentStep]) -> bool:
+        """Kayıt/terfi turu: teslim edilen şey kayıt kartıdır, tablo değil. Deterministik tablo teslimi bu turda
+        kapanmaz; model kartı anlatır ve gerekirse ikinci ölçüm sütununu da kaydeder (ölçüldü 23 Eyl, TEFAS CSV:
+        ilk seri kaydedilir kaydedilmez hızlı yol turu bitirdi, Net Takas Tutarı hiç kaydedilmedi)."""
+        return any(getattr(s, "tool_name", None) in ("ingest_from_url", "promote_draft", "ingest_source") for s in steps)
+
     def _is_table_delivery_complete(
         self,
         question: str,
@@ -1380,6 +1397,8 @@ class AnalyticsAgent:
         steps: list[AgentStep],
     ) -> bool:
         """Whether a verified structured result can finish without model narration."""
+        if self._is_write_turn(steps):
+            return False
         if not _TABLE_DELIVERY_ASK.search(question):
             return False
         if _NARRATIVE_OR_ANALYSIS_ASK.search(question):
@@ -1405,6 +1424,8 @@ class AnalyticsAgent:
         steps: list[AgentStep],
     ) -> bool:
         """Skip prose generation when verified structured work is the deliverable."""
+        if self._is_write_turn(steps):
+            return False
         if (not _TRANSFORMATION_ASK.search(question) or _EXPLICIT_INTERPRETATION_ASK.search(question)
                 or _COMPARISON_ASK.search(question)):
             return False
@@ -2043,6 +2064,7 @@ class AnalyticsAgent:
         if self._ledger is not None:
             self._ledger.begin_turn(planning_question)
         self._candidate_rows: list[dict[str, Any]] = []
+        self._turn_wrote = False          # bu turda kayıt/terfi başarıyla yapıldı mı (kapsam ön eki susar)
         contract_nudged = False
         saturation_hits = 0
         # Araç kapısı (ADR-0043): soruya göre araç alt kümesi; kapalı olan aile şemaya girmez.
@@ -2527,6 +2549,7 @@ class AnalyticsAgent:
                     )
                 )
                 answer_text = self._coverage_note(self._source_note(answer_text, steps, artifacts), artifacts)
+                answer_text = self._record_truth(answer_text, artifacts)
                 answer_text = self._completion_close(answer_text, completion, artifacts, produced_data)
                 self._history.append(ChatMessage(role="user", content=question))
                 self._history.append(ChatMessage(role="assistant", content=answer_text))
@@ -2593,6 +2616,22 @@ class AnalyticsAgent:
                         stuck_note = ("Arama doydu: yeni aday çıkmıyor. ARAÇ ÇAĞIRMA; elindeki aday listesiyle cevapla — "
                                       "uygun aday varsa hangisini neden seçtiğini, yoksa istenen yüzün (frekans/il/kaynak) "
                                       "adaylarda bulunmadığını söyle. 'Veri yok' deme, adayları say. Sayı uydurma.")
+                elif (call.name == "clarify" and _INGEST_ASK.search(question)
+                      and self.registry.get("ingest_from_url") is not None):
+                    # Kayıt isteğinde kayıt yapılmadan netleştirme sorulmaz: dosyanın frekansı gözlemlenir ve olduğu gibi
+                    # beyan edilir; istenen frekans (aylık) kayıt sonrası dönüşümdür. Ölçüldü (23 Eyl, TEFAS haftalık
+                    # CSV): model "haftalıkları aya nasıl indirgeyeyim?" diye sorup turu bitirdi, hiçbir seri kaydedilmedi.
+                    result = ToolResult.fail(
+                        "CLARIFY_NOT_ALLOWED",
+                        "Kullanıcı bu dosyanın kaydedilmesini istedi; kayıt turunda netleştirme sorulmaz, talimat mesajda.",
+                        hint=("Dosyayı olduğu gibi kaydet: frekansı gördüğün gibi (haftalık/günlük) beyan et, her ölçüm sütunu için "
+                              "ayrı ingest_from_url çağır (value_column). İstenen frekans farklıysa kayıt sonrası gold_align ile "
+                              "üret; toplama kuralı ölçüm tipinden gelir (akım → toplam, stok → dönem sonu). Kullanıcıya sorma."),
+                        layer="policy", retryable=False,
+                    )
+                    if result.error is not None:
+                        result.error.terminal = False
+                    tool_started = time.perf_counter()
                 elif call.name == "lakehouse_search" and recovery.catalog_search_budget_exhausted:
                     budget_refusals += 1
                     result = ToolResult.fail(
@@ -2661,6 +2700,8 @@ class AnalyticsAgent:
                         result_data=result.data.copy() if result.ok and isinstance(result.data, pd.DataFrame) else None,
                     )
                 )
+                if result.ok and call.name in ("ingest_from_url", "promote_draft", "ingest_source"):
+                    self._turn_wrote = True
                 if result.error is not None:
                     recovery.observe_failure(
                         call.name,
@@ -3521,12 +3562,34 @@ class AnalyticsAgent:
         self.last_preflight = report
         return report.note()
 
+    _RECORD_DENIAL = re.compile(r"ekle(?:ye|ne)medi\w*|eklenmedi|kayded(?:ile|e)medi\w*|kaydedilmedi|kayıt (?:tamamlanamadı|yapılamadı|"
+                                r"başarısız)|seriyi eklenmiş saymıyorum|kayıt kapısı geçilemedi|ekleme kapısı|yükle(?:ne|ye)medi\w*|"
+                                r"yüklenmemiş|engellendi|havuzunda .{0,40}bulunmuyor|serisi bulunmuyor", re.I)
+
+    def _record_truth(self, text: str, artifacts: list) -> str:
+        """Kayıt kartı doğruluk kaynağıdır: bu turda kayıt/terfi BAŞARILIYSA ve anlatı bunun tersini söylüyorsa
+        deterministik kayıt özeti öne konur (ölçüldü 23 Eyl, TEFAS: iki seri EKLENDİ kartıyla yazıldı, model 'kayıt
+        kapısı geçilemedi' diye anlattı). Anlatı silinmez; kartın söylediği ilk satırda görünür."""
+        records = [a for a in artifacts if a.get("kind") == "record" and a.get("series_id")]
+        if not records or not self._RECORD_DENIAL.search(text or ""):
+            return text
+        seen: dict[str, dict] = {}
+        for a in records:
+            seen[str(a["series_id"])] = a
+        parts = []
+        for sid, a in seen.items():
+            rows = a.get("rows_written")
+            parts.append(f"{sid}" + (f" ({rows} satır)" if rows is not None else ""))
+        head = ("KAYIT TAMAMLANDI (araç kartına göre): " + "; ".join(parts) + ". Aşağıdaki anlatıda kaydın yapılmadığına dair "
+                "ifadeler araç sonucuyla çelişiyor; kart esastır.")
+        return head + "\n\n" + text
+
     def _coverage_note(self, text: str, artifacts: list) -> str:
         """Kapsam beyanı (V3 §3.9, 15 Eyl): dış kaynaktan (web_url / ingest) yüklenen tablonun adı, dönemi, satırı ve
         kalite/uygunluk uyarıları cevabın İLK satırında, deterministik. Modelin hatırlamasına bırakılmaz: ölçüldü (UEB B02),
         uyarı cevabın sonuna not olarak düştü, kullanıcı sayıları önce okudu."""
         fits = [a for a in artifacts if a.get("kind") == "fitness"]
-        if not fits or any(a.get("kind") == "record" for a in artifacts):
+        if not fits or any(a.get("kind") == "record" for a in artifacts) or getattr(self, "_turn_wrote", False):
             # Kayıt turunda (ingest/terfi) kapsam satırı yanıltır: uygunluk kapısı tabloyu ANALİZ için ölçer,
             # kullanıcı ise kaydettirdi; kart zaten dönem/satır/birimi söylüyor (ölçüldü, 21 Eyl, altın PDF'i).
             return text

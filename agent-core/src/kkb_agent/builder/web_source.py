@@ -158,7 +158,17 @@ def _native_pdf(content: bytes, pages: str | None) -> list[tuple[str, pd.DataFra
                 if len(set(headers)) != len(headers):
                     headers = [f"{h} [{i}]" if headers.count(h) > 1 else h for i, h in enumerate(headers)]
                 tables.append((f"PDF sayfa {number}", pd.DataFrame(cleaned[1:], columns=headers)))
-    return tables
+    # Aynı başlıkla sayfa sayfa devam eden rapor tablosu tek tablodur (ölçüldü 23 Eyl: TEFAS haftalık işlem hacmi PDF'i,
+    # 8 sayfa / 261 satır; yalnız ilk sayfanın 34 satırı kaydediliyordu). Farklı başlıklı tablolar ayrı kalır.
+    merged: list[tuple[str, pd.DataFrame]] = []
+    for label, frame in tables:
+        if merged and list(merged[-1][1].columns) == list(frame.columns):
+            prev_label, prev = merged[-1]
+            first = prev_label.split("-")[0].strip()
+            merged[-1] = (f"{first}-{label.rsplit(' ', 1)[-1]}", pd.concat([prev, frame], ignore_index=True))
+        else:
+            merged.append((label, frame))
+    return merged
 
 
 _MONTHS = {name: i + 1 for i, name in enumerate(
