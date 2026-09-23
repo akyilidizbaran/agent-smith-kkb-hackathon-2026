@@ -179,7 +179,57 @@ def extract_pdf_tables(
 
     Tablo dışındaki serbest metin (rapor önsözü, sayfa altlığı) tabloya girmez.
     """
+    found: list[PdfTable] = []
+    try:
+        for number, index, grid in _page_grids(content, pages, max_pages):
+            rows = [
+                ["" if cell is None else str(cell).replace("\n", " ").strip() for cell in row]
+                for row in grid
+            ]
+            rows = [row for row in rows if any(cell for cell in row)]
+            if len(rows) < 2:
+                continue
+            found.append(PdfTable(page=number, index=index, rows=rows))
+            if len(found) >= max_tables:
+                break
+    except Exception:  # noqa: BLE001 - bozuk/şifreli PDF: OCR'a düşülür, veri yokmuş gibi davranılmaz
+        return merge_continuations(found)
+    return merge_continuations(found)
+
+
+def _selected_pages(pages: str | Sequence[int] | None, total: int, max_pages: int) -> list[int]:
     from .ocr import parse_pages
+
+    if pages is not None and not isinstance(pages, str):
+        return [int(number) for number in pages][: max(1, max_pages)]
+    return parse_pages(pages, total, max_pages=max_pages)
+
+
+def _page_grids(content: bytes, pages: str | Sequence[int] | None, max_pages: int):
+    """(sayfa no, tablo sırası, ham ızgara) üçlüleri; kurulu olan ilk tablo okuyucusuyla.
+
+    Sıra bilinçli: pdfplumber (MIT) projenin bağımlılığıdır; pymupdf (AGPL) yalnız ortamda
+    zaten varsa kullanılır. İkisi de yoksa hiçbir şey üretilmez ve çağıran OCR'a düşer.
+    """
+    import io
+
+    try:
+        import pdfplumber
+    except ImportError:
+        pdfplumber = None
+    if pdfplumber is not None:
+        with pdfplumber.open(io.BytesIO(content)) as document:
+            total = len(document.pages)
+            for number in _selected_pages(pages, total, max_pages):
+                if not 1 <= number <= total:
+                    continue
+                try:
+                    grids = document.pages[number - 1].extract_tables()
+                except Exception:  # noqa: BLE001 - tek sayfanın düzeni çözülemeyebilir
+                    continue
+                for index, grid in enumerate(grids):
+                    yield number, index, grid
+        return
 
     try:
         import pymupdf
@@ -187,46 +237,24 @@ def extract_pdf_tables(
         try:
             import fitz as pymupdf  # type: ignore[no-redef]
         except ImportError:
-            return []
-
-    try:
-        document = pymupdf.open(stream=content, filetype="pdf")
-    except Exception:  # noqa: BLE001 - bozuk/şifreli PDF: OCR'a düşülür, veri yokmuş gibi davranılmaz
-        return []
-
-    found: list[PdfTable] = []
+            return
+    document = pymupdf.open(stream=content, filetype="pdf")
     try:
         total = document.page_count
-        selected = (
-            [int(number) for number in pages][: max(1, max_pages)]
-            if pages is not None and not isinstance(pages, str)
-            else parse_pages(pages, total, max_pages=max_pages)
-        )
-        for number in selected:
+        for number in _selected_pages(pages, total, max_pages):
             if not 1 <= number <= total:
                 continue
             try:
                 tables = document[number - 1].find_tables()
-            except Exception:  # noqa: BLE001 - tek sayfanın düzeni çözülemeyebilir
+            except Exception:  # noqa: BLE001
                 continue
             for index, table in enumerate(tables.tables):
                 try:
-                    grid = table.extract()
+                    yield number, index, table.extract()
                 except Exception:  # noqa: BLE001
                     continue
-                rows = [
-                    ["" if cell is None else str(cell).replace("\n", " ").strip() for cell in row]
-                    for row in grid
-                ]
-                rows = [row for row in rows if any(cell for cell in row)]
-                if len(rows) < 2:
-                    continue
-                found.append(PdfTable(page=number, index=index, rows=rows))
-                if len(found) >= max_tables:
-                    return merge_continuations(found)
     finally:
         document.close()
-    return merge_continuations(found)
 
 
 __all__ = [
