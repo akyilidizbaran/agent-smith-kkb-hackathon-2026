@@ -15,15 +15,19 @@ kalır; yazan, ayrı bir süreçte çalışan veri ekibinin CLI'ıdır ve o da y
 
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 from typing import Any, Literal
 
+import pandas as pd
 from pydantic import BaseModel, Field
 
 from ..builder.ingest import LakehouseCLI
 from ..builder.profile import profile_table, propose
-from ..builder.read import ReadRefused, read_bytes_for_profiling, read_table_for_profiling
+from ..builder.read import (
+    ReadRefused, read_bytes_for_profiling, read_table_for_profiling, strip_preamble_rows,
+)
 from ..builder.crosscheck import cross_check, file_points
 from ..builder.quality import table_quality
 from ..builder.relevance import assess as assess_relevance, catalog_entries, user_confirmed
@@ -181,13 +185,21 @@ class IngestFromUrlTool(Tool):
         Veri ekibinin CLI'ı yalnız tablo dosyası alır; RAW'a OCR tablosunun CSV'si girer, belgenin
         sha256'sı ve OCR modeli katalog açıklamasında ve kartta taşınır. Belge bayt bayt izinli
         kökte saklanır ki kanıt zinciri geriye doğru izlenebilsin."""
-        if self.ocr is None:
-            raise OcrUnavailable("PDF/görsel belge OCR istemcisi olmadan okunamaz (VISION_MODEL yapılandırılmamış).")
         content, media, outcome = read_bytes_for_profiling(
             params.locator, allowed_roots=[self.allowed_root], session=self.session
         )
         if content is None or not outcome.ok:
             return None, outcome, None, params.locator
+
+        # Sayısal üretilmiş PDF'in tablosu zaten dosyanın içinde yazılı; OCR'a sormak hem
+        # yavaş hem de hücreleri tahmine çevirir. Metin katmanı varsa oradan okunur.
+        native = self._read_pdf_native(params, content)
+        if native is not None:
+            frame, note, csv_path = native
+            return frame, outcome, note, csv_path
+
+        if self.ocr is None:
+            raise OcrUnavailable("PDF/görsel belge OCR istemcisi olmadan okunamaz (VISION_MODEL yapılandırılmamış).")
         doc = ocr_document(content, media, client=self.ocr, url=params.locator.split("?")[0], pages=params.pages)
         page = extract_ocr_page(params.locator, doc)
         if not page.tables:
@@ -210,6 +222,58 @@ class IngestFromUrlTool(Tool):
         # OCR tablosu sayıya çevrilmiş DataFrame; profilci metin hücre bekler.
         frame = table.astype(str).where(table.notna(), "")
         return frame, outcome, note, str(csv_path)
+
+    def _read_pdf_native(self, params: IngestParams, content: bytes):
+        """PDF'in kendi metin katmanındaki tabloyu oku; yoksa None döner ve OCR'a düşülür.
+
+        OCR dalıyla aynı sözleşme: belge baytları ve tablonun CSV'si izinli köke yazılır, kart
+        sha256'yı taşır. Fark, hücrelerin tahmin değil dosyanın kendi metni olmasıdır — bu
+        yüzden kart "sayılar doğrulanmadı" uyarısını taşımaz.
+        """
+        if Path(params.locator.split("?")[0]).suffix.lower() != ".pdf":
+            return None
+        from ..vision.pdf import extract_pdf_tables
+
+        tables = extract_pdf_tables(content, pages=params.pages)
+        if not tables:
+            return None
+        idx = params.table_index if params.table_index is not None else max(
+            range(len(tables)), key=lambda i: tables[i].shape[0] * tables[i].shape[1])
+        if idx < 0 or idx >= len(tables):
+            raise OcrUnavailable(
+                f"table_index {idx} yok; belgenin metin katmanında {len(tables)} tablo var.")
+        table = tables[idx]
+
+        # Dışa aktarma önsözü ("Dışa Aktarım Tarihi", "Toplam Kayıt Sayısı") tablo çizgisinin
+        # içine düşmüşse başlık sanılmasın: CSV/XLSX ile aynı ölçütle ayrılır.
+        rows, preamble = strip_preamble_rows(table.rows)
+        if len(rows) < 2:
+            return None
+        width = max(len(row) for row in rows)
+        header = [
+            (str(row).strip() or f"sutun_{position + 1}")
+            for position, row in enumerate(list(rows[0]) + [""] * (width - len(rows[0])))
+        ]
+        seen: dict[str, int] = {}
+        for position, name in enumerate(header):
+            seen[name] = seen.get(name, 0) + 1
+            if seen[name] > 1:
+                header[position] = f"{name}_{seen[name]}"
+        body = [[(row[i] if i < len(row) else "") for i in range(width)] for row in rows[1:]]
+        frame = pd.DataFrame(body, columns=header, dtype=str).fillna("")
+        if preamble:
+            frame.attrs["preamble"] = preamble
+
+        sha256 = hashlib.sha256(content).hexdigest()
+        stem = f"pdf_{sha256[:12]}"
+        self.allowed_root.mkdir(parents=True, exist_ok=True)
+        (self.allowed_root / f"{stem}.pdf").write_bytes(content)
+        csv_path = self.allowed_root / f"{stem}_p{table.page}_t{table.index}.csv"
+        frame.to_csv(csv_path, index=False)
+        note = table.note(sha256, params.locator) + f" Belge kopyası: {stem}.pdf."
+        if preamble:
+            note += " Tablo üstündeki rapor satırları veri değil not sayıldı: " + " | ".join(preamble) + "."
+        return frame, note, str(csv_path)
 
     # ------------------------------------------------------------------ hooks
     def _user_text(self) -> str:
