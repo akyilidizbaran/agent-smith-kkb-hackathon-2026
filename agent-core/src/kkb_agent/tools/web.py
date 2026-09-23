@@ -627,6 +627,9 @@ class WebUrlTool(Tool):
                 f"TABLO YÜKLENDİ: #{params.table_index} ({len(table)} satır, {len(table.columns)} sütun) — {page.url}"
                 + (f" — {table_label}" if table_label else ""),
                 f"Sütunlar: {', '.join(map(str, table.columns))}",
+                # Ölçüldü (23 Eyl): model bu yüklemeyi "lakehouse'a ekledim" sayıp ingest'i çağırmadı.
+                "NOT: bu yükleme oturum içidir, veri havuzuna YAZILMADI. Kullanıcı 'ekle/kaydet/lakehouse'a ekle' "
+                "dediyse tabloyu ingest_from_url ile taslak seri olarak ekle; buraya yüklemek eklemek değildir.",
                 preview_table(table, render=_plain),   # ≤24 satır tamamı, üstü baş+son (core/preview, PART 41)
                 f"Kaynak: {page.page.title or page.url} | sha256 {page.fetch.sha256[:12]}… | çekim {page.fetch.fetched_at:%Y-%m-%d %H:%M} UTC",
                 *[f"NOT: {n}" for n in page.page.notes],  # type: ignore[union-attr]
