@@ -466,7 +466,7 @@ CASES += [
 ]
 
 
-# --- Sessiz semantik hata kapıları (Büşra, V3 §3.9; UEB 14–15 Eyl, docs/HUMAN_ERROR_RESEARCH_2026-09-14.md PART 37/40). ---
+# --- Sessiz semantik hata kapıları (Büşra, V3 §3.9; UEB 14–15 Eyl, docs/calisma-notlari/HUMAN_ERROR_RESEARCH_2026-09-14.md PART 37/40). ---
 # UEB'nin elle etiketlenen SILENT/LATE vakalarının golden eşdeğerleri: öncül (A09/A10), netleştirme (uygunluk "kısmen"),
 # önizleme/tam yıl (A24), anlamca yakın yanlış dosya (B02), yanlış etiketli kolon (B07). Fikstürler yerel (incoming/), ağ yok;
 # seed DB (bddk_aylik_krediler) kalem adlarıyla koşar: LAKEHOUSE_MODE=seed. Sayılar 2024/2025 BDDK değerleri (seed'den türetildi).

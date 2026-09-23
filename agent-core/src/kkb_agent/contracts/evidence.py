@@ -158,6 +158,10 @@ class EvidencePanel:
     context_sources: list[dict[str, Any]] = field(default_factory=list)  # K02-T04: web araması sonucu — bağlam, veri değil (ADR-0075)
     inspected_rows: int = 0         # kaç satır incelendi (ilk N); tablo daha büyükse kapsam notu
     ocr_unverified: bool = False    # K02-T06 (A12): sayılar OCR ile görüntüden okunmuş bir tablodan; kesin sonuç sayılmaz
+    #: Kayıt turu (Architect: ingest_from_url / promote_draft): cevap bir tabloya değil yazılan kayda dayanır.
+    #: Sayılar kayıt kartıyla, dosya zinciri artifact sha256'sıyla denetlenir. Ölçüldü (20 Eyl): başarılı bir taslak
+    #: kaydından sonra panel "EKSİK: 0/8 sayı tabloda · dosya zinciri ✗" gösteriyordu; dosya ve sha256 kayıttaydı.
+    record: dict[str, Any] | None = None
 
     @property
     def matched_numbers(self) -> int:
@@ -186,6 +190,12 @@ class EvidencePanel:
     def chain_ok(self) -> bool:
         """Kaynak zinciri: gözlem → artifact → RAW/Bronze dosyası diskte; ya da web sayfası sha256+zaman."""
         gaps = self.chain_gaps
+        if self.record is not None:
+            if self.record.get("tool") == "promote_draft":
+                # Terfi: zincir Silver'a kopyalanan satırlarda biter (provenance'ları taslaktan aynen taşınır).
+                return bool(self.record.get("rows_promoted")) and not gaps
+            # Kayıt turu: zincir yazılan artifact'ta biter — sha256 kayıtlı ve (bakılabildiyse) meta.artifact'ta bulundu.
+            return bool(self.record.get("artifact_sha256")) and self.record.get("artifact_found", True) and not gaps
         chained = [c for c in self.columns if not (c.sql or "").startswith("türetilmiş:")]
         if self.columns and not chained:
             return not gaps             # tablo yalnız türetilmiş kolonlardan oluşuyor (olağan dışı)
@@ -215,6 +225,24 @@ class EvidencePanel:
         arts = len(self.artifacts)
         fetched = sorted({str(a.get("fetched_at"))[:10] for a in self.artifacts.values() if a.get("fetched_at")})
         state = "tam" if self.complete else "EKSİK"
+        if self.record is not None:
+            rec = self.record
+            sha = str(rec.get("artifact_sha256") or "")
+            parts = [f"{self.matched_numbers}/{len(self.numbers)} sayı kayıt kartında",
+                     f"kayıt: {rec.get('series_id') or '?'} ({rec.get('tool') or 'kayıt'})"]
+            if rec.get("rows_written") is not None:
+                parts.append(f"{rec.get('rows_written')} satır yazıldı, {rec.get('rows_unchanged') or 0} değişmedi")
+            if rec.get("tool") == "promote_draft":
+                parts.append(f"{rec.get('rows_promoted') or 0} gözlem Silver'a kopyalandı (provenance korundu)")
+            else:
+                parts.append(f"artifact sha256 {sha[:12]}…" if sha else "artifact kaydı yok")
+            if rec.get("run_id"):
+                parts.append(f"run {str(rec['run_id'])[:8]}")
+            if not self.complete:
+                parts.append("durum: " + " · ".join(f"{k} {'✓' if v else '✗'}" for k, v in self.states().items()))
+            if fetched:
+                parts.append(f"çekim {', '.join(fetched)}")
+            return f"kanıt zinciri {state}: " + " · ".join(parts)
         parts = [
             f"{self.matched_numbers}/{len(self.numbers)} sayı tabloda"
             + (f" ({sum(1 for n in self.numbers if n.sign_warning)} işaret uyarısı)" if any(n.sign_warning for n in self.numbers) else "")
@@ -350,6 +378,7 @@ class EvidencePanel:
             "web_reads": self.web_reads,
             "web_unused": self.web_unused,
             "context_sources": self.context_sources,
+            "record": self.record,
         }
 
 

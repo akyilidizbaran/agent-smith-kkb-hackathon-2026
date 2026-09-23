@@ -9,4 +9,4 @@ SHA=$(git rev-parse --short "origin/$BRANCH")
 git rm -r -q --cached lakehouse-core >/dev/null 2>&1 || true
 rm -rf lakehouse-core
 git read-tree --prefix=lakehouse-core/ -u "origin/$BRANCH:lakehouse-core"
-echo "lakehouse-core ← origin/$BRANCH@$SHA (ağaç anlık görüntüsü; commit et ve docs/M01_ORTAM.md'de sha'yı güncelle)"
+echo "lakehouse-core ← origin/$BRANCH@$SHA (ağaç anlık görüntüsü; commit et ve docs/calisma-notlari/M01_ORTAM.md'de sha'yı güncelle)"

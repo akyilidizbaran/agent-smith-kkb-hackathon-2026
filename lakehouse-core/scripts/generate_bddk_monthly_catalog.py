@@ -38,6 +38,17 @@ Usage (from lakehouse-core/):
     uv run python scripts/generate_bddk_monthly_catalog.py --items items_units.json --dry-run
     uv run python scripts/generate_bddk_monthly_catalog.py --items items_units.json
     uv run python scripts/generate_bddk_monthly_catalog.py --items items_units.json --columns all
+
+Adding one group's non-primary columns without regenerating anything else (ADR-0108):
+
+    uv run python scripts/discover_bddk_monthly_items.py --group "Mevduat Vade İtibarıyla" --json vade.json
+    uv run python scripts/probe_bddk_monthly_units.py --items vade.json --out vade_units.json
+    uv run python scripts/generate_bddk_monthly_catalog.py --items vade_units.json \
+        --group "Mevduat Vade İtibarıyla" --add-columns --probed-on 2026-09-23
+
+``--add-columns`` inserts each item's missing columns directly after that item's existing
+primary entry and leaves every other byte of the catalog as it was. An item whose primary
+entry is not ``active`` (an old schema version, a source failure) gets nothing added.
 """
 
 from __future__ import annotations
@@ -169,6 +180,14 @@ def item_name(source_name: str, group: str) -> str:
 
 def aliases_for(name: str, group: str, column_label: str, is_primary: bool) -> list[str]:
     base = name.lower()
+    if not is_primary:
+        # A breakdown column must not answer the item's bare name: seven series sharing
+        # "tp mevduat / ..." would let a question about the total land on one bucket.
+        label = " ".join(column_label.lower().split())
+        out = [f"{base} {label}", f"{base} {label} bddk", f"aylık {base} {label}"]
+        if group == "Mevduat Vade İtibarıyla":
+            out.append(f"{label} vadeli {base}")
+        return out[:6]
     out = [base, f"{base} bddk", f"aylık {base}"]
     if not is_primary:
         out.append(f"{base} {column_label.lower()}")
@@ -192,7 +211,7 @@ ENTRY = """  - series_id: {series_id}
     description: >-
       BDDK Aylık Bülten, {group} tablosu, "{item}" kalemi, {column_label} sütunu, Sektör tarafı.
       {shape_note}
-      BİRİM: {unit} — kaynağın kendi rapor başlığı "{title}" diyor (2026-09-16 canlı yoklaması).
+      BİRİM: {unit} — kaynağın kendi rapor başlığı "{title}" diyor ({probed_on} canlı yoklaması).
       KİMLİK: kalemSutun={native_code}; {id_note}
       Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
       tarafından incelenmediği için semantic_confidence 'derived'.{extra_note}
@@ -219,7 +238,12 @@ SHAPE_NOTES = {
 }
 
 
-def build(items: list[dict], *, columns_mode: str, existing_ids: set[str]) -> tuple[list[str], dict[str, int]]:
+MATURITY_GROUP = "Mevduat Vade İtibarıyla"
+"""The bulletin table whose non-primary columns are opening-maturity buckets (ADR-0108)."""
+
+
+def build(items: list[dict], *, columns_mode: str, existing_ids: set[str],
+          probed_on: str = "2026-09-16") -> tuple[list[str], dict[str, int]]:
     entries: list[str] = []
     stats = {"yazildi": 0, "atlandi_elle": 0, "deprecated_bos": 0, "deprecated_birimsiz": 0,
              "deprecated_adet": 0, "deprecated_kaynak_hatasi": 0, "kural_yok": 0,
@@ -304,7 +328,11 @@ def build(items: list[dict], *, columns_mode: str, existing_ids: set[str]) -> tu
                 cumulative = f"    cumulative_reset: {rule.cumulative_reset}\n"
 
             is_primary = kalem_sutun == primary[0]
-            display = name if is_primary else f"{name} - {column_label}"
+            display = name if is_primary else f"{name} - {' '.join(column_label.split())}"
+            if group == MATURITY_GROUP and not is_primary:
+                extra += ("\n      VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun "
+                          "toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu "
+                          "yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).")
             entries.append(ENTRY.format(
                 series_id=series_id,
                 native_code=kalem_sutun,
@@ -312,10 +340,11 @@ def build(items: list[dict], *, columns_mode: str, existing_ids: set[str]) -> tu
                 name_tr=json.dumps(f"{display} ({group}, Sektör)", ensure_ascii=False),
                 group=group,
                 item=name,
-                column_label=column_label,
+                column_label=" ".join(column_label.split()),
                 shape_note=SHAPE_NOTES.get(measure_type, ""),
                 unit=unit,
                 title=(probe.get("title") or "—").replace('"', "'")[:110],
+                probed_on=probed_on,
                 id_note=("kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin "
                          "dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1."),
                 extra_note=(extra + (f"\n      {rule.note}" if rule and rule.note else "")),
@@ -332,13 +361,100 @@ def build(items: list[dict], *, columns_mode: str, existing_ids: set[str]) -> tu
     return entries, stats
 
 
+_BLOCK_START = re.compile(r"^  - series_id: (\S+)\s*$", re.M)
+
+
+def _blocks(catalog_text: str) -> dict[str, tuple[int, int]]:
+    """series_id -> (start, end) character span of its entry in the catalog text."""
+
+    starts = [(m.group(1), m.start()) for m in _BLOCK_START.finditer(catalog_text)]
+    spans: dict[str, tuple[int, int]] = {}
+    for index, (series_id, start) in enumerate(starts):
+        end = starts[index + 1][1] if index + 1 < len(starts) else len(catalog_text)
+        spans[series_id] = (start, end)
+    return spans
+
+
+def add_group_columns(catalog_text: str, items: list[dict], *, group: str,
+                      probed_on: str) -> tuple[str, dict[str, int]]:
+    """Insert one group's missing non-primary columns after each item's primary entry.
+
+    Nothing that is already in the catalog changes: the result minus the inserted entries is
+    the input byte for byte, which the caller re-checks. Idempotent: a second run adds nothing.
+    """
+
+    stats = {"eklendi": 0, "zaten_var": 0, "ana_giris_aktif_degil": 0}
+    spans = _blocks(catalog_text)
+    existing = set(spans)
+    insertions: list[tuple[int, str]] = []
+    for item in (it for it in items if it.get("group") == group):
+        entries, _ = build([item], columns_mode="all", existing_ids=set(), probed_on=probed_on)
+        by_id = {e.split("\n", 1)[0].split("series_id:", 1)[1].strip(): e for e in entries}
+        # The primary column is the group rule's, exactly as the primary-only catalog chose it.
+        primary, _ = build([item], columns_mode="primary", existing_ids=set(), probed_on=probed_on)
+        primary_id = primary[0].split("\n", 1)[0].split("series_id:", 1)[1].strip() if primary else None
+        if primary_id is None or primary_id not in existing:
+            raise SystemExit(f"{item['native_code']}: ana giriş {primary_id} katalogda yok; "
+                             "tahmin edilmez, durduruldu.")
+        start, end = spans[primary_id]
+        if not re.search(r"^    status: active\s*$", catalog_text[start:end], re.M):
+            stats["ana_giris_aktif_degil"] += 1
+            continue
+        new = [e for sid, e in by_id.items() if sid not in existing]
+        stats["zaten_var"] += len(by_id) - 1 - len(new)
+        if new:
+            # Keep the source's column order after the primary: insert after the last existing
+            # column of this item, so a partial earlier run is completed in place.
+            present = [spans[sid] for sid in by_id if sid in existing]
+            end = max(span_end for _, span_end in present)
+        if new:
+            # Generated entries are separated by one blank line; the new ones keep that shape.
+            insertions.append((end, "".join(e.rstrip("\n") + "\n\n" for e in new)))
+            stats["eklendi"] += len(new)
+    out = catalog_text
+    for position, text in sorted(insertions, reverse=True):
+        head = out[:position]
+        if not head.endswith("\n\n"):
+            head = head.rstrip("\n") + "\n\n"
+        tail = out[position:]
+        out = head + (text if tail else text.rstrip("\n") + "\n") + tail
+    return out, stats
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--items", type=Path, required=True, help="probe script'inin --out çıktısı")
     parser.add_argument("--columns", choices=("primary", "all"), default="primary",
                         help="primary: kalem başına ana sütun; all: kaynağın bildirdiği her sütun")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--group", help="--add-columns ile: yalnız bu tablo grubu")
+    parser.add_argument("--add-columns", action="store_true",
+                        help="grubun eksik sütunlarını ana girişin arkasına ekle; başka hiçbir şeyi değiştirme")
+    parser.add_argument("--probed-on", default="2026-09-16", help="birim yoklamasının tarihi (YYYY-AA-GG)")
     args = parser.parse_args()
+
+    if args.add_columns:
+        if not args.group:
+            parser.error("--add-columns için --group gerekli")
+        items = json.loads(args.items.read_text(encoding="utf-8"))
+        original = CATALOG_PATH.read_text(encoding="utf-8")
+        updated, stats = add_group_columns(original, items, group=args.group, probed_on=args.probed_on)
+        for key, value in stats.items():
+            print(f"   {key:22} {value}")
+        # Invariant: every original byte survives, in order; only whole entries were inserted.
+        before, after = _blocks(original), _blocks(updated)
+        for series_id, (start, end) in before.items():
+            new_start, new_end = after[series_id]
+            if updated[new_start:new_end].rstrip("\n") != original[start:end].rstrip("\n"):
+                raise SystemExit(f"değişmemesi gereken giriş değişti: {series_id}; yazılmadı")
+        if updated.split(MARKER)[0] != original.split(MARKER)[0]:
+            raise SystemExit("elle yazılmış bölüm değişti; yazılmadı")
+        if args.dry_run:
+            print("\n--dry-run: dosya yazılmadı.")
+            return 0
+        CATALOG_PATH.write_text(updated, encoding="utf-8")
+        print(f"\nyazıldı -> {CATALOG_PATH.relative_to(_REPO_ROOT)}")
+        return 0
 
     items = json.loads(args.items.read_text(encoding="utf-8"))
     existing_text = CATALOG_PATH.read_text(encoding="utf-8")

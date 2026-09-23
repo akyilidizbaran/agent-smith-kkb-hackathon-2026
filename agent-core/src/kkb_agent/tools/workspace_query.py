@@ -112,21 +112,69 @@ class WorkspaceQueryTool(Tool):
             self.workspace.note_peek(text, out)
             return ToolResult(content=content, data=out)
 
-        parents = [self.workspace.column_provenance(str(c)) for c in table.columns]
+        # `as_active_table=true` is a workspace operation, not a new source.
+        # The old implementation attached one provenance record with an empty
+        # dataset id to every output column.  A preparatory query such as
+        # ``CAST(observation_date AS DATE) ... ORDER BY ...`` therefore erased
+        # the verified series identities and the following deterministic LAG
+        # path quite correctly refused to calculate on the table.  Preserve
+        # lineage per carried column and use a conservative union for aliases
+        # or computed expressions whose output name cannot be matched exactly.
+        parents_by_name = {
+            str(column): self.workspace.column_provenance(str(column))
+            for column in table.columns
+        }
+        parents = [provenance for provenance in parents_by_name.values() if provenance is not None]
+        dataset_ids: list[str] = []
         sources: list[str] = []
         urls: list[str] = []
-        for p in parents:
-            if p is None:
-                continue
-            sources.extend(s for s in p.sources if s not in sources)
-            urls.extend(u for u in p.source_urls if u not in urls)
-        prov = QueryProvenance(sql=f"workspace_query: {text}", dataset_ids=[], sources=sources,
-                               source_urls=urls, row_count=len(out),
-                               warnings=[f"Türetildi: önceki aktif tablodan ({len(table)} satır) SQL ile; veri havuzuna yazılmadı."])
-        self.workspace.set_table(out, description=params.purpose, provenance=prov)
+        for parent in parents:
+            for dataset_id in parent.dataset_ids:
+                if dataset_id not in dataset_ids:
+                    dataset_ids.append(dataset_id)
+            for source in parent.sources:
+                if source not in sources:
+                    sources.append(source)
+            for url in parent.source_urls:
+                if url not in urls:
+                    urls.append(url)
+        sql = f"workspace_query: {text}"
+        warning = f"Türetildi: önceki aktif tablodan ({len(table)} satır) SQL ile; veri havuzuna yazılmadı."
+        prov = QueryProvenance(sql=sql, dataset_ids=dataset_ids, sources=sources,
+                               source_urls=urls, row_count=len(out), warnings=[warning])
+        column_provenance: dict[str, QueryProvenance] = {}
+        for column in out.columns:
+            parent = parents_by_name.get(str(column))
+            if parent is None:
+                # An alias (most commonly a casted period column) still comes
+                # from this verified workspace.  Keeping the union means the
+                # column remains auditable without pretending that a new
+                # catalog series was discovered.
+                inherited_ids = dataset_ids
+                inherited_sources = sources
+                inherited_urls = urls
+            else:
+                inherited_ids = list(parent.dataset_ids)
+                inherited_sources = list(parent.sources)
+                inherited_urls = list(parent.source_urls)
+            column_provenance[str(column)] = QueryProvenance(
+                sql=sql,
+                dataset_ids=list(inherited_ids),
+                sources=list(inherited_sources),
+                source_urls=list(inherited_urls),
+                row_count=len(out),
+                warnings=[warning],
+            )
+        self.workspace.set_table(
+            out,
+            description=params.purpose,
+            provenance=prov,
+            column_provenance=column_provenance,
+        )
         self.workspace.title = params.purpose
         content = (
-            f"Sorgu başarılı: {len(out)} satır, {len(out.columns)} sütun — artık AKTİF TABLO bu (veri havuzuna yazılmadı).\n"
+            f"Sorgu başarılı: {len(out)} satır, {len(out.columns)} sütun — artık AKTİF TABLO bu (veri havuzuna yazılmadı; "
+            "kullanıcı 'ekle/kaydet' dediyse kalıcı ekleme ingest_from_url ile yapılır).\n"
             f"Sütunlar: {', '.join(map(str, out.columns))}\n" + preview_table(out)
         )
         return ToolResult(content=content, data=out, provenance=prov)

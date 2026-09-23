@@ -251,3 +251,39 @@ flow_ytd`, `cumulative_reset: yearly`; aylık akım Gold `decompose_cumulative` 
 (`catalog/gold/kredi_kirilimi.yml`, `net_kar_aylik`). "Paylaşım başlangıcından itibaren
 kümülatif" giden bir kalem bu turda bulunamadı; Kar Zarar tablosundaki tüm kalemler aynı yıl içi
 kalıptadır (yalnız 194 ve 158 ölçüldü).
+
+## Mevduat vade kovaları (2026-09-23): 24 kalem × 6 kova, canlı doğrulandı
+
+`Mevduat Vade İtibarıyla` tablosunun güncel şema kalemleri 520–543'tür (24 kalem). Her kalem için
+`KalemSutunGetir?kalemNoList=<kalem>` aynı yedi sütunu bildirir (23 Eylül, 24 istek, hepsi aynı):
+
+| `kalemSutun` eki | Kaynağın etiketi | Vade aralığı (ay) |
+|---|---|---|
+| `Vadesiz` | Vadesiz | [0, 0] |
+| `BirAyaKadar` | 1 Aya Kadar | (0, 1] |
+| `BirAyUcAy` | 1-3 Ay Arası | (1, 3] |
+| `UcAyAltiAy` | 3-6 Ay Arası | (3, 6] |
+| `AltiAyBirYil` | 6-12 Ay Arası | (6, 12] |
+| `BirYil` | 1  Yıl Üzeri (kaynakta çift boşluk) | (12, ∞) |
+| `Toplam` | Toplam | tümü |
+
+Canlı ölçümler (`GelismisRaporGetir`, taraf=10001, paraBirimi=TL, periyot=1):
+
+- **Toplanabilirlik.** 520 (TP, yurt içi yerleşik) ve 524 (DTH, yurt içi yerleşik) için
+  2020-12 → 2025-12 arasındaki 61 ayın hepsinde altı kovanın toplamı Toplam'a eşittir; en
+  büyük fark 2 milyon TL'dir. Bu fark kaynağın her sütunu tam milyon TL'ye yuvarlamasından
+  gelir; altı kovada sınır 6 × 0,5 = 3'tür. `scripts/check_breakdown_sums.py` bu kuralı
+  yüklenmiş havuzda her kalem ve her ay için denetler.
+- **Birim.** Rapor başlığı her kalemde `(milyon TL)`; kova sütununun Bronze adı Toplam'la aynı
+  biçimdedir: `Mevduat Vade İtibarıyla - 1   TP Mevduat / Katılım Fonları - Yurt İçi Yerleşik (milyon TL)-BirYil`.
+- **Kapsam.** Kalem 520 kimliğiyle 2016-01 ve 2020 ayları da döner (ör. 2020-12 TP Toplam
+  1.502.152, DTH Toplam 1.458.547). Havuzda bu kalemlerin 2021-01'den başlaması kaynaktan değil,
+  o yüklemenin 2021-01-01 başlangıcından kaynaklanıyordu.
+- **Eski şema.** Aynı optgroup'ta 729–737 kalemleri (Tasarruf Mevduatı, Özel Cari Hesaplar …)
+  dört şema kimliği taşır (`729,720,711,702`) ve 2025-12 için satır döndürmez; katalogda
+  `deprecated` kalırlar, kovaları eklenmez.
+
+Kova serileri `scripts/generate_bddk_monthly_catalog.py --group "Mevduat Vade İtibarıyla"
+--add-columns --probed-on 2026-09-23` ile eklendi (144 giriş; mevcut girişlerin hiçbiri
+değişmedi). Toplam ile kovaları arasındaki ilişki `src/lakehouse/catalog/relations.py`'de
+kaynak kimliğinden üretilir (ADR-0108).

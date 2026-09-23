@@ -51,6 +51,12 @@ class SeriesRow:
     native_code: str
     dataset_id: str
     name_tr: str
+    #: Publish the response under this series key instead of the one derived from ``native_code``.
+    #: Used for a historical schema id of the same bulletin item (catalog/bddk_monthly_history.yml):
+    #: BDDK re-keys an item when its schema changes (``1842`` was ``1626`` until 2021-10), and the older
+    #: id still answers for the older months. Measured 21 Sept 2026: 63 of the 70 monthly series that
+    #: started after 2021-01 have their earlier months under an older id. ``None`` means "no override".
+    series_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -98,19 +104,24 @@ def _bddk_monthly_spec(row: SeriesRow, start: date, end: date) -> FetchSpec:
     kalem_sutun = (
         row.native_code if "?" in row.native_code else f"{row.native_code}?Toplam"
     )
+    parameters: dict[str, object] = {
+        "periyot": "1",
+        "paraBirimi": "TL",
+        "taraf": ["10001"],
+        "kalemSutun": kalem_sutun,
+        "gosterimTuru": "grid",
+    }
+    if row.series_key:
+        # Not a wire field: the connector records it in the artifact metadata and the parser publishes
+        # the single measure column under this key, so an older schema id lands on the catalogued series.
+        parameters["series_key"] = row.series_key
     return FetchSpec(
         source_id=row.source_id,
         dataset_id=row.dataset_id,
         locator="https://www.bddk.org.tr/BultenAylik/tr/Home/BasitRaporGetir",
         start_date=start,
         end_date=end,
-        parameters={
-            "periyot": "1",
-            "paraBirimi": "TL",
-            "taraf": ["10001"],
-            "kalemSutun": kalem_sutun,
-            "gosterimTuru": "grid",
-        },
+        parameters=parameters,
     )
 
 

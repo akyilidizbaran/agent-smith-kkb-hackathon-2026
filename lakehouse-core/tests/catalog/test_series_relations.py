@@ -100,3 +100,56 @@ def test_unchanged_relations_are_not_rewritten_and_changed_rows_are_upserted(tmp
     assert after[0][2] == unchanged[0][2]
     assert after[1][2] > unchanged[1][2]
     connection.close()
+
+
+def test_bddk_monthly_maturity_buckets_are_additive_children_of_their_total() -> None:
+    """ADR-0108: the six opening-maturity columns of a "Mevduat Vade İtibarıyla" item are additive
+    children of that item's Toplam, with a machine-readable month interval."""
+
+    table = "(Mevduat Vade İtibarıyla, Sektör)"
+    relations = infer_series_relations([
+        _row("bddk_monthly:520_Toplam", "bddk_monthly", "520?Toplam", f"TP Mevduat {table}"),
+        _row("bddk_monthly:520_Vadesiz", "bddk_monthly", "520?Vadesiz", f"TP Mevduat - Vadesiz {table}"),
+        _row("bddk_monthly:520_BirAyUcAy", "bddk_monthly", "520?BirAyUcAy", f"TP Mevduat - 1-3 Ay Arası {table}"),
+        _row("bddk_monthly:520_BirYil", "bddk_monthly", "520?BirYil", f"TP Mevduat - 1 Yıl Üzeri {table}"),
+        # Same suffix outside the maturity table, and an old-schema item of the same table: untouched.
+        _row("bddk_monthly:1160_BirYil", "bddk_monthly", "1160?BirYil", "Başka Kalem - 1 Yıl Üzeri (Bilanço, Sektör)"),
+        _row("bddk_monthly:1160_Toplam", "bddk_monthly", "1160?Toplam", "Başka Kalem (Bilanço, Sektör)"),
+        _row("bddk_monthly:729_Toplam", "bddk_monthly", "729?Toplam", f"Tasarruf Mevduatı {table}"),
+    ])
+    by_id = {relation.series_id: relation for relation in relations}
+
+    total = by_id["bddk_monthly:520_Toplam"]
+    assert total.relation_type == "parent_total" and total.additivity == "additive"
+    for child, label, interval in (("520_Vadesiz", "Vadesiz", "[0,0]"),
+                                   ("520_BirAyUcAy", "1-3 Ay Arası", "(1,3]"),
+                                   ("520_BirYil", "1 Yıl Üzeri", "(12,inf)")):
+        relation = by_id[f"bddk_monthly:{child}"]
+        assert relation.relation_type == "child_breakdown"
+        assert relation.parent_series_id == "bddk_monthly:520_Toplam"
+        assert relation.dimension_path == (f"vade={label}", f"vade_ay={interval}")
+        assert relation.concept_id == total.concept_id
+
+    assert by_id["bddk_monthly:1160_BirYil"].parent_series_id is None
+    assert by_id["bddk_monthly:1160_Toplam"].additivity == "unknown"
+    assert by_id["bddk_monthly:729_Toplam"].relation_type == "standalone"
+
+
+def test_thousands_of_relations_are_written_in_one_batch_quickly(tmp_path) -> None:
+    """Ölçüldü (22 Eyl, Windows, DuckDB 1.5.5): satır satır `executemany` + `INSERT OR REPLACE` süperlineer
+    büyüyordu (300 satır 5,9 sn; tam katalog 6.694 satır dakikalar); bootstrap çağıran her test ve CLI bekliyordu.
+    Toplu ekleme aynı satırları saniyenin altında yazar; liste kolonu (dimension_path) korunur."""
+    connection = bootstrap_database(tmp_path / "relations.duckdb", catalog_root=None)
+    rows = [_row(f"bddk_finturk:IL{i:04d}_Kredi", "bddk_finturk", f"IL{i:04d}_Kredi", f"İl {i} kredi") for i in range(6000)]
+
+    started = time.perf_counter()
+    assert _upsert_series_relations(connection, rows) == 6000
+    elapsed = time.perf_counter() - started
+
+    assert elapsed < 20, f"6.000 ilişki {elapsed:.1f} sn sürdü; toplu ekleme bozulmuş olabilir"
+    count, with_path = connection.execute(
+        "SELECT count(*), count(*) FILTER (WHERE len(dimension_path) > 0) FROM meta.series_relation"
+    ).fetchone()
+    assert count == 6000 and with_path == 6000
+    assert _upsert_series_relations(connection, rows) == 6000          # değişmeyen katalog: yeniden yazılmaz
+

@@ -418,7 +418,7 @@ def test_narration_timeout_commits_verified_context_for_monthly_follow_up() -> N
         agent,
         question="Aylık BDDK ihtiyaç kredisi ve bireysel kredi kartı bakiyelerini tabloya getir ve sonucu kısaca açıkla.",
     )
-    assert payload["table"]["row_count"] == 60, "anlatım kesilse de doğrulanmış aktif tablo API'de korunmalı"
+    assert payload["table"]["row_count"] == 60, "ilk doğrulanmış aktif tablo tam pencereyi korumalı"
     assert agent.follow_up_context.series == "bddk_monthly:1536_Toplam"
     assert agent.follow_up_resolution is not None and agent.follow_up_resolution.committed
 
@@ -432,6 +432,14 @@ def test_narration_timeout_commits_verified_context_for_monthly_follow_up() -> N
     assert view.iloc[0]["need_change"] == 1
     assert view.iloc[0]["card_change"] == 10
     assert len(workspace.table) == 60, "pencere görünümü aktif tablonun yerine geçmez"
+    second_payload = answer_to_dict(
+        second,
+        agent,
+        question="Aylık değişimleri 202301–202412 dönemine hizala.",
+    )
+    assert second_payload["table"]["row_count"] == 24
+    assert second_payload["table"]["rows"][0]["c0"] == "2023-01-31"
+    assert second_payload["table"]["rows"][-1]["c0"] == "2024-12-31"
 
 
 def test_web_narration_timeout_keeps_sources_and_does_not_attach_stale_table() -> None:

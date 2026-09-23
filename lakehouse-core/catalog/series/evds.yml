@@ -22,23 +22,25 @@ series:
     dataset_id: evds_housing_price_index
     name_tr: Konut Fiyat Endeksi (Türkiye)
     description: >-
-      TCMB Konut Fiyat Endeksi, Türkiye geneli. Aylık yayımlanır. Birim endekstir;
-      DİKKAT: endeksin BAZ YILI bu repoda doğrulanmamıştır, bu yüzden
-      semantic_confidence 'derived' işaretlenmiştir. Baz yılı doğrulanmadan farklı
-      bazlı endeks serileri birleştirilmemeli (splice) ve reel dönüşümde
-      kullanılmamalıdır.
+      TCMB Konut Fiyat Endeksi (KFE), Türkiye geneli, aylık, nominal. Baz yılı 2023=100:
+      EVDS'in yayımladığı seride 2023'ün 12 ayının ortalaması tam 100,00 (veriden
+      doğrulandı, 21 Eylül 2026; TCMB endeksi 2024'te 2023 bazına geçirdi). Bölgesel
+      kırılımlar evds_bie_kfe grubunda (TR10 İstanbul vb.). Fiyat düzeyi değil endekstir;
+      reel karşılaştırmada TÜFE (2025=100) ile bazlar farklıdır, oran alınırken aynı
+      döneme yeniden bazlanmalı.
     aliases:
       - konut fiyat endeksi
       - KFE
       - ev fiyat endeksi
       - konut fiyatları
       - konut fiyat artışı
+      - türkiye konut fiyat endeksi
     tags: [endeks, konut, fiyat, tcmb]
     frequency: monthly
     unit: index
     measure_type: index
     default_agg: avg
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_service
     metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=TP.KFE.TR
     status: active
@@ -19397,6 +19399,7 @@ series:
       - ihtiyaç kredisi faiz oranı
       - ihtiyaç kredisi faiz oranı akım
       - ihtiyaç kredisi kredi faizi
+      - ihtiyaç kredisi yeni açılan kredi faizi
       - faiz oranı ihtiyaç kredisi
     tags: [evds, konut, otomatik, faiz, oran, akim]
     frequency: weekly
@@ -19417,10 +19420,11 @@ series:
       TCMB EVDS, "bie_kt100h" veri grubu (kod: bie_kt100h). Kaynagin kendi API metadata'sindan
       otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
     aliases:
-      - ihtiyaç kredisi faiz oranı
-      - ihtiyaç kredisi faiz oranı akım
-      - ihtiyaç kredisi kredi faizi
-      - faiz oranı ihtiyaç kredisi
+      - ihtiyaç kredisi kmh dahil faiz oranı
+      - ihtiyaç kredisi kmh dahil faiz oranı akım
+      - ihtiyaç kredisi kmh dahil kredi faizi
+      - ihtiyaç kredisi kmh dahil yeni açılan kredi faizi
+      - faiz oranı ihtiyaç kredisi kmh dahil
     tags: [evds, konut, otomatik, faiz, oran, akim]
     frequency: weekly
     week_anchor: friday
@@ -19443,6 +19447,7 @@ series:
       - taşıt kredisi faiz oranı
       - taşıt kredisi faiz oranı akım
       - taşıt kredisi kredi faizi
+      - taşıt kredisi yeni açılan kredi faizi
       - faiz oranı taşıt kredisi
     tags: [evds, konut, otomatik, faiz, oran, akim]
     frequency: weekly
@@ -19493,6 +19498,7 @@ series:
       - ticari krediler faiz oranı
       - ticari krediler faiz oranı akım
       - ticari krediler kredi faizi
+      - ticari krediler yeni açılan kredi faizi
       - faiz oranı ticari krediler
     tags: [evds, konut, otomatik, faiz, oran, akim]
     frequency: weekly
@@ -19513,10 +19519,11 @@ series:
       TCMB EVDS, "bie_kt100h" veri grubu (kod: bie_kt100h). Kaynagin kendi API metadata'sindan
       otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
     aliases:
-      - ticari krediler faiz oranı
-      - ticari krediler faiz oranı akım
-      - ticari krediler kredi faizi
-      - faiz oranı ticari krediler
+      - ticari krediler euro faiz oranı
+      - ticari krediler euro faiz oranı akım
+      - ticari krediler euro kredi faizi
+      - ticari krediler euro yeni açılan kredi faizi
+      - faiz oranı ticari krediler euro
     tags: [evds, konut, otomatik, faiz, oran, akim]
     frequency: weekly
     week_anchor: friday
@@ -19536,10 +19543,11 @@ series:
       TCMB EVDS, "bie_kt100h" veri grubu (kod: bie_kt100h). Kaynagin kendi API metadata'sindan
       otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
     aliases:
-      - ticari krediler faiz oranı
-      - ticari krediler faiz oranı akım
-      - ticari krediler kredi faizi
-      - faiz oranı ticari krediler
+      - ticari krediler abd doları faiz oranı
+      - ticari krediler abd doları faiz oranı akım
+      - ticari krediler abd doları kredi faizi
+      - ticari krediler abd doları yeni açılan kredi faizi
+      - faiz oranı ticari krediler abd doları
     tags: [evds, konut, otomatik, faiz, oran, akim]
     frequency: weekly
     week_anchor: friday
@@ -19559,10 +19567,11 @@ series:
       TCMB EVDS, "bie_kt100h" veri grubu (kod: bie_kt100h). Kaynagin kendi API metadata'sindan
       otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
     aliases:
-      - ticari krediler faiz oranı
-      - ticari krediler faiz oranı akım
-      - ticari krediler kredi faizi
-      - faiz oranı ticari krediler
+      - ticari krediler tüzel kişi kmh ve kurumsal kredi kartları hariç faiz oranı
+      - ticari krediler tüzel kişi kmh ve kurumsal kredi kartları hariç faiz oranı akım
+      - ticari krediler tüzel kişi kmh ve kurumsal kredi kartları hariç kredi faizi
+      - ticari krediler tüzel kişi kmh ve kurumsal kredi kartları hariç yeni açılan kredi faizi
+      - faiz oranı ticari krediler tüzel kişi kmh ve kurumsal kredi kartları hariç
     tags: [evds, konut, otomatik, faiz, oran, akim]
     frequency: weekly
     week_anchor: friday
@@ -19585,6 +19594,7 @@ series:
       - tüketici kredisi faiz oranı
       - tüketici kredisi faiz oranı akım
       - tüketici kredisi kredi faizi
+      - tüketici kredisi yeni açılan kredi faizi
       - faiz oranı tüketici kredisi
     tags: [evds, konut, otomatik, faiz, oran, akim]
     frequency: weekly
@@ -19605,10 +19615,11 @@ series:
       TCMB EVDS, "bie_kt100h" veri grubu (kod: bie_kt100h). Kaynagin kendi API metadata'sindan
       otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
     aliases:
-      - tüketici kredisi faiz oranı
-      - tüketici kredisi faiz oranı akım
-      - tüketici kredisi kredi faizi
-      - faiz oranı tüketici kredisi
+      - tüketici kredisi kmh dahil faiz oranı
+      - tüketici kredisi kmh dahil faiz oranı akım
+      - tüketici kredisi kmh dahil kredi faizi
+      - tüketici kredisi kmh dahil yeni açılan kredi faizi
+      - faiz oranı tüketici kredisi kmh dahil
     tags: [evds, konut, otomatik, faiz, oran, akim]
     frequency: weekly
     week_anchor: friday
@@ -19628,10 +19639,10 @@ series:
       TCMB EVDS, "bie_kt210a" veri grubu (kod: bie_kt210a). Kaynagin kendi API metadata'sindan
       otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
     aliases:
-      - ihtiyaç kredisi faiz oranı
-      - ihtiyaç kredisi faiz oranı stok
-      - ihtiyaç kredisi kredi faizi
-      - faiz oranı ihtiyaç kredisi
+      - ihtiyaç kredisi stoku faiz oranı
+      - ihtiyaç kredisi stok faiz oranı
+      - ihtiyaç kredisi mevcut kredilerin ortalama faizi
+      - stoku faiz oranı ihtiyaç kredisi
     tags: [evds, konut, otomatik, faiz, oran, stok]
     frequency: monthly
     unit: pct
@@ -19650,10 +19661,10 @@ series:
       TCMB EVDS, "bie_kt210a" veri grubu (kod: bie_kt210a). Kaynagin kendi API metadata'sindan
       otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
     aliases:
-      - ihtiyaç kredisi faiz oranı
-      - ihtiyaç kredisi faiz oranı stok
-      - ihtiyaç kredisi kredi faizi
-      - faiz oranı ihtiyaç kredisi
+      - ihtiyaç kredisi kmh dahil stoku faiz oranı
+      - ihtiyaç kredisi kmh dahil stok faiz oranı
+      - ihtiyaç kredisi kmh dahil mevcut kredilerin ortalama faizi
+      - stoku faiz oranı ihtiyaç kredisi kmh dahil
     tags: [evds, konut, otomatik, faiz, oran, stok]
     frequency: monthly
     unit: pct
@@ -19672,10 +19683,10 @@ series:
       TCMB EVDS, "bie_kt210a" veri grubu (kod: bie_kt210a). Kaynagin kendi API metadata'sindan
       otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
     aliases:
-      - taşıt kredisi faiz oranı
-      - taşıt kredisi faiz oranı stok
-      - taşıt kredisi kredi faizi
-      - faiz oranı taşıt kredisi
+      - taşıt kredisi stoku faiz oranı
+      - taşıt kredisi stok faiz oranı
+      - taşıt kredisi mevcut kredilerin ortalama faizi
+      - stoku faiz oranı taşıt kredisi
     tags: [evds, konut, otomatik, faiz, oran, stok]
     frequency: monthly
     unit: pct
@@ -19694,10 +19705,10 @@ series:
       TCMB EVDS, "bie_kt210a" veri grubu (kod: bie_kt210a). Kaynagin kendi API metadata'sindan
       otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
     aliases:
-      - konut kredisi faiz oranı
-      - konut kredisi faiz oranı stok
-      - konut kredisi kredi faizi
-      - faiz oranı konut kredisi
+      - konut kredisi stoku faiz oranı
+      - konut kredisi stok faiz oranı
+      - konut kredisi mevcut kredilerin ortalama faizi
+      - stoku faiz oranı konut kredisi
     tags: [evds, konut, otomatik, faiz, oran, stok]
     frequency: monthly
     unit: pct
@@ -19716,10 +19727,10 @@ series:
       TCMB EVDS, "bie_kt210a" veri grubu (kod: bie_kt210a). Kaynagin kendi API metadata'sindan
       otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
     aliases:
-      - ticari krediler faiz oranı
-      - ticari krediler faiz oranı stok
-      - ticari krediler kredi faizi
-      - faiz oranı ticari krediler
+      - ticari krediler stoku faiz oranı
+      - ticari krediler stok faiz oranı
+      - ticari krediler mevcut kredilerin ortalama faizi
+      - stoku faiz oranı ticari krediler
     tags: [evds, konut, otomatik, faiz, oran, stok]
     frequency: monthly
     unit: pct
@@ -19738,10 +19749,10 @@ series:
       TCMB EVDS, "bie_kt210a" veri grubu (kod: bie_kt210a). Kaynagin kendi API metadata'sindan
       otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
     aliases:
-      - ticari krediler faiz oranı
-      - ticari krediler faiz oranı stok
-      - ticari krediler kredi faizi
-      - faiz oranı ticari krediler
+      - ticari krediler euro stoku faiz oranı
+      - ticari krediler euro stok faiz oranı
+      - ticari krediler euro mevcut kredilerin ortalama faizi
+      - stoku faiz oranı ticari krediler euro
     tags: [evds, konut, otomatik, faiz, oran, stok]
     frequency: monthly
     unit: pct
@@ -19760,10 +19771,10 @@ series:
       TCMB EVDS, "bie_kt210a" veri grubu (kod: bie_kt210a). Kaynagin kendi API metadata'sindan
       otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
     aliases:
-      - ticari krediler faiz oranı
-      - ticari krediler faiz oranı stok
-      - ticari krediler kredi faizi
-      - faiz oranı ticari krediler
+      - ticari krediler abd doları stoku faiz oranı
+      - ticari krediler abd doları stok faiz oranı
+      - ticari krediler abd doları mevcut kredilerin ortalama faizi
+      - stoku faiz oranı ticari krediler abd doları
     tags: [evds, konut, otomatik, faiz, oran, stok]
     frequency: monthly
     unit: pct
@@ -19782,10 +19793,10 @@ series:
       TCMB EVDS, "bie_kt210a" veri grubu (kod: bie_kt210a). Kaynagin kendi API metadata'sindan
       otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
     aliases:
-      - ticari krediler faiz oranı
-      - ticari krediler faiz oranı stok
-      - ticari krediler kredi faizi
-      - faiz oranı ticari krediler
+      - ticari krediler tüzel kişi kmh ve kurumsal kredi kartları hariç stoku faiz oranı
+      - ticari krediler tüzel kişi kmh ve kurumsal kredi kartları hariç stok faiz oranı
+      - ticari krediler tüzel kişi kmh ve kurumsal kredi kartları hariç mevcut kredilerin ortalama faizi
+      - stoku faiz oranı ticari krediler tüzel kişi kmh ve kurumsal kredi kartları hariç
     tags: [evds, konut, otomatik, faiz, oran, stok]
     frequency: monthly
     unit: pct
@@ -19804,10 +19815,10 @@ series:
       TCMB EVDS, "bie_kt210a" veri grubu (kod: bie_kt210a). Kaynagin kendi API metadata'sindan
       otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
     aliases:
-      - tüketici kredisi faiz oranı
-      - tüketici kredisi faiz oranı stok
-      - tüketici kredisi kredi faizi
-      - faiz oranı tüketici kredisi
+      - tüketici kredisi stoku faiz oranı
+      - tüketici kredisi stok faiz oranı
+      - tüketici kredisi mevcut kredilerin ortalama faizi
+      - stoku faiz oranı tüketici kredisi
     tags: [evds, konut, otomatik, faiz, oran, stok]
     frequency: monthly
     unit: pct
@@ -19826,10 +19837,10 @@ series:
       TCMB EVDS, "bie_kt210a" veri grubu (kod: bie_kt210a). Kaynagin kendi API metadata'sindan
       otomatik uretildi; insan tarafindan tek tek dogrulanmadi.
     aliases:
-      - tüketici kredisi faiz oranı
-      - tüketici kredisi faiz oranı stok
-      - tüketici kredisi kredi faizi
-      - faiz oranı tüketici kredisi
+      - tüketici kredisi kmh dahil tl üzerinden açılan stoku faiz oranı
+      - tüketici kredisi kmh dahil tl üzerinden açılan stok faiz oranı
+      - tüketici kredisi kmh dahil tl üzerinden açılan mevcut kredilerin ortalama faizi
+      - stoku faiz oranı tüketici kredisi kmh dahil tl üzerinden açılan
     tags: [evds, konut, otomatik, faiz, oran, stok]
     frequency: monthly
     unit: pct
@@ -33357,17 +33368,44 @@ series:
     dataset_id: evds_fx_usd
     name_tr: ABD Doları Döviz Alış Kuru (TL)
     description: >-
-      TCMB EVDS, "bie_dkdovytl" veri grubu. TCMB gösterge döviz alış kuru, ABD doları, günlük (iş günleri). Fiyat düzeyidir: dönemlere indirgenirken ortalama alınır (kural avg), toplanmaz. Frekans ve birim EVDS'nin kendi metadata'sından
+      YALNIZ kullanıcı açıkça "alış kuru" dediğinde kullanılır; genel "USD/TL", "dolar kuru", "döviz kuru" istekleri için
+      satış kuru evds:TP.DK.USD.S.YTL kullanılır. TCMB EVDS, "bie_dkdovytl" veri grubu. TCMB gösterge döviz alış kuru, ABD doları, günlük (iş günleri). Fiyat düzeyidir: dönemlere indirgenirken ortalama alınır (kural avg), toplanmaz. Frekans ve birim EVDS'nin kendi metadata'sından
       (FREQUENCY_STR, BIRIMI: Türk lirası); ölçüm tipi ve indirgeme kuralı serinin adından ve veri
       grubu tanımından; canlı seri listesi 13 Eylül 2026 (docs/sources/evds.md, 'Küratörlü ek').
     aliases:
+      - dolar alış kuru
+      - usd alış kuru
+      - dolar alış
+      - döviz alış kuru dolar
+    tags: [kur, doviz, usd, tcmb]
+    frequency: daily
+    unit: TRY
+    measure_type: rate
+    default_agg: avg
+    semantic_confidence: verified
+    semantic_source: source_service
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_dkdovytl
+    status: active
+
+  - series_id: evds:TP.DK.USD.S.YTL
+    native_code: TP.DK.USD.S.YTL
+    dataset_id: evds_fx_usd
+    name_tr: ABD Doları Döviz Satış Kuru (TL)
+    description: >-
+      TCMB EVDS, "bie_dkdovytl" veri grubu. TCMB gösterge döviz satış kuru, ABD doları, günlük (iş günleri). Fiyat düzeyidir: dönemlere indirgenirken ortalama alınır (kural avg), toplanmaz. Frekans ve birim EVDS'nin kendi metadata'sından
+      (FREQUENCY_STR, BIRIMI: Türk lirası); ölçüm tipi ve indirgeme kuralı serinin adından ve veri
+      grubu tanımından; canlı seri listesi 13 Eylül 2026 (docs/sources/evds.md, 'Küratörlü ek'). Genel "USD/TL" / "dolar kuru" ifadeleri bu seriye gider (resmî gösterge satış kurudur); alış kuru ayrıca TP.DK.USD.A.YTL.
+    aliases:
+      - USD/TL döviz satış kuru
       - dolar kuru
       - usd kuru
+      - usd/tl
       - dolar/tl
       - usd/try
       - amerikan doları
       - döviz kuru dolar
-      - dolar alış
+      - dolar satış kuru
+      - döviz satış
     tags: [kur, doviz, usd, tcmb]
     frequency: daily
     unit: TRY
@@ -33461,6 +33499,7 @@ series:
       (FREQUENCY_STR, BIRIMI: Ağırlıklı ortalama (yüzde)); ölçüm tipi ve indirgeme kuralı serinin adından ve veri
       grubu tanımından; canlı seri listesi 13 Eylül 2026 (docs/sources/evds.md, 'Küratörlü ek').
     aliases:
+      - 3 aya kadar vadeli TL mevduat faizi
       - mevduat faizi
       - 3 aylık mevduat faizi
       - tl mevduat faiz oranı
@@ -33549,4 +33588,65 @@ series:
     semantic_confidence: verified
     semantic_source: source_service
     metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_hpbitablo1
+    status: active
+
+  # --- Borsa İstanbul endeksleri (bie_mkbrgn; canlı seri listesi 21 Eylül 2026) ---------------
+  # Borsa endeksi günlük/aylık değişim soruları için. borsaistanbul.com/endeks/xtumy
+  # sayfası JavaScript ile dolar ve bot engeli uygular; resmî kamu kaynağı TCMB EVDS'dir.
+  # DİKKAT: XTUMY "BIST Tüm-100"dür, BIST 100 (XU100) değil; iki seri ayrı girilmiştir.
+  - series_id: evds:TP.MK.F.BILESIK
+    native_code: TP.MK.F.BILESIK
+    dataset_id: evds_bist_index
+    name_tr: BIST 100 Endeksi (XU100), Kapanış (Fiyat)
+    description: >-
+      TCMB EVDS, "bie_mkbrgn" (Borsa İstanbul Endeksi ve Günlük İşlem Hacmi) veri grubu; kaynak Borsa İstanbul.
+      "(FİYAT) BİST 100 Endeks (XU100), Kapanış Fiyatlarına Göre (Ocak 1986=0,01)". İş günü kapanış değeri, puan.
+      Fiyat düzeyidir: aya/çeyreğe indirgenirken dönem sonu kapanışı alınır (kural last), toplanmaz; günlük ve aylık
+      değişim bu kapanışlardan hesaplanır. Frekans ve ad EVDS'nin kendi metadata'sından (canlı seri listesi 21 Eylül
+      2026). Değerler yüklendikten sonra Borsa İstanbul'un yayımladığı kapanışlarla doğrulandı (22 Eylül 2026:
+      2023-12-29 kapanış 7.470,18; 2021-01-04 1.495,43): birim puan, düzey serisi, ay sonu kuralı last.
+    aliases:
+      - bist 100
+      - bist100
+      - bist 100 endeksi
+      - borsa istanbul 100 endeksi
+      - xu100
+      - borsa endeksi
+      - hisse senedi endeksi
+      - bist 100 kapanış
+    tags: [endeks, borsa, bist, hisse, tcmb]
+    frequency: daily
+    unit: index
+    measure_type: index
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_service
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_mkbrgn
+    status: active
+
+  - series_id: evds:TP.MK.F.BILESIK.TUM
+    native_code: TP.MK.F.BILESIK.TUM
+    dataset_id: evds_bist_index
+    name_tr: BIST Tüm-100 Endeksi (XTUMY), Kapanış (Fiyat)
+    description: >-
+      TCMB EVDS, "bie_mkbrgn" veri grubu; kaynak Borsa İstanbul. "(FİYAT) BİST Tüm-100 Endeksi (XTUMY), Kapanış
+      Fiyatlarına Göre". BIST 100 dışındaki payları kapsayan endeks; BIST 100 (XU100) ile karıştırılmamalı
+      (borsaistanbul.com/endeks/xtumy sayfası bu endekstir). İş günü kapanış değeri, puan; dönem sonu kapanışı ile
+      indirgenir (kural last). Frekans ve ad EVDS metadata'sından (21 Eylül 2026); değerler yüklendikten sonra BIST 100 ile aynı
+      grup ve aynı kaynak tablosundan geldiği doğrulandı (22 Eylül 2026): birim puan, düzey serisi.
+    aliases:
+      - bist tüm-100
+      - bist tum-100
+      - bist tüm 100
+      - bist tüm-100 endeksi
+      - xtumy
+      - tüm-100 endeksi
+    tags: [endeks, borsa, bist, hisse, tcmb]
+    frequency: daily
+    unit: index
+    measure_type: index
+    default_agg: last
+    semantic_confidence: verified
+    semantic_source: source_service
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_mkbrgn
     status: active

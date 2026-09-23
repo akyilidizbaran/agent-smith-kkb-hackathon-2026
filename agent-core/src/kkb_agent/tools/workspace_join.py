@@ -27,7 +27,7 @@ from ..core.errors import ToolError
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
 
-KeyPolicy = Literal["tam", "metin", "metin_normal", "sayi", "tarih_gun"]
+KeyPolicy = Literal["tam", "metin", "metin_normal", "sayi", "tarih_gun", "ay"]
 
 POLICY_TEXT: dict[str, str] = {
     "tam": "tam eşitlik (tamsayı kayıpsız, metin olduğu gibi, zaman damgası saatiyle)",
@@ -35,11 +35,14 @@ POLICY_TEXT: dict[str, str] = {
     "metin_normal": "baş/son boşluk ve büyük/küçük harf farkı yok sayıldı (Türkçe İ/ı dahil)",
     "sayi": "tamsayı olarak (baştaki sıfırlar yok sayıldı: '001' = 1)",
     "tarih_gun": "gün düzeyinde tarih (saat atıldı)",
+    "ay": "ay düzeyinde (202101, 2021-01, 2021-01-31 aynı ay; YYYY-MM)",
 }
 _INT_EXACT_LIMIT = 2 ** 53          # float64'ün her tamsayıyı kayıpsız taşıdığı sınır
 # Tip çifti (alfabetik) → sonucu değiştirebilecek açık kurallar. Aynı tipte yalnız metin için gevşek kurallar sınanır.
 _ALTERNATIVES = {"metin": ("metin_normal", "sayi"), "metin|tamsayı": ("metin", "sayi"), "ondalık|tamsayı": ("sayi",),
                  "tarih|zaman": ("tarih_gun",), "metin|tarih": ("tarih_gun",), "metin|zaman": ("tarih_gun",)}
+# "ay" kuralı önerilmez: gün düzeyindeki tarihleri aya indirmek farklı günleri birleştirir. Yalnız kullanıcı aylık
+# birleştirme istediğinde açıkça seçilir (key_policy='ay').
 
 
 class JoinParams(BaseModel):
@@ -53,8 +56,9 @@ class JoinParams(BaseModel):
         default="tam",
         description=("Anahtar eşleme kuralı. tam (varsayılan): birebir. metin: iki taraf metin olarak birebir. "
                      "metin_normal: boşluk ve büyük/küçük harf farkı yok sayılır. sayi: tamsayı olarak, baştaki sıfırlar "
-                     "yok sayılır. tarih_gun: saat atılır. 'tam' dışındakileri YALNIZ araç sorduktan sonra kullanıcı o "
-                     "eşdeğerliği kabul ettiyse seç."))
+                     "yok sayılır. tarih_gun: saat atılır. ay: 202101 / 2021-01 / 2021-01-31 aynı ay. Kullanıcı 'aylık "
+                     "tarih bazında birleştir/hizala' dediyse tarih anahtarlarında 'ay' kuralını doğrudan kullan; diğer "
+                     "'tam' dışı kuralları YALNIZ araç sorduktan sonra kullanıcı o eşdeğerliği kabul ettiyse seç."))
     purpose: str = Field(description="Bu birleştirmenin neyi cevapladığını anlatan tek cümle")
 
 
@@ -143,6 +147,12 @@ def key_values(s: pd.Series, policy: str, kind: str) -> list[Any]:
                 out.append(pd.Timestamp(x).date())
             except (ValueError, TypeError) as exc:
                 raise KeyError_(f"tarihe çevrilemeyen anahtar: {x!r}") from exc
+        elif policy == "ay":
+            from ..builder.temporal import canonical_month
+            month = canonical_month(x)
+            if month is None:
+                raise KeyError_(f"aya çevrilemeyen anahtar: {x!r}")
+            out.append(month)
         else:  # pragma: no cover — şema dışı
             raise KeyError_(f"bilinmeyen anahtar kuralı: {policy}")
     return out
@@ -309,7 +319,17 @@ class WorkspaceJoinTool(Tool):
             if k is not None:
                 rmap.setdefault(k, j)
 
-        take = list(params.columns) if params.columns else [c for c in rf.columns if c != rk]
+        # Varsayılan seçim kanıt sütunlarını taşımaz (canlı koşu, 23 Eyl: Gold tablosunun gözlem tarihi listeleri ve
+        # artifact özetleri kullanıcı tablosuna "_k2" sütunları olarak girdi). Açıkça istenirse columns ile alınır.
+        evidence_suffixes = ("::series_id", "::quality_flag", "::measure_type", "::unit", "::aggregation",
+                             "::observations", "::missing_observations", "::warned_observations",
+                             "::source_observation_dates", "::artifact_sha256_list", "::vintage_id_list", "::run_id_list")
+        evidence_names = {"quality_flag", "observations", "missing_observations", "warned_observations",
+                          "source_observation_dates", "artifact_sha256_list", "vintage_id_list", "run_id_list",
+                          "contributing_series", "absent_series", "is_complete_period", "period_start"}
+        take = list(params.columns) if params.columns else [
+            c for c in rf.columns if c != rk
+            and str(c) not in evidence_names and not str(c).endswith(evidence_suffixes)]
         missing = [c for c in take if c not in rf.columns]
         if missing:
             return ToolResult.fail("COLUMN_NOT_FOUND", f"{right.id} tablosunda yok: {', '.join(map(str, missing))}.",

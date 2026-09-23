@@ -81,5 +81,27 @@
     "bddk_weekly": ["bddk.gov.tr", "bddk.org.tr"],
     "bddk_finturk": ["bddk.gov.tr", "bddk.org.tr"],
     "evds": ["tcmb.gov.tr"]
+  },
+  "financial_sources": {
+    "_note": "Yerel havuzda KARŞILIĞI OLMAYAN, web'den çekilen dış kaynaklar. Çekirdek routing bu yapıdan beslenir; kaynak adı koda gömülmez. access_mode: static_html|dynamic_html|api_json_post|browser. adapter_key null ise kaynağa özel bir alıcı yok (yalnız genel web/dosya yolu). canonical_url title-only istekte deterministik önce-oku ve domain-kısıtlı arama için kullanılır.",
+    "tefas": {
+      "aliases": ["tefas", "takasbank tefas", "fon bilgilendirme platformu", "toplam işlem hacmi raporu", "net takas tutarı"],
+      "hosts": ["tefas.gov.tr"],
+      "canonical_url": "https://www.tefas.gov.tr/",
+      "access_mode": "api_json_post",
+      "adapter_key": "tefas",
+      "name": "TEFAS (Takasbank)",
+      "manual_export": {
+        "url": "https://www.tefas.gov.tr/tr/tefas-istatistikleri",
+        "steps": "Sitede İşlem Hacmi Raporları → Toplam İşlem Hacmi Raporu'nu açın; başlangıç ve bitiş yılı/ayını istenen döneme, para birimini isteğe göre ayarlayıp Görüntüle'ye basın, sonra CSV ile dışa aktarın ve dosyayı buraya yükleyin."
+      }
+    },
+    "odmd": {
+      "aliases": ["odmd", "otomotiv distribütörleri", "pazar değerlendirme", "otomobil ve hafif ticari araç pazar"],
+      "hosts": ["odmd.org.tr"],
+      "canonical_url": "https://www.odmd.org.tr/",
+      "access_mode": "dynamic_html",
+      "adapter_key": null
+    }
   }
 }

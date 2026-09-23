@@ -1,7 +1,12 @@
 # Agentic Analytics Engine — Mimari
 
-> **Durum:** 14 Eylül 2026 · 386 ajan birim testi + 1.086 lakehouse testi (CI'da) · 63 ADR · 681 seri 2016+ canlı yüklü ·
-> birleşik kabul: [M16_KABUL_RAPORU.md](M16_KABUL_RAPORU.md). §1 çizimindeki "planlı" etiketleri 10 Eylül tarihlidir;
+> **Güncel özet:** Jüriye yönelik güncel anlatım [01-genel-mimari](../01-GENEL-MIMARI.md), [02-moduler-kod-yapisi](../02-MODULER-KOD-YAPISI.md),
+> [03-agent-karar-ve-gorev-isleme](../03-AGENT-KARAR-VE-GOREV-ISLEME.md) ve [04-dokuman-okuma](../04-DOKUMAN-OKUMA.md) belgelerindedir. Bu belge
+> ayrıntılı tarihçeli başvuru olarak korunur.
+>
+> **Durum:** 22 Eylül 2026 · 856 ajan birim testi + ~1.150 lakehouse testi (CI'da) · 80+ ADR · 6.306 seri (2021-01 → 2026-06) canlı yüklü ·
+> tamamlanma sözleşmesi ve arama defteri (`core/completion.py`, `core/search_ledger.py`, 22 Eyl) ·
+> birleşik kabul: [M16_KABUL_RAPORU.md](calisma-notlari/M16_KABUL_RAPORU.md). §1 çizimindeki "planlı" etiketleri 10 Eylül tarihlidir;
 > güncel araç ve katmanlar §15 sonrasındaki "YAZILDI" bölümlerinde ve §14–15'tedir.
 > Bu belge kodun *ne yaptığını* değil, *neden öyle yapıldığını* anlatır; her karar
 > `docs/adr/` altındaki kayda atıfla gelir. Kodla birebir örtüşmesi için modül, sınıf ve
@@ -205,7 +210,7 @@ protokolü konuştuğu için kod değişmez, yalnız `.env` değişir:
 
 ```
 LLM_BASE_URL=https://mia.csp.kloudeks.com/v1
-LLM_MODEL=kkbhackathon2026/Qwen3.8-27B
+LLM_MODEL=deepseek-ai/DeepSeek-V4.1-Flash   # ADR-0103; önceki: kkbhackathon2026/Qwen3.8-27B
 ```
 
 **`reasoning_effort: "none"`** varsayılan olarak gönderilir (`LLM_DISABLE_THINKING`).

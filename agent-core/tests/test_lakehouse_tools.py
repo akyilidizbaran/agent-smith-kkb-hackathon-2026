@@ -224,6 +224,63 @@ def test_aylik_pencere_tam_ay_sayisini_kabul_eder() -> None:
     assert result.error is None
 
 
+def test_secili_seri_pencereyi_kapsamiyorsa_sql_calismadan_reddedilir() -> None:
+    """Kısa türetilmiş kart serisi, tam kapsama sahip doğrulanmış parent'ın yerine geçemez."""
+    from types import SimpleNamespace
+
+    def spec(dataset_id: str, name: str, start: date, *, confidence: str | None) -> DatasetSpec:
+        return DatasetSpec(
+            dataset_id=dataset_id,
+            name=name,
+            description="BDDK aylık ulusal toplam seri",
+            source="bddk_monthly",
+            frequency=Frequency.MONTHLY,
+            time_column="period_end",
+            grain=["period_end"],
+            columns=[
+                ColumnSpec(name="period_end", role=ColumnRole.TIME, dtype="DATE", description="dönem"),
+                ColumnSpec(name="value", role=ColumnRole.MEASURE, dtype="DOUBLE", description="bakiye", unit="milyon TL"),
+            ],
+            coverage=Coverage(start=start, end=date(2026, 6, 30)),
+            semantic_confidence=confidence,
+        )
+
+    need = spec("bddk_monthly:need", "Tüketici Kredileri - İhtiyaç, Toplam (Sektör)", date(2016, 1, 31), confidence="verified")
+    bad_card = spec("bddk_monthly:bad_card", "Kredi Kartları (Krediler, Sektör)", date(2022, 1, 31), confidence="derived")
+    good_card = spec("bddk_monthly:good_card", "Bireysel Kredi Kartları, Toplam (Sektör)", date(2016, 1, 31), confidence="verified")
+
+    class Lake:
+        def list_datasets(self):
+            return [need, bad_card, good_card]
+
+        def get_dataset(self, dataset_id: str):
+            return next(item for item in self.list_datasets() if item.dataset_id == dataset_id)
+
+        def execute_sql(self, sql: str, *, max_rows: int = 10_000):  # pragma: no cover - guard must stop before this
+            raise AssertionError("kapsam hatasında SQL çalıştırılmamalı")
+
+    registry = SimpleNamespace(
+        active_question=(
+            "2022-2023 yıllarını kapsayan 60 aylık dönemde Türkiye'deki ihtiyaç kredisi "
+            "ve bireysel kredi kartı verilerini BDDK verilerinden getir. "
+            "[Otomatik dönem sınırı: 2021-01 ile 2025-12 arasındaki 60 aylık pencereyi kullan]"
+        )
+    )
+    workspace = AnalysisWorkspace()
+    tool = LakehouseQueryTool(Lake(), workspace, registry)
+    result = tool.validate_and_run({
+        "sql": 'SELECT "period_end", "value" FROM "bddk_monthly:need" JOIN "bddk_monthly:bad_card" USING ("period_end")',
+        "purpose": "60 aylık BDDK sonuç",
+    })
+
+    assert not result.ok
+    assert result.error is not None
+    assert result.error.error_code == "SERIES_COVERAGE_MISMATCH"
+    assert result.error.is_retryable
+    assert "bddk_monthly:good_card" in result.error.candidates
+    assert not workspace.has_table
+
+
 def test_compact_ay_araligi_disina_tasan_sonuc_reddedilir() -> None:
     class SahteRegistry:
         active_question = "Tüm serileri 202301–202412 döneminde aylık bazda aynı eksende hizala"
@@ -426,3 +483,100 @@ def test_aylik_soruya_ceyreklik_tablo_okunmaz_incesi_serbest() -> None:
     # iki frekans sözcüğü: guard susar
     t3 = tool("Haftalık faizi aylık göster, 2021'den bu yana")
     assert t3.check_policy(t3.Params(sql="SELECT * FROM gold.konut_kredisi_ceyreklik WHERE period_end >= '2021-01-01'", purpose="x")) is None
+
+
+def test_varlik_pivotu_frekans_donusumu_degildir_where_filtresi_kutu_sayilmaz() -> None:
+    """Boş katalog provası (22 Eyl): iki ülkeyi aynı tarih taneli satırda yan yana koyan pivot GOLD_REQUIRED yedi."""
+    from kkb_agent.tools.lakehouse import LakehouseQueryTool
+
+    class Lake:
+        def get_dataset(self, *a, **k):
+            raise LookupError
+
+    tool = LakehouseQueryTool(Lake(), AnalysisWorkspace(), None, gold_available=True)
+    pivot = ("SELECT observation_date, MAX(CASE WHEN entity_id='Germany' THEN value END) AS almanya, "
+             "MAX(CASE WHEN entity_id='Turkiye' THEN value END) AS turkiye FROM silver.fact_observation "
+             "WHERE series_id='adhoc:nufus' AND EXTRACT(year FROM observation_date) BETWEEN 2000 AND 2020 GROUP BY observation_date")
+    assert not tool._is_period_aggregation(pivot)
+    assert tool._is_period_aggregation("SELECT strftime(observation_date, '%Y-%m') AS ay, AVG(value) FROM t GROUP BY 1")
+    assert tool._is_period_aggregation("SELECT EXTRACT(year FROM observation_date) AS y, SUM(value) FROM t GROUP BY EXTRACT(year FROM observation_date)")
+
+
+def test_distinct_degerler_seri_kimligini_tablo_adi_sanmaz() -> None:
+    """Boş katalog provası (22 Eyl): 'adhoc:dunya_nufus' FROM'a yazılınca 'Table … does not exist'; adaptörün kapsamı kullanılır."""
+    import pandas as pd
+    from types import SimpleNamespace
+    from kkb_agent.tools.lakehouse import LakehouseDistinctValuesTool
+
+    class Lake:
+        def __init__(self):
+            self.sql: list[str] = []
+
+        def get_dataset(self, dataset_id):
+            return SimpleNamespace(dataset_id=dataset_id, columns=[SimpleNamespace(name="entity_id"), SimpleNamespace(name="value")],
+                                   column=lambda name: SimpleNamespace(name=name) if name in ("entity_id", "value") else None)
+
+        def series_scope(self, dataset_id):
+            return "silver.fact_observation", "series_id = '" + dataset_id + "'"
+
+        def execute_sql(self, sql):
+            self.sql.append(sql)
+            data = pd.DataFrame({"n": [2]}) if "COUNT(DISTINCT" in sql else pd.DataFrame({"entity_id": ["Germany", "Turkiye"]})
+            return SimpleNamespace(is_empty=False, data=data)
+
+    lake = Lake()
+    r = LakehouseDistinctValuesTool(lake).validate_and_run({"dataset_id": "adhoc:nufus", "column": "entity_id", "limit": 5})
+    assert r.ok and "Germany" in r.content and "Turkiye" in r.content, r.content
+    assert lake.sql[0].startswith("SELECT DISTINCT entity_id FROM silver.fact_observation WHERE series_id = 'adhoc:nufus'"), lake.sql[0]
+
+
+def test_distinct_degerler_aksana_ve_buyuk_kucuk_harfe_duyarsiz_arar() -> None:
+    """Boş katalog provası (22 Eyl): kullanıcı "Türkiye" yazdı, kaynak "Turkiye" tutuyor; ILIKE bulamadı."""
+    import pandas as pd
+    from types import SimpleNamespace
+    from kkb_agent.tools.lakehouse import LakehouseDistinctValuesTool
+
+    class Lake:
+        def __init__(self):
+            self.sql: list[str] = []
+
+        def get_dataset(self, dataset_id):
+            return SimpleNamespace(dataset_id=dataset_id, columns=[SimpleNamespace(name="entity_id")],
+                                   column=lambda name: SimpleNamespace(name=name) if name == "entity_id" else None)
+
+        def series_scope(self, dataset_id):
+            return "silver.fact_observation", "series_id = '" + dataset_id + "'"
+
+        def execute_sql(self, sql):
+            self.sql.append(sql)
+            data = pd.DataFrame({"n": [1]}) if "COUNT(DISTINCT" in sql else pd.DataFrame({"entity_id": ["Turkiye"]})
+            return SimpleNamespace(is_empty=False, data=data)
+
+    lake = Lake()
+    r = LakehouseDistinctValuesTool(lake).validate_and_run({"dataset_id": "adhoc:nufus", "column": "entity_id", "contains": "Türkiye", "limit": 5})
+    assert r.ok and "Turkiye" in r.content
+    assert "strip_accents(lower(entity_id)) LIKE '%' || strip_accents(lower('Türkiye')) || '%'" in lake.sql[0], lake.sql[0]
+
+
+def test_kaynak_uyusmazligi_adhoc_ve_karma_join_icin_uygulanmaz() -> None:
+    """23 Eyl: (1) 'dış kaynağı BDDK–EVDS setiyle birleştir' — kullanıcının taslak (adhoc) serisi SOURCE_MISMATCH aldı;
+    (2) 'TCMB politika faizi ile konut kredisi stoku' — EVDS+BDDK join'i reddedildi. Yalnız hiçbir dış seri istenen
+    kaynaktan değilse ret."""
+    from types import SimpleNamespace
+    from kkb_agent.tools.lakehouse import LakehouseQueryTool
+
+    class Lake:
+        def list_datasets(self):
+            return [SimpleNamespace(dataset_id="adhoc:fon_islem_hacmi", name="Fon işlem hacmi", source="adhoc"),
+                    SimpleNamespace(dataset_id="evds:TP.BISPOLFAIZ.TUR", name="Politika faizi", source="evds"),
+                    SimpleNamespace(dataset_id="bddk_monthly:1534_Toplam", name="Konut kredisi", source="bddk_monthly")]
+
+    tool = LakehouseQueryTool.__new__(LakehouseQueryTool)
+    tool.lakehouse = Lake()
+    tool._registry = SimpleNamespace(active_question="Fon verisini mevcut kredi tablosuna aylık olarak ekle")
+    assert tool._boyut_uyusmazligi("SELECT * FROM silver.fact_observation WHERE series_id = 'adhoc:fon_islem_hacmi'") is None
+    tool._registry = SimpleNamespace(active_question="TCMB politika faizi ile aylık konut kredisi stoku arasında ilişki var mı?")
+    assert tool._boyut_uyusmazligi("SELECT * FROM silver.fact_observation WHERE series_id IN ('evds:TP.BISPOLFAIZ.TUR', 'bddk_monthly:1534_Toplam')") is None
+    err = tool._boyut_uyusmazligi("SELECT * FROM silver.fact_observation WHERE series_id = 'bddk_monthly:1534_Toplam'")
+    assert err is not None and err.error_code == "SOURCE_MISMATCH"
+

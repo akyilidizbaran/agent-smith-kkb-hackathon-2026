@@ -39,6 +39,10 @@ ErrorCode = Literal[
     # Aylık pencere sorusunda model sonucu anchor yıllarına indirgedi; çıktı
     # beklenen farklı ay sayısını taşımadığında araç sonucu kabul edilmez.
     "PERIOD_GRAIN_MISMATCH",
+    # Seçilen seri istenen pencereyi kapsamıyor ya da aynı kavram için daha
+    # güçlü doğrulanmış alternatif varken türetilmiş seriye düşülmüş.
+    "SERIES_COVERAGE_MISMATCH",
+    "SERIES_SEMANTIC_MISMATCH",
     # Gold katmanının semantik reddi: katalog kuralı bu dönüşümü güvenli bulmuyor
     # (stok seride decompose, doğrulanmamış semantik, üst örnekleme...). Kural
     # kataloğun, seçim modelin değil (ADR-0031).
@@ -62,6 +66,9 @@ ErrorCode = Literal[
     # Netleştirme kapısı (Büşra, tools/clarify.py, V3 §3.9): soru yalnız uygunluk kapısı "kısmen" dediğinde ve tur başına bir kez;
     # aksi hâlde model eldeki veriyle cevap verir (turu bitirmez: terminal=False).
     "CLARIFY_NOT_ALLOWED",
+    # Arama defteri (core/search_ledger, 22 Eyl): arama artık yeni aday üretmiyor; tam aday listesi verildi, model
+    # aramayı bırakıp adaylardan seçer ya da eksik yüzü söyler. "Veri yok" değil, "arama doydu".
+    "SEARCH_SATURATED",
     # veri katmanı — sorgu çalıştı, sonuç ne söylüyor
     "OUT_OF_COVERAGE",
     "EMPTY_RESULT",
@@ -148,7 +155,12 @@ class ToolError:
             parts.append(f"ADAYLAR: {shown}{more}")
         if self.hint:
             parts.append(f"YAPACAĞIN: {self.hint}")
-        if not self.is_retryable:
+        if self.terminal is False:
+            # Turu bitirmeyen ret (ör. netleştirme yasağı): "kullanıcıya durumu açıkla" kapanış cümlesi modeli durdurup
+            # hazır veriyle devam etmesini engelliyordu (ADR-0104).
+            parts.append("BU HATA TEKRAR DENEMEYLE ÇÖZÜLMEZ; aynı çağrıyı tekrarlama. Tur devam ediyor: "
+                         "başka bir yolla ya da eldeki doğrulanmış veriyle sürdür.")
+        elif not self.is_retryable:
             parts.append(
                 "BU HATA TEKRAR DENEMEYLE ÇÖZÜLMEZ. Aynı çağrıyı farklı biçimde deneme; "
                 "kullanıcıya durumu açıkla."

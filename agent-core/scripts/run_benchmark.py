@@ -36,7 +36,7 @@ ENGINES: dict[str, Callable[[], Any]] = {}
 
 # Motorun araç adları golden/alt-küme kontrollerinden farklıysa buraya eşleme yazılır:
 # {"motor": {"onun_adı": "kontrollerin beklediği ad"}}. Kontroller lakehouse_query(sql),
-# workspace_add_column, workspace_compute_column adlarını bekler (docs/BENCHMARK_PROTOCOL.md).
+# workspace_add_column, workspace_compute_column adlarını bekler (docs/calisma-notlari/BENCHMARK_PROTOCOL.md).
 TOOL_ALIASES: dict[str, dict[str, str]] = {"team": {}, "v3": {}}
 
 
@@ -358,7 +358,7 @@ def main() -> None:
     engines = args.engine or ["team", "v3"]
     unknown = [e for e in engines if e not in ENGINES]
     if unknown:
-        sys.exit(f"bilinmeyen motor: {unknown}; kayıtlı: {list(ENGINES)} (bkz. docs/BENCHMARK_PROTOCOL.md §4)")
+        sys.exit(f"bilinmeyen motor: {unknown}; kayıtlı: {list(ENGINES)} (bkz. docs/calisma-notlari/BENCHMARK_PROTOCOL.md §4)")
     case_ids = [c for c in args.cases.split(",") if c]
     import os
     model = os.getenv("LLM_MODEL", "?")

@@ -26,5 +26,5 @@ uygulaması (`DuckDBLakehouse`) kullanılır.
 Gerçek kırılma noktası tek: **katalog eksik doldurulursa.** Sözleşme dokümanında
 veri ekibinden istenen asıl şey bu yüzden "veri" değil, doldurulmuş katalogdur.
 Veri ekibi sözleşmeyi kendi P0 kararlarıyla doldurup geri verdi
-(`docs/LAKEHOUSE_CONTRACT_FILLED.md`); arayüz farkları oradaki eşleme tablosuyla
+(`docs/calisma-notlari/LAKEHOUSE_CONTRACT_FILLED.md`); arayüz farkları oradaki eşleme tablosuyla
 yönetilecek.

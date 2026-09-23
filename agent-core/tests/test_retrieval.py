@@ -268,6 +268,21 @@ def test_bddk_turkiye_geneli_aylik_pencere_il_serilerini_eleme_ile_ayirir() -> N
     assert "bddk_finturk:ADANA_Ihtiyac" not in hits
 
 
+def test_coklu_kavram_baglacsiz_sorguda_kisa_ifadeleri_birleştirir() -> None:
+    """"ve" yazılmasa bile iki istenen kavram aynı aday havuzuna girmeli."""
+    catalog = [
+        _rec("bddk_monthly:1536_Toplam", "İhtiyaç Kredileri, Toplam (Sektör)", aliases=("ihtiyaç kredisi",)),
+        _rec("bddk_monthly:1539_Toplam", "Bireysel Kredi Kartları, Toplam (Sektör)", aliases=("bireysel kredi kartı",)),
+    ]
+    catalog.extend(
+        _rec(f"bddk_finturk:{index}_child", "İhtiyaç Kredileri, ADANA alt kırılım", source="bddk_finturk", province="Adana")
+        for index in range(30)
+    )
+    retriever = CatalogRetriever(catalog, policy=RetrievalPolicy(mode="bm25"))
+    hits = [hit.id for hit in retriever.search("aylık ihtiyaç kredisi bireysel kredi kartı BDDK", k=2)]
+    assert set(hits) == {"bddk_monthly:1536_Toplam", "bddk_monthly:1539_Toplam"}
+
+
 def test_politika_kademeleri() -> None:
     p = RetrievalPolicy()
     assert p.resolve(40, embedder_available=False) == "preload_all"
@@ -408,6 +423,25 @@ def test_sayili_vade_frekans_yuzu_degildir_ve_embedding_dusunce_bm25_kalir() -> 
     r = CatalogRetriever(CATALOG, policy=RetrievalPolicy(mode="hybrid"), embedder=Broken())
     hits = [h.id for h in r.search("konut kredisi bakiyesi", k=3)]
     assert hits[0] == "bddk_monthly:1534_Toplam" and r.last_error and "uç kapalı" in r.last_error
+
+
+def test_esitlik_bandinda_dogrulanmis_kayit_one_bant_disinda_sira_degismez() -> None:
+    """Canlı soru (21 Eyl, gerçek katalog, BM25): otomatik alias'lı stok faiz serisi 33,84, doğrulanmış akım
+    serisi 33,31, Gold aylık ortalama 33,14 — alias sayısı stok serisini öne çıkarıyordu. Bant (%5) içinde
+    doğrulanmış/Gold öne; bant dışındaki doğrulanmış kayıt sırasını korur. Puanlar ölçümden alındı."""
+    stock = CatalogRecord(id="evds:TP.BKR.TRY.18", name="Konut Kredisi (TL, Stok, %)", frequency="monthly", source="evds")
+    flow = CatalogRecord(id="evds:TP.KTF12", name="Konut Kredisi Faiz Oranı (Akım, %)", frequency="weekly", source="evds", curated=True)
+    gold = CatalogRecord(id="gold.konut_faizi_aylik", name="Konut kredisi faiz oranı, aylık ortalama", frequency="monthly",
+                         source="gold", curated=True)
+    far = CatalogRecord(id="evds:TP.BISPOLFAIZ.TUR", name="TCMB Politika Faiz Oranı (%)", frequency="daily", source="evds", curated=True)
+    ranked = [Candidate(id=stock.id, text="", score=33.84), Candidate(id=flow.id, text="", score=33.31),
+              Candidate(id=gold.id, text="", score=33.14), Candidate(id=far.id, text="", score=30.0)]
+    records = [stock, flow, gold, far]
+    monthly = apply_facets(records, ranked, extract_facets("konut kredisi faiz oranı aylık"), k=4)
+    assert [c.id for c in monthly] == [gold.id, stock.id, flow.id, far.id], [(c.id, c.meta) for c in monthly]
+    assert monthly[0].meta["curated_tie"] and not monthly[1].meta["curated_tie"]
+    plain = apply_facets(records, ranked, extract_facets("konut kredisi faiz oranı"), k=4)
+    assert [c.id for c in plain] == [flow.id, gold.id, stock.id, far.id]      # bant dışı 'far' doğrulanmış ama geride
 
 
 def test_acik_il_ulusal_yuzu_ezer_ulusal_soruda_il_serileri_geride_kalir() -> None:

@@ -28,7 +28,7 @@ def _factory_recording(seen: list[str]):
     return factory
 
 
-def test_a21_profil_gecisi_yalniz_anahtarla_ve_oturumu_temizler() -> None:
+def test_a21_profil_gecisi_yalniz_anahtarla_ve_sohbeti_korur() -> None:
     seen: list[str] = []
     client = TestClient(create_app(_factory_recording(seen), profile="analyst", architect_token="gizli-123"))
     assert client.get("/api/status").json()["profile"] == "analyst"
@@ -38,11 +38,27 @@ def test_a21_profil_gecisi_yalniz_anahtarla_ve_oturumu_temizler() -> None:
     assert client.post("/api/profile", json={"profile": "operator"}).status_code == 422
     r = client.post("/api/profile", json={"profile": "architect", "token": "gizli-123"})
     assert r.status_code == 200 and client.get("/api/status").json()["profile"] == "architect" and seen[-1] == "architect"
-    assert client.get("/api/answers").json() == [], "geçiş oturumu temizler (A28)"
+    assert len(client.get("/api/answers").json()) == 1, "geçiş aynı sohbette olur (ADR-0112); tam sıfırlama ayrıca temizler"
     assert client.post("/api/profile", json={"profile": "analyst"}).status_code == 200, "Analyst'e dönüş anahtar istemez"
     closed = TestClient(create_app(_factory_recording([]), profile="analyst"))
     assert closed.post("/api/profile", json={"profile": "architect", "token": "x"}).status_code == 403
     assert "ARCHITECT_TOKEN" in closed.post("/api/profile", json={"profile": "architect", "token": "x"}).json()["detail"]
+    assert closed.get("/api/status").json()["profile_switch_mode"] == "closed"
+
+
+def test_profil_gecisi_acik_kipte_tek_tik_ve_tablo_tasinir() -> None:
+    """ADR-0112: operatör PROFILE_SWITCH=open ile açtıysa geçiş anahtarsız; sohbet, cevaplar ve geçmiş yeni profile taşınır."""
+    seen: list[str] = []
+    client = TestClient(create_app(_factory_recording(seen), profile="analyst", profile_switch="open"))
+    assert client.get("/api/status").json()["profile_switch_mode"] == "open"
+    client.post("/api/ask", json={"question": "2025 konut"})
+    session = client.app.state.session
+    table_before = session.agent.workspace.table.copy()
+    assert client.post("/api/profile", json={"profile": "architect"}).status_code == 200
+    assert seen[-1] == "architect" and client.get("/api/status").json()["profile"] == "architect"
+    assert len(client.get("/api/answers").json()) == 1
+    assert session.agent.workspace.table.equals(table_before), "aktif tablo yeni profilin ajanına taşındı"
+    assert client.post("/api/profile", json={"profile": "analyst"}).status_code == 200 and seen[-1] == "analyst"
 
 
 def test_a21c_tam_sifirlama_iki_adim_yalniz_veri_koku(tmp_path) -> None:

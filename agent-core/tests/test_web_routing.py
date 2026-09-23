@@ -14,7 +14,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from kkb_agent.core.web_routing import (
     addresses,
     discovery_requested,
+    external_source_fallback_plan,
+    external_source_requested,
+    general_public_fallback_plan,
     host_of,
+    matched_external_source,
     public_db_fallback,
     public_fallback_plan,
     source_domains,
@@ -183,3 +187,80 @@ def test_turkish_ordinal_suffix_is_not_a_domain():
     assert addresses("Raporun 5.sayfadaki tabloyu getir") == []
     assert addresses("bddk.gov.tr sitesinden bülteni bul") == ["bddk.gov.tr"]
     assert addresses("www.tcmb.gov.tr/evds adresini oku") == ["www.tcmb.gov.tr/evds"]
+
+
+# --- Option A: açık web isteği + yerel yokluk → genel (domain-pinsiz) fallback planı -------------
+
+def test_general_fallback_distills_query_and_flags_general():
+    """Genel fallback: junk sözcükler elenir, yıl/konu kalır, scope=general ve boş domain."""
+    plan = general_public_fallback_plan(
+        "Peki bunu internetten araştırır mısın: 2024'te dünya faiz piyasalarında ne yaşandı?"
+    )
+    assert plan is not None
+    assert plan["scope"] == "general"
+    assert plan["include_domains"] == []
+    tokens = str(plan["query"]).lower().split()
+    assert "2024" in tokens
+    assert any(t.startswith("faiz") for t in tokens) and any(t.startswith("piyasa") for t in tokens)
+    for junk in ("bunu", "araştırır", "mısın", "internetten", "yaşandı", "peki", "ne"):
+        assert junk not in tokens, junk
+
+
+def test_general_fallback_gate_protects_out_of_scope():
+    """web_requested kapısı out-of-scope reddini korur: web istenmeyen soruda genel yol açılmaz."""
+    assert web_requested("2015 yılında konut kredisi bakiyesi ne kadardı?") is False
+    assert web_requested("Bunu internetten araştırır mısın?") is True
+
+
+def test_general_fallback_respects_web_forbidden():
+    assert general_public_fallback_plan(
+        "yalnızca veritabanı kullan, internete çıkma: 2024 konut faizi"
+    ) is None
+
+
+def test_external_source_fallback_is_host_pinned_from_config():
+    # TEFAS title-only istek → source_hints.financial_sources'tan host-pinli plan (config-driven).
+    plan = external_source_fallback_plan(
+        "TEFAS Toplam İşlem Hacmi Raporu 2021-2025 verisini getir"
+    )
+    assert plan is not None
+    assert plan["include_domains"] == ["tefas.gov.tr"]
+    assert plan.get("scope") == "external"
+    assert plan.get("canonical_url", "").startswith("https://www.tefas.gov.tr")
+    assert external_source_requested("TEFAS işlem hacmi getir")
+    assert (matched_external_source("ODMD pazar değerlendirme") or {}).get("key") == "odmd"
+
+
+def test_external_source_fallback_none_for_local_or_forbidden():
+    assert external_source_fallback_plan("2024 konut kredisi faizini getir") is None
+    assert external_source_fallback_plan("internete çıkma: TEFAS hacmi") is None
+
+
+def test_generalizes_to_unseen_financial_source_via_config_only(tmp_path, monkeypatch):
+    # GENELLEME: çekirdek koda dokunmadan, YALNIZ yapılandırmaya GÖRÜLMEMİŞ bir finans kaynağı ekleyince
+    # routing (tanıma + host-pinli plan) çalışmalı — davranış TEFAS/ODMD kelimelerine özel değildir.
+    hints = tmp_path / "hints.json"
+    hints.write_text(json.dumps({
+        "financial_sources": {
+            "matriks": {
+                "aliases": ["matriks", "matriks veri terminali", "borsa akış verisi"],
+                "hosts": ["matriksdata.com"],
+                "canonical_url": "https://www.matriksdata.com/",
+                "access_mode": "browser",
+                "adapter_key": None,
+            }
+        }
+    }, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setenv("SOURCE_HINTS_FILE", str(hints))
+    clear_cache()
+    try:
+        # Farklı ifadeli, TEFAS'tan bağımsız prompt:
+        q = "Borsa akış verisini Matriks veri terminalinden aylık olarak çekip getir"
+        assert external_source_requested(q)
+        assert (matched_external_source(q) or {}).get("key") == "matriks"
+        plan = external_source_fallback_plan(q)
+        assert plan is not None and plan["include_domains"] == ["matriksdata.com"]
+        # Yapılandırmada olmayan yerel/başka kaynak tetiklememeli.
+        assert not external_source_requested("2024 konut kredisi faizini getir")
+    finally:
+        clear_cache()

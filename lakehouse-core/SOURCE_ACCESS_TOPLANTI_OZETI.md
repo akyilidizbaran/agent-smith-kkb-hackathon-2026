@@ -101,7 +101,7 @@ Bu hazırlık sürecinin başlıca artefaktları şunlardır:
 | Artefakt | Amaç |
 |---|---|
 | `KKB_Agentic_Data_Analytics_Hackathon_Uctan_Uca_Proje_Rehberi.md` | Organizatör gereksinimlerini ve bütün proje sürecini derlemek |
-| `KKB_Hackathon_2026_Kick_Off_Tam_Transkript.md` | Kararların toplantıdaki gerçek ifadelere dayanmasını sağlamak |
+| `docs/calisma-notlari/KKB_Hackathon_2026_Kick_Off_Tam_Transkript.md` | Kararların toplantıdaki gerçek ifadelere dayanmasını sağlamak |
 | `lakehouse-mimari-karar.md` | Gereksinim, varsayım ve teknoloji seçeneklerini ayırmak |
 | `lakehouse-nihai-karar.md` | Çelişen iki araştırma arasında tek uygulanabilir mimari karar vermek |
 | `KKB_Data_Lakehouse_Terimler_Sozlugu.md` | Mimariyi öğrenilebilir ve ekip içinde ortak konuşulabilir hale getirmek |

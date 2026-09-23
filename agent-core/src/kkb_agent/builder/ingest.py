@@ -77,6 +77,7 @@ class LakehouseCLI:
     def ingest_file_command(
         self, *, locator: str, dataset_id: str, mapping: MappingProposal, semantics: SemanticsProposal,
         name: str, description: str, allowed_root: Path, timeout: float = 60.0,
+        delimiter: str | None = None,
     ) -> list[str]:
         cmd = [*self.launcher.split(), "-m", "lakehouse", "ingest-file", locator,
                "--database", str(self.database), "--data-root", str(self.data_root),
@@ -101,7 +102,24 @@ class LakehouseCLI:
             cmd += ["--week-anchor", semantics.week_anchor]
         if semantics.cumulative_reset:
             cmd += ["--cumulative-reset", semantics.cumulative_reset]
+        if delimiter:
+            # Kendi yazdığımız CSV (OCR/türetilmiş/web tablosu): ayraç bilinir, veri ekibinin koklayıcısına
+            # bırakılmaz — başlıkta "|" geçince (Borsa altın PDF'i) koklayıcı iki adayı da geçerli buluyordu.
+            cmd += ["--delimiter", delimiter]
         return cmd
+
+    def refresh_gold(self) -> tuple[bool, str]:
+        """Silver değiştikten sonra Gold tablolarını yeniden kurar (`python -m lakehouse gold`).
+
+        Ölçüldü (21 Eyl, gerçek DB): Gold 15 Eylül'de 116.413 Silver satırıyla kurulmuş, 18 Eylül'deki genişletme
+        Silver'ı 232.217'ye çıkarmış; yedi Gold tablosu da "bayat" sayılıp aylık faiz sorusu GOLD_STALE ile
+        reddedildi. Architect'in Silver'a yazan her yolu (kaynaktan çekme, terfi) bunu çağırır; Gold tablosu Silver'ın
+        parmak izine bağlı olduğu için yalnız ilgili tabloyu yenilemek mümkün değil, hepsi kurulur (saniyeler)."""
+        cmd = [*self.launcher.split(), "-m", "lakehouse", "gold",
+               "--database", str(self.database), "--data-root", str(self.data_root)]
+        code, out, err = self.runner(cmd, self.core_dir)
+        ok = code == 0 and "status: success" in (out or "")
+        return ok, (out + err).strip()[-300:]
 
     def ingest_file(self, **kwargs) -> IngestOutcome:
         cmd = self.ingest_file_command(**kwargs)

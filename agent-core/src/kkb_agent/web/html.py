@@ -152,7 +152,7 @@ def convert_numbers(frame: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     ambiguous: list[tuple[str, dict[tuple[str, str | None], list[float | None]], str]] = []
     resolved_pairs: Counter[tuple[str, str | None]] = Counter()
     for col in profile.columns:
-        if not col.numeric_under or col.date_formats:
+        if not col.numeric_under or (col.date_formats and col.date_formats != ("%Y",)):
             continue
         values = frame[col.name].map(lambda t: "" if t is None else str(t))
         parsed: dict[tuple[str, str | None], list[float | None]] = {}
@@ -220,6 +220,10 @@ def convert_dates(frame: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     notes: list[str] = []
     for col in profile_table(frame).columns:
         if not col.date_formats or col.non_empty != col.rows or pd.api.types.is_datetime64_any_dtype(frame[col.name]):
+            continue
+        if col.date_formats == ("%Y",):
+            # Çıplak yıl sütunu web tablosunda sayı kalır (2024 → 2024.0): kullanıcı "2024-01-01" görmemeli; kayıt yolu
+            # (tools/ingest) yılı ayrıca yıl sonu tarihine çevirir.
             continue
         if col.date_ambiguous:
             notes.append(f"'{col.name}' tarih ama gün/ay ayrımı belirsiz ({', '.join(col.date_formats)}); metin bırakıldı, kullanıcıya sorulmalı")
@@ -449,11 +453,54 @@ def _xml_tables(content: bytes) -> tuple[pd.DataFrame | None, list[str], str]:
     return pd.DataFrame(rows).fillna(""), notes, title
 
 
+def _native_pdf_tables(content: bytes, url: str, path: str, pages: Any) -> PageContent | None:
+    """Metin katmanı olan PDF'in tabloları OCR'sız; tablo yoksa None (çağıran OCR'a düşer).
+
+    CSV/XLSX dalıyla aynı sözleşme: `kind="data"`, sayılar profilci dilbilgisiyle çevrilir,
+    tablo üstündeki rapor önsözü veri değil not olur. Hücreler dosyanın kendi metnidir.
+    """
+    from ..builder.read import ReadRefused, frame_from_grid
+    from ..vision.pdf import extract_pdf_tables
+
+    found = extract_pdf_tables(content, pages=pages)
+    tables: list[pd.DataFrame] = []
+    labels: list[str] = []
+    notes: list[str] = []
+    for table in found:
+        try:
+            frame, preamble = frame_from_grid(table.rows)
+        except ReadRefused:
+            continue
+        converted, table_notes = convert_numbers(frame)
+        tables.append(converted)
+        labels.append("sayfa " + ", ".join(str(n) for n in table.source_pages) + f": tablo #{table.index}")
+        notes.extend(table_notes)
+        if preamble:
+            notes.append("Tablo üstündeki rapor satırları veri sayılmadı: " + " | ".join(preamble))
+    if not tables:
+        return None
+    pages_read = sorted({number for table in found for number in table.source_pages})
+    notes.insert(0, "PDF'in yerel metin katmanındaki tablo(lar) hücre hücre okundu; OCR tahmini değildir. "
+                    f"Okunan sayfalar: {', '.join(map(str, pages_read))}. Sayfalar boyunca süren tablo birleştirildi.")
+    return PageContent(
+        url=url, title=Path(path).name, tables=tables, kind="data", notes=notes, table_labels=labels,
+        extraction={"method": "pdf_native_tables", "pages": pages_read, "tables": len(tables),
+                    "structured_tables": True},
+    )
+
+
 def extract_page(content: bytes, media_type: str, url: str, *, ocr: Any = None,
                  ocr_options: dict[str, Any] | None = None) -> PageContent:
     kind = media_type.split(";")[0].strip().lower()
     path = urlparse(url).path.lower()
     from ..vision.ocr import is_document, ocr_document
+
+    # Inspect the response itself before trusting the URL suffix or MIME header.
+    head = content[:1024].lstrip()
+    if head.startswith(b"%PDF-"):
+        kind = "application/pdf"
+    elif head.lower().startswith((b"<html", b"<!doctype html")):
+        kind = "text/html"
 
     if is_document(kind, url):
         is_pdf = kind == "application/pdf" or path.endswith(".pdf") or content[:5] == b"%PDF-"
@@ -461,6 +508,13 @@ def extract_page(content: bytes, media_type: str, url: str, *, ocr: Any = None,
         text_layer_error = None
         if is_pdf:
             from ..vision.pdf import PdfTextLayerError, extract_pdf_text_layer
+
+            # Sayısal üretilmiş PDF'in tablosu dosyanın içinde yazılıdır: OCR'a sormadan, hücre
+            # hücre okunur; sayfa sayfa kesilmiş tablo birleşir. Ölçüldü (23 Eyl): OCR yolu iki
+            # sayfalık TEFAS raporunun yalnız 1. sayfasını (31/60 ay) veriyordu.
+            native = _native_pdf_tables(content, url, path, (ocr_options or {}).get("pages"))
+            if native is not None:
+                return native
 
             try:
                 text_layer = extract_pdf_text_layer(content, pages=(ocr_options or {}).get("pages"))
@@ -515,8 +569,12 @@ def extract_page(content: bytes, media_type: str, url: str, *, ocr: Any = None,
             converted, notes = convert_numbers(frame)
             return PageContent(url=url, title=xml_title or path.rsplit("/", 1)[-1], tables=[converted], kind="data",
                                notes=xml_notes + notes)
+    # Gövde HTML olarak koklandıysa (PDF/CSV adresinde giriş/hata sayfası) veri dosyası gibi ayrıştırılmaz;
+    # HTML yoluna düşer ve erişim sınıflandırması (ACCESS_BLOCKED) çalışır (test_pdf_rejected_response).
+    sniffed_html = kind in ("text/html", "application/xhtml+xml")
     if kind in ("text/csv", "application/json", "application/vnd.ms-excel",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") or path.endswith(DATA_SUFFIXES):
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") or (
+                path.endswith(DATA_SUFFIXES) and not sniffed_html):
         try:
             frame = _table_from_bytes(content, path or url)
         except Exception as exc:  # noqa: BLE001

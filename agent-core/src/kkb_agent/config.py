@@ -65,6 +65,9 @@ class Settings:
     # Profil başlatmada seçilir; oturumda geçiş yalnız ARCHITECT_TOKEN ile (boşsa geçiş kapalı).
     agent_profile: str
     architect_token: str
+    # Oturumda tek tık profil geçişi (ADR-0112): "open" anahtarsız geçişe izin verir (yalnız operatörün açtığı demo),
+    # "token" (varsayılan) Architect'e geçişte ARCHITECT_TOKEN ister.
+    profile_switch: str
     # Bütçeler (M15): tek çağrı zaman aşımı, çıktı sınırı, soru başına toplam süre.
     llm_timeout: float
     llm_max_retries: int
@@ -122,15 +125,17 @@ def load_settings() -> Settings:
         tool_gate=os.getenv("TOOL_GATE", "on").lower() != "off",
         agent_profile=os.getenv("AGENT_PROFILE", "analyst").strip().lower(),
         architect_token=os.getenv("ARCHITECT_TOKEN", "").strip(),
-        llm_timeout=float(os.getenv("LLM_TIMEOUT", "90")),
+        profile_switch=("open" if os.getenv("PROFILE_SWITCH", "token").strip().lower() == "open" else "token"),
+        # Sağlayıcı çağrı tavanı narration deadline'ını kırpmamalı (100 sn).
+        llm_timeout=float(os.getenv("LLM_TIMEOUT", "100")),
         llm_max_retries=int(os.getenv("LLM_MAX_RETRIES", "3")),
         # The full table is kept as a structured UI artifact, but 1,500 tokens
         # is too small for a legitimate 24/60-month narration. Keep the
         # environment override and give the default final turn enough room.
         llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "4000")),
-        # Anlatı tüm retry'larla birlikte kısa bir üst sınıra bağlıdır; veri
-        # aracıyla kurulmuş doğrulanmış tablo bu süreden etkilenmez.
-        llm_narration_timeout_s=float(os.getenv("LLM_NARRATION_TIMEOUT_S", "60")),
+        # Anlatı tüm retry'larla birlikte sınırlıdır; servis gecikmesi için
+        # 100 sn üst sınır tanınır. Doğrulanmış tablo bu süreden etkilenmez.
+        llm_narration_timeout_s=float(os.getenv("LLM_NARRATION_TIMEOUT_S", "100")),
         # Tool-selection calls share one bounded deadline across provider retries.
         llm_tool_timeout_s=float(os.getenv("LLM_TOOL_TIMEOUT_S", "90")),
         # Demo'da uzun çok-adımlı sorguların istemci tarafından erken kesilmemesi

@@ -78,7 +78,7 @@ _GOLD_COLUMN_NOTES = {
     "cumulative_value": "Kaynağın birikimli okuması (dokunulmamış)",
     "previous_cumulative_value": "Bir önceki dönemin birikimli okuması (taban)",
     "raw_change": "İki okuma farkı; dönem akımı olarak yazılmadıysa burada durur",
-    "quality_flag": "ok | partial_period | boundary_missing | missing_value | source_warning",
+    "quality_flag": "ok | partial_period | boundary_missing | boundary_shifted (endeks/oran: dönem sınırı tatil, son işlem günü alındı) | missing_value | source_warning",
     "decomposition_flag": "ok | no_prior_base | unattributable_year_start | spans_multiple_periods | negative_change | missing_value",
     "observations": "Döneme giren kaynak gözlem sayısı",
     "missing_observations": "Dönemde eksik gelen gözlem sayısı",
@@ -690,6 +690,16 @@ class SilverLakehouse:
             ),
         )
 
+    def relation_sql(self, dataset_id: str) -> str:
+        """Bir katalog kimliğinin SQL FROM ifadesi. Seri kimliği tablo adı değildir: `evds:TP.KTF17` doğrudan FROM'a
+        yazılınca DuckDB `TP`'yi şema sanıp "Catalog/schema TP does not exist" der (L04, S06; 23 Eyl). Gold tabloları
+        gerçek tablodur ve olduğu gibi kalır."""
+        self.get_dataset(dataset_id)
+        if self._is_gold(dataset_id):
+            return dataset_id
+        sid = dataset_id.replace("'", "''")
+        return f"(SELECT * FROM {self._relation_for(dataset_id)} WHERE series_id = '{sid}') AS _seri"
+
     def preview(self, dataset_id: str, n: int = 5) -> QueryResult:
         self.get_dataset(dataset_id)
         if self._is_gold(dataset_id):
@@ -706,6 +716,14 @@ class SilverLakehouse:
             f"SELECT observation_date, value, quality_flag FROM {self._relation_for(dataset_id)} "
             f"WHERE series_id = '{dataset_id}' ORDER BY observation_date LIMIT {int(n)}"
         )
+
+    def series_scope(self, dataset_id: str) -> tuple[str, str]:
+        """(ilişki, temel WHERE) — bir seriye ait satırların yaşadığı yer. Gold tablosu gerçek tablodur (filtre yok); Silver ve
+        adhoc serileri uzun tabloda `series_id` filtresiyle. Araçlar FROM'a kimlik yazmak yerine bunu kullanır."""
+        self.get_dataset(dataset_id)          # yoksa LakehouseError: kimlik tablo adı sanılmaz
+        if self._is_gold(dataset_id):
+            return dataset_id, ""
+        return self._relation_for(dataset_id), "series_id = '" + dataset_id.replace("'", "''") + "'"
 
     def series_sql(
         self,
@@ -841,12 +859,24 @@ class SilverLakehouse:
         return cache[key] == artifact_sha256
 
     def _bronze_path(self, artifact_sha256: str) -> str | None:
-        """Bronze parquet: `<data>/bronze/**/artifact_sha256=<sha>.parquet`. Yoksa None, uydurulmaz."""
+        """Bronze parquet: `<data>/bronze/**/artifact_sha256=<sha>.parquet`. Yoksa None, uydurulmaz.
+
+        Dizin bir kez taranır, kimlik → yol tablosu önbellekte tutulur. Ölçüldü (23 Eyl, canlı arayüz): her gözlem için
+        ayrı `rglob` 16.991 dosyalık ağaçta 0,065 sn sürüyordu; günlük kur serisini taşıyan bir cevapta ~1300 gözlem kanıt
+        panelini ~100 sn bekletti. Bulunamayan kimlikte tablo yeniden kurulur (yeni kayıtlar görünsün), en sık 5 sn'de bir.
+        """
         root = self.db_path.parent / "bronze"
         if not root.is_dir():
             return None
-        matches = sorted(root.rglob(f"artifact_sha256={artifact_sha256}.parquet"))
-        return str(matches[0]) if matches else None
+        index: dict[str, str] | None = self.__dict__.get("_bronze_index")
+        if index is None or (artifact_sha256 not in index
+                             and time.monotonic() - self.__dict__.get("_bronze_indexed_at", 0.0) > 5.0):
+            index = {}
+            for path in sorted(root.rglob("artifact_sha256=*.parquet")):
+                index.setdefault(path.name[len("artifact_sha256="):-len(".parquet")], str(path))
+            self.__dict__["_bronze_index"] = index
+            self.__dict__["_bronze_indexed_at"] = time.monotonic()
+        return index.get(artifact_sha256)
 
     def evidence_for_artifacts(self, artifact_sha256s: list[str]) -> dict[str, dict[str, Any]]:
         if not artifact_sha256s:

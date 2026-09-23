@@ -1,5 +1,8 @@
 # Lakehouse Core
 
+> Project-level documentation (architecture, modular structure, setup, data and catalog) lives in
+> [`../docs/`](../docs/) and the root [`README.md`](../README.md).
+
 ## Purpose
 
 `lakehouse-core` is a local-first, generic Python data lakehouse component. It
@@ -34,14 +37,15 @@ BDDK / EVDS / future sources
             |
  Gold analytical functions
             |
-   Agent tools (planned)
+   agent-core tools (read-only SQL + CLI)
 ```
 
 Connectors and parsers are implemented for the current source fixtures. Silver V1
 is implemented and tested for four captured real series. A fifth TÜFE mapping is
 contract-tested with an explicitly synthetic EVDS envelope while its official
 `TP.FG.J0` capture and base-year evidence remain pending. Gold P0 functions are
-implemented; Agent tools remain planned.
+implemented. The agent (`agent-core`) reads Silver and Gold through read-only SQL and writes only
+through this CLI (`ingest-file`, `promote-draft`); see [`../02-MODULER-KOD-YAPISI.md`](../02-MODULER-KOD-YAPISI.md).
 
 ## Current Delivery Status
 
@@ -117,7 +121,8 @@ in [`docs/generic-ingestion-contract.md`](docs/generic-ingestion-contract.md),
 - **Bronze:** parsed and source-faithful data stored as Parquet.
 - **Silver:** canonical, validated, source-independent observations.
 - **Gold:** read-only, catalog-driven frequency alignment, cumulative decomposition, and
-  period joins; no persisted Gold tables yet.
+  period joins; catalog metrics (`catalog/gold/*.yml`) are materialized as Gold tables and
+  refused when stale.
 
 ## Silver V1
 
@@ -175,9 +180,10 @@ Python 3.12 and `uv` are required.
 ```bash
 uv sync --frozen
 uv lock --check
-make test
-make build
-make demo-check
+make test-fast   # contract, scripts, catalog tests
+make bootstrap   # schema + series catalog
+make silver
+make gold
 ```
 
 The operational entry point is available from this directory:
@@ -229,9 +235,6 @@ docs/branches/evds-windowing.md.
 The following are intentionally planned for later work:
 
 - EVDS live/CPI evidence closure.
-- FinTürk Silver mapping and entity/geography modeling.
-- Broader catalog coverage for retrieval and genericity evaluation.
-- Safe decomposition-to-alignment composition and persisted Gold publication.
+- Safe decomposition-to-alignment composition.
 - Gold current-revision selection policy.
 - Gold-only `QueryExecutor` restrictions.
-- Agent tools and LangGraph orchestration.

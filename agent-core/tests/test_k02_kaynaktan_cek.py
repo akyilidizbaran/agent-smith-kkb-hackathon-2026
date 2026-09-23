@@ -52,9 +52,10 @@ def test_kaynaktan_ceker_silveri_yeniler_ve_yeniden_yukler(make) -> None:
     tool, lake = make(runner, "2015 aralık konut kredisini kaynaktan çek")
     r = tool.validate_and_run({"series_id": "bddk_monthly:konut", "start": "2015-12-01", "end": "2015-12-31", "purpose": "2015"})
     assert r.ok, r.content
-    fetch, silver = runner.calls
+    fetch, silver, gold = runner.calls
     assert fetch[fetch.index("--only") + 1] == "bddk_monthly:konut" and fetch[fetch.index("--start") + 1] == "2015-12-01"
     assert "silver" in silver and lake.events == ["close", "reload"] and "KAYNAKTAN ÇEKİLDİ" in r.content
+    assert "gold" in gold and "Silver ve Gold yeniden kuruldu" in r.content, "Silver değişince Gold da yenilenir (GOLD_STALE ölçümü)"
 
 
 def test_kaynak_erisilemezse_sebep_doner_silver_yenilenmez(make) -> None:

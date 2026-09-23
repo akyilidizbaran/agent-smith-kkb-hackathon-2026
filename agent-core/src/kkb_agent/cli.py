@@ -43,6 +43,7 @@ from .tools.gold import GOLD_PROMPT_RULES, GoldAlignTool, GoldDecomposeTool, Gol
 from .tools.chart import CHART_PROMPT_RULES, ChartTool
 from .tools.workspace_query import WorkspaceQueryTool
 from .tools.real_value import REAL_VALUE_PROMPT_RULES, WorkspaceRealValueTool
+from .tools.breakdown import BREAKDOWN_PROMPT_RULES, LakehouseBreakdownPanelTool
 from .tools.workspace_join import WorkspaceJoinTool
 from .tools.premise import PREMISE_PROMPT_RULES, CheckPremiseTool
 from .tools.clarify import CLARIFY_PROMPT_RULES, ClarifyTool
@@ -68,6 +69,11 @@ kırpma) as_active_table=true ver. Özet, toplam, "en yüksek hangisi" gibi soru
 ARCHITECT_PROMPT_RULES = """
 
 ARCHITECT AKIŞI (yeni veri):
+Web sayfasından KAYIT istendiğinde doğrudan ingest_from_url kullan; web_url yalnız okur, DB'ye yazmaz.
+Sayfa URL'sinin sorgu ve #bölüm kısmını koru. Araç ekleri listelerse aynı locator ile resource_index,
+tabloları listelerse table_index/pages, ölçüm satırlarını listelerse value_row seç. Kullanıcının
+istediği rapor/ölçüm belliyse seçimi kendin yap; hangisi istendiği belirsizse sor. Farklı ölçümleri
+farklı series_key ile kaydet. EKLENMEDİ bir ara adımdır; yalnız EKLENDİ ve run_id döndüğünde kaydedildi de.
 1) Kullanıcı bir dosya/adres verip 'ekle' derse ingest_from_url → TASLAK seri (adhoc). Araç birim ya da \
 ölçüm tipini soruyorsa kullanıcıya sor; kullanıcı söyleyince aynı aracı unit/measure_type/default_agg \
 alanlarıyla yeniden çağır, uydurma. 2) Taslak sorgulanabilir ama Gold'a giremez. Kullanıcı 'onaylıyorum, \
@@ -165,6 +171,7 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
             LakehouseDescribeTool(lakehouse),
             LakehouseDistinctValuesTool(lakehouse),
             LakehouseQueryTool(lakehouse, workspace, registry, gold_available=gold_on),
+            LakehouseBreakdownPanelTool(lakehouse, workspace, registry=registry),   # ADR-0108: seri + vade grubu paneli, deterministik
             WorkspaceAddColumnTool(lakehouse, workspace),
             WorkspaceComputeColumnTool(workspace),
             WorkspaceShowTool(workspace),
@@ -203,7 +210,7 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
     registry.register(
         ChartTool(lakehouse, workspace, chart_dir=settings.chart_dir, geo_dir=settings.geo_dir)
     )
-    system_prompt = (SYSTEM_PROMPT + CHART_PROMPT_RULES + WORKSPACE_QUERY_RULES + ANALYTICS_PROMPT_RULES + REAL_VALUE_PROMPT_RULES
+    system_prompt = (SYSTEM_PROMPT + CHART_PROMPT_RULES + WORKSPACE_QUERY_RULES + ANALYTICS_PROMPT_RULES + REAL_VALUE_PROMPT_RULES + BREAKDOWN_PROMPT_RULES
                      + PREMISE_PROMPT_RULES + CLARIFY_PROMPT_RULES)
     # Dış kaynak (ADR-0034): web_url her zaman; web_search yalnız arama anahtarı varsa.
     settings.ingest_allowed_root.mkdir(parents=True, exist_ok=True)

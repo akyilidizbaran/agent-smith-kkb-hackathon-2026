@@ -26,11 +26,60 @@ from ..core.sql_identifiers import quote_known_identifiers
 from ..core.tool import Tool, ToolResult
 from ..core.workspace import AnalysisWorkspace
 from ..core.period_intent import parse_period_intent
+from ..core.lexical import tokenize
 
+
+
+def _measure_signature(spec: Any) -> tuple[str, str]:
+    for column in getattr(spec, "columns", []) or []:
+        role = getattr(getattr(column, "role", None), "value", getattr(column, "role", None))
+        if role == "measure":
+            semantic = getattr(getattr(column, "semantic_type", None), "value", getattr(column, "semantic_type", None))
+            return str(getattr(column, "unit", "") or ""), str(semantic or "")
+    return "", ""
+
+
+def _acik_seri_uyusmazligi(question: str, specs: list[Any], used: list[Any]) -> ToolError | None:
+    """Soruda açıkça yazılan seri kodu (TP.KTF12, 1534_Toplam) varken aynı kaynaktan aynı türde BAŞKA bir seri okunamaz.
+
+    Ölçüldü (ADR-0105, DeepSeek 3 tekrar): C04 ve C07 "EVDS TP.KTF12 konut faizi" dediği hâlde model başka bir faiz
+    serisini sessizce kullandı. Kod rakam ya da nokta içeren ve en az 5 karakterli kimlik parçasıdır; aynı kaynaktaki
+    farklı ölçüm türündeki yardımcı seriler (ör. reel dönüşüm için TÜFE) engellenmez.
+    """
+    if not question or not used:
+        return None
+    named = []
+    for spec in specs:
+        code = str(getattr(spec, "dataset_id", "")).split(":", 1)[-1]
+        if len(code) < 5 or not re.search(r"[\d.]", code):
+            continue
+        if re.search(rf"(?<![\w.]){re.escape(code)}(?![\w])", question):
+            named.append(spec)
+    if not named:
+        return None
+    named_ids = {str(spec.dataset_id) for spec in named}
+    for spec in used:
+        if str(spec.dataset_id) in named_ids:
+            continue
+        rivals = [n for n in named if str(getattr(n, "source", "")) == str(getattr(spec, "source", ""))
+                  and _measure_signature(n) == _measure_signature(spec) and str(n.dataset_id) not in {str(u.dataset_id) for u in used}]
+        if rivals:
+            return ToolError(
+                error_code="SERIES_SEMANTIC_MISMATCH", layer="policy", retryable=True,
+                message=(f"Soruda açıkça {', '.join(str(r.dataset_id).split(':', 1)[-1] for r in rivals)} seri kodu yazılı; sorgu "
+                         f"aynı türde başka bir seri ({spec.dataset_id}) okuyor. Kullanıcının adını verdiği seri sessizce değiştirilemez."),
+                hint="Aynı SQL'i kullanıcının yazdığı serinin kimliğiyle yeniden çalıştır.",
+                candidates=[str(r.dataset_id) for r in rivals],
+            )
+    return None
 
 class SearchParams(BaseModel):
     query: str = Field(
         description="Aranan konuyu anlatan kısa Türkçe ifade, ör. 'aylık {example_entity}'"
+    )
+    limit: int = Field(
+        default=5, ge=1, le=40,
+        description="Kaç aday listelensin (varsayılan 5). Kullanıcı eşleşen serileri LİSTELEMEK istiyorsa 40 ver.",
     )
 
 
@@ -57,16 +106,22 @@ class LakehouseSearchTool(Tool):
         self.lakehouse = lakehouse
         self._empty_streak = 0
         self._pending_streak = 0
+        # Arama defteri (core/search_ledger): tur içinde tekil adayları, yeni aday üretimini ve istenen yüzleri izler.
+        # Aramayı çağrı sayısı değil verim durdurur; ajan `ledger.begin_turn(soru)` ile turu açar.
+        from ..core.search_ledger import SearchLedger
+        self.ledger = SearchLedger()
 
     def begin_turn(self, turn_id: int) -> None:
         """Search limits apply inside one turn, never to a later user intent."""
         del turn_id
         self._empty_streak = 0
         self._pending_streak = 0
+        self.ledger.begin_turn("")
 
     def run(self, params: SearchParams) -> ToolResult:
-        specs = self.lakehouse.search_datasets(params.query)
+        specs = self.lakehouse.search_datasets(params.query, limit=int(params.limit))
         if not specs:
+            self.ledger.record(params.query, [])
             self._empty_streak += 1
             search_un = getattr(self.lakehouse, "search_uningested", None)
             pending = list(search_un(params.query, 5)) if callable(search_un) else []
@@ -89,6 +144,7 @@ class LakehouseSearchTool(Tool):
                 )
             return ToolResult(content="\n".join(lines), ok=True)
         self._empty_streak = 0
+        verdict = self.ledger.record(params.query, specs)
         terms = getattr(self.lakehouse, "last_search_terms", {}) or {}
         from ..labels import spec_origin
         lines = ["Bulunan tablolar:"]
@@ -143,7 +199,17 @@ class LakehouseSearchTool(Tool):
         else:
             self._pending_streak = 0
         lines.append("\nSorgu yazmadan önce lakehouse_describe ile kolonları incele.")
-        return ToolResult(content="\n".join(lines))
+        lines.append(verdict.line())
+        rows = self.ledger.candidates_frame().to_dict("records")
+        if verdict.saturated:
+            # Doygunluk: son aramalar yeni aday üretmedi. Bütçe dolduğu için değil, arama artık bir şey katmadığı için
+            # durulur; tam aday listesi burada (model kısa anlatısıyla listenin yerine geçemez, ajan tabloya da koyar).
+            lines.append(f"SEARCH_SATURATED: arama doydu ({verdict.searches} arama, {verdict.total_unique} tekil aday). "
+                         "YENİDEN ARAMA YAPMA. Ya adaylardan uygun olanı seçip sorgula ya da istenen yüz "
+                         "(frekans/il/kaynak) adaylarda yoksa bunu kullanıcıya açıkça söyle; 'veri yok' deme, adayları say.")
+            lines.append("Tüm adaylar: " + "; ".join(f"{r['series_id']} ({r['frequency']}, {r['source']})" for r in rows))
+        return ToolResult(content="\n".join(lines),
+                          artifacts={"candidates": rows, "search_ledger": self.ledger.summary()})
 
     def _access_sql(self, spec) -> str | None:
         """Kimliğin tablo adı olmadığı adaptörler için çalıştırılabilir erişim kalıbı.
@@ -323,6 +389,9 @@ class LakehouseQueryTool(Tool):
         uyusmazlik = self._boyut_uyusmazligi(params.sql)
         if uyusmazlik:
             return uyusmazlik
+        uyusmazlik = self._seri_secim_uyusmazligi(params.sql)
+        if uyusmazlik:
+            return uyusmazlik
         eksik_donem = self._atlanmis_donem_filtresi(params.sql)
         if eksik_donem:
             yil = eksik_donem.split(",")[0].strip()
@@ -334,6 +403,161 @@ class LakehouseQueryTool(Tool):
                 layer="policy",
             )
         return None
+
+    @staticmethod
+    def _month_key(value: Any) -> tuple[int, int]:
+        return (value.year, value.month)
+
+    def _seri_secim_uyusmazligi(self, sql: str) -> ToolError | None:
+        """Validate selected series before SQL can install an active table.
+
+        A catalog hit is not automatically a valid input for the requested
+        window.  In particular, broad derived series can have a shorter
+        coverage (or a different concept) than a verified parent series.  The
+        check is intentionally metadata based and source agnostic: it applies
+        to BDDK, FinTürk, EVDS and future adapters alike.
+        """
+        question = getattr(self._registry, "active_question", "") or ""
+        if not question:
+            return None
+        intent = parse_period_intent(question)
+        if not (intent.outer_bounds_explicit and intent.outer_start and intent.outer_end):
+            # Without a resolved outer window there is no deterministic period
+            # contract to enforce.  Existing single-period queries keep their
+            # previous behaviour and the result-grain guard remains in place.
+            return None
+        try:
+            specs = list(self.lakehouse.list_datasets())
+        except Exception:  # noqa: BLE001 — a catalog outage must not break SQL execution
+            return None
+        used = [
+            spec for spec in specs
+            if re.search(rf"(?<![\w.]){re.escape(spec.dataset_id)}(?![\w])", sql or "", re.I)
+        ]
+        if not used:
+            return None
+        start = self._month_key(intent.outer_start)
+        end = self._month_key(intent.outer_end)
+        incomplete = [
+            spec for spec in used
+            if self._month_key(spec.coverage.start) > start
+            or self._month_key(spec.coverage.end) < end
+        ]
+        candidates = self._seri_alternatifleri(question, specs, used, start, end)
+        # ADR-0105: yalnız pencereyi tam kapsayan bir alternatif varken reddedilir. Alternatif yoksa seri kendi kapsamıyla
+        # okunur (kapsam çıktıda görünür). Ölçüldü: F01 "her serinin mevcut kapsama başlangıcını ayrı raporla" dediği hâlde
+        # 2019 öncesi olmayan ihracat kredisi serisi, yerine konacak seri olmadan her tekrarda reddedildi.
+        if incomplete and candidates:
+            details = "; ".join(
+                f"{spec.dataset_id} ({spec.coverage.start:%Y-%m}→{spec.coverage.end:%Y-%m})"
+                for spec in incomplete
+            )
+            return ToolError(
+                error_code="SERIES_COVERAGE_MISMATCH",
+                layer="policy",
+                retryable=True,
+                message=(
+                    f"Sorgudaki seri seçimi istenen {intent.outer_start:%Y-%m}→"
+                    f"{intent.outer_end:%Y-%m} aylık pencereyi kapsamıyor: {details}. "
+                    "Kapsamı kısa olan seri diğer serinin yerine kullanılamaz."
+                ),
+                hint=(
+                    "Kapsamı pencerenin tamamını karşılayan ve aynı kavramı doğrulanmış "
+                    "olarak gösteren adaylardan yeniden seç; sonra SQL'i tekrar çalıştır."
+                ),
+                candidates=candidates,
+            )
+
+        # Coverage is complete, but a derived broad concept may still hide a
+        # verified, more specific parent.  Only reject when the catalog offers
+        # a materially better verified alternative; this avoids turning an
+        # unknown/derived series into a blanket ban.
+        verified_alternatives = [
+            spec for spec in self._candidate_specs(question, specs, used, start, end)
+            if getattr(spec, "semantic_confidence", None) == "verified"
+        ]
+        used_scores = {spec.dataset_id: self._seri_eslesme_skoru(question, spec) for spec in used}
+        for spec in used:
+            if getattr(spec, "semantic_confidence", None) != "derived":
+                continue
+            selected_score = used_scores.get(spec.dataset_id, 0)
+            better = [
+                candidate for candidate in verified_alternatives
+                if self._seri_eslesme_skoru(question, candidate) >= selected_score + 2
+            ]
+            if better:
+                ranked = sorted(better, key=lambda item: (-self._seri_eslesme_skoru(question, item), item.dataset_id))
+                return ToolError(
+                    error_code="SERIES_SEMANTIC_MISMATCH",
+                    layer="policy",
+                    retryable=True,
+                    message=(
+                        f"Sorgu {spec.dataset_id} adlı doğrulanmamış/türetilmiş seriyi seçiyor; "
+                        "katalog aynı kavram için daha güçlü doğrulanmış bir seri sunuyor."
+                    ),
+                    hint="Doğrulanmış parent/toplam seriyi seç ve aynı SQL'i onun kimliğiyle tekrar çalıştır.",
+                    candidates=[item.dataset_id for item in ranked[:5]],
+                )
+        return None
+
+    def _candidate_specs(self, question: str, specs: list[Any], used: list[Any], start: tuple[int, int], end: tuple[int, int]) -> list[Any]:
+        used_ids = {spec.dataset_id for spec in used}
+        facets = extract_facets(question)
+        wanted_frequency = facets.frequency
+        if wanted_frequency is None:
+            used_frequencies = {
+                getattr(getattr(spec, "frequency", None), "value", getattr(spec, "frequency", None))
+                for spec in used
+            }
+            if len(used_frequencies) == 1:
+                wanted_frequency = next(iter(used_frequencies))
+        out = []
+        for spec in specs:
+            if spec.dataset_id in used_ids:
+                continue
+            frequency = getattr(getattr(spec, "frequency", None), "value", getattr(spec, "frequency", None))
+            if wanted_frequency and frequency != wanted_frequency:
+                continue
+            if self._month_key(spec.coverage.start) > start or self._month_key(spec.coverage.end) < end:
+                continue
+            if facets.sources and not source_matches(str(getattr(spec, "source", "")), facets.sources):
+                continue
+            province = province_of(f"{spec.dataset_id} {spec.name}")
+            if facets.national and province is not None:
+                continue
+            if facets.provinces and province not in facets.provinces:
+                continue
+            out.append(spec)
+        return out
+
+    def _seri_alternatifleri(self, question: str, specs: list[Any], used: list[Any], start: tuple[int, int], end: tuple[int, int]) -> list[str]:
+        candidates = self._candidate_specs(question, specs, used, start, end)
+        ranked = sorted(
+            candidates,
+            key=lambda item: (
+                0 if getattr(item, "semantic_confidence", None) == "verified" else 1,
+                -self._seri_eslesme_skoru(question, item),
+                item.dataset_id,
+            ),
+        )
+        return [item.dataset_id for item in ranked[:8]]
+
+    @staticmethod
+    def _seri_eslesme_skoru(question: str, spec: Any) -> int:
+        """Small deterministic lexical score used only to rank repair candidates."""
+        q = set(tokenize(question, prefixes=False))
+        text = " ".join(
+            [
+                str(getattr(spec, "name", "")),
+                str(getattr(spec, "description", "")),
+                " ".join(getattr(spec, "tags", []) or []),
+                " ".join(alias for column in getattr(spec, "columns", []) for alias in getattr(column, "aliases", []) or []),
+            ]
+        )
+        tokens = set(tokenize(text, prefixes=False))
+        # Concept words are worth more than generic source/frequency terms.
+        generic = {"bddk", "aylik", "ay", "donem", "sonu", "toplam", "sektor", "veri", "kredi"}
+        return sum(2 if token not in generic else 1 for token in q.intersection(tokens))
 
     def _boyut_uyusmazligi(self, sql: str) -> ToolError | None:
         """Reject silent geography/source substitutions during recovery.
@@ -367,14 +591,26 @@ class LakehouseQueryTool(Tool):
                 hint="İstenen il için doğru seriyi lakehouse_search ile bulup sorgula.",
                 candidates=[spec.dataset_id for spec, province in zip(used, used_provinces) if province in facets.provinces],
             )
-        if facets.sources and any(not source_matches(str(getattr(spec, "source", "")), facets.sources) for spec in used):
+        # İstenen kaynaktan EN AZ BİR seri sorgudaysa öbür kaynaklar ek bağlamdır (EVDS politika faizi + BDDK konut stoku);
+        # kullanıcının kendi getirdiği (adhoc) seri hiç ikame sayılmaz ("dış kaynağı BDDK–EVDS setiyle birleştir": taslak dış rapor
+        # serisini okumak isteğin kendisidir). Yalnız dış kaynaklı serilerin hiçbiri istenen kaynaktan değilse ret (23 Eyl).
+        external = [spec for spec in used if str(getattr(spec, "source", "")) != "adhoc"]
+        if facets.sources and external and not any(source_matches(str(getattr(spec, "source", "")), facets.sources) for spec in external):
             return ToolError(
                 error_code="SOURCE_MISMATCH", layer="policy", retryable=True,
                 message="Sorgudaki kaynak kullanıcının istediği kaynakla uyuşmuyor; başka kaynağın verisi sessizce kullanılamaz.",
-                hint="İstenen kaynak için doğru seriyi lakehouse_search ile bulup sorgula.",
+                # Canlı koşu (23 Eyl): takipte (aktif tablo varken) model mevcut mevduat sütunlarını başka seriden yeniden çekmeye
+                # çalıştı, bu ret tekrar tekrar döndü ve tur sabit metinle kapandı. Aktif tablo varken doğru yol, yalnız
+                # yeni istenen seriyi getirip tabloya eklemektir.
+                hint=("Aktif tabloda veri zaten var: onu yeniden çekme. Yalnız kullanıcının yeni istediği seriyi "
+                      "(istenen kaynaktan) getir ve tabloya ekle: fiyat endeksiyle reel değer için workspace_real_value "
+                      "(index_dataset_id=<endeks serisi>, base_period=YYYY-MM, her tutar sütunu için ayrı çağrı); "
+                      "başka bir seri için workspace_add_column."
+                      if getattr(getattr(self, "workspace", None), "has_table", False) else
+                      "İstenen kaynak için doğru seriyi lakehouse_search ile bulup sorgula."),
                 candidates=[spec.dataset_id for spec in used if source_matches(str(getattr(spec, "source", "")), facets.sources)],
             )
-        return None
+        return _acik_seri_uyusmazligi(question, specs, used)
 
     def _bayat_gold(self, sql: str) -> list[str]:
         stale = getattr(self.lakehouse, "stale_gold_tables", None)
@@ -402,7 +638,78 @@ class LakehouseQueryTool(Tool):
             return f"WHERE EXTRACT(year FROM <dönem_kolonu>) <= {yil}"
         return f"WHERE EXTRACT(year FROM <dönem_kolonu>) = {yil}"
 
+    # FROM/JOIN hedefi: tırnaklı ad, `kaynak:kod` biçimli kimlik ya da çıplak EVDS kodu (TP.KKHARTUT.KT1).
+    _FROM_TARGET = re.compile(
+        r'\b(?:FROM|JOIN)\s+(?:"([^"]+)"|([A-Za-z_]\w*:[^\s,;()]+)|(TP\.[A-Za-z0-9_.]+))', re.I,
+    )
+
+    def _series_used_as_table(self, sql: str) -> tuple[str, str] | None:
+        """SQL bir seri kimliğini tablo adı olarak kullanıyor mu? (yazılan hedef, katalog kimliği)
+
+        Seriler tek uzun tabloda satır kümesidir; kimlik FROM'a yazılınca DuckDB `TP.KKHARTUT.KT1`'i katalog.şema.tablo
+        sanıp "Catalog "TP" does not exist" der. Ölçüldü (canlı koşu, 23 Eyl): hata genel SQL_FAILED + "kolon adlarını
+        karşılaştır" ipucuyla döndü, model yolu bulamadı. Gold tabloları gerçek tablodur, işaretlenmez."""
+        for match in self._FROM_TARGET.finditer(sql or ""):
+            written = next(g for g in match.groups() if g)
+            for candidate in (written, f"evds:{written}" if written.upper().startswith("TP.") else None):
+                if not candidate:
+                    continue
+                try:
+                    self.lakehouse.get_dataset(candidate)
+                except Exception:  # noqa: BLE001 — katalogda yok: gerçek tablo adı olabilir
+                    continue
+                if _relation_sql(self.lakehouse, candidate) != candidate:
+                    return written, candidate
+            if written.upper().startswith("TP."):
+                return written, f"evds:{written}"
+        return None
+
+    def _maturity_buckets_in(self, sql: str) -> list[str]:
+        """SQL'de adı geçen vade kovası serileri (ilişki grafında `vade_ay=` boyutu olanlar)."""
+        named = set(re.findall(r"'([A-Za-z_]\w*:[^'\s]+)'", sql or ""))
+        if len(named) < 2:
+            return []
+        found = []
+        for series_id in named:
+            try:
+                spec = self.lakehouse.get_dataset(series_id)
+            except Exception:  # noqa: BLE001
+                continue
+            if any(str(d).startswith("vade_ay=") for d in (getattr(spec, "dimension_path", None) or ())):
+                found.append(series_id)
+        return sorted(found)
+
     def run(self, params: QueryParams) -> ToolResult:
+        buckets = self._maturity_buckets_in(params.sql)
+        if len(buckets) >= 2 and self._registry is not None and getattr(self._registry, "get", None) \
+                and self._registry.get("lakehouse_breakdown_panel") is not None:
+            # Canlı koşu (23 Eyl): model kovaları SQL ile toplarken "3 aya kadar"dan Vadesiz'i çıkardı. Kova seçimi
+            # modelin yorumuna bırakılmaz (ADR-0108); deterministik araç kovaları ilişki grafından seçer.
+            return ToolResult.fail(
+                "INVALID_ARGS",
+                f"Sorgu {len(buckets)} vade kovasını elle birleştiriyor; vade grupları SQL ile kurulmaz, sorgu çalıştırılmadı.",
+                hint=("lakehouse_breakdown_panel kullan: groups=[{total_series_id: <kovaların toplam serisi>, column_name, "
+                      "max_months: X} ('X aya kadar', Vadesiz dahil) ya da {min_months: X} ('X aydan fazla')], "
+                      "series=[olduğu gibi alınacak toplamlar], stok istenmiyorsa value=monthly_change."),
+                candidates=buckets,
+                layer="policy",
+                retryable=True,
+            )
+        misused = self._series_used_as_table(params.sql)
+        if misused is not None:
+            written, series_id = misused
+            relation = getattr(self.lakehouse, "_relation_for", lambda _sid: "silver.fact_observation")(series_id)
+            return ToolResult.fail(
+                "INVALID_ARGS",
+                f"'{written}' bir seri kimliği, tablo adı değil; sorgu çalıştırılmadı. Bütün seriler tek tabloda, "
+                f"series_id satırlarıdır.",
+                hint=(f"Şu kalıbı kullan: SELECT observation_date, value FROM {relation} "
+                      f"WHERE series_id = '{series_id}' AND observation_date BETWEEN '<başlangıç>' AND '<bitiş>' "
+                      "ORDER BY observation_date. Birden çok seri için series_id IN (...) ve pivot (MAX(CASE ...))."),
+                candidates=[series_id],
+                layer="reference",
+                retryable=True,
+            )
         # SQL guard sınır doğrulayıcıda çalıştı (UNSAFE_SQL orada); buraya gelen bir
         # hata artık çalışma hatasıdır ve tekrar denemeyle çözülebilir.
         try:
@@ -560,8 +867,34 @@ class LakehouseQueryTool(Tool):
         )
 
     def _is_period_aggregation(self, sql: str) -> bool:
+        """Dönem kutusuna (ay/çeyrek/yıl) toplama: dönem ifadesi GROUP BY'da ya da SELECT listesinde olmalı.
+
+        WHERE'deki `EXTRACT(year …) BETWEEN` bir filtredir, kutu değil. Ölçüldü (22 Eyl, boş katalog provası): iki ülkeyi
+        aynı tarih taneli satırlarda yan yana koyan pivot (`MAX(CASE WHEN entity_id=…)` + `GROUP BY observation_date`,
+        yıl filtresi WHERE'de) yanlışlıkla frekans dönüşümü sayılıp GOLD_REQUIRED ile reddedildi."""
         text = sql.lower()
-        return bool(self._PERIOD_AGG.search(text) and self._AGG_FN.search(text) and "group by" in text)
+        if "group by" not in text or not self._AGG_FN.search(text):
+            return False
+        group_part = text.rsplit("group by", 1)[1]
+        select_part = text[text.find("select"):text.find(" from ")] if " from " in text else text
+        hit = self._PERIOD_AGG.search(group_part) or self._PERIOD_AGG.search(select_part)
+        if not hit:
+            return False
+        # Ay kutusu (strftime %Y-%m / date_trunc month / extract month) ve okunan her seri zaten aylıksa bu frekans
+        # dönüşümü değil, aynı aydaki serilerin toplanmasıdır (vade dilimleri: Vadesiz + 1 Ay + 1-3 Ay). Ölçüldü (23 Eyl):
+        # altı aylık vade serisinin ay bazında toplamı GOLD_REQUIRED ile reddedildi, Gold ise 6 seriyi yan yana koyar,
+        # toplamaz. Çeyrek/yıl kutusu ya da daha ince seri (günlük/haftalık) yine Gold'a gider.
+        expr = hit.group(0)
+        month_bucket = ("%y-%m" in expr and "%d" not in expr) or "'month'" in expr or re.search(r"month", expr) is not None
+        if month_bucket:
+            try:
+                specs = list(self.lakehouse.list_datasets())
+            except Exception:  # noqa: BLE001
+                return True
+            used = [sp for sp in specs if re.search(rf"(?<![\w.]){re.escape(sp.dataset_id)}(?![\w])", sql, re.I)]
+            if used and all(str(getattr(getattr(sp, "frequency", None), "value", getattr(sp, "frequency", ""))).lower() == "monthly" for sp in used):
+                return False
+        return True
 
     _FREKANS_SOZ = (
         ("günlük", Frequency.DAILY), ("gunluk", Frequency.DAILY),
@@ -742,6 +1075,13 @@ class DistinctValuesParams(BaseModel):
     limit: int = Field(default=20, description="En fazla kaç değer döndürülsün")
 
 
+def _relation_sql(lakehouse: Any, dataset_id: str) -> str:
+    """Katalog kimliğini FROM ifadesine çevirir. Seri-merkezli lakehouse'ta kimlik tablo adı değildir (`relation_sql`);
+    kimliği gerçek tablo olan adaptörlerde (eski DuckDB, testler) olduğu gibi kalır."""
+    relation = getattr(lakehouse, "relation_sql", None)
+    return relation(dataset_id) if callable(relation) else dataset_id
+
+
 class LakehouseDistinctValuesTool(Tool):
     """Modelin en sık yaptığı hatayı kapatan araç.
 
@@ -786,13 +1126,20 @@ class LakehouseDistinctValuesTool(Tool):
         # Alt toplam bayrağı varsa birlikte göster: mükerrer sayımı önleyen sinyal.
         has_flag = spec.column("is_alt_toplam") is not None
         select = f"{col}, is_alt_toplam" if has_flag else col
-        where = ""
+        conditions = []
+        relation, base_where = self._scope(params.dataset_id)
+        if base_where:
+            conditions.append(base_where)
         if params.contains:
+            # Aksana ve büyük/küçük harfe duyarsız: kaynaklar varlık adını kendi dilinde yazar ("Turkiye", "IZMIR");
+            # kullanıcı Türkçe yazar ("Türkiye", "İzmir"). Ölçüldü (22 Eyl, boş katalog provası): "Türkiye", "Turkey"
+            # ve "Tür" aramaları "Turkiye" kaydını bulamadı, karşılaştırma yapılamadı. Dil listesi yok: strip_accents.
             safe = params.contains.replace("'", "''")
-            where = f"WHERE {col} ILIKE '%{safe}%'"
+            conditions.append(f"strip_accents(lower({col})) LIKE '%' || strip_accents(lower('{safe}')) || '%'")
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
         sql = (
-            f"SELECT DISTINCT {select} FROM {params.dataset_id} {where} "
+            f"SELECT DISTINCT {select} FROM {relation} {where} "
             f"ORDER BY 1 LIMIT {int(params.limit)}"
         )
         try:
@@ -845,11 +1192,25 @@ class LakehouseDistinctValuesTool(Tool):
         )
         return ToolResult(content="\n".join(lines), data=result.data)
 
+    def _scope(self, dataset_id: str) -> tuple[str, str]:
+        """(ilişki, temel WHERE): seri kimliği tablo adı olmayan yerleşimlerde adaptör söyler (Silver: uzun tablo + series_id
+        filtresi; Gold: tablonun kendisi). Adaptör bilmiyorsa (seed) kimlik tablo adıdır. Ölçüldü (22 Eyl): 'adhoc:dunya_nufus'
+        FROM'a yazılınca "Table … does not exist", varlık listesi hiç alınamadı."""
+        scope = getattr(self.lakehouse, "series_scope", None)
+        if callable(scope):
+            try:
+                relation, where = scope(dataset_id)
+                return str(relation), str(where or "")
+            except Exception:  # noqa: BLE001 — kapsam üretilemezse eski davranış
+                pass
+        return dataset_id, ""
+
     def _toplam_deger_sayisi(self, dataset_id: str, column: str) -> int:
         """Kolondaki toplam distinct değer sayısı — limit uygulanmadan önceki hâli."""
+        relation, base_where = self._scope(dataset_id)
         try:
             r = self.lakehouse.execute_sql(
-                f"SELECT COUNT(DISTINCT {column}) AS n FROM {dataset_id}"
+                f"SELECT COUNT(DISTINCT {column}) AS n FROM {relation}" + (f" WHERE {base_where}" if base_where else "")
             )
             return int(r.data.iloc[0, 0]) if not r.is_empty else 0
         except LakehouseError:

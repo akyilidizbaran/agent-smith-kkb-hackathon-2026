@@ -494,12 +494,65 @@ class EvidenceBuilder:
         panel.context_sources[:] = [c for c in panel.context_sources if c.get("url") not in read_urls]
 
     # ------------------------------------------------------------------ giriş
+    def _record_panel(self, panel: EvidencePanel, answer: str, record: dict[str, Any], *,
+                      workspace: AnalysisWorkspace | None = None, question: str = "") -> EvidencePanel:
+        """Kayıt turu (ingest_from_url / promote_draft): kanıt yazılan kayıttır.
+
+        Sayılar araç kartıyla eşleştirilir (kart araç çıktısıdır; "11 satır", "2023" oradan gelir); aynı turda model
+        kaydı sorgulayıp tablo da ürettiyse (ölçüldü: kayıttan sonra lakehouse_query) tablodaki sayılar da eşleşir.
+        Dosya zinciri artifact sha256 ile: adaptör artifact izi sunuyorsa `meta.artifact`'ta aranır ve bulunmazsa
+        halka kopuk sayılır; terfide zincir Silver'a kopyalanan satırlarda biter."""
+        card = str(record.get("card") or "")
+        card_numbers = {n for _, n in _number_texts(card)}
+        panel.numbers = [NumberEvidence(number=n, text=t, matched=n in card_numbers,
+                                        column="kayıt kartı" if n in card_numbers else None)
+                         for t, n in _number_texts(answer)]
+        table = getattr(workspace, "table", None) if workspace is not None else None
+        if table is not None and not table.empty:
+            try:
+                from_table = self._match_numbers(answer, table, _time_column(table), previous=workspace.previous_tables(),
+                                                 peeks=workspace.peeks(), question=question)
+            except Exception:  # noqa: BLE001 — tablo eşlemesi kayıt panelini düşürmez
+                from_table = []
+            matched_in_table = {n.number for n in from_table if n.matched}
+            for n in panel.numbers:
+                if not n.matched and n.number in matched_in_table:
+                    n.matched, n.column = True, "aynı turdaki sorgu tablosu"
+        rec = {k: record.get(k) for k in ("tool", "series_id", "locator", "artifact_sha256", "run_id",
+                                          "rows_written", "rows_unchanged", "rows_promoted")}
+        sha = rec.get("artifact_sha256")
+        if sha and isinstance(self.lakehouse, EvidenceCapable):
+            try:
+                found = self.lakehouse.evidence_for_artifacts([str(sha)])
+            except Exception as exc:  # noqa: BLE001 — iz okunamazsa panel bunu söyler, cevabı düşürmez
+                found = {}
+                panel.gaps.append(f"artifact izi okunamadı: {exc}")
+            panel.artifacts = dict(found)
+            rec["artifact_found"] = str(sha) in found
+            if not rec["artifact_found"]:
+                panel.gaps.append(f"yazılan artifact {str(sha)[:12]}… meta.artifact'ta bulunamadı")
+        elif not sha and rec.get("tool") != "promote_draft":
+            panel.gaps.append("kayıt kartı artifact sha256 taşımıyor")
+        elif rec.get("tool") == "promote_draft" and not rec.get("rows_promoted"):
+            panel.gaps.append("terfi kartı Silver'a kopyalanan satır sayısı taşımıyor")
+        panel.record = rec
+        unmatched = [n.text for n in panel.numbers if not n.matched]
+        if unmatched:
+            # Aynı ön ek: sayı boşluğu "sayılar" rozetinde sayılır, dosya zincirini ✗ yapmaz (M16 ölçümü, chain_gaps).
+            panel.gaps.append("tabloda bulunmayan sayılar (kayıt kartında da yok): " + ", ".join(unmatched[:8]))
+        return panel
+
     def build(
         self, question: str, answer: str, workspace: AnalysisWorkspace, steps: list[Any],
         *, artifacts: list[dict[str, Any]] | None = None,
     ) -> EvidencePanel:
         panel = EvidencePanel(question=question, supports_artifacts=isinstance(self.lakehouse, EvidenceCapable))
         table = workspace.table
+        records = [a for a in (artifacts or []) if isinstance(a, dict) and a.get("kind") == "record"]
+        if records:
+            # Kayıt turu her zaman kaydı anlatır: önceki turdan kalan tablo bu cevabın kanıtı değildir
+            # (ölçüldü: terfi turunda panel eski sorgu tablosunun halkalarını gösteriyordu).
+            return self._record_panel(panel, answer, records[-1], workspace=workspace, question=question)
         if table is None or table.empty:
             panel.gaps.append("analiz tablosu yok")
             panel.numbers = [NumberEvidence(number=n, text=t) for t, n in _number_texts(answer)]

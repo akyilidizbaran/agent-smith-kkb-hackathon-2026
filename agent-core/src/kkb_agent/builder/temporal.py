@@ -20,7 +20,10 @@ from typing import Any
 import pandas as pd
 
 FREQUENCIES = ("daily", "weekly", "monthly", "quarterly", "yearly", "irregular", "unknown")
-MEASURE_TYPES = ("FLOW", "STOCK", "RATIO", "RATE", "INDEX", "COUNT", "UNKNOWN")
+MEASURE_TYPES = ("FLOW", "STOCK", "RATIO", "RATE", "INDEX", "COUNT", "AVERAGE", "UNKNOWN")
+
+# Dışa aktarımların alt toplam satırı ("Toplam", "Genel Toplam", "Total"): dönem değildir, dönüşüme girmez.
+_FOOTER_LABEL = re.compile(r"^\s*(?:genel\s+)?(?:toplam|total|grand\s+total)\s*:?\s*$", re.I)
 
 _INTERVAL = re.compile(
     r"^(?:(?P<code>\d{4})[/-](?P<week>\d{1,2})\s*)?"
@@ -129,6 +132,10 @@ def _parse_dmy(value: str) -> date:
 
 def parse_period(value: Any) -> PeriodValue | None:
     """Parse common period/date spellings without asking an LLM."""
+    # Gold tablolarının kanıt sütunları (gözlem tarihleri listesi vb.) liste/dizi taşır; bunlar dönem değildir.
+    if isinstance(value, (list, tuple, set, dict)) or hasattr(value, "__array__") and not isinstance(value, (str, bytes)) \
+            and getattr(value, "ndim", 0) > 0:
+        return None
     if value is None or (not isinstance(value, str) and pd.isna(value)):
         return None
     raw = str(value).strip()
@@ -213,24 +220,26 @@ def infer_temporal(frame: pd.DataFrame, period_column: str | None = None) -> Tem
     if not candidates:
         candidates = [str(c) for c in frame.columns if _PERIOD_NAME.search(str(c))]
     candidates += [str(c) for c in frame.columns if str(c) not in candidates]
-    best: tuple[int, str, list[PeriodValue]] | None = None
+    best: tuple[int, str, list[PeriodValue], int] | None = None
     for column in candidates:
         if column not in frame.columns:
             continue
-        parsed = [p for p in (parse_period(v) for v in frame[column].tolist()) if p is not None]
+        # Alt toplam satırı ("Toplam") dönem değildir; ekseni değerlendirirken sayılmaz.
+        values = [v for v in frame[column].tolist() if not (v is not None and _FOOTER_LABEL.match(str(v)))]
+        parsed = [p for p in (parse_period(v) for v in values) if p is not None]
         if not parsed:
             continue
-        score = len(parsed) * 2 + (len(parsed) == len(frame)) * 20 + (_PERIOD_NAME.search(str(column)) is not None) * 10
+        score = len(parsed) * 2 + (len(parsed) == len(values)) * 20 + (_PERIOD_NAME.search(str(column)) is not None) * 10
         if best is None or score > best[0]:
-            best = (score, str(column), parsed)
+            best = (score, str(column), parsed, len(values))
     if best is None:
         return TemporalSemantics(period_column=None, frequency="unknown", confidence="low",
                                  evidence=("no column was parsed as a temporal axis",))
-    _, column, parsed = best
+    _, column, parsed, period_rows = best
     frequency, confidence, evidence = _frequency_from_gaps(parsed)
-    if len(parsed) < len(frame):
+    if len(parsed) < period_rows:
         confidence = "low"
-        evidence += f"; {len(frame) - len(parsed)} rows were not parsed"
+        evidence += f"; {period_rows - len(parsed)} rows were not parsed"
     return TemporalSemantics(
         period_column=column, frequency=frequency, confidence=confidence, evidence=(evidence,),
         parsed=tuple(parsed), coverage_start=min(p.start for p in parsed), coverage_end=max(p.end for p in parsed),
@@ -297,6 +306,12 @@ def infer_measure_semantics(column: str, *, metadata: Mapping[str, Any] | None =
         if value in MEASURE_TYPES:
             return MeasureSemantics(column, value, "high", ("declared metadata",), value in {"FLOW", "COUNT"})
     label = _fold_label(column)
+    if re.search(r"(?:gunluk|haftalik|daily|weekly|per\s+day|is\s+gunu)\s+(?:ortalama|average|mean|avg)|"
+                 r"(?:ortalama|average|mean)\s+(?:gunluk|daily)", label):
+        # "Günlük Ortalama İşlem Hacmi": zaman başına ortalama toplanmaz; aylığa iş günü ağırlıklı ortalamayla iner
+        # (gün ağırlığı bu tanımda kesindir). Zaman birimi söylenmeyen "Ortalama Tutar" işlem başına olabilir; gün
+        # ağırlığı yanlış olur, aşağıdaki akım kuralı onu güvenli kural yok (UNKNOWN) tarafına düşürür.
+        return MeasureSemantics(column, "AVERAGE", "medium", ("column label indicates a per-time average",))
     if re.search(r"faiz|interest|%|rate", label):
         return MeasureSemantics(column, "RATE", "medium", ("column label indicates a rate",))
     if re.search(r"ratio|rasyo|payı|payi|oran", label):
@@ -391,6 +406,27 @@ def requested_columns_from_text(frame: pd.DataFrame, text: str, *, period_column
     return selected or None
 
 
+def _business_days(start: date, end: date) -> list[date]:
+    days = [start + timedelta(days=n) for n in range((end - start).days + 1)]
+    weekdays = [d for d in days if d.weekday() < 5]
+    return weekdays or days
+
+
+def _month_allocation(period: PeriodValue) -> dict[str, int]:
+    """Dönem BAŞLADIĞI aya yazılır: {'2021-03': 5} (29.03–02.04 haftası Mart'tır).
+
+    Kaynağın kendi aylık raporu da haftayı başladığı aya sayar (fon işlem hacmi raporu, 23 Eyl kaynakla karşılaştırıldı: bir ay = o ayda başlayan
+    dört hafta). Değer günlere bölünmez; bölüştürme kaynağın yayımlamadığı bir günlük dağılım varsayardı."""
+    key = f"{period.start.year:04d}-{period.start.month:02d}"
+    return {key: len(_business_days(period.start, period.end))}
+
+
+def _weekdays_in_month(month: str) -> int:
+    year, number = int(month[:4]), int(month[5:7])
+    last = calendar.monthrange(year, number)[1]
+    return len(_business_days(date(year, number, 1), date(year, number, last)))
+
+
 def normalize_frequency(
     frame: pd.DataFrame,
     *,
@@ -409,6 +445,11 @@ def normalize_frequency(
         raise TemporalNormalizationError("kaynak frekansı bilinmiyor", code="TEMPORAL_GRAIN_AMBIGUOUS")
     period_column = temporal.period_column
     source = project_columns(frame, period_column=period_column, requested_columns=requested_columns)
+    footer = source[period_column].map(lambda v: bool(_FOOTER_LABEL.match(str(v))) if v is not None else False)
+    warnings: list[str] = []
+    if footer.any():
+        warnings.append(f"{int(footer.sum())} alt toplam satırı (ör. 'Toplam') dönem sayılmadı ve dışarıda bırakıldı")
+        source = source.loc[~footer].reset_index(drop=True)
     parsed_by_row = [parse_period(v) for v in source[period_column].tolist()]
     if any(p is None for p in parsed_by_row):
         raise TemporalNormalizationError("tüm dönem değerleri çözülemedi", code="PERIOD_PARSE_FAILED")
@@ -431,45 +472,66 @@ def normalize_frequency(
         if temporal.frequency not in {"daily", "weekly"}:
             raise TemporalNormalizationError(f"{temporal.frequency} → monthly dönüşümü için güvenli kural yok",
                                              code="UNSAFE_FREQUENCY_CONVERSION")
-        # Satırlar dosyadaki sırayla değil, çözülmüş döneme göre gruplanır. Dışa aktarımların
-        # çoğu yeniden eskiye sıralı gelir; dosya sırasına güvenilirse "dönem sonu" değeri ayın
-        # ilk günü olur ve yanlış sayı sessizce üretilir. Toplam ve ortalama sıradan etkilenmez,
-        # bu sıralama yalnız `last_period_end` yolunu doğru kılar ve çıktıyı kronolojik verir.
-        chronological = sorted(range(len(parsed)), key=lambda i: (parsed[i].start, parsed[i].end, i))
-        grouped: dict[str, list[int]] = {}
-        for index in chronological:
-            period = parsed[index]
-            if period.start.month != period.end.month:
-                raise TemporalNormalizationError(
-                    f"dönem sınır aşıyor ve güvenli dağıtım kuralı yok: {period.raw}",
-                    code="INTERVAL_BOUNDARY_AMBIGUOUS",
-                    details={"period": period.raw},
-                )
-            grouped.setdefault(f"{period.start.year:04d}-{period.start.month:02d}", []).append(index)
-        values: dict[str, list[Any]] = {"period_month": list(grouped)}
+        # Her dönem BAŞLADIĞI aya yazılır (ör. 29.03–02.04 haftası Mart'tır; bölüştürülmez). Toplanabilir tutar
+        # toplanır, ortalama/oran iş günü ağırlıklı ortalanır, stok/endeks ayın en son biten dönemidir. Aylar
+        # takvim sırasıyla kurulur ve stok dönem sonuna göre seçilir; dosyanın satır sırası sonucu değiştirmez.
+        allocations = [_month_allocation(period) for period in parsed]
+        months = sorted({month for allocation in allocations for month in allocation})
+        crossing = sum(1 for period in parsed if (period.start.year, period.start.month) != (period.end.year, period.end.month))
+        if crossing:
+            warnings.append(f"{crossing} dönem ay sınırını aşıyor; her dönem başladığı aya yazıldı (bölüştürülmedi), "
+                            "ortalamalar iş günü ağırlıklı alındı")
+        # Eksik kapsam yalnız uç aylarda anlamlıdır: dönemler başladıkları aya yazıldığı için ara aylarda gün sayısı
+        # dalgalanır ama veri eksik değildir. İlk dönem ayın ilk haftasından sonra başlıyorsa ilk ay, son dönem ayın son
+        # haftasından önce bitiyorsa son ay eksik sayılır.
+        first, last = min(parsed, key=lambda p: p.start), max(parsed, key=lambda p: p.end)
+        partial = []
+        if first.start.day > 7:
+            partial.append(f"{first.start.year:04d}-{first.start.month:02d}")
+        last_key = f"{last.start.year:04d}-{last.start.month:02d}"
+        last_day = calendar.monthrange(last.end.year, last.end.month)[1]
+        if (last.end.year, last.end.month) != (last.start.year, last.start.month):
+            pass   # son dönem başladığı aya yazıldı; o ayın kapsamı tamdır
+        elif last.end.day < last_day - 6:
+            partial.append(last_key)
+        if partial:
+            warnings.append("kapsamı eksik aylar (kaynak bu ayların yalnız bir kısmını içeriyor): " + ", ".join(partial))
+        values: dict[str, list[Any]] = {"period_month": months}
         for measure in measures:
-            series = source[measure.column].tolist()
+            series = [_number(v) if v is not None else None for v in source[measure.column].tolist()]
+            column_values: list[Any] = []
             if measure.measure_type == "FLOW" or (measure.measure_type == "COUNT" and measure.additive):
-                values[measure.column] = [sum(_number(series[i]) for i in indexes) for indexes in grouped.values()]
-                methods[measure.column] = "sum"
+                for month in months:
+                    parts = [(series[i], allocation[month], sum(allocation.values()))
+                             for i, allocation in enumerate(allocations) if month in allocation]
+                    column_values.append(None if any(v is None for v, _, _ in parts)
+                                         else sum(v * days / total for v, days, total in parts))
+                methods[measure.column] = "sum_by_period_start_month" if crossing else "sum"
+            elif measure.measure_type in {"AVERAGE", "RATE"}:
+                for month in months:
+                    parts = [(series[i], allocation[month]) for i, allocation in enumerate(allocations) if month in allocation]
+                    weight = sum(days for _, days in parts)
+                    column_values.append(None if any(v is None for v, _ in parts) or not weight
+                                         else sum(v * days for v, days in parts) / weight)
+                methods[measure.column] = "business_day_weighted_mean"
             elif measure.measure_type in {"STOCK", "INDEX"}:
-                values[measure.column] = [series[indexes[-1]] for indexes in grouped.values()]
+                for month in months:
+                    ending = [i for i, period in enumerate(parsed) if f"{period.end.year:04d}-{period.end.month:02d}" == month]
+                    column_values.append(series[max(ending, key=lambda i: parsed[i].end)] if ending else None)
                 methods[measure.column] = "last_period_end"
-            elif measure.measure_type == "RATE":
-                values[measure.column] = [sum(_number(series[i]) for i in indexes) / len(indexes) for indexes in grouped.values()]
-                methods[measure.column] = "mean"
             else:
                 raise TemporalNormalizationError(
                     f"'{measure.column}' için {measure.measure_type} semantiğiyle güvenli toplulaştırma yok",
                     code="MEASURE_SEMANTICS_AMBIGUOUS",
                 )
+            values[measure.column] = column_values
         out = pd.DataFrame(values)
     key_column = "period_month" if requested == "monthly" else f"period_{requested}"
     out.attrs["temporal_normalization"] = NormalizationMetadata(
         source_frequency=temporal.frequency, requested_frequency=requested,
         source_confidence=temporal.confidence, aggregation_method=methods,
         period_parser="deterministic_period_parser", canonical_time_key=key_column,
-        rows_before=len(frame), rows_after=len(out),
+        rows_before=len(frame), rows_after=len(out), warnings=tuple(warnings),
     )
     return NormalizationResult(out, out.attrs["temporal_normalization"], temporal, measures)
 

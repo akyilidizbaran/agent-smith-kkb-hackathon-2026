@@ -1,4 +1,4 @@
-"""kkb_agent_v3 — Batched ReAct + Boundary Validation motoru (docs/ARCHITECTURE_V3.md).
+"""kkb_agent_v3 — Batched ReAct + Boundary Validation motoru (docs/calisma-notlari/ARCHITECTURE_V3.md).
 
 `kkb_agent` (ekip motoru) ile AYNI veri katmanını paylaşır ve ona dokunmaz:
 contracts/, adapters/, domain.DomainProfile ve golden set oradan import edilir.

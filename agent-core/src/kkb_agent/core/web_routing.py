@@ -8,6 +8,7 @@ taşımaz.
 from __future__ import annotations
 
 import re
+from typing import Any
 from urllib.parse import urlparse
 
 from ..source_hints import load_source_hints
@@ -44,10 +45,15 @@ _SQL_OR_CODE = re.compile(r"\b(?:select|from|where|join|union|insert|update|dele
 _EMAIL = re.compile(r"\b[^\s@]+@[^\s@]+\.[^\s@]+\b")
 _WORDS = re.compile(r"[a-zçğıöşü]+", re.I)
 _QUERY_STOP = frozenset({
-    "getir", "getirsin", "bul", "ara", "araştır", "arastir", "internetten", "internet",
+    "getir", "getirsin", "bul", "ara", "araştır", "arastir", "araştırır", "arastirir",
+    "araştırabilir", "internetten", "internet", "internette",
     "web", "veri", "verileri", "verisini", "kaynak", "kaynağından", "kaynaklar",
     "lütfen", "lutfen", "için", "icin", "olan", "bana", "göster", "goster",
     "tablo", "tablosu", "hangi", "nedir", "yılında", "yillari", "döneminde", "doneminde",
+    # işlev sözcükleri: arama konusuna katkısı yok, kaliteyi düşürür
+    "bunu", "bunları", "şunu", "sunu", "peki", "mısın", "misin", "musun", "müsün",
+    "ne", "neler", "nasıl", "nasil", "oldu", "olmuş", "olmus", "yaşandı", "yasandi",
+    "yaşanmış", "yasanmis", "o", "bu", "şu", "su", "ile", "de", "da",
 })
 
 
@@ -94,6 +100,93 @@ def source_domains(question: str) -> list[str]:
     # casefold differently (dotted İ); fold both sides to ASCII instead.
     wanted = fold(constraint.source_ref)
     return list(next((hosts for name, hosts in mapping.items() if fold(name) == wanted), ()))
+
+
+def matched_external_source(question: str) -> dict[str, Any] | None:
+    """Config-driven dış-kaynak eşleşmesi (source_hints.financial_sources).
+
+    Kaynak adları/hostları çekirdek koda gömülmez; yalnız yapılandırmadan okunur. Yerel havuzda
+    karşılığı olan kaynaklar (BDDK/EVDS) bu yapıda yer almadığından burada eşleşmez → yerel sorular
+    web'i açmaz. Eşleşen ilk kaynağın anahtar+spec'i döner (canonical_url/access_mode/adapter_key ile).
+    """
+
+    folded = fold(question or "")
+    sources = load_source_hints().get("financial_sources", {})
+    for key, spec in sources.items():
+        for alias in spec.get("aliases", ()):  # çok sözcüklü alias → alt dize; tek sözcük → sözcük sınırı
+            token = fold(alias)
+            if not token:
+                continue
+            pattern = rf"(?<![\wçğıöşü]){re.escape(token)}(?![\wçğıöşü])" if " " not in token else re.escape(token)
+            if re.search(pattern, folded):
+                return {"key": key, **spec}
+        for host in spec.get("hosts", ()):
+            if host and host in folded:
+                return {"key": key, **spec}
+    return None
+
+
+def external_source_requested(question: str) -> bool:
+    """Soru, yerelde karşılığı olmayan yapılandırılmış bir dış kaynağı adıyla/hostuyla istiyor mu?"""
+    return not web_forbidden(question) and matched_external_source(question) is not None
+
+
+_RESEARCH_INTENT = re.compile(
+    r"yorumla|değerlendir|degerlendir|araştır|arastir|incele|analiz et|tespit et|kırılma|kirilma|"
+    r"ilişki|iliski|gelişme|gelisme|neden|niçin|nicin|açıkla|acikla|çerçeve|cerceve",
+    re.IGNORECASE,
+)
+
+
+def research_intent(question: str) -> bool:
+    """Soru belirli bir kaynaktan VERİ ÇEKME değil, GENEL web araştırması/yorum istiyor mu?
+
+    Böyle sorularda aramayı tek bir kaynağın domainine pinlemek yanlıştır (0 sonuç / alakasız
+    reddi); genel — ama güvenli — finans araması yapılmalı, kabul edilebilir yeni domainler dahil.
+    """
+    return bool(_RESEARCH_INTENT.search(question or ""))
+
+
+_ENRICH_INTENT = re.compile(
+    r"zenginleştir|zenginlestir|mevcut(?:\s+\w+){0,3}\s+(?:ekle|hizala|birleştir|birlestir)|"
+    r"aynı\s+(?:aylık\s+)?tarih|ayni\s+(?:aylik\s+)?tarih|tarih\s+baz|tarih\s+ekseni|"
+    r"veri\s*setine\s+ekle|tabloya\s+ekle|analize\s+dahil|hizala",
+    re.IGNORECASE,
+)
+
+
+_OPEN_URL_INTENT = re.compile(
+    r"\baç\b|\bac\b|açar|oku\b|okur|getir|incele|yorumla|değerlendir|degerlendir|analiz|"
+    r"veri\s*(?:yi)?\s*çek|veri\s*(?:yi)?\s*cek|\bçek\b|\bcek\b|indir|raporu",
+    re.IGNORECASE,
+)
+
+
+def explicit_url_directive(question: str) -> str | None:
+    """Ham mesajda TEK açık http(s) URL + aç/oku/getir/incele/yorumla niyeti → o URL (P0).
+
+    Deterministik ilk-okuma için: bu URL modele sorulmadan `web_url` ile açılır. Güvenlik (private IP,
+    localhost, kimlik bilgili URL, şema, SSRF) web_url/fetch katmanında AYNEN uygulanır — burada yalnız
+    'kullanıcı bunu açıkça istedi mi' kararı verilir. Çoklu URL ya da yalnız referans → None (hepsini açma).
+    """
+    if web_forbidden(question) or _PRIVATE.search(question or ""):
+        return None
+    urls = [u for u in addresses(question) if u.lower().startswith(("http://", "https://"))]
+    if len(urls) != 1:                       # tam olarak bir açık URL; çoklu/sıfır → deterministik açma yok
+        return None
+    if not _OPEN_URL_INTENT.search(question or ""):
+        return None
+    return urls[0]
+
+
+def enrich_intent(question: str) -> bool:
+    """Soru, YENİ bir kaynağı MEVCUT tabloya EKLEMEK/hizalamak istiyor mu (üzerine yazmak değil)?
+
+    'zenginleştir', 'mevcut veri setine ekle', 'ay bazında hizala' gibi ifadeler:
+    yeni kaynak ayrı bir aktif tablo olarak set_table ile ÜZERİNE YAZILMAMALI; Tarih üzerinden
+    join edilmeli (deterministik). Bkz. WebUrlTool enrich-join.
+    """
+    return bool(_ENRICH_INTENT.search(question or ""))
 
 
 def web_forbidden(question: str) -> bool:
@@ -233,11 +326,65 @@ def public_fallback_plan(
     return {"query": query, "include_domains": domains, "topic": "finance", "max_results": 5}
 
 
+def general_public_fallback_plan(question: str) -> dict[str, list[str] | str] | None:
+    """Açık web isteği + doğrulanmış yerel yokluk: domain-pini olmayan sınırlı bir arama.
+
+    Yalnız kullanıcı web'i AÇIKÇA istediğinde (``web_requested``) ve hiçbir yerel veri
+    isteği karşılamadığında kullanılır. Ham soru asla birebir kopyalanmaz; kısa ve güvenli
+    bir konu sorgusu damıtılır (SQL/gizli/e-posta biçimleri elenir). Domain kısıtı yoktur —
+    kullanıcı açık web istedi — ama harness yine tek bir aramayı zorlar.
+    """
+
+    if web_forbidden(question) or _PRIVATE.search(question or ""):
+        return None
+    terms = _safe_search_terms(question)
+    years = _YEAR.findall(question or "")
+    parts = list(dict.fromkeys(part for part in (*terms, *years) if part))
+    query = " ".join(parts)[:500]
+    if not query:
+        return None
+    # scope="general": web aracına bu planın domain-pinsiz (boş include_domains) meşru yetkili
+    # arama olduğunu bildirir; web aracı boş domaini yalnız bu bayrakta kabul eder.
+    return {"query": query, "include_domains": [], "topic": "finance", "max_results": 5, "scope": "general"}
+
+
+def external_source_fallback_plan(question: str) -> dict[str, list[str] | str] | None:
+    """Yapılandırılmış dış kaynak (TEFAS/ODMD) için HOST-PINLI arama planı (config-driven).
+
+    Title-only istekte (URL gömülü değil) kaynak adı source_hints.financial_sources'ta eşleşirse,
+    aramayı o kaynağın hostlarıyla sınırlarız (domain-restricted); canonical_url önce-oku için taşınır.
+    Domain pini olduğundan web aracının mevcut kapısından (dolu include_domains) geçer.
+    """
+    src = matched_external_source(question)
+    if src is None or web_forbidden(question) or _PRIVATE.search(question or ""):
+        return None
+    terms = _safe_search_terms(question)
+    years = _YEAR.findall(question or "")
+    parts = list(dict.fromkeys(part for part in (*terms, *years) if part))
+    query = " ".join(parts)[:500] or str(src.get("key") or "")
+    domains = [str(h) for h in (src.get("hosts") or []) if h]
+    if not query or not domains:
+        return None
+    plan: dict[str, list[str] | str] = {
+        "query": query, "include_domains": domains, "topic": "finance", "max_results": 5, "scope": "external",
+    }
+    if src.get("canonical_url"):
+        plan["canonical_url"] = str(src["canonical_url"])
+    return plan
+
+
 __all__ = [
     "addresses",
     "catalog_ids_in_sql",
+    "general_public_fallback_plan",
     "discovery_requested",
+    "explicit_url_directive",
+    "enrich_intent",
+    "external_source_fallback_plan",
+    "external_source_requested",
     "host_of",
+    "matched_external_source",
+    "research_intent",
     "public_db_fallback",
     "public_fallback_plan",
     "source_domains",

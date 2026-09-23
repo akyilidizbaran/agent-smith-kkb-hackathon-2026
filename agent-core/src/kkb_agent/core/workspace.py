@@ -22,6 +22,20 @@ from datetime import datetime
 
 import pandas as pd
 
+
+def _plain_float(v: float) -> str:
+    """Modele giden tablolarda bilimsel gösterim yok: 1.513497e+11 → 151349741325 (ölçüldü, 21 Eyl: model
+    cevaba '1.513497e+11 TL' yazdı, kanıt zinciri de bu biçimi tabloda buldu)."""
+    v = float(v)
+    if v != v or v in (float("inf"), float("-inf")):
+        return str(v)
+    if v.is_integer() and abs(v) < 1e15:
+        return f"{v:.1f}"          # 110.0 — kolon ondalıklı olduğu için ".0" kalır, sadece bilimsel gösterim gider
+    return repr(v)
+
+
+pd.set_option("display.float_format", _plain_float)
+
 from ..contracts.lakehouse import QueryProvenance
 
 
@@ -58,6 +72,9 @@ class AnalysisWorkspace:
         self._snapshots: list[pd.DataFrame] = []
         self._column_sources: dict[str, QueryProvenance] = {}
         self.title: str = ""
+        # Tablo kuşağı: tablo yeniden kurulunca (set/replace/revert) artar, kolon eklemede değişmez. Harness döngü kilidi
+        # aynı hesap çağrısını yeni tabloda tekrar serbest bırakır (son 3×, T06: gold_join sonrası LAG çağrıları kilitlendi).
+        self.generation: int = 0
         self._peeks: list[tuple[str, pd.DataFrame]] = []      # bakış sorguları (tabloyu değiştirmeyen)
         self.web_pages: dict[str, dict[str, object]] = {}     # url → sha256/fetched_at/status; turlar arası kalır
         self._sources: dict[str, SourceTable] = {}             # k1, k2, … — join ve workspace_query için
@@ -112,6 +129,7 @@ class AnalysisWorkspace:
         """Yeni bir analiz başlatır. Önceki tablo geçmişe alınır; tablo kimlikli kaynak olarak kaydedilir."""
         self._snapshot()
         self._table = df.copy()
+        self.generation += 1
         if provenance:
             for col in df.columns:
                 self._column_sources[col] = provenance
@@ -141,6 +159,7 @@ class AnalysisWorkspace:
             raise ValueError("Önce bir tablo oluşturulmalı (set_table).")
         self._snapshot()
         self._table = df.copy()
+        self.generation += 1
         for column, provenance in (column_provenance or {}).items():
             if provenance is not None:
                 self._column_sources[str(column)] = provenance
@@ -302,6 +321,7 @@ class AnalysisWorkspace:
         if not self._snapshots:
             return False
         self._table = self._snapshots.pop()
+        self.generation += 1
         self.last_completion = {}
         if self._history:
             self._history.pop()

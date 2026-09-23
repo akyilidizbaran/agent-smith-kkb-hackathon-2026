@@ -54,7 +54,8 @@ def test_b_weekly_stock_uses_period_end_value():
 def test_c_rate_is_averaged_not_summed():
     result = normalize_frequency(weekly_frame(), requested="monthly", requested_columns=["Faiz Oranı (%)"])
     assert result.frame["Faiz Oranı (%)"].tolist() == [25.0, 50.0]
-    assert result.metadata.aggregation_method["Faiz Oranı (%)"] == "mean"
+    # İş günü ağırlıklı ortalama: eşit uzunluklu haftalarda basit ortalamayla aynı sonucu verir.
+    assert result.metadata.aggregation_method["Faiz Oranı (%)"] == "business_day_weighted_mean"
 
 
 def test_d_unknown_semantics_fails_closed():
@@ -64,11 +65,17 @@ def test_d_unknown_semantics_fails_closed():
     assert error.value.code == "MEASURE_SEMANTICS_AMBIGUOUS"
 
 
-def test_e_cross_month_interval_does_not_get_arbitrarily_allocated():
-    frame = pd.DataFrame({"period": ["2021/05 (29.01.21-02.02.21)"], "volume": [10]})
-    with pytest.raises(TemporalNormalizationError) as error:
-        normalize_frequency(frame, requested="monthly", requested_columns=["volume"])
-    assert error.value.code == "INTERVAL_BOUNDARY_AMBIGUOUS"
+def test_e_cross_month_interval_goes_to_its_start_month_and_is_reported():
+    """ADR-0108 ek (23 Eyl): ay sınırını aşan hafta başladığı aya yazılır; bölüştürülmez, uydurulmaz, uyarıda söylenir.
+    Kaynağın kendi aylık raporu da haftayı başladığı aya sayar (kaynağın aylık raporuyla karşılaştırıldı)."""
+    frame = pd.DataFrame({"period": ["2021/05 (29.01.21-02.02.21)", "2021/06 (05.02.21-09.02.21)", "Toplam"],
+                          "volume": [10, 20, 30]})
+    result = normalize_frequency(frame, requested="monthly", requested_columns=["volume"])
+    assert result.frame["period_month"].tolist() == ["2021-01", "2021-02"]
+    assert result.frame["volume"].tolist() == [10, 20]
+    assert result.metadata.aggregation_method["volume"] == "sum_by_period_start_month"
+    warnings = " ".join(result.metadata.warnings)
+    assert "başladığı aya yazıldı" in warnings and "alt toplam" in warnings
 
 
 def test_f_native_frequency_is_preferred():

@@ -139,8 +139,29 @@ def test_red_gold_refused_tekrar_denenmez_ve_turkce_sebep_tasir(env) -> None:
     assert not r.error.is_retryable
     assert "NOT_DECOMPOSABLE" in r.content and "birikimli değil" in r.content
     assert "gold_align" in r.content  # alternatif öneri
-    assert "TEKRAR DENEMEYLE ÇÖZÜLMEZ" in r.content
+    # ADR-0104: ret uygulanabilir bir alternatif gösteriyorsa tur bitmez; aynı çağrı yine tekrar denenmez.
+    assert r.error.terminal is False and "TEKRAR DENEMEYLE ÇÖZÜLMEZ" not in r.content and "Tur devam ediyor" in r.content
     assert ws.table is None
+
+
+def test_onay_gerektiren_gold_reddi_turu_kapatir(env) -> None:
+    lake, ws, runner = env
+    runner.refusal = ("UNVERIFIED_SEMANTICS", "semantics not verified")
+    tool = GoldDecomposeTool(lake, ws)
+    tool._verified_alternatives = lambda *_a, **_k: []          # doğrulanmış eşdeğer yok: onay gerekir
+    r = tool.validate_and_run({"series_id": "bddk_monthly:konut", "purpose": "akıma çöz"})
+    assert not r.ok and r.error.terminal is not False and "TEKRAR DENEMEYLE ÇÖZÜLMEZ" in r.content
+
+
+def test_dogrulanmis_esdeger_varsa_gold_reddi_turu_bitirmez(env) -> None:
+    """PR #21: aynı kavramın doğrulanmış serisi varsa model aynı işlemi onunla yineler; çelişkili kapanış satırı yok."""
+    lake, ws, runner = env
+    runner.refusal = ("UNVERIFIED_SEMANTICS", "semantics not verified")
+    tool = GoldDecomposeTool(lake, ws)
+    tool._verified_alternatives = lambda *_a, **_k: ["evds:TP.KTF12"]
+    r = tool.validate_and_run({"series_id": "bddk_monthly:konut", "purpose": "akıma çöz"})
+    assert not r.ok and r.error.terminal is False and "evds:TP.KTF12" in r.content
+    assert "TEKRAR DENEMEYLE ÇÖZÜLMEZ" not in r.content
 
 
 def test_adaptor_reddi_typed_exception_olarak_yukseltir(env) -> None:
@@ -322,6 +343,39 @@ def test_parse_period_ve_workspace_view() -> None:
     assert "run_id_list" not in view.columns and "source_observation_dates" in view.columns
 
 
+def test_dogrulanmamis_ret_dogrulanmis_esdegeri_aday_olarak_verir(env) -> None:
+    """Benchmark P04 (22 Eyl): model semantiği doğrulanmamış seriyi seçti, Gold reddetti, tur bitti; aynı adla aranan
+    doğrulanmış seri duruyordu. Ret artık doğrulanmış eşdeğer(ler)i aday olarak taşır; onay istemeden önce o denenir."""
+    lake, ws, runner = env
+    runner.refusal = ("UNVERIFIED_SEMANTICS", "semantic_confidence is 'derived'")
+    tool = GoldAlignTool(lake, ws)
+
+    r = tool.validate_and_run({"series_id": "bddk_monthly:konut", "target_frequency": "quarterly", "purpose": "çeyreklik"})
+
+    assert not r.ok and r.error.error_code == "GOLD_REFUSED"
+    alts = tool._verified_alternatives("bddk_monthly:konut")
+    assert "bddk_monthly:konut" not in alts
+    if alts:                                            # test kataloğunda doğrulanmış komşu varsa ipucuna ve adaylara girer
+        assert set(alts) <= set(r.error.candidates) and "DOĞRULANMIŞ serisi var" in r.content
+
+
+def test_dogrulanmis_esdeger_varsa_ret_terminal_degildir(env, monkeypatch) -> None:
+    """Eşdeğer aday varken tur bitmez: model aynı işlemi doğrulanmış seriyle yeniden dener."""
+    lake, ws, runner = env
+    runner.refusal = ("UNVERIFIED_SEMANTICS", "semantic_confidence is 'derived'")
+    tool = GoldAlignTool(lake, ws)
+    monkeypatch.setattr(tool, "_verified_alternatives", lambda sid, limit=3: ["bddk_monthly:konut_dogrulanmis"])
+
+    r = tool.validate_and_run({"series_id": "bddk_monthly:konut", "target_frequency": "quarterly", "purpose": "çeyreklik"})
+
+    assert not r.ok and r.error.error_code == "GOLD_REFUSED" and r.error.terminal is False
+    assert r.error.candidates == ["bddk_monthly:konut_dogrulanmis"] and "DOĞRULANMIŞ serisi var" in r.content
+    runner.refusal = ("UNVERIFIED_SEMANTICS", "semantic_confidence is 'derived'")
+    monkeypatch.setattr(tool, "_verified_alternatives", lambda sid, limit=3: [])
+    r2 = tool.validate_and_run({"series_id": "bddk_monthly:konut", "target_frequency": "monthly", "purpose": "aylık"})
+    assert not r2.ok and r2.error.terminal is None          # eşdeğer yok: ret terminal (kullanıcıya sorulur)
+
+
 def test_workspace_view_json_tarihlerini_gercek_tarih_tipine_dondurur() -> None:
     frame = pd.DataFrame({
         "period_start": ["2024-01-01", "2024-02-01"],
@@ -331,3 +385,42 @@ def test_workspace_view_json_tarihlerini_gercek_tarih_tipine_dondurur() -> None:
     view = workspace_view(frame)
     assert view["period_end"].iloc[0] == date(2024, 1, 31)
     assert all(isinstance(value, date) for value in view["period_end"])
+
+
+def test_seri_kimligi_tablo_adi_olarak_kullanilmaz(env) -> None:
+    """Canlı koşu (23 Eyl): `evds:TP.KTF12` / `TP.KTF12` FROM'a yazılınca DuckDB 'Catalog "TP" does not exist' dedi.
+    lakehouse_distinct_values kimliği kendisi FROM'a yazıyordu (araç hatası); lakehouse_query'de model yazınca hata
+    genel SQL_FAILED + yanıltıcı ipucuyla dönüyordu. Artık kırılım aracı doğru ilişkiyi kullanır, sorgu aracı çalıştırmadan
+    doğru kalıbı söyler; gold tablosu ve doğru yazılmış seri sorgusu etkilenmez."""
+    from kkb_agent.tools.lakehouse import LakehouseDistinctValuesTool, LakehouseQueryTool
+
+    lake, ws, _ = env
+    assert lake.relation_sql("evds:TP.KTF12").startswith("(SELECT * FROM silver.fact_observation WHERE series_id = ")
+
+    distinct = LakehouseDistinctValuesTool(lake).validate_and_run({"dataset_id": "evds:TP.KTF12", "column": "quality_flag"})
+    assert distinct.ok, distinct.content
+
+    query = LakehouseQueryTool(lake, ws)
+    for sql in ("SELECT observation_date, value FROM evds:TP.KTF12",
+                "SELECT observation_date, value FROM TP.KTF12",
+                'SELECT observation_date, value FROM "evds:TP.KTF12"'):
+        r = query.validate_and_run({"sql": sql, "purpose": "faiz"})
+        assert not r.ok and r.error.error_code == "INVALID_ARGS" and r.error.is_retryable, sql
+        assert "series_id = 'evds:TP.KTF12'" in r.content and r.error.candidates == ["evds:TP.KTF12"]
+
+    ok = query.validate_and_run({"sql": "SELECT observation_date, value FROM silver.fact_observation "
+                                        "WHERE series_id = 'evds:TP.KTF12' AND observation_date BETWEEN '2025-01-01' "
+                                        "AND '2025-03-31' ORDER BY observation_date", "purpose": "faiz"})
+    assert ok.ok, ok.content
+
+
+
+def test_gold_join_reddi_turu_bitirmez_kirilim_paneline_yonlendirir(env) -> None:
+    """Canlı koşu (23 Eyl): çok serili hizalama Gold kuralına (ör. derived seri) takılınca tur bitiyordu; ajan panele geçemedi.
+    gold_join reddi artık tur bitirmez ve aynı serileri lakehouse_breakdown_panel ile almayı söyler."""
+    lake, ws, runner = env
+    runner.refusal = ("UNVERIFIED_SEMANTICS", "semantik doğrulanmadı")
+    r = GoldJoinTool(lake, ws).validate_and_run(
+        {"series_ids": ["bddk_monthly:konut", "evds:TP.KTF12"], "target_frequency": "monthly", "purpose": "yan yana"})
+    assert not r.ok and r.error.error_code == "GOLD_REFUSED"
+    assert r.error.terminal is False and "lakehouse_breakdown_panel" in r.content and "bddk_monthly:konut" in r.content

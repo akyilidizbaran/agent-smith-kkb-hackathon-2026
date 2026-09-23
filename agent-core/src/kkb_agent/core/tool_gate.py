@@ -21,6 +21,7 @@ from .question_preflight import _PREMISE as _PREMISE_Q   # öncül kalıbı tek 
 
 ALWAYS = frozenset({
     "lakehouse_search", "lakehouse_describe", "lakehouse_distinct_values", "lakehouse_query",
+    "lakehouse_breakdown_panel",
     "workspace_add_column", "workspace_compute_column", "workspace_show", "workspace_query", "workspace_real_value", "workspace_join",
     "gold_align", "gold_decompose", "gold_join",
     "clarify",   # netleştirme (tools/clarify.py): şema küçük, politika kapısı kendi içinde (yalnız uygunluk "kısmen" dediğinde)
@@ -29,7 +30,7 @@ ALWAYS = frozenset({
 # üretildikten sonra dönüşüm/analiz aileleri açılır.
 RETRIEVAL_PHASE = frozenset({
     "lakehouse_search", "lakehouse_describe", "lakehouse_distinct_values",
-    "lakehouse_query", "clarify",
+    "lakehouse_query", "lakehouse_breakdown_panel", "clarify",
 })
 GOLD_PHASE = frozenset({"gold_align", "gold_decompose", "gold_join"})
 WORKSPACE_PHASE = frozenset({
@@ -45,7 +46,14 @@ PREMISE = frozenset({"check_premise"})
 
 _CHART = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
 _ANALYTICS = re.compile(r"anomali|aykır|sapan|sapma|olağan ?dışı|sıra ?dışı|kırılma|rejim değişi|öncül|önden mi|korelasyon|granger|ilişki|mevsimsel|seasonal|\bmad\b|medyan mutlak", re.I)
-_WEB = re.compile(r"https?://|www\.|\.pdf\b|\.png\b|\.jpe?g\b|\.csv\b|\.xlsx?\b|sayfa|siteden|linkten|adres|internet|web|\barama\b|\bara\b|bul\b", re.I)
+# Dış-bağlam sinyalleri (dünya/küresel/uluslararası…) de web ailesini açar: yerel havuz Türkiye
+# bankacılık/EVDS verisi; bu ifadeler veri havuzunda karşılığı olmayan, web'den bulunabilir bilgiyi ister.
+# Genel web sinyalleri. "pdf"/"link"/"bağlant" kelime sınırıyla (pdfindeki, linkinden, bağlantısı) yakalanır.
+# Kaynak/kurum ADLARI burada YOK: dış-kaynak tanıma config-driven'dır (source_hints.financial_sources →
+# web_routing.external_source_requested), böylece çekirdek regex kaynağa özel kalmaz.
+_WEB = re.compile(r"https?://|www\.|\bpdf|\.png\b|\.jpe?g\b|\.csv\b|\.xlsx?\b|sayfa|siteden|\blink|\bbağlant|adres|internet|web|\barama\b|\bara\b|bul\b|dünya|küresel|global|uluslararası|yurt ?dışı|yurtdışı|dış piyasa|"
+                  # Kırılma dönemlerini "yorumla" isteği dönemin gelişmelerine dayanır; web araştırması açılır (canlı koşu, 23 Eyl).
+                  r"kırılma[\s\S]{0,120}yorumla|kirilma[\s\S]{0,120}yorumla", re.I)
 _ARCHITECT = re.compile(r"taslak|onayl|kataloğa al|kataloga al|ekle\b|yükle|yukle|kaydet|ingest|terfi|yayınla", re.I)
 _WORKSPACE_HINT = re.compile(
     r"birleştir|birles|\bjoin\b|iki (?:ayrı )?tablo|sütun|kolon|tabloyu|tabloya|"
@@ -142,9 +150,14 @@ def decide(
         allowed.update(initial_tools)
     opened: list[str] = []
     closed: list[str] = []
+    # Config-driven dış kaynak: kaynak adı/hostu source_hints.financial_sources'ta tanımlı ve yerelde
+    # karşılığı yoksa (TEFAS/ODMD gibi) web ailesi açılır — kaynak adı çekirdek koda gömülmeden.
+    from .web_routing import external_source_requested
+    external_source = external_source_requested(question) or external_source_requested(user_text)
     for family, names, pattern in (("grafik", CHART, _CHART), ("analitik", ANALYTICS, _ANALYTICS), ("web", WEB, _WEB),
                                    ("öncül", PREMISE, _PREMISE_Q)):
-        if pattern.search(question) or (family == "web" and pattern.search(user_text)):
+        web_signal = family == "web" and (pattern.search(user_text) or external_source)
+        if pattern.search(question) or web_signal:
             allowed |= names
             opened.append(family)
         else:

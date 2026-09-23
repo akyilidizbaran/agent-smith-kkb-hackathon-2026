@@ -301,11 +301,18 @@ def _verified_run_artifact_fetched_at(
         "SELECT source_id, dataset_id FROM meta.artifact WHERE artifact_sha256 = ?",
         [asset.artifact_sha256],
     ).fetchone()
-    if artifact is None or tuple(artifact) != (link_source, link_dataset):
+    if artifact is None:
         raise AdhocPublicationError(
-            f"artifact {asset.artifact_sha256} is not registered under the run-artifact "
-            f"link's source/dataset {link_source}/{link_dataset}"
+            f"artifact {asset.artifact_sha256} is not registered in meta.artifact; the run-artifact "
+            f"link {link_source}/{link_dataset} points at bytes the catalog never recorded"
         )
+    # Artifact identity is the bytes (catalog/artifacts.py, 17 Sep): ``meta.artifact`` keeps the
+    # *first* fetch's source/dataset as context, and the per-run ``meta.run_artifact`` link carries
+    # this run's dataset. Requiring the two to be equal made byte-identical content unpublishable
+    # under any second series: the same CSV uploaded for a new series key, or re-uploaded after a
+    # refused attempt, failed with "not registered under the link's source/dataset" while the run
+    # was already recorded as success (observed 20 Sep, Architect drive). The link, verified above
+    # against the in-memory result, is the authority for this publication.
     if link_fetched_us != epoch_us(asset.fetched_at):
         raise AdhocPublicationError(
             "asset fetched_at does not match the durable run-artifact link; the in-memory "

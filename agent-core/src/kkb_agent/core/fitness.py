@@ -1,6 +1,6 @@
 """Uygunluk kapısı — "soru ne istiyor × veri ne sunuyor", tablo aktif olmadan ÖNCE (V3 §3.9; Büşra, 15 Eyl).
 
-Neden var (ölçüldü, 14 Eyl UEB, docs/HUMAN_ERROR_RESEARCH_2026-09-14.md PART 14/19–22): profilci
+Neden var (ölçüldü, 14 Eyl UEB, docs/calisma-notlari/HUMAN_ERROR_RESEARCH_2026-09-14.md PART 14/19–22): profilci
 biçime bakar (tarih kolonu var mı, sayı okunuyor mu), 13 Eylül ilgi kapısı sözcük örtüşmesine bakar;
 ikisi de "konut fiyat endeksi" dosyasını "konut kredisi bakiyesi" sorusuna geçirdi (anlamca yakın
 yanlış dosya: repo kapısı hard-negative'lerin %6'sını, bu modülün ablation kolu %98'ini reddetti;
@@ -233,7 +233,14 @@ def _to_dt(s: pd.Series) -> pd.Series:
     """pd.to_datetime, 'biçim çıkarılamadı' uyarısı olmadan (her kolon denenir; uyarı gürültüdür, hata değil)."""
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return pd.to_datetime(s, errors="coerce")
+        parsed = pd.to_datetime(s, errors="coerce")
+    if len(parsed) and parsed.isna().all():
+        # Dönem + tarih aralığı hücreleri ("2021/01 (04.01.21-08.01.21)"): aralığın bitiş günü (23 Eyl, dış rapor haftalık).
+        from ..builder.profile import range_end_date
+        ends = s.map(lambda v: range_end_date(str(v)) if v is not None else None)
+        if ends.notna().any():
+            return pd.to_datetime(ends, errors="coerce")
+    return parsed
 
 
 def _infer_frequency(dates: pd.Series) -> str | None:
@@ -253,6 +260,18 @@ def signature_of(frame: pd.DataFrame, locator: str, *, mapping: Any = None, sema
     (yil/yıl/year) → yıllık tablo."""
     name = str(locator or "").split("?")[0].replace("\\", "/").rsplit("/", 1)[-1]
     name = name.rsplit(".", 1)[0] if "." in name else name
+    # Yinelenen ya da sayısal kolon etiketi (TCMB today.xml, başlıksız Excel): `frame[c]` DataFrame döner ve tarih/yıl
+    # taraması "cannot assemble with duplicate keys" ile patlar; kapı sessizce atlanıyordu (22 Eyl, arkadaş bulgusu).
+    # İmza için etiketler tekil dizeye çevrilir; çağıranın tablosu değişmez.
+    if len(set(map(str, frame.columns))) != len(frame.columns) or any(not isinstance(c, str) for c in frame.columns):
+        seen: dict[str, int] = {}
+        labels = []
+        for c in map(str, frame.columns):
+            n = seen.get(c, 0)
+            labels.append(c if n == 0 else f"{c}_{n}")
+            seen[c] = n + 1
+        frame = frame.copy()
+        frame.columns = labels
     headers = tuple(str(c) for c in frame.columns)
     years: tuple[int, int] | None = None
     freq: str | None = getattr(semantics, "frequency", None) if semantics is not None else None
@@ -289,7 +308,11 @@ def signature_of(frame: pd.DataFrame, locator: str, *, mapping: Any = None, sema
                 years, date_col = (int(parsed.dt.year.min()), int(parsed.dt.year.max())), str(best)
                 freq = freq or _infer_frequency(parsed)
         if years is None:
-            ys = sorted({int(y) for c in frame.columns for y in _YEAR.findall(" ".join(frame[c].astype(str)))})
+            # Scan every cell as text for 4-digit years. Coerce each value with str():
+            # duplicate/float column labels make frame[c] a DataFrame and leak non-str
+            # into the join (e.g. TCMB XML tables), so .astype(str) alone is not safe.
+            cells = " ".join(str(v) for v in frame.to_numpy().ravel().tolist())
+            ys = sorted({int(y) for y in _YEAR.findall(cells)})
             years = (ys[0], ys[-1]) if ys else None
 
     med: dict[str, float] = {}
@@ -325,7 +348,7 @@ class Fitness:
 
     def lines(self) -> list[str]:
         head = f"uygunluk: {self.label} ({self.score:.2f}) — " + ("; ".join(self.reasons) if self.reasons else "gerekli kavramlar var")
-        return [head, "  soru istiyor: " + (", ".join(self.required) or "—") + " | veride: " + (", ".join(self.present) or "—")]
+        return [head, "  soru istiyor: " + _short_list(self.required) + " | veride: " + _short_list(self.present)]
 
     def stop_message(self) -> str:
         """Ret kartı: modelin ne söyleyeceği — dosyada NE VAR, ne YOK; suçlamayan dil."""
@@ -334,6 +357,15 @@ class Fitness:
                 f"Dosyada olan: kolonlar {', '.join(sig.headers)}"
                 + (f"; dönem {sig.years[0]}–{sig.years[1]}" if sig.years else "")
                 + (f"; frekans {sig.frequency}" if sig.frequency else "") + ".")
+
+
+def _short_list(items: set[str] | list[str], limit: int = 6) -> str:
+    """Uyarıda veri terimleri: teknik sütun adları (`<seri>@<varlık>::<ölçü>`) çıkarılır, en çok `limit` terim yazılır.
+    Canlı koşu (23 Eyl): birleşik tablonun teknik adları insan diline çevrilince aynı ad onlarca kez tekrarlandı."""
+    clean = sorted({str(item) for item in items if "::" not in str(item)})
+    if not clean:
+        return "—"
+    return ", ".join(clean[:limit]) + (f" (+{len(clean) - limit})" if len(clean) > limit else "")
 
 
 def assess(question: str, sig: DataSignature, lexicon: Lexicon | None = None) -> Fitness:
@@ -389,7 +421,7 @@ def assess(question: str, sig: DataSignature, lexicon: Lexicon | None = None) ->
         # Ortak hiçbir kavram yok: ilgisiz (otobüs tarifesi). Gevşek (katalog) kavramlar tek başına ret vermez.
         dims["measure"] = "fail" if measures else "n/a"
         dims["entity"] = "fail" if qualifiers else "n/a"
-        reasons.append(f"soru {', '.join(sorted(req))} istiyor; veride bunların hiçbiri yok" + (f" (veride: {', '.join(sorted(have))})" if have else ""))
+        reasons.append(f"soru {_short_list(req)} istiyor; veride bunların hiçbiri yok" + (f" (veride: {_short_list(have)})" if have else ""))
         return out("reject" if strict(req) else "partial", 0.0 if strict(req) else 0.4)
     if measures and m_have and not (measures & m_have):
         # Dosya BAŞKA bir ölçümü taşıyor (fiyat endeksi ≠ bakiye): niyet açısından yanlış veri.
@@ -408,7 +440,8 @@ def assess(question: str, sig: DataSignature, lexicon: Lexicon | None = None) ->
         competing = strict(have - req)
         labeled = bool(m_have) or bool(competing)
         dims["entity"] = "fail" if (labeled and strict(missing_q)) else "partial"
-        reasons.append(f"varlık/segment {'farklı' if labeled else 'belirsiz'}: eksik {', '.join(sorted(missing_q))}; veride {', '.join(sorted(have)) or '—'}")
+        reasons.append(f"varlık/segment {'farklı' if labeled else 'belirsiz'}: eksik {', '.join(sorted(missing_q))}; "
+                       f"veride {_short_list(have)}")
         return out("reject" if dims["entity"] == "fail" else "partial", 0.2 if labeled else 0.45)
     dims["entity"] = "ok" if qualifiers else "n/a"
     if measures and not m_have:

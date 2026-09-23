@@ -2,218 +2,117 @@
 
 **Lakehouse Agent Builder and Data Analytics**
 
-Sıfırdan kurulan bir Data Lakehouse ve onun üzerinde çalışan, doğal dildeki soruyu
-anlayıp analizi kendi planlayan bir *agentic analytics* motoru.
+Agent Smith iki parçadan oluşur:
+- **Data Lakehouse:** sıfırdan yazılmış bir veri gölü evi. Türkiye'nin kamuya açık bankacılık ve makroekonomi
+  verisini (BDDK, TCMB EVDS) RAW → Bronze → Silver → Gold katmanlarında, kaynağın baytlarına kadar izlenebilir biçimde
+  tutar.
+- **Agentic analitik motoru:** bu havuzun üzerinde çalışır. Doğal dildeki soruyu anlar, analizi kendisi planlar ve
+  yürütür. Cevaptaki her sayıyı kanıt zinciriyle kaynağa bağlar.
 
-
-## Main üzerindeki güncel lakehouse teslimi
-
-Kaynak: `feature/generic-adhoc-ingestion-v1` (`84919cb`). Önceki Elif Güngen katkıları commit geçmişiyle birlikte alınmıştır. Ajan motorunun entegrasyonu ayrı PR ile devam edecektir.
-
-AgentSmithler Workspace is the shared repository for the KKB Agentic Data Analytics
-project. The current implemented component is `lakehouse-core/`, a local-first,
-generic Python data lakehouse foundation.
-
-### Current state
-
-`lakehouse-core/` provides source access, immutable RAW artifacts, Bronze Parquet,
-semantic catalog loading, ingestion observability, and an acceptance-tested,
-source-independent Silver V1 observation layer. The first Agent/Data P0 handoff is
-also implemented: CPI catalog/Silver support, automatic series coverage, and safe
-read-only Agent queries over Silver. Gold P0 is implemented as catalog-driven,
-fail-closed functions for frequency alignment, cumulative decomposition, and period joins.
-Generic and ad-hoc ingestion V1 is also implemented: unknown CSV, XLSX, JSON-record, and
-static HTML inputs can be ingested through a guarded connector/parser path, registered only
-as draft/derived catalog entries, and published into an isolated ad-hoc observation table
-with durable run-to-artifact provenance.
-
-### Repository map
-
-- `lakehouse-core/`: the analytical lakehouse component.
-- `lakehouse-core/src/lakehouse/`: connectors, parsers, storage, catalog, Silver, and shared contracts.
-- `lakehouse-core/models/`: SQL models, including the current Silver model.
-- `lakehouse-core/schemas/`: formal data contracts.
-- `lakehouse-core/docs/`: team, source, catalog, and architecture documentation.
-- `lakehouse-core/tests/`: unit, contract, security, infrastructure, and offline integration tests.
-
-For architecture, supported series, setup, and usage, see the
-[`lakehouse-core README`](lakehouse-core/README.md).
-
-### Current delivery checkpoints
-
-- Silver V1 acceptance and data-trust closure:
-  [`silver-v1-acceptance-pack.md`](lakehouse-core/docs/acceptance/silver-v1-acceptance-pack.md)
-- Agent/Data P0 handoff:
-  [`agent-data-p0.md`](lakehouse-core/docs/branches/agent-data-p0.md)
-- Gold P0 API and branch delivery:
-  [`gold-contract.md`](lakehouse-core/docs/gold-contract.md) ·
-  [`gold-functions-v1.md`](lakehouse-core/docs/branches/gold-functions-v1.md)
-- Generic and ad-hoc ingestion V1:
-  [`generic-ingestion-contract.md`](lakehouse-core/docs/generic-ingestion-contract.md) ·
-  [`adhoc-publication-contract.md`](lakehouse-core/docs/adhoc-publication-contract.md) ·
-  [`generic-adhoc-review-fixes.md`](lakehouse-core/docs/branches/generic-adhoc-review-fixes.md)
-- Independent architecture and quality audit:
-  [`data-lakehouse-bagimsiz-denetim-raporu-2026-09-10.md`](lakehouse-core/docs/audits/data-lakehouse-bagimsiz-denetim-raporu-2026-09-10.md)
-
-The source branch records **942 passing tests** at its Generic/Ad-hoc checkpoint; this is a historical result, not a new test run for this merge. The remaining
-Data/Lakehouse scope is operational CLI/windowing, then catalog/FinTürk expansion and
-live-source evidence closure.
-
----
-
-## Proje hedefi ve başlangıç planı
-
-Aşağıdaki ajan mimarisi ve ajan çalıştırma komutları başlangıç planıdır; ajan kodu henüz bu main tesliminde yoktur. Mevcut bileşenin kurulum ve kullanımı için yukarıdaki lakehouse bağlantısını izleyin.
-
-
-## Problem
-
-Türkiye'nin açık ekonomi verileri (BDDK, TCMB EVDS) dağınık, farklı frekanslarda ve
-farklı birimlerde yayınlanıyor. Bir kısmı kümülatif, bir kısmı değil. Bu haliyle ne bir
-analist ne de bir dil modeli doğrudan kullanabilir.
-
-Yarışmanın beklentisi iki katmanlı:
-
-1. Bu veriyi **işlenebilir ve ilişkilendirilebilir** hale getiren, alandan bağımsız
-   (jenerik) bir Data Lakehouse.
-2. Üzerinde çalışan, soruyu anlayan → analizi planlayan → uygun aracı kullanan →
-   sonucu doğrulayan → karar destek çıktısına dönüştüren bir **agentic** çözüm.
-
-Beklenen, yalnızca analiz yapan bir sistem değil; **uçtan uca akıl yürüten** bir sistem.
-
-## Çözüm mimarisi
-
-```
-   Açık veri kaynakları                    Doğal dilde soru
-   BDDK · EVDS · URL · dosya · PDF/görsel         │
-            │                                     ▼
-            ▼                          ┌────────────────────────┐
-   ┌──────────────────┐                │   Agentic Engine       │
-   │  Data Lakehouse  │                │  planla → araç çağır   │
-   │                  │                │  → gözlemle → onar     │
-   │  RAW (immutable) │                ├────────────────────────┤
-   │  Bronze  parquet │                │ Araçlar:               │
-   │  Silver  canonic │◀──────────────▶│  lakehouse             │
-   │  Gold    analiz  │   Contract     │  web search / URL      │
-   │  Meta    catalog │                │  anomali · kırılma     │
-   └──────────────────┘                │  öncül-ardıl (Granger) │
-                                       │  grafik · ingest       │
-                                       └───────────┬────────────┘
-                                                   ▼
-                                     Tablo · grafik · rapor + KAYNAK
+```mermaid
+flowchart LR
+    K["Kaynaklar<br/>BDDK · EVDS · dosya · web"] --> L["lakehouse-core<br/>RAW → Bronze → Silver → Gold<br/>+ anlamsal katalog"]
+    L -- "salt-okunur SQL" --> A["agent-core<br/>tek orkestrasyon ajanı<br/>+ deterministik doğrulama"]
+    A -- "ingest-file / promote-draft<br/>(Architect, onaylı)" --> L
+    A <--> M["LLM (Kloudeks)<br/>DeepSeek-V4.1-Flash"]
+    A <--> U["Web arayüzü<br/>canlı adımlar · kanıt zinciri"]
 ```
 
-İki katman doğrudan birbirine bağlı değil; aralarında yazılı bir **sözleşme** var
-([docs/LAKEHOUSE_CONTRACT.md](docs/LAKEHOUSE_CONTRACT.md)). Bu sayede iki ekip birbirini
-beklemeden paralel çalışır ve Lakehouse'un iç yapısı değiştiğinde agent etkilenmez.
+## Belgeler
 
-Aynı ayrım, yarışmanın *"platform jenerik olmalı, içi boşaltılıp bambaşka bir sağlık
-verisiyle de çalışabilmeli"* şartını mimari düzeyde karşılar: yeni bir alana geçmek için
-yeni bir Lakehouse uygulaması ve yeni bir katalog yazmak yeterlidir, agent aynı kalır.
+Değerlendirme başlıklarının her biri ayrı bir belgede, diyagramlarıyla anlatılır:
 
-### Tasarım ilkesi: harness güçlü, modele en az iş
-
-Açılış toplantısındaki yönlendirme netti: *"Harness yapısını daha güçlü yapın, LLM'e en az
-işi bırakın."* Buna göre model:
-
-- **hesap yapmaz** — toplama, oran, değişim hepsi SQL'de,
-- **ham veri görmez** — şema ve birkaç örnek satır görür, veri motorda kalır,
-- **değer uydurmaz** — filtreleyeceği kategorileri katalogdan okur,
-- **hatasını yutmaz** — hata metni kendisine döner, çağrısını düzeltir.
-
-Geliştirmede küçük yerel modelle de çalışan bu yapı, demoda KKB'nin MIA/Kloudeks üzerinden verdiği
-modellerle (Qwen3.8-27B metin, Unlimited-OCR belge/görsel, Qwen3-Embedding-8B) çalışır; sağlayıcı yalnız `.env` ile değişir.
-
-### Güven katmanı
-
-Üretilen her sayı; hangi SQL'den, hangi tablodan, hangi kurumun hangi bültenindeki hangi
-dönemden geldiği bilgisiyle birlikte taşınır. "Bu rakam nereden geliyor?" sorusu tek adımda
-cevaplanabilir.
-
-## Repo yapısı
-
-| Yol | İçerik |
+| Başlık | Belge |
 |---|---|
-| `agent-core/src/kkb_agent/` | Agentic analytics motoru — [teknik doküman](docs/AGENT.md) |
-| `agent-core/src/kkb_agent/contracts/` | Veri katmanıyla sözleşme (Protocol + semantic catalog) |
-| `agent-core/src/kkb_agent/core/` | Harness, analiz durumu, araç soyutlaması |
-| `agent-core/src/kkb_agent/tools/` | Araçlar — her yetenek bağımsız modül |
-| `agent-core/src/kkb_agent/web_app.py` + `static/` | Arayüz: sohbet, kanıt paneli, dosya yükleme, dışa aktarım, profil |
-| `agent-core/tests/` | Deterministik birim/sözleşme testleri; `golden/` uçtan uca vakalar, `fixtures/generic/` finans dışı veri |
-| `agent-core/scripts/` | Demo verisi kurulumu, golden, M02 kıyası, M16 kabul ve arayüz uçtan uca provası |
-| `lakehouse-core/` | Data Lakehouse — ingestion, Bronze/Silver/Gold, semantic catalog |
-| `docs/ARCHITECTURE.md` | **Mimari** — katmanlar, sözleşmeler, agent döngüsü, araçlar, jeneriklik garantileri |
-| `docs/adr/` | **Mimari karar kayıtları** — her kararın gerekçesi ve ölçümü |
-| `docs/MILESTONE_PLANI_2026-09-13.md` | Milestone planı ve işaretli ilerleme (M00–M17) |
-| `docs/OPERASYON_TARIFI.md` | Demo günü kurulum, akış, kaynak erişim matrisi, sorun giderme |
-| `docs/M16_KABUL_RAPORU.md` | Birleşik kabul raporu (vaka matrisi, canlı koşular, sınırlar) |
-| `PROJECT_MEMORY.md` | Adım adım ilerleme kaydı ve ölçülerek öğrenilenler |
-| `docs/` | Sözleşme dokümanları, açılış toplantısı slaytları |
+| Projenin genel mimari tasarımı (diyagram ve akış şemaları) | [01-GENEL-MIMARI.md](01-GENEL-MIMARI.md) |
+| Projenin modüler kod yapısı | [02-MODULER-KOD-YAPISI.md](02-MODULER-KOD-YAPISI.md) |
+| Agentic mimarinin karar alma ve görev işleme tasarımı | [03-AGENT-KARAR-VE-GOREV-ISLEME.md](03-AGENT-KARAR-VE-GOREV-ISLEME.md) |
+| Doküman okuma süreçlerinde kullanılan yaklaşım ve agent yapısı | [04-DOKUMAN-OKUMA.md](04-DOKUMAN-OKUMA.md) |
+| Kurulum ve çalıştırma | [05-KURULUM-VE-CALISTIRMA.md](05-KURULUM-VE-CALISTIRMA.md) |
+| Veri, katalog ve Gold | [06-VERI-VE-KATALOG.md](06-VERI-VE-KATALOG.md) |
+| Mimari kararlar (ADR) | [docs/adr/README.md](docs/adr/README.md) |
+
+## Öne çıkanlar
+
+- **Sıfırdan yazılmış lakehouse.** Bulut veya lisanslı ürün yok; DuckDB + Parquet + Python.
+  - Havuzda 6.839 seri kataloglu, 6.449'u yüklü.
+  - Silver'da 255.413 gözlem var (2016 → 2026).
+  - Her gözlem kaynak dosyasının sha256'sını taşır.
+- **Harness güçlü, modele en az iş.** Model araç seçer ve anlatır. Hesap, hizalama, reel değer, endeks ve vade grupları
+  deterministik koddadır.
+- **Kanıtsız sayı yok.** Cevaptaki her sayı bir araç çıktısında bulunmalıdır. Kanıt zinciri şöyledir:
+
+  ```
+  sayı → tablo hücresi → SQL → Silver gözlemi → RAW dosya (bayt özeti doğrulanır) → kaynak URL
+  ```
+- **Doküman okuma.**
+  - CSV, XLSX, XLS, JSON, PDF metin katmanı ve OCR okunur; web sayfası da okunur.
+  - Rapor önsözü ve "Toplam" satırı veri sayılmaz.
+  - Haftalık → aylık dönüşüm yalnız güvenli kurallarla yapılır.
+  - Erişim engeli aşılmaz; açıkça söylenir ve dosya yükleme yolu gösterilir.
+- **İki profil.**
+  - **Analyst:** salt-okunur analiz.
+  - **Architect:** dosyayı havuza taslak olarak kaydeder, kullanıcı onayıyla kataloğa alır, iki adımlı tam sıfırlama
+    yapar.
+  - Arayüzden tek tıkla geçilir; sohbet korunur.
+- **Jenerik.** Alan bilgisi katalog ve yapılandırmadadır. Havuz boşaltılıp başka bir alanın verisiyle kurulabilir.
+- **Her karar kayıtlı.** 110+ ADR'nin her biri gerekçe ve ölçüm içerir; reddedilen kararlar da kayıtta durur.
 
 ## Hızlı başlangıç
 
-Repo kökünde (M01, ADR-0049):
-
 ```bash
-make setup                    # iki ortam, kilit dosyalarından
-cp .env.example .env          # değerleri doldurun — .env asla commit edilmez
-make preflight                # salt-okunur ön kontrol; HAZIR DEĞİL ise sebebini söyler
-make demo-data                # veri DEĞİŞTİRİR: 681 seri 2016+ canlı ingest → silver → gold (~30 dk)
-make serve                    # arayüz: http://127.0.0.1:8765
-make ci                       # CI ile aynı deterministik testler
+make setup                   # iki paketin bağımlılıkları (uv)
+cp .env.example .env         # MIA_API_KEY, EVDS_API_KEY (+ isteğe bağlı TAVILY_API_KEY)
+make preflight               # salt-okunur ön kontrol
+make demo-data               # veri havuzunu kaynaklardan kur
+make serve                   # http://127.0.0.1:8765
 ```
 
-Tek soru, izli: `cd agent-core && uv run python -m kkb_agent.cli --trace "2025'te konut kredisi nasıl değişti?"`
+Ayrıntılar, ortam değişkenleri ve komut satırı: [05-KURULUM-VE-CALISTIRMA.md](05-KURULUM-VE-CALISTIRMA.md).
 
-Ayrıntı: [docs/AGENT.md](docs/AGENT.md) · demo günü ve kabul betikleri: [docs/OPERASYON_TARIFI.md](docs/OPERASYON_TARIFI.md) · `.env` kabukta `source` edilmez, uygulama okur
+## Neyin nerede olduğu
 
-## Veri kaynakları
-
-| Kaynak | Kapsam | Erişim |
-|---|---|---|
-| BDDK Aylık Bülten | 2016-01 → 2026-06, 20 kalem (4 kalem kaynakta 2018'den) | Kimlik doğrulaması olmayan JSON endpoint |
-| BDDK Haftalık Bülten | 2016-01 → 2026-06 | dönem bazlı sorgu |
-| BDDK FinTürk (il bazlı) | 2016-Ç1 → 2026-Ç2, 81 il × 8 ölçüm | form POST, yalnız çeyrek sonu |
-| TCMB EVDS 3 | 2016-01 → 2026-06, 12 seri | `key` başlığıyla REST, ≤365 günlük pencere |
-| Ad-hoc dosya / URL | demo anında | CSV / Excel / PDF / görsel (MIA OCR) / HTML |
-
-Yüklü dönemin dışı istenirse Analyst mevcut aralığı söyler; Architect kaynaktan çekebilir. Kapsam ve mutabakat:
-[docs/M08_KAPSAM_RAPORU.md](docs/M08_KAPSAM_RAPORU.md).
-
-Endpoint ayrıntıları ve doğrulanmış tablo haritası:
-[docs/LAKEHOUSE_CONTRACT.md](docs/LAKEHOUSE_CONTRACT.md) § 5.
-
-## Çalışma düzeni
-
-- `main` — korumalı. Doğrudan geliştirme yapılmaz; ana dala birleştirme ekip kararıyla ve PR üzerinden yapılır.
-- `feature/agent-engine` — bütünleşik geliştirme dalı: agent motoru, `lakehouse-core`, arayüz ve belgeler birlikte.
-- Diğer `feature/*` dalları ekip üyelerinin çalışma ve araştırma dallarıdır; silinmez.
-- Her push'ta GitHub Actions iki paketin deterministik testlerini koşar (`.github/workflows/tests.yml`).
-
-## Kararlar nasıl kayda geçiyor
-
-Her mimari karar, gerekçesi ve varsa ölçümüyle birlikte
-[`docs/adr/`](docs/adr/) altına yazılır. Reddedilen kararlar da kayıtta durur:
-bir şeyi deneyip ölçerek vazgeçmiş olmak, hiç dememekten farklıdır ve aynı fikir
-tekrar gündeme geldiğinde tartışma sıfırdan başlamaz.
-
-## Takvim
-
-| Tarih | Aşama |
+| Yol | İçerik |
 |---|---|
-| 20 Eylül 2026 | Geliştirme bitişi — repo dondurulur |
-| 5 Ekim 2026 | Finalist 10 takımın açıklanması |
-| 17 Ekim 2026 | Final sunumları |
+| `agent-core/src/kkb_agent/core/` | Ajan motoru: döngü, tur niyeti, araç kapısı, doğrulayıcı, kurtarma, cevap doğrulama, kanıt zinciri, çalışma tablosu |
+| `agent-core/src/kkb_agent/tools/` | 25 araç: lakehouse, çalışma tablosu, Gold, analitik, grafik, web, kayıt |
+| `agent-core/src/kkb_agent/builder/` | Dosya okuma, zaman normalizasyonu, profil ve kayıt hattı |
+| `agent-core/src/kkb_agent/web/`, `vision/` | Web erişimi (robots, bütçe, tarayıcı katmanı), PDF ve OCR |
+| `agent-core/src/kkb_agent/web_app.py`, `static/` | Arayüz (FastAPI + tek sayfa) |
+| `agent-core/src/kkb_agent/config_data/` | Kodun dışındaki alan bilgisi: kaynak ipuçları, kavram sözlüğü |
+| `agent-core/tests/` | Ajan testleri (1168) |
+| `lakehouse-core/src/lakehouse/` | Bağlayıcılar, ayrıştırıcılar, RAW/Bronze depolama, Silver, katalog, Gold, ad-hoc |
+| `lakehouse-core/catalog/` | Seri kataloğu (`series/*.yml`) ve Gold metrikleri (`gold/*.yml`) |
+| `lakehouse-core/scripts/` | Toplu çekim, katalog üreticileri, kalite kapıları |
+| `lakehouse-core/docs/` | Lakehouse sözleşmeleri (katalog, Gold, jenerik alım, ad-hoc) ve kaynak notları |
+| `docs/adr/` | Mimari karar kayıtları |
+| `docs/calisma-notlari/` | Ekibin iç çalışma notları, ilerleme ve denetim raporları (arşiv) |
+| `data/` | (git dışı) RAW, Bronze, `lakehouse.duckdb`, yüklemeler, sohbetler |
 
 ## Kurallar
 
 Yarışma şartnamesinden doğan ve ihlali eleme sebebi olan kısıtlar:
 
-- **Hazır/lisanslı bulut Lakehouse kullanılmaz** (Snowflake, BigQuery vb.). Çözüm
-  baştan sona bu repoda üretilir.
-- **Dış LLM servisi kullanılmaz** (OpenAI, Anthropic, OpenRouter). Yalnızca KKB'nin
-  Kloudeks platformu üzerinden erişilen modeller kullanılır.
-- **Backend Python.** Frontend serbest. Açık kaynak kütüphaneler tercih edilir.
-- **API key'leri repoya yazılmaz** — private repo olsa bile. Tümü `.env` içinde tutulur,
-  `.gitignore` ile korunur.
-- Repo private kalır; dondurma tarihinden sonra commit atılmaz.
+- **Hazır ya da lisanslı bulut lakehouse kullanılmaz** (Snowflake, BigQuery vb.). Çözüm baştan sona bu repoda üretilir.
+- **Dış LLM servisi kullanılmaz** (OpenAI, Anthropic, OpenRouter). Yalnız KKB'nin Kloudeks platformundaki modeller
+  kullanılır.
+- **Backend Python.** Açık kaynak kütüphaneler tercih edilir.
+- **Anahtarlar repoya yazılmaz.** Hepsi `.env` içindedir ve `.gitignore` ile korunur.
+- **Bot koruması ve CAPTCHA aşılmaz.** Erişilemeyen kaynakta ajan durumu söyler ve seçenek sunar (mentör kararı,
+  12 Eylül).
+
+## Çalışma düzeni
+
+- **Dallar.** `main` korumalıdır; birleştirme PR ile ve ekip onayıyla yapılır. Bütünleşik geliştirme
+  `feature/agent-engine` dalındadır.
+- **CI.** Her PR'da iki paketin deterministik testleri koşar: `.github/workflows/tests-agent.yml` ve
+  `tests-lakehouse.yml`.
+- **Kararlar.** Her mimari karar gerekçesi ve ölçümüyle `docs/adr/` altına yazılır.
+- **İlerleme kaydı.** Adım adım ilerleme `PROJECT_MEMORY.md` dosyasındadır.
+
+## Takvim
+
+| Tarih | Aşama |
+|---|---|
+| 5 Ekim 2026 | Finalist 10 takımın açıklanması |
+| 17 Ekim 2026 | Final sunumları |

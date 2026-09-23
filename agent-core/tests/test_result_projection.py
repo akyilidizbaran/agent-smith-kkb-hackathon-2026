@@ -92,6 +92,16 @@ def test_percent_and_explicit_base_plus_change_projection() -> None:
     assert projected is not None
     assert list(projected.columns) == ["date", "metric_a", "metric_b", "metric_a_change", "metric_b_change"]
 
+    answer, agent, before = _derived_answer()
+    projected = project_result_table(
+        answer,
+        agent,
+        question="Orijinal bakiyeleri de aylık değişimlerle birlikte göster.",
+        table_before=before,
+    )
+    assert projected is not None
+    assert list(projected.columns) == ["date", "metric_a", "metric_b", "metric_a_change", "metric_b_change"]
+
 
 def test_generic_transport_projection_and_explicit_all_columns() -> None:
     answer, agent, before = _derived_answer(transport=True)
@@ -288,3 +298,93 @@ def test_fastpath_multi_column_step_projects_and_exports_derived_only() -> None:
     csv_frame = pd.read_csv(io.BytesIO(table_csv_bytes(projected)), sep=";", decimal=",", encoding="utf-8-sig")
     xlsx_frame = pd.read_excel(io.BytesIO(table_xlsx_bytes(projected, title="fastpath")), sheet_name="tablo", engine="openpyxl")
     assert list(csv_frame.columns) == list(projected.columns) == list(xlsx_frame.columns)
+
+
+def test_deterministic_fastpath_uses_scoped_result_for_exports() -> None:
+    """The active 60-row LAG base must not leak into a 24-row answer artifact."""
+    dates = pd.date_range("2021-01-31", periods=60, freq="ME")
+    base = pd.DataFrame({"date": dates, "metric": range(60)})
+    workspace = AnalysisWorkspace()
+    workspace.set_table(base, description="monthly fixture")
+    change = pd.Series([None, *[1.0] * 59], index=workspace.table.index)
+    workspace.add_column(
+        "metric_change",
+        change,
+        description="monthly change",
+        provenance=QueryProvenance(
+            sql="türetilmiş: metric - LAG(metric) OVER (ORDER BY date)",
+            dataset_ids=[],
+        ),
+    )
+    scoped = workspace.table.iloc[12:36].copy()
+    answer = AgentAnswer(
+        text="ok",
+        steps=[AgentStep(
+            index=1,
+            role="execute",
+            tool_name="workspace_compute_column",
+            tool_args={
+                "column_name": "metric_change",
+                "expression": "metric - LAG(metric) OVER (ORDER BY date)",
+                "deterministic": True,
+            },
+            result_data=scoped,
+        )],
+        workspace=workspace,
+    )
+    agent = SimpleNamespace(workspace=workspace)
+
+    projected = project_result_table(answer, agent, question="aylık değişimleri göster")
+
+    assert projected is not None
+    assert len(projected) == 24
+    assert projected.iloc[0]["date"] == dates[12]
+    assert projected.iloc[-1]["date"] == dates[35]
+    csv_frame = pd.read_csv(io.BytesIO(table_csv_bytes(projected)), sep=";", decimal=",", encoding="utf-8-sig")
+    xlsx_frame = pd.read_excel(io.BytesIO(table_xlsx_bytes(projected, title="scoped")), sheet_name="tablo", engine="openpyxl")
+    assert len(csv_frame) == len(xlsx_frame) == 24
+
+
+def test_base_and_derived_projection_needs_both_and_a_connective() -> None:
+    from kkb_agent.web_app import _BASE_AND_DERIVED_REQUEST as both
+    for question in ("Orijinal bakiyeleri de aylık değişimlerle birlikte göster", "Hem bakiye hem değişim göster",
+                     "Değişimleri ve orijinal değerleri göster", "Orijinal değerlerle birlikte yüzde değişimi göster",
+                     "Show both values and changes"):
+        assert both.search(question), question
+    for question in ("Değişim değerlerini göster", "Aylık değişimleri göster", "Yüzde değişimi hesapla", "Bakiyeleri göster"):
+        assert not both.search(question), f"{question}: yalnız biri istendi, orijinal kolonlar eklenmez"
+
+
+def test_base_data_request_keeps_source_columns_and_both_operations() -> None:
+    """ADR-0105: F04 'tabloda period, üç bakiye, fark ve yüzde olsun', F02 'aynı tabloya aylık farkı ekle'.
+    Kaynak veri istenince bakiyeler görünür; mutlak fark + yüzde birlikte istenince yüzde kelimesi mutlak farkı düşürmez.
+    'Yalnız değişim' her zaman kazanır."""
+    answer, agent, before = _derived_answer()
+    both = project_result_table(answer, agent, table_before=before,
+                                question="Kullanıcı tablosunda period, bakiyeler, aylık mutlak farkı ve aylık yüzde değişimi olsun.")
+    assert both is not None and list(both.columns) == ["date", "metric_a", "metric_b", "metric_a_change", "metric_b_change"]
+    added = project_result_table(answer, agent, question="Aynı tabloya aylık farkı ekle.", table_before=before)
+    assert added is not None and "metric_a" in added.columns and "helper_score" not in added.columns
+    only = project_result_table(answer, agent, question="Bakiyeleri gösterme, yalnız aylık değişimleri göster.", table_before=before)
+    assert only is not None and list(only.columns) == ["date", "metric_a_change", "metric_b_change"]
+
+
+def test_compute_request_keeps_source_and_untransformed_turn_shows_full_table() -> None:
+    """Son 3× (23 Eyl): F07 'Aylık farkı hesapla' tabloya kolon ekler, stok görünür kalır. F08 dışa aktarma turu ve
+    T05 'nominal ve reel aynı tabloda' türetme istemez; hesaplanan kolonlar görünümü daraltmaz, tablo olduğu gibi çıkar."""
+    answer, agent, before = _derived_answer()
+    computed = project_result_table(answer, agent, question="Takip: Aylık farkı hesapla.", table_before=before)
+    assert computed is not None and list(computed.columns) == ["date", "metric_a", "metric_b", "metric_a_change", "metric_b_change"]
+    export = project_result_table(answer, agent, table_before=before,
+                                  question="Takip: Kullanıcı projection'ını CSV ve XLSX olarak dışa aktar.")
+    assert export is not None and list(export.columns) == list(agent.workspace.table.columns)
+    shown = project_result_table(answer, agent, question="aylık değişimleri göster", table_before=before)
+    assert shown is not None and list(shown.columns) == ["date", "metric_a_change", "metric_b_change"]
+
+
+def test_only_restricting_months_does_not_hide_source_values() -> None:
+    """Son 3× (23 Eyl, Q05): 'Yalnız komşu takvim ayları için ... değişim hesapla' ay kısıtıdır; değer kolonu görünür kalır."""
+    answer, agent, before = _derived_answer()
+    projected = project_result_table(answer, agent, table_before=before,
+                                     question="Yalnız komşu takvim ayları için mutlak ve yüzde değişim hesapla.")
+    assert projected is not None and "metric_a" in projected.columns and "metric_a_change" in projected.columns

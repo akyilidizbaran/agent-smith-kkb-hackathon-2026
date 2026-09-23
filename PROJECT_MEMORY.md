@@ -1171,3 +1171,276 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
 - Actions `35538510918` (`7d0009e`) içinde A ve C test job'ları 60 dakikada `cancelled` oldu; son pytest ilerlemesi A %29, C %62 idi. B tamamlandı. Assertion sonucu/stack trace yok; gerçek neden 6.304 aktif seri kapsamına göre eski A/B/C parçalarının artık fazla büyük olması. `tests-lakehouse.yml` A–H sekiz parçaya dağıtıldı; 15 test dizininin tam ve çakışmasız kapsandığı YAML/coverage kontrolü geçti. Test komutuna `--durations=20` eklendi. Yeni Actions süresi henüz ölçülmedi; dosya değişiklikleri push/PR edilmedi.
 - `load_series_catalog` her bootstrap'ta ilişki grafiğinin tamamını ayrı ayrı yeniden yazıyordu. Relation hash'i değişmeyen satırlar artık atlanıyor, değişenler tek `executemany` batch'iyle yazılıyor. Geçici DuckDB benchmark'ında tekrar bootstrap **5,766 s → 0,717 s** (−%87,6); ilk bootstrap 6,884 s / 7,502 s olduğundan ilk kurulumda hız kazanımı ölçülmedi.
 - Regresyon doğrulaması: ilişki idempotency/update + catalog bootstrap testleri **22 geçti**; acceptance **37 geçti**; tam test keşfi **1.133** vaka. Tam lakehouse suite yerelde başlatıldı ancak büyük katalog maliyeti nedeniyle tamamlanmadan durduruldu; tam suite sonucu iddia edilmiyor. Workflow değişiklikleri ve relation batch yolu için CI'ın yeni A–H koşusu gerekir.
+
+### 2.126 MIA erişiminin geri gelmesi (21 Eylül)
+- Yerel demo `127.0.0.1:8765` üzerinde çalışıyordu ve `/api/status` HTTP 200 verdi. Salt-okunur `uv run python -m kkb_agent.cli --preflight --live` kontrolü tam hazır sonucu verdi; canlı MIA ping'i `kkbhackathon2026/Qwen3.8-27B` üzerinden `hazır` yanıtı aldı.
+- Önceki 401/API key expired hatası şu an tekrarlanmadı. Model/sağlayıcı, prompt, token veya ortam ayarı değiştirilmedi; bu yalnızca servis erişiminin geri geldiğini doğrulayan kısa sağlık çağrısıdır.
+- Ardından eski demo PID'si kontrollü durdurulup `make serve` ile `0b76fad` commitindeki kod yeniden başlatıldı. `/` ve `/api/status` HTTP 200; katalog 6.304 seri ve araç sayısı 21; başlatma logu Kloudeks/Qwen3.8-27B'yi, canlı preflight da başarılı `hazır` yanıtını doğruladı.
+
+### 2.127 Cloudflare demosu tekrar açıldı (21 Eylül)
+- Aynı `agent-smith-demo` Cloudflare tunnel connector'ı mevcut token-file ile tekrar çalıştırıldı; Cloudflare uzaktan hostname ingress yapılandırmasını `agent-smith-demo.bardaka.site` → `http://localhost:8765` olarak yükledi ve connector kaydoldu.
+- Public `/` ve `/api/status` HTTPS kontrolleri HTTP 200 verdi. Public status aynı `kkbhackathon2026/Qwen3.8-27B` modelini, 6.304 katalog serisini ve 21 aracı gösterdi. Token/secret proje dosyasına yazılmadı; uygulama kodu ve `.env` değiştirilmedi.
+
+### 2.128 Aynı sorguda 22,8 sn / 51,9 sn gecikme farkı (21 Eylül)
+- İki ayrı yeni sohbette aynı soru tam metin eşleşti. Önceki yanıt **22,834 sn**, yenisi **51,868 sn**; ikisi de Qwen3.8-27B ile 3 LLM çağrısı, 5 başlangıç / 14 maksimum araç şeması, 0 başarısız çağrı ve 0 retry kullandı. Prompt/completion tokenları sırasıyla 10.177/478 ve 10.082/421; boyut farkı ihmal edilebilir.
+- LLM çağrı süreleri toplamı **13,63 → 42,23 sn** (+28,60 sn); araç yürütmesi **1,05 → 1,72 sn**, context hazırlığı her ikisinde de yaklaşık 0,05 sn. Üç planlama çağrısının süreleri 0,96/2,39/10,27 sn'den 6,75/9,42/26,07 sn'ye çıktı. Ek 29,03 saniyenin neredeyse tamamı provider çağrılarında; harness/tool yolu belirgin değişmedi.
+- En kuvvetli açıklama Kloudeks/MIA serving latency değişkenliği (muhtemel kuyruk/iş yükü/cold-start); ancak stream kapalı olduğundan TTFT yok ve provider kuyruğu ile model üretim süresi ayrılamıyor. Bu gözlem kod, token ayarı veya Cloudflare kaynaklı bir değişiklik kanıtı değil; tekrarlı eşzamanlı canary ve streaming TTFT metriğiyle izlenmeli.
+
+### 2.129 Narration timeout'unun 100 saniyeye çıkarılması (21 Eylül)
+- Kullanıcı isteğiyle `LLM_NARRATION_TIMEOUT_S` varsayılanı 60 → 100 saniyeye çıkarıldı. Sağlayıcı istemcisinin tek çağrı üst sınırı 90 sn'de narration'ı keseceği için `LLM_TIMEOUT` da 100 sn oldu; tool fazı kendi 90 sn deadline'ıyla sınırlı, soru bütçesi 600 sn. Bu nedenle planlama gibi araçsız LLM çağrılarının genel tek-çağrı tavanı da 90 → 100 sn yükseldi.
+- `.env.example` ve yerel `.env` aynı iki değere ayarlandı; ortam değişkeniyle farklı değer verme desteği korunuyor.
+- Doğrulama: settings/default+override, agent doğrudan-varsayılanı, narration deadline ve web research testleri **8 geçti**; etkin ayarlar `LLM_TIMEOUT=100`, `LLM_NARRATION_TIMEOUT_S=100`, `LLM_TOOL_TIMEOUT_S=90`. Değişen modüllerde Ruff `F` ve `git diff --check` temiz; geniş Ruff kural seti `agent.py` içindeki bu değişiklikten bağımsız mevcut biçim uyarılarını raporluyor. Demo PID 8873 ile yeniden başladı; yerel ve Cloudflare `/api/status` HTTP 200 verdi, tünel prosesi korundu.
+
+### 2.130 Kloudeks DeepSeek alternatif model erişimi (22 Eylül)
+- Mevcut `.env` içindeki MIA/Kloudeks anahtarıyla salt sağlayıcı kontrolleri yapıldı; `/v1/models` exact model kimliği `deepseek-ai/DeepSeek-V4.1-Flash` olarak listeliyor.
+- Aynı modelle doğrudan chat canary’si HTTP 200/`stop` verdi; native function-tool canary’si HTTP 200/`tool_calls` ile `echo` çağrısı ve argüman üretti. Bu, modelin agent’in OpenAI-uyumlu araç protokolüne erişilebilir olduğunu gösterir; tam 71-vaka kalite benchmarkı değildir.
+- Demo’nun mevcut modeli değiştirilmedi: `LLM_MODEL=kkbhackathon2026/Qwen3.8-27B`. DeepSeek’i denemek isteyen ekip yalnızca kendi yerel `.env` dosyasında `LLM_MODEL=deepseek-ai/DeepSeek-V4.1-Flash` seçebilir; API anahtarı veya değeri repoya yazılmadı.
+
+### 2.131 Seri seçimi için dönem ve semantik uyum kapısı (22 Eylül)
+- 60 satırlı BDDK sorgusunda kredi kartı kolonu boş kalıyordu çünkü model `bddk_monthly:1897_Toplam` adlı türetilmiş “Kredi Kartları (Krediler)” serisini seçmişti. Bu seri 2022-01'de başlıyor ve “Bireysel Kredi Kartları, Toplam (Sektör)” doğrulanmış `bddk_monthly:1539_Toplam` serisinin yerine geçemiyor; ihtiyaç kredisi serisi doğruydu. 60 aylık dış pencerenin otomatik olarak 2021-01→2025-12 çözülmesi beklenen davranış olarak kaldı.
+- Genel mimariye iki savunma eklendi: retriever, bağlaçsız çoklu kavram sorgularında kısa kavram ifadelerini de aday havuzuna katar; `lakehouse_query` SQL çalıştırmadan önce kullanılan aylık serilerin çözülmüş dış pencereyi tamamen kapsadığını ve daha güçlü doğrulanmış alternatif varken türetilmiş seriye düşülmediğini kontrol eder. Uyuşmazlıklar `SERIES_COVERAGE_MISMATCH` / `SERIES_SEMANTIC_MISMATCH` olarak yapılandırılmış ve recovery semantic guard'a bağlanmıştır.
+- Regresyonlar: seçilen kısa seri SQL çalışmadan reddediliyor ve tam kapsamlı doğrulanmış aday öneriliyor; bağlaçsız ihtiyaç + bireysel kart sorgusu iki kavramı aynı aday havuzunda koruyor. Hedefli lakehouse/retrieval/recovery testleri **80**, tam `agent-core` suite **947** geçti; yalnız mevcut Starlette/AnyIO deprecation uyarısı var. `compileall`, değişen dosyalarda Ruff F ve `git diff --check` temiz.
+- Demo kontrollü biçimde bu kodla yeniden başlatıldı; `/api/status` HTTP 200, DeepSeek modeli, 6.304 seri, 21 araç ve 7 Gold tabloyu bildirdi. Aynı kullanıcı sorusu API üzerinden başarıyla tamamlandı: 60 satır, iki dolu seri (`1536` + doğrulanmış `1539`), 5 LLM çağrısı, 15,7 sn; yanlış `1897` serisi seçilmedi. `.env`, veritabanı ve Cloudflare tüneli değiştirilmedi. Kod/test/memory değişikliği yerel bir committe; henüz push/PR yok.
+
+### 2.132 Dönüşüm çıktısında kullanıcı penceresi ile aktif çalışma tablosunu ayırma (22 Eylül)
+- Ekrandaki 24 dönemlik takip dönüşümü anlatımda doğru görünürken UI/CSV/XLSX kartı aktif 60 satırlı workspace'i dışa aktarıyordu. LAG tabanının korunması için workspace'in tam pencere olması doğrudur; hata, `project_result_table`'ın deterministic fast path `result_data` görünümünü ve reuse proof'un dönem sınırlarını yok sayıp tekrar tam workspace'e dönmesiydi.
+- Genel projeksiyon katmanı düzeltildi: deterministic fast path'ın zaten kapsamlandırılmış `result_data`'sı kullanıcı artefaktına taşınıyor; verified workspace reuse'ta yalnız `period_start`–`period_end` aralığı filtreleniyor. Aktif workspace 60 satır olarak korunuyor, kullanıcı tablosu ve indirilebilir dosyalar istenen 24 satırı taşıyor. Ortak `_compute_result_projection` helper'ı kolon seçim mantığını iki yoldan da aynı tutuyor.
+- Regresyonlar: takip dönüşümü API payload'ı 24 satır ve 2023-01–2024-12 sınırlarıyla; deterministic fast path üzerinde 60 satırlı workspace'e karşı UI/CSV/XLSX 24 satırla doğrulanıyor. İlgili projection/follow-up testleri **50 geçti**, tam `agent-core` suite **947 geçti**; tek mevcut Starlette/AnyIO deprecation uyarısı. `ruff --select F` ve `git diff --check` temiz.
+- `.env`, lakehouse, provider, model ve Cloudflare tüneli değiştirilmedi. Değişiklikler henüz commit edilmedi; demo süreci mevcut eski kodla çalışıyor ve commit sonrası kontrollü yeniden başlatılıp canlı takip akışı doğrulanmalı.
+
+### 2.133 Fast path'in kanıt metadatasını analitik seri saymaması (22 Eylül)
+- Canlı takip akışında 24 satır kapsamı düzeldikten sonra BDDK Gold kanıt kolonları (`::observations`, `::missing_observations`) da numeric oldukları için `*_change` kolonlarına dönüştürülüyordu. Bunlar ölçüm serisi değil lineage metadata'sıdır ve kullanıcı projeksiyonuna girmemelidir.
+- `plan_verified_workspace_transform` artık ortak provenance kolon filtresini kullanıyor; gerçek ölçü kolonları üzerinde dönüşüm yapılırken kanıt kolonları hesaplanmıyor. Bu generic kural BDDK dışındaki Gold/workspace tablolarında aynı suffix sözleşmesine sahip metadata için de geçerlidir.
+- Yeni regresyon testi numeric provenance kolonlarının plan dışı kaldığını doğruluyor. Önceki 947 teste ek hedefli test çalıştırılacak; commit ve demo yeniden başlatması bu ek değişiklikten sonra yapılmalı.
+
+### 2.134 24 satırlı takip çıktısının canlı doğrulaması (22 Eylül)
+- UI/export kapsamı düzeltmesi `92dae5f` ve kanıt filtresi `6cb35f3` commitleriyle yerel dala alındı; untracked benchmark/deney dosyaları commit kapsamına alınmadı.
+- Tam `agent-core` suite **949 geçti** (tek mevcut Starlette/AnyIO deprecation uyarısı); hedefli projection/follow-up/workspace suite **64 geçti**. `ruff --select F` ve `git diff --check` temiz.
+- Yeni demo kontrollü biçimde PID 11233 ile `127.0.0.1:8765` üzerinde çalışıyor; DeepSeek `deepseek-ai/DeepSeek-V4.1-Flash`, 6.304 seri ve 21 araç aktif. Aynı iki sorunun canlı akışında ilk tablo 60 satır; takip dönüşümü 2022-01-31–2023-12-31 arasında 24 satır, yalnız iki gerçek `value_change` kolonu, 0 başarısız LLM çağrısı verdi. `table.csv` 24 veri satırı, `table.xlsx` 24 veri satırı olarak ayrıca doğrulandı.
+- Aktif workspace tam 60 aylık pencere olarak korunuyor; bu, sonraki takiplerde Aralık 2021 tabanıyla LAG hesaplamasını ve kapsam değişikliğini bozmuyor. Cloudflare, `.env`, lakehouse ve provider ayarları değiştirilmedi; PR/push yapılmadı.
+
+### 2.135 Teknik kolon adlarını kullanıcı etiketlerine ayırma (22 Eylül)
+- Gold birleşiminden gelen `<seri>@<varlık>::value` ve `...::value_change` isimleri UI/export başlıklarında ham haliyle görünüyordu. Yeni `display_column_labels` katmanı katalogdaki seri adı, ölçüm alias'ı ve birimden okunur etiket üretir; `Dönem`, `ihtiyaç kredisi (milyon TL)` ve `ihtiyaç kredisi — değişim (milyon TL)` gibi başlıklar gösterilir.
+- Bu yalnızca sunum projeksiyonudur: DataFrame kolon kimlikleri, provenance, SQL ve kanıt paneli değişmez. JSON payload başlıklarıyla CSV/XLSX başlıkları aynı etiketlerden üretilir; katalog eşleşmesi yoksa teknik isim korunur, anlam uydurulmaz. Kullanıcı dosyaları ve zaten okunur kolonlar etkilenmez.
+- `test_labels.py` ile katalog semantiği, birim ve türetilmiş kolon adlandırması; web/export testleriyle geriye dönük davranış doğrulandı. Tam `agent-core` suite **950 geçti**, tek mevcut Starlette/AnyIO deprecation uyarısı; `ruff --select F` ve `git diff --check` temiz. Demo, commit sonrası yeniden başlatılıp Gold başlıkları canlı kontrol edilmeli.
+
+### 2.136 Kullanıcı kolon etiketlerinin canlı doğrulaması (22 Eylül)
+- Demo PID 12868 ile yeniden başlatıldı ve aynı BDDK akışı tekrarlandı. İlk cevapta UI ve CSV başlıkları `Dönem`, `ihtiyaç kredisi (milyon TL)`, `bireysel kredi kartları (milyon TL)`; takip cevabında `ihtiyaç kredisi — değişim (milyon TL)` ve `bireysel kredi kartları — değişim (milyon TL)` oldu.
+- Takip tablosu 24 satır, 2022-01-31–2023-12-31 sınırında kaldı. Ham seri kimlikleri yalnızca workspace/provenance/kanıt izinde tutuluyor; kullanıcı tablosu ve dışa aktarımlar teknik isim sızdırmıyor. Model, katalog veya veri dosyası değişmedi.
+
+### 2.137 Kaynak soruları için deterministik, maddeli provenance özeti (22 Eylül)
+- Kullanıcı “verinin kaynağı ve dayandığı seriler nedir?” dediğinde serbest narration tek paragrafta kaynak, seri, türetilmiş kolon ve teknik Gold kimliklerini karıştırıyordu. `core/source_summary.py` genel bir kaynak niyeti algısı ve doğrulanmış workspace/katalog metadatasından maddeli özet üretimi ekledi: kaynak, seriler, dönem, frekans, birim, ölçüm türü, hesaplanan kolonlar ve kanıt kapsamı ayrı başlıklar halinde gösteriliyor.
+- Yanıt yalnızca mevcut doğrulanmış tabloya dayanıyor; teknik seri kimlikleri ve sorgu izi kanıt panelinde kalıyor. Kaynak sorusu salt-okunur bir takip olduğunda aktif tablo provenance'ı yeniden sorgulanmıyor ve anlatım LLM'i atlanıyor; `deterministic_source_summaries` ölçümü ile görünür. Yeni veri/seri/dönem isteyen sorular bu kapıyı kullanmıyor.
+- Kaynak/spec bilgisi yoksa bu özet zorlanmıyor; normal model/recovery akışı korunuyor. Bu nedenle web-only araştırma ve metadata'sız kullanıcı dosyaları için yanlış kaynak uydurulmuyor. BDDK'ya özel prompt veya seri kimliği eklenmedi.
+- Doğrulama: yeni source-summary/fastpath testleri ve tam `agent-core` suite **953 geçti**, tek mevcut Starlette/AnyIO deprecation uyarısı; Ruff `F` ve `git diff --check` temiz. Demo yeniden başlatıldı; ilk veri sorgusundan sonra kaynak takip sorusu **0 LLM çağrısı**, `FOUND`, yapılandırılmış maddeli metin ve 60 satırlı aktif tablo ile tamamlandı. Kod henüz commit/PR edilmedi.
+
+### 2.138 Aktif tablo hazırlık sorgusunda lineage kaybı ve eksik LAG kapanışı (22 Eylül)
+- Kullanıcı “önceki aya göre aylık değişimleri göster” dediğinde bazı model turlarında `workspace_query(as_active_table=true)` yalnızca tarih kolonunu CAST/sıralıyor, ardından anlatıma geçiyordu. Bu sorgu eski uygulamada her kolonun provenance'ını boş `dataset_ids` ile ezdiği için doğrulanmış dönüşüm planı seri kimliğini kaybediyor; 24 satırlı ham tablo görünmesine rağmen aylık değişim üretilemiyordu.
+- `workspace_query` artık aktif tablonun taşınan kolon provenance'ını tek tek koruyor; aynı adlı kolonlar kendi dataset kimliklerini, kaynaklarını ve URL'lerini alıyor, alias/hesap kolonları önceki workspace lineage'ının muhafazakâr birleşimini taşıyor. Ana sorgu provenance'ı da union kimlikleriyle kaydediliyor; yeni katalog serisi keşfedilmiş sayılmıyor.
+- `AnalyticsAgent`, doğrulanmış takipte hazırlık sorgusunu nihai dönüşüm saymıyor: `period_change`/`percent_change` istenip türetilmiş kolon yoksa, model anlatımını kabul etmeden aynı güvenli deterministik workspace fast path'ini çalıştırıyor. Yapısal teslim kapısı da artık bu operasyonlarda `_change`/`_pct_change` çıktısını arıyor; tarih hazırlığı tek başına yeterli değil.
+- Regresyonlar: provenance kimliklerinin workspace query ile taşınması ve hazırlık sorgusundan sonra otomatik LAG tamamlanması hedefli suite **20**, tam `agent-core` suite **955 geçti**; yalnız mevcut Starlette/AnyIO deprecation uyarısı. Canlı demo yeniden başlatıldı; ilk BDDK tablosu 24 satır, takip sorusu 24 satır ve iki değişim kolonu ile `FOUND`, 0 LLM çağrısıyla tamamlandı. Kod henüz commit/PR edilmedi.
+
+### 2.139 Orijinal bakiye ve değişim kolonlarını birlikte projekte etme (22 Eylül)
+- “Orijinal bakiyeleri de aylık değişimlerle birlikte göster” isteğinde hesaplanmış değişim kolonları doğruydu, ancak UI/CSV/XLSX projeksiyonu yalnız türetilmiş kolonları seçiyordu. Nedeni değer hesabı değil, `_BASE_AND_DERIVED_REQUEST` deseninin Türkçe doğal bağlaç ve kelime sırasını ("değişimlerle birlikte") kapsamamasıydı.
+- Kullanıcı projeksiyonu artık kaynak ve türetilmiş kolon talebini iki yönde ve bağlaçsız Türkçe kullanımda da tanıyor. Böylece aynı tarih ekseninde `Dönem + orijinal bakiye serileri + değişim serileri` birlikte gösteriliyor; aktif workspace ve provenance davranışı değişmiyor.
+- Hedefli projection suite **12**, tam `agent-core` suite **955 geçti**; tek mevcut Starlette/AnyIO deprecation uyarısı, Ruff ve `git diff --check` temiz. Demo kontrollü yeniden başlatıldı ve canlı aynı akışta 24 satırla şu kolonları verdi: `observation_date`, iki orijinal bakiye, iki değişim kolonu. Takipte 0 LLM çağrısı kullanıldı.
+
+### 2.140 Kaynak sorusu tanıma ve tablo kullanım kapısı; orijinal+değişim projeksiyonu (23 Eylül)
+- **Bulgu:** 2.137'deki kaynak kısayolu çözmesi gereken soruyu yakalamıyordu. `is_source_question` şu soruları kaçırıyordu:
+  "Verinin kaynağı ve dayandığı seriler nedir?", "Bu verinin kaynağı nedir?", "Bu tablonun kaynağı ne?"; çünkü `\bkaynak\b`
+  deseni "kaynağı" çekimini tutmuyordu. Buna karşılık şunları yakalıyordu: "Hangi seriler TÜFE'yi gösteriyor?" (katalog
+  araması), "Hangi kaynaktan enflasyon verisi alabiliriz?" (yeni veri isteği), "Bu artış neye dayanıyor?" (yorum).
+- **Asıl risk:** eşleşen soruda `_active_table_reuse_allowed` zorla açılıyordu. Bu, PR #15'teki uyumsuz tablo korumasını
+  atlıyordu; masadaki eski tablonun kaynak özeti yeni bir aramaya cevap olarak dönebiliyordu.
+- **Düzeltme:**
+  - Desen Türkçe çekimleri ("kaynağı", "kaynağını", "nereden geliyor", "hangi kaynaktan çektin", "dayandığı seriler") tanır.
+  - Yeni istek sayılıp dışarıda kalanlar: getir/bul/ara/karşılaştır, "-abilir" kipi, başka/yeni kaynak, "elimizde hangi veri
+    kaynakları var".
+  - Zorla açma kaldırıldı. Kaynak sorusu da `_active_table_is_compatible` kontrolünden geçer; yalnız "kısa takip" kuralı
+    gevşetildi. Çözücü uzun bir kaynak sorusunu yeni soru saysa bile, soruda yeni bir alan (ölçü, seri, kaynak, il, dönem)
+    adı yoksa tablo kullanılır. İl, kaynak ve frekans denetimleri aynen geçerli: Adana tablosunda "İstanbul verisinin kaynağı
+    nedir?" eski tabloyu kullanmaz.
+- **Projeksiyon (2.139 eki):** "hem orijinal hem değişim" deseni bağlaç şartını tamamen kaldırmıştı; "Değişim değerlerini
+  göster" de orijinal kolonları ekliyordu. İki sıra da kabul edilir, ama bir bağlaç şarttır: ve, ile, birlikte, de/da, -le/-la, hem…hem.
+- **Doğrulama:** hedefli testler eklendi (çekimler, dışlananlar, uzun soru ve il kapısı, projeksiyon); tam `agent-core`
+  suite 960 geçti. Ruff `F` ve `git diff --check` temiz. Commit ve push edilmedi (kullanıcı kararı).
+
+### 2.141 Repo varsayılan metin modeli DeepSeek-V4.1-Flash (23 Eylül, ADR-0103)
+- Kullanıcı kararıyla `.env.example`'da `LLM_MODEL=deepseek-ai/DeepSeek-V4.1-Flash` oldu. Model yine Kloudeks'ten, aynı adres ve
+  anahtarla çağrılıyor; embedding ve OCR değişmedi. README, `docs/ARCHITECTURE.md` ve ADR dizini güncellendi.
+- Kodda modele bağlı bir yol yok; `config.py`'deki Ollama geliştirme varsayılanı aynı kaldı. Yerel `.env` zaten bu modeldeydi;
+  demo `127.0.0.1:8765`'te DeepSeek ile çalışıyor.
+- Not: Qwen3.8-27B ile alınmış kabul ve benchmark sayıları bu model için yeniden alınmalı. Commit ve push edilmedi.
+
+### 2.142 DeepSeek 76-vaka benchmarkı (23 Eylül)
+- `deepseek-ai/DeepSeek-V4.1-Flash`, `LLM_DISABLE_THINKING=true` ile 71 standart `agent_cli` vakası temiz workspace'lerde tek tek koşturuldu; L06/L07/L08/O03/O06 entegrasyonları ayrıca çalıştırıldı.
+- İlk manuel oracle puanlaması: **76 vaka, 41 PASS, 8 PARTIAL, 27 FAIL, ortalama 68,1/100**. Standart 71 koşuda **438 LLM çağrısı, 0 provider/API hatası, 49 tablolu ve 22 tablosuz** çıktı; ortalama 16,00 s, p50 12,68 s, p95 36,81 s.
+- Güçlü alanlar: stok/akış semantiği, güvenlik retleri, nedensellik iddiasına direnç, grafik parity, as-of ve narration timeout fallback. Açıklar: takipte aktif seri/projection korunması, çoklu dönüşüm ve korelasyon araç kapsamı, inline fixture ingestion, UI filtre sözleşmesi, dönem ve mixed-frequency kapıları.
+- Kanıt: `docs/experiments/v2_deepseek_local_20260923.jsonl`, `v2_deepseek_local_20260923_tables/`, `v2_deepseek_integrations_20260923.json`, `v2_deepseek_ui_integrations_20260923*.json`, skor raporu `v2_deepseek_76_score_20260923.md`.
+- Bu benchmark yalnız rapor ve kanıt dosyası üretir; agent/lakehouse kodu, `.env`, provider ve Cloudflare ayarları değiştirilmedi. Commit/PR atılmadı.
+
+### 2.142 DeepSeek 76 vaka puanının kontrolü; kaynak özetinin cevabı ele geçirmesi (23 Eylül)
+- **Rapor:** `docs/experiments/v2_deepseek_76_score_20260923.md`. Ortalama 68,1/100; 41 geçti, 8 kısmi, 27 başarısız; 0 sağlayıcı
+  hatası; p50 12,7 s, p95 36,8 s. Tek koşu. Model ve kod aynı anda değiştiği için Qwen'deki 44'ten farkın ne kadarının modelden
+  geldiği ayrıştırılamaz.
+- **Ham kayıttan bulgu:** 9 turda kullanıcı kaynak sormadığı hâlde cevap deterministik kaynak özetiyle değiştirilmişti:
+  F01/F03/F04/F07/F08 T2, D04, I08, O07, O08. Tetikleyiciler: eski desendeki çıplak "kaynak" (6 tur) ve "provenance"
+  (4 tur; "provenance kolonlarını katma" gibi kısıt olarak geçiyordu).
+- **Asıl hata:** kaynak özetini uygulayan dört yerden yalnız biri dönüşüm ve tablo istemlerini dışarıda bırakıyordu; sonlandırma
+  yolundaki iki yer model cevabını yalnız desene bakarak değiştiriyordu.
+- **Düzeltme:**
+  - Tek yardımcı: `_is_read_only_source_question`. Kaynak sorusu olmalı, tablo ya da dönüşüm istememeli; dört yer bunu kullanıyor.
+  - Çıplak "provenance" artık istek sayılmıyor.
+  - 76 vakanın hiçbir turu artık kaynak sorusu sayılmıyor; gerçek kaynak soruları tanınıyor. Regresyon testi eklendi; suite 961 geçti.
+- **Başarısız vakaların kök nedenleri (hata kodu sayımı):** CATALOG_SEARCH_BUDGET 7 vaka, GOLD_REQUIRED 7, INVALID_ARGS 4,
+  CLARIFY_NOT_ALLOWED 4, DUPLICATE_CALL 4.
+  - Eksik araç: korelasyon/gecikmeli korelasyon, haftalıktan aylığa ortalama, il × dönem paneli (C01/C02/C05/C06, T06, L03/L04).
+  - Satır içi veri: Q04, Q05, I08.
+  - Arayüzde filtre yok: O03.
+- Etkilenen vakalar (F01/F03/F04/F07/F08, D04, I08, O07/O08) yeniden koşulmalı. Commit ve push edilmedi.
+
+### 2.143 Tur niyeti tek yerde, yönlendiren retler ve otomatik puanlayıcı (23 Eylül, ADR-0104)
+- **Envanter:** çekirdekteki kural noktalarının envanteri çıkarıldı: niyet desenleri, kısayollar, sonradan metin düzenlemeleri,
+  retler. Envanterden çıkan iki gerçek hata düzeltildi:
+  - kaynak kısayolu konuşma hafızasına yazmıyordu;
+  - GOLD_REFUSED alternatif araç önerip turu bitiriyordu.
+- **`core/turn_intent.py`:** desenler taşındı, `classify()` her soruyu bir kez sınıflandırıyor. 82 benchmark turunun
+  sınıflandırması `tests/fixtures/turn_intent_benchmark.json` ile kilitli. Tek desen değişikliği: "fark" dönüşüm sayılıyor
+  (F07.2, P02).
+- **Retler:** netleştirme yasağı, tekrar çağrı ve arama bütçesi retleri doğrulanmış teslimi kapatmıyor. Arama bütçesi reddi
+  bu turun adaylarını taşıyor. Turu bitirmeyen retler "kullanıcıya açıkla" diye kapanmıyor.
+- **`scripts/m02_benchmark/score_v2.py`:** sayısal 27 vakanın otomatik puanlayıcısı. 23 Eylül elle puanlamasıyla 26/27 aynı
+  sınıfı veriyor; P03, D05 ve R02 elle puanlanıyor.
+- **Doğrulama:** suite 969 geçti. Benchmark 71 vaka × 3 tekrarla koşuluyor (`v2_deepseek_adr0104_r3_20260923.jsonl`).
+  Commit ve push edilmedi.
+
+### 2.143 Cloudflare tüneli yeniden açıldı (23 Eylül)
+- Kullanıcının isteğiyle mevcut local demo (`127.0.0.1:8765`) değiştirilmeden `cloudflared tunnel run --token-file /Users/baran/.cloudflared/agent-smith-demo-token` connector'ı yeniden başlatıldı.
+- `https://agent-smith-demo.bardaka.site/` ve `/api/status` Cloudflare edge üzerinden HTTP 200 verdi; public status DeepSeek `deepseek-ai/DeepSeek-V4.1-Flash`, Analyst profilini ve 6.304 katalog serisini bildiriyor.
+- Connector token repo dışında kaldı; `.env`, uygulama kodu, lakehouse ve model ayarları değiştirilmedi.
+
+### 2.144 Üç tekrarlı bulgular: teslim, kurtarma ve açık seri (23 Eylül, ADR-0105)
+- **Ölçüm:** ADR-0104 3 tekrar, aynı puanlayıcılarla 60,9 (23 Eylül baseline 61,5'e yeniden puanlandı). Kök neden: şablon teslim
+  politika retlerini (A05/Q08/A08) yuttu, takipte eski tablo "hazırlandı" diye teslim edildi, arama bütçesi sabit metinle kapandı.
+- **Düzeltmeler:**
+  - CLARIFY_NOT_ALLOWED yine teslimi kapatıyor.
+  - `sensitive` niyeti: silme/kişisel veri turunda şablon teslim yok.
+  - Aday bulunmuş arama kapanışını model anlatıyor.
+  - Yokluk ifadesi silinmiyor, not ekleniyor. Arama bütçesi 8.
+  - Tarih nesnesi kolonunda LAG çalışıyor.
+  - Soruda açıkça yazılan seri kodu değiştirilemiyor.
+  - Konuşma etiketi ("Takip:") follow-up çözücüde temizleniyor.
+- **Benchmark aracı:** `run_v2.py` kullanıcı projeksiyonunu (`table`) ve ham tabloyu (`workspace_table`) ayrı yazıyor;
+  `score_v2.py --table-key` ile ikisi ayrı puanlanıyor.
+- **Sonuç:** ADR-0105 3 tekrar 65,9 (tekrarlar 65,5 / 65,8 / 66,4), PASS/PARTIAL/FAIL 25/24/22.
+
+### 2.145 Son 3 tekrar ve ADR-0106: kullanıcı tablosu, takip turu, tablo kuşağı (23 Eylül)
+- **Son tam koşu** (`v2_deepseek_final_r3_20260923*`, 213 kayıt): ham tabloyla 67,4, kullanıcı tablosuyla 64,1.
+  Sayısal vakalarda iki tablo arasında 8,6 puan fark vardı: ajan doğru tabloyu kurup eksik gösteriyordu.
+- **ADR-0106 düzeltmeleri:**
+  - Çıplak "kolon/oran" dönüşüm değil; F08 dışa aktarma turunda istenmemiş hesap yapılmıyor.
+  - Türetme istenmeyen turda kullanıcı tablosu daralmıyor; "hesapla" kaynak kolonu koruyor.
+  - "Yalnız" değişime bitişik değilse kolon kısıtı sayılmıyor (Q05).
+  - Uyumsuz takip turu sabit metinden önce bir kez veri çekmeye yönlendiriliyor. Aynı durumda aşama "araç" kalıyor: F03'te
+    `workspace_show` sonrası modele 0 araç sunuluyordu.
+  - Döngü kilidi tablo kuşağını (`AnalysisWorkspace.generation`) görüyor: T06'da `gold_join` sonrası LAG çağrıları
+    kilitleniyordu.
+- **Hedefli koşular** (`final_fix`, `final_fix2`, `final_fix3`; kullanıcı tablosu):
+  - F08 40→100, T05 45→95, F07 49→84, T06 46→84, F03 38→100, Q05 66→100, F01 17→46.
+  - Davranış: O04 +29, F06 +19.
+  - Bileşik tahmin (son tam koşu + hedefli koşular): 69,4, PASS/PARTIAL/FAIL 26/28/17. Farklı kod sürümlerini birleştirdiği
+    için tam koşu yerine geçmez.
+- **Kalan zayıf noktalar:**
+  - C ailesi 47: korelasyon/gecikmeli korelasyon aracı yok.
+  - D08: ikinci turda `gold_align` aktif tabloyu eziyor, anomali etiketleri kayboluyor.
+  - L03/L04/O05: 81 il paneli arama bütçesine takılıyor.
+  - P02: KOBİ serisi eşleşmesi.
+  - R02: tam aday listesi.
+  - S06: belirsiz seride netleştirme yerine seçim.
+  - F01.1: veri yerine kapsam özeti kuruluyor.
+- **Doğrulama:** suite 984 geçti. Site yeni kodla yeniden başlatıldı; tünel etkilenmedi. Commit ve push edilmedi.
+
+### 2.146 Seri kimliği tablo adı değil: "Catalog TP does not exist" (23 Eylül, ADR-0107)
+- **Bulgu:** Canlı incelemede EVDS `TP.KKHARTUT.KT1` sorgusu `Catalog "TP" does not exist` verdi. Koşu kayıtlarında 11 vakada
+  33 kez görüldü.
+- **Kök neden 1 (araç):** `lakehouse_distinct_values` kimliği doğrudan FROM'a yazıyordu. `evds:TP.KTF17`,
+  `bddk_finturk:ANKARA_…` gibi her seri kimliğiyle patlıyordu; aynısı değer sayımında ve `core/context.py` ön yüklemesinde de
+  vardı.
+- **Kök neden 2 (model):** `lakehouse_query`'de kimlik tablo adı yazılınca genel SQL_FAILED ve yanıltıcı "kolon adlarını
+  karşılaştır" ipucu dönüyordu.
+- **Düzeltme:** `SilverLakehouse.relation_sql()` üç yerde kullanılıyor. `lakehouse_query` FROM/JOIN'deki seri kimliğini ya da
+  çıplak `TP.` kodunu çalıştırmadan, tam doğru kalıpla (INVALID_ARGS, tekrar denenebilir) geri gönderiyor. Gold tabloları ve doğru
+  sorgular etkilenmiyor.
+- **Doğrulama:** Canlı lakehouse'ta üç kimlik de kırılım aracında çalışıyor; hatalı üç SQL biçimi yakalanıyor. Suite 985 geçti.
+  Demo sunucusu yeniden başlatılmadı; düzeltme sunucu yeniden başlatılınca devreye girer.
+
+### 2.147 Faz 0: mevduat vade kovaları kararı (23 Eylül, ADR-0108)
+- **Bulgu:** Vade kırılımı isteyen mevduat sorularında ajan tablo vermiyordu. Kök neden veride: BDDK "Mevduat Vade
+  İtibarıyla" tablosunun 24 kalemi (520–543) havuzda yalnız Toplam sütunuyla var. Kaynak her kalemde 6 vade kovası
+  yayımlıyor: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri. 24 kalemin hepsi `KalemSutunGetir` ile
+  23 Eylül'de tek tek doğrulandı.
+- **Karar:**
+  - 144 kova ham aylık seri olarak alınacak; kova aralığı ilişki grafında (`child_breakdown`, `vade_ay=(a,b]`).
+  - Gruplar çalışma anında kovaların toplamıyla hesaplanacak, havuza yazılmayacak; Toplam yalnız denetim için.
+  - Kovayı bölen istek en yakın kapsayan kovaya gidecek ve söylenecek (5 yıl → 1 Yıl Üzeri).
+  - Vade ile zaman ufku (N aya göre değişim) ayrı niyet.
+- **Yapısal not:** `meta.series` YAML yükleyicisi ilişki alanlarını reddediyor. `relations.py`'deki "açık YAML ilişkisi" yolu
+  bu yüzden kullanılamıyor; kova ilişkisi kaynak kimliğinden kural olarak üretilecek.
+- **Sıradaki:** Faz 1 (katalog üretecine grup kapsamlı sütun seçimi, 144 seri, ilişki kuralı, yükleme, kova toplamı = Toplam
+  kalite kapısı). `lakehouse-core` artık bizim sorumluluğumuzda.
+
+### 2.148 Faz 1–2 uygulandı; gerçek koşu düzeltmeleri (23 Eylül, ADR-0108/0109)
+- **Faz 1 (veri, lakehouse-core):**
+  - `generate_bddk_monthly_catalog.py --group --add-columns` ile 24 kalem × 6 vade kovası = 144 aylık seri eklendi.
+    Mevcut katalog girişleri byte düzeyinde değişmedi.
+  - `relations.py` kova ilişkisini (`child_breakdown`, `vade_ay=(a,b]`) kaynak kimliğinden kuruyor.
+  - Kalite kapısı: `quality/breakdown.py` ve `scripts/check_breakdown_sums.py`. 24 toplam × 126 ayda uyumsuz ay yok.
+  - EVDS: USD/TL satış kuru eklendi ve genel "dolar kuru" isteği ona gidiyor; faiz serisinin ilk takma adı "3 aya kadar
+    vadeli TL mevduat faizi".
+  - Canlı veritabanı yeniden kuruldu; öncesi `data/` altında yedekli. Veritabanı dosyası repoya girmez (`.gitignore`),
+    katalog ve betiklerden yeniden kurulur.
+- **Faz 2 (ajan, agent-core):** `lakehouse_breakdown_panel` ve ADR-0108 "Gerçek koşu düzeltmeleri" bölümündeki kurallar.
+  PR #26'nın (Elif) CSV/XLSX okuma ve zaman normalizasyonu yerelde entegre edildi (ADR-0109).
+- **Gerçek koşu:** Çok turlu uçtan uca koşu gerçek modelle 3 tekrar yapıldı; bulunan hatalar ADR-0108
+  "Gerçek koşu düzeltmeleri" bölümünde. Açık kalan konu aynı bölümün "Açık" maddesinde.
+- **Doğrulama:** agent-core 1027 test geçti. lakehouse-core'da değişen alanların testleri geçti (ilişki, kalite, üretici);
+  tam suite bu adımın başında 1139 geçmişti; sonraki katalog takma ad değişikliklerinden sonra kullanıcı kararıyla yeniden
+  koşulmadı.
+
+### 2.149 Açık PR'ların entegrasyonu ve endeksin seviyede kurulması (23 Eylül, ADR-0110)
+- **Entegrasyon:** PR #27 (Büşra), PR #23 (Elif) ve PR #21 (Zümral) `integration/q4-q5-gates` dalında bu dalla birleştirildi.
+  - Dosya okuma: başlık tespiti PR #26 ayrıştırıcısında tek yerde kaldı.
+  - Kayıt: PR #21'in akışı esas alındı, PR #27'nin korunan parçaları üstüne eklendi.
+  - Katalog: 18 çift vade kimliği teke indirildi ve `verified` oldu.
+  - Tur niyeti: `classify` mimarisi korundu.
+- **Canlı katalog:** `meta.series` yenilendi (6839 seri; Silver değişmedi, 255.413 satır). Öncesi
+  `data/lakehouse_pre_integration_20260923.duckdb` olarak yedeklendi.
+- **Q5'in iki kök nedeni:** Endeks akım sütununda kuruluyordu; seviyeleri getirecek panel de tablo koruma kuralına
+  takılıyordu. Düzeltmeler:
+  - akım sütununda endeks reddi (turu bitirmez);
+  - endeks isteği panel yeteneği oldu;
+  - `index_base`/`join_session` taşıyan panel tablo korumasını geçiyor;
+  - oturum birleştirmesi seçici.
+- **Gerçek koşu:** Her tekrar ayrı bir veritabanı kopyasında koşuldu; zenginleştirme turunun taslak kaydı canlı havuza
+  yazılmadı.
+  - İlk üç tur her tekrarda beklenen değerleri verdi (7–13 sn).
+  - Zenginleştirme turunda kaynak değerleri tuttu.
+  - Son tekrarda yorum turu endeksi seviyede kurdu; kırılma analizi ve web araştırması yapıldı.
+- **Doğrulama:** agent-core 1161 test geçti; lakehouse-core hedefli alt küme (katalog, kalite, ayrıştırıcı, bağlayıcı) 122 geçti.
+  Tam lakehouse suite kullanıcı kararıyla koşulmadı.
+- **Bağımlılıklar:** pdfplumber, playwright ve xlrd venv'e kuruldu (`uv sync --frozen --extra dev`).
+
+### 2.150 Kanıt paneli gecikmesi ve tarayıcıda bot engeli (23 Eylül, ADR-0111)
+- **Kanıt paneli:** Canlı arayüzde üçüncü turda cevap hazırken "Kanıt zinciri kuruluyor" adımı ~130 sn sürdü (model 4 sn,
+  araçlar 1 sn). Neden: gözlem başına bronze klasörünü baştan tarayan `rglob` (16.991 dosya, 0,065 sn). Klasör bir kez taranıyor;
+  1300 arama 84 sn → 0,12 sn.
+- **Adresle istenen rapor:**
+  - Kaynak başsız tarayıcıya "Request Rejected" döndürüyor; bu bir bot koruması, aşılmaz (mentör 12 Eyl, ADR-0028).
+  - Tarayıcı engeli artık ~1 sn'de tanıyor; `web_url` erişim kararı ve seçenekler dönüyor, engelli host 10 dk yeniden
+    açılmıyor.
+  - Kaynağın dışa aktarım yolu yapılandırmadan (`manual_export`) geliyor; cevap araç kartından deterministik kuruluyor.
+  - Tur 105 sn → 2,9 sn.
+- **Araştırma:** Aynı rapor kurumun ikinci sitesinde de aynı engelin arkasında; bulunan üçüncü taraf bülten yalnız tek haftayı
+  kapsıyor. Demoda dosya yükleme yolu kullanılır.
+- **Doğrulama:** agent-core 1167 test geçti. Dosyalı beş tur gerçek koşuda: ilk dört tur tam, yorum turu seviyede endeks, kırılma
+  analizi ve web araştırmasıyla bitti.

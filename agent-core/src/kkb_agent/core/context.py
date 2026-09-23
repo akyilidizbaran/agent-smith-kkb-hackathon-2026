@@ -77,6 +77,12 @@ def compact_card(spec: DatasetSpec, lakehouse: LakehouseClient) -> str:
     return "\n".join(lines)
 
 
+def _from(lakehouse: LakehouseClient, dataset_id: str) -> str:
+    """Seri kimliği tablo adı değildir; lakehouse FROM ifadesini veriyorsa onu kullan (`relation_sql`)."""
+    relation = getattr(lakehouse, "relation_sql", None)
+    return relation(dataset_id) if callable(relation) else dataset_id
+
+
 def dimension_values(spec: DatasetSpec, lakehouse: LakehouseClient, *, max_values: int) -> list[str]:
     """Seed tarzı tablolarda kırılım kolonlarının gerçek değerleri (V3 E8): filtre uydurulmaz."""
     out: list[str] = []
@@ -89,7 +95,7 @@ def dimension_values(spec: DatasetSpec, lakehouse: LakehouseClient, *, max_value
         select = f"{col.name}, is_alt_toplam" if has_flag else col.name
         try:
             res = lakehouse.execute_sql(
-                f"SELECT DISTINCT {select} FROM {spec.dataset_id} ORDER BY 1 LIMIT {max_values + 1}"
+                f"SELECT DISTINCT {select} FROM {_from(lakehouse, spec.dataset_id)} ORDER BY 1 LIMIT {max_values + 1}"
             )
         except Exception:  # noqa: BLE001
             continue

@@ -156,12 +156,19 @@ def main() -> int:
     parser.add_argument("--json", type=Path, help="makine okunur çıktı dosyası")
     parser.add_argument("--pause", type=float, default=0.15, help="istekler arası bekleme (sn)")
     parser.add_argument("--limit", type=int, help="yalnız ilk N kalem (deneme için)")
+    parser.add_argument("--group", help="yalnız bu tablo grubunun kalemleri (kaynağın optgroup adı, birebir)")
     args = parser.parse_args()
 
     client = session()
     page = client.get(f"{BASE_URL}{TREE_PATH}", timeout=60)
     page.raise_for_status()
     items = parse_tree(page.text)
+    if args.group:
+        groups = sorted({item.group for item in items})
+        items = [item for item in items if item.group == args.group]
+        if not items:
+            print(f"'{args.group}' adlı grup kaynakta yok. Gruplar: {', '.join(groups)}", file=sys.stderr)
+            return 2
     if args.limit:
         items = items[: args.limit]
     print(f"kalem ağacı okundu: {len(items)} kalem; sütunlar sorulacak…", file=sys.stderr)

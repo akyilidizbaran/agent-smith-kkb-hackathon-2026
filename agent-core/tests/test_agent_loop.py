@@ -49,6 +49,28 @@ class _CountingTool(Tool):
         )
 
 
+class _SearchParams(BaseModel):
+    query: str
+
+
+class _SearchOnlyTool(Tool):
+    """Arama adayı üretir; sayfa okunmadığı için veri kanıtı üretmez."""
+
+    name = "web_search"
+    description = "test web araması"
+    Params = _SearchParams
+
+    def run(self, params: _SearchParams) -> ToolResult:
+        return ToolResult(
+            content="Arama adayı bulundu; sayfa henüz okunmadı.",
+            artifacts={"web_search": {
+                "query": params.query,
+                "hits": ["https://example.test/report"],
+                "results": [{"url": "https://example.test/report", "title": "Rapor"}],
+            }},
+        )
+
+
 class _ScriptedLLM:
     """Kendisine verilen turları sırayla oynar; bittiğinde sonuncuyu tekrarlar."""
 
@@ -439,6 +461,30 @@ def test_aktif_tablo_donusumu_stale_guard_tarafindan_bastirilmaz() -> None:
     assert transform.calls == 1
     assert "mevcut analiz tablosuyla uyumlu değil" not in answer.text
     assert "Aylık değişim" in answer.text
+
+
+def test_search_only_cannot_release_stale_active_table() -> None:
+    """web_search kaynak adayıdır; web_url okunmadan eski tablodaki sayı anlatılamaz."""
+
+    registry = ToolRegistry()
+    registry.register(_SearchOnlyTool())
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[ToolCall(
+            id="search", name="web_search", arguments={"query": "küresel piyasalar"},
+        )]),
+        LLMResponse(content="Eski tablodaki değer 987654321; dünya piyasaları böyleydi."),
+    ])
+    workspace = AnalysisWorkspace()
+    workspace.set_table(pd.DataFrame({"donem": ["2025-01"], "deger": [987654321]}), description="önceki tablo")
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=workspace, max_steps=4)
+    agent._catalog_specs = lambda: []
+    agent._follow_up_context = FollowUpContext(metric="bakiye", series="test:seri", frequency="monthly")
+
+    answer = agent.ask("İnternetten araştır: 2024 küresel faiz ve konut piyasalarında hangi gelişmeler yaşandı?")
+
+    assert "987654321" not in answer.text
+    assert "mevcut analiz tablosuyla uyumlu değil" in answer.text
+    assert answer.reused_verified_table is False
 
 
 def test_basariyla_katalog_kesfedilince_ikinci_turda_gerekli_faz_acilir() -> None:
@@ -905,3 +951,77 @@ def test_k02_t07_erisilemeyen_kaynaktan_sonra_kullanilan_kaynak_adlandirilir() -
     assert "Kaynak notu: a.example adresine erişilemedi; veriler b.example kaynağından alındı." in silent.text
     named = run("2025 değeri 42 (kaynak: b.example).")
     assert "Kaynak notu" not in named.text, "cevap kaynağı zaten adlandırıyorsa not eklenmez"
+
+
+class _FakeQuery(Tool):
+    name = "lakehouse_query"
+    role = "execute"
+    description = "sahte sorgu"
+    Params = _Params
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def run(self, params: _Params) -> ToolResult:
+        self.calls += 1
+        return ToolResult(content="Sorgu: 2 satır", data=pd.DataFrame({"ay": ["2022-01", "2022-02"], "tufe": [1.0, 2.0]}))
+
+
+def test_uyumsuz_takip_turu_kapanmadan_once_bir_kez_veri_cekmeye_yonlendirilir() -> None:
+    """Son 3× (23 Eyl, F03): yeni kaynak isteyen takip turunda model veri çekmeden cevap yazınca tur doğrudan
+    'uyumlu değil' sabit metniyle kapanıyordu. Önce bir kez yönlendirilir; model veriyi çekerse cevap geçer."""
+    query = _FakeQuery()
+    registry = ToolRegistry()
+    registry.register(query)
+    llm = _ScriptedLLM([
+        LLMResponse(content="TÜFE endeksi katalogda var."),
+        LLMResponse(content="", tool_calls=[ToolCall(id="q", name="lakehouse_query", arguments={})]),
+        LLMResponse(content="TÜFE eklendi."),
+    ])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=6)
+    agent._catalog_specs = lambda: []
+    agent._follow_up_context = FollowUpContext(metric="mevduat", series="bddk_monthly:1357", frequency="monthly")
+    agent.workspace.set_table(pd.DataFrame({"ay": ["2022-01", "2022-02"], "mevduat": [100.0, 110.0]}), description="mevduat")
+    agent._has_confirmed_follow_up_context = lambda: True
+    agent._active_table_is_compatible = lambda *a, **k: False
+
+    answer = agent.ask("EVDS TÜFE genel endeksini yeni kaynak olarak getir")
+
+    assert query.calls == 1
+    assert any("takip turu aktif tabloyla karşılanmıyor" in (s.thought or "") for s in answer.steps)
+    assert "mevcut analiz tablosuyla uyumlu değil" not in answer.text
+
+
+class _FakeShow(Tool):
+    name = "workspace_show"
+    role = "retrieve"
+    description = "sahte tablo gösterimi"
+    Params = _Params
+
+    def run(self, params: _Params) -> ToolResult:
+        return ToolResult(content="Analiz tablosu: 2 satır", data=pd.DataFrame({"ay": ["2022-01"], "mevduat": [100.0]}))
+
+
+def test_uyumsuz_takipte_tablo_gosterimi_araclari_kapatmaz() -> None:
+    """Son 3× (23 Eyl, F03): takipte workspace_show 'veri üretildi' sayılıp araçsız anlatıma geçiliyor, model TÜFE'yi
+    ekleyemiyordu. Aktif tablo soruya uymuyorsa sonraki çağrıda araçlar sunulmaya devam eder."""
+    query = _FakeQuery()
+    registry = ToolRegistry()
+    registry.register(_FakeShow())
+    registry.register(query)
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[ToolCall(id="s", name="workspace_show", arguments={})]),
+        LLMResponse(content="", tool_calls=[ToolCall(id="q", name="lakehouse_query", arguments={})]),
+        LLMResponse(content="TÜFE eklendi."),
+    ])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=6)
+    agent._catalog_specs = lambda: []
+    agent._follow_up_context = FollowUpContext(metric="mevduat", series="bddk_monthly:1357", frequency="monthly")
+    agent.workspace.set_table(pd.DataFrame({"ay": ["2022-01", "2022-02"], "mevduat": [100.0, 110.0]}), description="mevduat")
+    agent._has_confirmed_follow_up_context = lambda: True
+    agent._active_table_is_compatible = lambda *a, **k: False
+
+    agent.ask("EVDS TÜFE genel endeksini yeni kaynak olarak getir")
+
+    assert llm.seen_tool_counts[1] > 0, "workspace_show sonrası araçlar kapatıldı"
+    assert query.calls == 1
