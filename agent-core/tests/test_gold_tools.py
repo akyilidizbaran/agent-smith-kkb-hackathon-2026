@@ -366,3 +366,15 @@ def test_seri_kimligi_tablo_adi_olarak_kullanilmaz(env) -> None:
                                         "WHERE series_id = 'evds:TP.KTF12' AND observation_date BETWEEN '2025-01-01' "
                                         "AND '2025-03-31' ORDER BY observation_date", "purpose": "faiz"})
     assert ok.ok, ok.content
+
+
+
+def test_gold_join_reddi_turu_bitirmez_kirilim_paneline_yonlendirir(env) -> None:
+    """23 Eyl demo: çok serili hizalama Gold kuralına (ör. derived seri) takılınca tur bitiyordu; ajan panele geçemedi.
+    gold_join reddi artık tur bitirmez ve aynı serileri lakehouse_breakdown_panel ile almayı söyler."""
+    lake, ws, runner = env
+    runner.refusal = ("UNVERIFIED_SEMANTICS", "semantik doğrulanmadı")
+    r = GoldJoinTool(lake, ws).validate_and_run(
+        {"series_ids": ["bddk_monthly:konut", "evds:TP.KTF12"], "target_frequency": "monthly", "purpose": "yan yana"})
+    assert not r.ok and r.error.error_code == "GOLD_REFUSED"
+    assert r.error.terminal is False and "lakehouse_breakdown_panel" in r.content and "bddk_monthly:konut" in r.content

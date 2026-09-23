@@ -27,7 +27,8 @@ from .gold import unverified_consent
 
 REAL_VALUE_PROMPT_RULES = """
 
-REEL DEĞER KURALI: "enflasyondan arındır / reel / sabit fiyatlarla" istendiğinde workspace_real_value kullan \
+REEL DEĞER KURALI: "enflasyondan arındır / reel / sabit fiyatlarla" istendiğinde workspace_real_value kullan; \
+"tutarlar / mevduatlar" gibi çoğul istekte tablodaki bütün tutar sütunlarını value_columns ile TEK çağrıda ver \
 (endeks: fiyat endeksi serisi; compute_column ile elle formül YAZMA). Baz dönemi kullanıcı söylemediyse tablonun son \
 dönemini ver ve cevapta "<baz dönem> fiyatlarıyla" diye açıkça belirt. Farklı bazlı iki endeksi birleştirme. \
 Anlamı (baz yılı) doğrulanmamış endeks reel dönüşümde kullanılmaz; araç reddederse doğrulanmış endeks seç ya da \
@@ -35,10 +36,15 @@ kullanıcıya 'doğrulanmamış olsa da kullanayım mı?' diye sor."""
 
 
 class RealValueParams(BaseModel):
-    value_column: str = Field(description="Aktif tablodaki nominal tutar sütunu (para cinsinden bir ölçüm)")
+    value_column: str | None = Field(default=None, description="Aktif tablodaki nominal tutar sütunu (tek sütun)")
+    value_columns: list[str] = Field(
+        default_factory=list,
+        description="Birden çok tutar sütunu tek çağrıda (her biri '<sütun>_reel' adıyla eklenir). "
+                    "Kullanıcı 'tutarları' dediyse tablodaki bütün tutar sütunlarını ver.",
+    )
     index_dataset_id: str = Field(description="Fiyat endeksi serisinin kimliği (katalogda ölçüm tipi endeks)")
     base_period: str = Field(pattern=r"^\d{4}-\d{2}$", description="Baz dönem 'YYYY-MM': reel değerler bu ayın fiyatlarıyla")
-    column_name: str = Field(description="Eklenecek reel değer sütununun adı")
+    column_name: str | None = Field(default=None, description="Tek sütunda eklenecek reel sütunun adı")
     purpose: str = Field(description="Bu hesabın neyi cevapladığını anlatan tek cümlelik Türkçe açıklama")
 
 
@@ -84,20 +90,36 @@ class WorkspaceRealValueTool(Tool):
         measures = [c for c in spec.columns if c.role == ColumnRole.MEASURE]
         return spec, (measures[0] if measures else None)
 
+    @staticmethod
+    def _targets(params: RealValueParams) -> list[tuple[str, str]]:
+        """(nominal sütun, reel sütun) çiftleri. Tek sütun eski sözleşmedir; çoklu kipte ad '<sütun>_reel'."""
+        pairs: list[tuple[str, str]] = []
+        if params.value_column:
+            pairs.append((params.value_column, params.column_name or f"{params.value_column}_reel"))
+        for column in params.value_columns:
+            if column != params.value_column:
+                pairs.append((column, f"{column}_reel"))
+        return pairs
+
     def validate_refs(self, params: RealValueParams) -> ToolError | None:
         table = self.workspace.table
         if table is None or table.empty:
             return ToolError(error_code="NO_ACTIVE_TABLE", layer="workspace", message="Aktif tablo yok; önce nominal seriyi getir.")
         numeric = [str(c) for c in table.columns if pd.api.types.is_numeric_dtype(table[c])]
-        if params.value_column not in table.columns:
-            return ToolError(error_code="COLUMN_NOT_FOUND", layer="reference", candidates=numeric,
-                             message=f"'{params.value_column}' aktif tabloda yok.")
-        if params.value_column not in numeric:
+        targets = self._targets(params)
+        if not targets:
             return ToolError(error_code="INVALID_ARGS", layer="schema", candidates=numeric,
-                             message=f"'{params.value_column}' sayısal değil.")
-        if params.column_name in table.columns:
-            return ToolError(error_code="COLUMN_EXISTS", layer="workspace", candidates=list(table.columns),
-                             message=f"'{params.column_name}' zaten tabloda var.")
+                             message="value_column ya da value_columns ver.")
+        for value_column, column_name in targets:
+            if value_column not in table.columns:
+                return ToolError(error_code="COLUMN_NOT_FOUND", layer="reference", candidates=numeric,
+                                 message=f"'{value_column}' aktif tabloda yok.")
+            if value_column not in numeric:
+                return ToolError(error_code="INVALID_ARGS", layer="schema", candidates=numeric,
+                                 message=f"'{value_column}' sayısal değil.")
+            if column_name in table.columns:
+                return ToolError(error_code="COLUMN_EXISTS", layer="workspace", candidates=list(table.columns),
+                                 message=f"'{column_name}' zaten tabloda var.")
         if _time_column(table) is None:
             return ToolError(error_code="INVALID_ARGS", layer="data",
                              message="Aktif tabloda tarih kolonu yok: dönem eşlemesi yapılamaz.")
@@ -128,11 +150,16 @@ class WorkspaceRealValueTool(Tool):
         if confidence in (None, "verified") or self._consent():
             return None
         verified = [sid for sid, _ in self.loaded_index_series() if self._confidence(sid) == "verified"]
+        # Doğrulanmış bir endeks varsa ret turu bitirmez: model aynı çağrıyı o endeksle yineler (23 Eyl senaryo koşusu:
+        # model eski bazlı TP.FG.J0'ı seçti, ret turu kapattı, doğrulanmış TÜFE hiç denenmedi).
         return ToolError(
+            terminal=False if verified else None,
             error_code="UNVERIFIED_SEMANTICS", layer="policy", retryable=False, candidates=verified,
             message=(f"'{params.index_dataset_id}' endeksinin anlamı katalogda doğrulanmamış (semantic_confidence={confidence}): "
                      "baz yılı güvenilmez, reel dönüşümde kullanılmaz."),
-            hint=("Doğrulanmış bir fiyat endeksi seç" + (f" ({', '.join(verified[:4])})" if verified else "")
+            hint=(("Aynı çağrıyı doğrulanmış endeksle yinele: index_dataset_id=" + verified[0] + ". "
+                   if verified else "")
+                  + "Doğrulanmış bir fiyat endeksi seç" + (f" ({', '.join(verified[:4])})" if verified else "")
                   + " ya da kullanıcıya 'doğrulanmamış olsa da kullanayım mı?' diye sor; açık rıza verirse yeniden çağır."),
         )
 
@@ -178,20 +205,28 @@ class WorkspaceRealValueTool(Tool):
                                    "reel dönüşüm aylık ya da daha seyrek tabloda yapılır.",
                                    hint="Önce gold_align ile tabloyu aylığa indir.", layer="data", retryable=False)
         aligned = pd.Series(row_months.map(index_by_month).to_numpy(dtype="float64"), index=table.index)
-        nominal = pd.to_numeric(table[params.value_column], errors="coerce")
         usable = aligned.notna() & (aligned != 0)
-        real = (nominal * base_value / aligned).where(usable)
-
-        index_col = f"{params.column_name}_endeks"
-        self.workspace.add_column(index_col, aligned.round(6), description=f"{params.index_dataset_id} endeks değeri (reel dönüşüm girdisi)",
-                                  provenance=result.provenance)
-        formula = f"{params.value_column} × endeks({params.base_period}) / endeks(dönem)"
-        prov = QueryProvenance(
-            sql=f"türetilmiş: reel_değer = {formula}; endeks {params.index_dataset_id}, baz {params.base_period} = {base_value:g}",
-            dataset_ids=[params.index_dataset_id, *list(getattr(self.workspace.column_provenance(params.value_column), "dataset_ids", []) or [])],
-            sources=[f"türetilmiş sütun — {formula}", *list(getattr(result.provenance, "sources", []) or [])],
-        )
-        self.workspace.add_column(params.column_name, real.round(4), description=params.purpose, provenance=prov)
+        targets = self._targets(params)
+        multi = len(targets) > 1 or not params.value_column
+        # Çoklu kipte endeks sütunu bir kez eklenir; tek sütunda eski adlandırma korunur.
+        index_col = (f"endeks_{params.index_dataset_id.split(':')[-1].replace('.', '_').lower()}" if multi
+                     else f"{targets[0][1]}_endeks")
+        if index_col not in (self.workspace.table.columns if self.workspace.table is not None else []):
+            self.workspace.add_column(index_col, aligned.round(6),
+                                      description=f"{params.index_dataset_id} endeks değeri (reel dönüşüm girdisi)",
+                                      provenance=result.provenance)
+        prov = None
+        for value_column, column_name in targets:
+            nominal = pd.to_numeric(table[value_column], errors="coerce")
+            real = (nominal * base_value / aligned).where(usable)
+            formula = f"{value_column} × endeks({params.base_period}) / endeks(dönem)"
+            prov = QueryProvenance(
+                sql=f"türetilmiş: reel_değer = {formula}; endeks {params.index_dataset_id}, baz {params.base_period} = {base_value:g}",
+                dataset_ids=[params.index_dataset_id, *list(getattr(self.workspace.column_provenance(value_column), "dataset_ids", []) or [])],
+                sources=[f"türetilmiş sütun — {formula}", *list(getattr(result.provenance, "sources", []) or [])],
+            )
+            self.workspace.add_column(column_name, real.round(4), description=params.purpose, provenance=prov)
+        formula = ", ".join(f"{name} = {col} × endeks({params.base_period}) / endeks(dönem)" for col, name in targets)
         confidence = getattr(spec, "semantic_confidence", None)
         unverified = [] if confidence in (None, "verified") else [
             f"UYARI: {params.index_dataset_id} endeksinin anlamı doğrulanmamış (semantic_confidence={confidence}); baz yılı "
@@ -202,14 +237,16 @@ class WorkspaceRealValueTool(Tool):
         updated = self.workspace.table
         assert updated is not None
         notes = [f"{missing} satırda endeks yok ya da sıfır: reel değer boş bırakıldı (dönemler uydurulmadı)"] if missing else []
+        added = ", ".join([index_col, *[name for _, name in targets]])
         card = [
-            f"REEL DEĞER: {params.column_name} = {formula}",
+            f"REEL DEĞER: {formula}",
             f"Endeks: {params.index_dataset_id} (kapsam {coverage}) · baz {params.base_period} = {base_value:g}",
-            f"Tabloya eklendi: {index_col}, {params.column_name}. Tablo bozulmadı: {len(updated)} satır.",
+            f"Tabloya eklendi: {added}. Tablo bozulmadı: {len(updated)} satır; önceki sütunların hiçbiri değişmedi.",
+            "İstenmeyen türev (yüzde değişim, pay) EKLEME; tablo bu hâliyle cevaptır.",
             *notes,
             *unverified,
             "Farklı bazlı endeksler birleştirilmedi. Cevapta 'baz dönem fiyatlarıyla' ifadesini ve sayıları tablodan aktar.",
-            "İlk 5 satır:\n" + updated[[tcol, params.value_column, index_col, params.column_name]].head(5).to_string(index=False),
+            "İlk 5 satır:\n" + updated[[tcol, index_col, *[c for pair in targets for c in pair]]].head(5).to_string(index=False),
         ]
         return ToolResult(content="\n".join(card), data=updated, provenance=prov)
 

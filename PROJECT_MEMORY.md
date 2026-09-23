@@ -1373,3 +1373,37 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
   sorgular etkilenmiyor.
 - **Doğrulama:** Canlı lakehouse'ta üç kimlik de kırılım aracında çalışıyor; hatalı üç SQL biçimi yakalanıyor. Suite 985 geçti.
   Demo sunucusu yeniden başlatılmadı; düzeltme sunucu yeniden başlatılınca devreye girer.
+
+### 2.147 Faz 0: mevduat vade kovaları kararı (23 Eylül, ADR-0108)
+- **Bulgu:** Vade kırılımı isteyen mevduat sorularında ajan tablo vermiyordu. Kök neden veride: BDDK "Mevduat Vade
+  İtibarıyla" tablosunun 24 kalemi (520–543) havuzda yalnız Toplam sütunuyla var. Kaynak her kalemde 6 vade kovası
+  yayımlıyor: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri. 24 kalemin hepsi `KalemSutunGetir` ile
+  23 Eylül'de tek tek doğrulandı.
+- **Karar:**
+  - 144 kova ham aylık seri olarak alınacak; kova aralığı ilişki grafında (`child_breakdown`, `vade_ay=(a,b]`).
+  - Gruplar çalışma anında kovaların toplamıyla hesaplanacak, havuza yazılmayacak; Toplam yalnız denetim için.
+  - Kovayı bölen istek en yakın kapsayan kovaya gidecek ve söylenecek (5 yıl → 1 Yıl Üzeri).
+  - Vade ile zaman ufku (N aya göre değişim) ayrı niyet.
+- **Yapısal not:** `meta.series` YAML yükleyicisi ilişki alanlarını reddediyor. `relations.py`'deki "açık YAML ilişkisi" yolu
+  bu yüzden kullanılamıyor; kova ilişkisi kaynak kimliğinden kural olarak üretilecek.
+- **Sıradaki:** Faz 1 (katalog üretecine grup kapsamlı sütun seçimi, 144 seri, ilişki kuralı, yükleme, kova toplamı = Toplam
+  kalite kapısı). `lakehouse-core` artık bizim sorumluluğumuzda.
+
+### 2.148 Faz 1–2 uygulandı; demo senaryosunun ilk üç turu gerçek koşuda 3/3 (23 Eylül, ADR-0108/0109)
+- **Faz 1 (veri, lakehouse-core):**
+  - `generate_bddk_monthly_catalog.py --group --add-columns` ile 24 kalem × 6 vade kovası = 144 aylık seri eklendi.
+    Mevcut katalog girişleri byte düzeyinde değişmedi.
+  - `relations.py` kova ilişkisini (`child_breakdown`, `vade_ay=(a,b]`) kaynak kimliğinden kuruyor.
+  - Kalite kapısı: `quality/breakdown.py` ve `scripts/check_breakdown_sums.py`. 24 toplam × 126 ayda uyumsuz ay yok.
+  - EVDS: USD/TL satış kuru eklendi ve genel "dolar kuru" isteği ona gidiyor; faiz serisinin ilk takma adı "3 aya kadar
+    vadeli TL mevduat faizi".
+  - Canlı veritabanı yeniden kuruldu; öncesi `data/` altında yedekli. Veritabanı dosyası repoya girmez (`.gitignore`),
+    katalog ve betiklerden yeniden kurulur.
+- **Faz 2 (ajan, agent-core):** `lakehouse_breakdown_panel` ve ADR-0108 "Gerçek koşu düzeltmeleri" bölümündeki kurallar.
+  PR #26'nın (Elif) CSV/XLSX okuma ve zaman normalizasyonu yerelde entegre edildi (ADR-0109).
+- **Gerçek koşu:** Demo senaryosu birebir metinlerle, 3 tekrar, gerçek modelle koşuldu (sorular ve beklenen çıktılar
+  yalnız yerelde, repoya girmez). İlk üç tur her tekrarda beklenen değerleri verdi. Yüklenen dosya ve çok kaynaklı yorum
+  turları ekip arkadaşlarınca ayrıca ele alınıyor; ADR-0108 "Açık" maddesi gözlenen sorunu kaydediyor.
+- **Doğrulama:** agent-core 1027 test geçti. lakehouse-core'da değişen alanların testleri geçti (ilişki, kalite, üretici);
+  tam suite bu adımın başında 1139 geçmişti; sonraki katalog takma ad değişikliklerinden sonra kullanıcı kararıyla yeniden
+  koşulmadı.

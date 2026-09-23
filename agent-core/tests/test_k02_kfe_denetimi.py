@@ -112,3 +112,91 @@ def test_kfe_sutun_eklerken_birim_baz_donem_karti_kaynak_kolonlar_korunur() -> N
                                                                  column_name="tufe", join_on="observation_date", purpose="tüfe"))
     assert r2.ok and "katalogda doğrulanmış seri" in r2.content and "UYARI" not in r2.content
     assert not ws2.column_provenance("tufe").warnings
+
+
+def test_reel_deger_birden_cok_sutunu_tek_cagrida_cevirir_ve_endeksi_bir_kez_ekler() -> None:
+    """ADR-0108 (23 Eyl demo): "mevduat tutarlarını reel hale getir" takibinde model yalnız iki sütunu çevirdi; araç
+    value_columns ile bütün tutarları tek çağrıda alır, endeks sütunu bir kez eklenir, önceki sütunlar değişmez."""
+    ws = _ws()
+    ws.add_column("diger", pd.Series([50.0, 55.0, 60.5], index=ws.table.index), description="ikinci tutar")
+    before = ws.table[["bakiye", "diger"]].copy()
+    tool = WorkspaceRealValueTool(Lake(), ws, registry=SimpleNamespace(current_message="Tutarları reel yap."))
+    r = tool.validate_and_run({"value_columns": ["bakiye", "diger"], "index_dataset_id": TUFE, "base_period": "2025-03",
+                               "purpose": "test"})
+    assert r.ok, r.content
+    t = ws.table
+    assert {"bakiye_reel", "diger_reel"} <= set(t.columns)
+    assert [c for c in t.columns if "endeks" in c] == ["endeks_tufe"]
+    assert t["bakiye_reel"].tolist() == [121.0, 121.0, 121.0]            # 100×242/200, 110×242/220, 121×242/242
+    assert t[["bakiye", "diger"]].equals(before)
+
+
+def test_harness_reel_istenip_arac_cagrilmazsa_dogrulanmis_endeksle_kendisi_uygular() -> None:
+    """23 Eyl senaryo koşusu: reel dönüşüm istendi, tablo koruma kuralı yeniden kurmayı engelledi, model aracı hiç
+    çağırmadı. Harness doğrulanmış endeksle (KFE derived olduğu için TÜFE) önceki turun tablosuna bir kez uygular."""
+    from kkb_agent.core.agent import _REQUESTED_CAPABILITIES, AnalyticsAgent
+    from kkb_agent.core.registry import ToolRegistry
+
+    ws = _ws()
+    registry = ToolRegistry()
+    registry.register(WorkspaceRealValueTool(Lake(), ws, registry=SimpleNamespace(current_message="")))
+    agent = AnalyticsAgent(llm=SimpleNamespace(model="x", supports_native_tools=lambda: True), registry=registry,
+                           workspace=ws, max_steps=4)
+    agent._turn_start_generation = ws.generation
+    requested = [cap for cap in _REQUESTED_CAPABILITIES if cap[0] == "reel"]
+    step, note = agent._auto_real_value("Tutarları 2025-03 fiyatlarıyla reel hale getir.", requested, [], 1)
+    assert step.ok and step.tool_args["index_dataset_id"] == TUFE and step.tool_args["value_columns"] == ["bakiye"]
+    assert step.tool_args["base_period"] == "2025-03" and "bakiye_reel" in ws.table.columns and "ARAÇ ÇAĞIRMA" in note
+    assert agent._auto_real_value("Tutarları reel hale getir.", requested, [step], 2) is None   # bir kez
+
+
+def test_tablo_yeniden_kurma_engellenince_harness_reel_donusumu_sonraki_adimda_uygular() -> None:
+    """23 Eyl senaryo koşusu: reel takibinde model tabloyu yeniden çekmeye çalıştı, engellendi, sonra kaynak reddiyle tur
+    kapandı. Harness engelden sonraki ilk adımda reel dönüşümü uygular; model yalnız anlatır."""
+    from pydantic import BaseModel as _BM
+
+    from kkb_agent.core.agent import AnalyticsAgent
+    from kkb_agent.core.registry import ToolRegistry
+    from kkb_agent.core.tool import Tool, ToolResult
+    from kkb_agent.llm.base import LLMResponse, ToolCall
+
+    class _QP(_BM):
+        sql: str = ""
+
+    class _Query(Tool):
+        name = "lakehouse_query"
+        description = "sahte sorgu"
+        Params = _QP
+        calls = 0
+
+        def run(self, params):
+            _Query.calls += 1
+            return ToolResult(content="çalışmamalıydı")
+
+    class _LLM:
+        model = "x"
+
+        def __init__(self):
+            self.turns = [LLMResponse(content="", tool_calls=[ToolCall(id="q", name="lakehouse_query", arguments={"sql": "x"})]),
+                          LLMResponse(content="Mevduat 2025-03 fiyatlarıyla reel hâle getirildi.")]
+            self.n = 0
+
+        def supports_native_tools(self):
+            return True
+
+        def chat(self, messages, *, tools=None, temperature=0.0, max_tokens=None):
+            self.n += 1
+            return self.turns[min(self.n - 1, len(self.turns) - 1)]
+
+    ws = _ws()
+    registry = ToolRegistry()
+    registry.register(_Query())
+    registry.register(WorkspaceRealValueTool(Lake(), ws, registry=SimpleNamespace(current_message="")))
+    agent = AnalyticsAgent(llm=_LLM(), registry=registry, workspace=ws, max_steps=5, tool_gate=False)
+    agent._catalog_specs = lambda: []
+
+    answer = agent.ask("TÜFE'yi mevcut veri setiyle hizala ve tutarları 2025-03 fiyatlarıyla reel hale getir.")
+
+    assert _Query.calls == 0, "önceki turun tablosunu yeniden kuran sorgu çalışmadı"
+    auto = [s for s in answer.steps if s.tool_name == "workspace_real_value"]
+    assert auto and auto[0].ok and "harness" in auto[0].thought and "bakiye_reel" in ws.table.columns
