@@ -39,6 +39,7 @@ class QueryProvenance:
     executed_at: datetime = field(default_factory=datetime.now)
     duration_ms: float = 0.0
     warnings: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def summary(self) -> str:
         parts = [f"{self.row_count} satır", f"kaynak: {', '.join(self.sources) or '—'}"]
