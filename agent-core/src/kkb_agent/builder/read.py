@@ -13,20 +13,27 @@ bot engeli, giriş sayfası, 404 burada sınıflandırılır, yorumlanmaz.
 from __future__ import annotations
 
 import io
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 from urllib.parse import urlparse
 
 import pandas as pd
 
 from ..contracts.access import AccessOutcome
 from ..core.access_policy import classify_access
+from .tabular import TabularParseError, TabularParseResult, parse_tabular_bytes
 
 MAX_BYTES_DEFAULT = 25 * 1024 * 1024
 
 
 class ReadRefused(Exception):
-    """Politika reddi: izinsiz kök, özel IP, boyut, biçim. Erişim sonucu değil, yerel karar."""
+    """Politika/parser reddi with a stable machine-readable error code."""
+
+    def __init__(self, message: str, *, code: str = "READ_REFUSED", details: dict | None = None):
+        super().__init__(message)
+        self.code = code
+        self.details = details or {}
 
 
 def _under(path: Path, roots: Iterable[Path]) -> bool:
@@ -42,8 +49,12 @@ def _under(path: Path, roots: Iterable[Path]) -> bool:
 
 def excel_sheets(content: bytes) -> list[str]:
     """XLSX sayfa adları (M10-T05): birden çok sayfa varsa kullanıcı/model seçer, sessizce ilki alınmaz."""
-    with pd.ExcelFile(io.BytesIO(content)) as xf:
-        return [str(n) for n in xf.sheet_names]
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True, keep_links=False)
+        return [str(n) for n in wb.sheetnames]
+    except Exception as exc:
+        raise ReadRefused(f"Excel dosyası okunamadı: {type(exc).__name__}", code="XLSX_CORRUPT") from exc
 
 
 def _table_from_bytes(content: bytes, name: str, *, sheet: str | int | None = None) -> pd.DataFrame:
@@ -53,27 +64,28 @@ def _table_from_bytes(content: bytes, name: str, *, sheet: str | int | None = No
     sayfa listesi döner (belirsizlik sorulur). Legacy .xls desteklenmez (xlrd yok) — açıkça söylenir.
     """
     suffix = Path(name.split("?")[0]).suffix.lower()
-    if suffix == ".xls":
-        raise ReadRefused("eski Excel (.xls) desteklenmiyor; dosyayı .xlsx olarak kaydedin")
-    if suffix in (".xlsx", ".xlsm"):
-        names = excel_sheets(content)
-        if sheet is None and len(names) > 1:
-            raise ReadRefused("Excel dosyasında birden çok sayfa var: " + ", ".join(names) + " — `sheet` ile birini seç")
-        target: str | int = 0 if sheet is None else sheet
-        if isinstance(target, str) and target.isdigit():
-            target = int(target)
-        if isinstance(target, str) and target not in names:
-            raise ReadRefused(f"sayfa '{target}' yok; sayfalar: {', '.join(names)}")
-        if isinstance(target, int) and not (0 <= target < len(names)):
-            raise ReadRefused(f"sayfa indeksi {target} yok; {len(names)} sayfa var")
-        frame = pd.read_excel(io.BytesIO(content), sheet_name=target, dtype=str, keep_default_na=False, engine="openpyxl")
-        return frame.fillna("")
-    text = content.decode("utf-8-sig", errors="replace")
     if suffix == ".json":
+        try:
+            text = content.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise ReadRefused("JSON kodlaması UTF-8 değil", code="ENCODING_UNSUPPORTED") from exc
         frame = pd.read_json(io.StringIO(text), dtype=False)
         return frame.astype(str).where(frame.notna(), "")
-    sep = "\t" if suffix == ".tsv" else None  # None → sniff (',' ';' '\t' '|')
-    return pd.read_csv(io.StringIO(text), sep=sep, engine="python", dtype=str, keep_default_na=False).fillna("")
+    try:
+        return parse_tabular_bytes(content, source_name=name, sheet=sheet).raw_frame
+    except TabularParseError as exc:
+        raise ReadRefused(str(exc), code=exc.code, details=exc.details) from exc
+
+
+def read_tabular_bytes(content: bytes, name: str, *, sheet: str | int | None = None) -> TabularParseResult:
+    """Parse bytes and expose raw/typed frames plus the deterministic quality report."""
+    suffix = Path(name.split("?")[0]).suffix.lower()
+    if suffix == ".json":
+        raise ReadRefused("JSON için tabular kalite raporu desteklenmiyor; JSON ingest yolunu kullanın", code="JSON_UNSUPPORTED")
+    try:
+        return parse_tabular_bytes(content, source_name=name, sheet=sheet)
+    except TabularParseError as exc:
+        raise ReadRefused(str(exc), code=exc.code, details=exc.details) from exc
 
 
 def _private_host(host: str) -> bool:
@@ -102,7 +114,10 @@ def read_bytes_for_profiling(
         if session is None:
             from ..web.session import default_session
             session = default_session()
-        from ..web.fetch import FetchRefused, guarded_get   # döngüsel import: web.html → builder.read
+        from ..web.fetch import (  # döngüsel import: web.html → builder.read
+            FetchRefused,
+            guarded_get,
+        )
         try:
             resp, _final = guarded_get(session, locator, timeout=30, stream=True)
         except FetchRefused as exc:
@@ -110,12 +125,14 @@ def read_bytes_for_profiling(
         except Exception:  # noqa: BLE001
             return None, "", classify_access(locator, http_status=None, environ=environ)
         chunks, size = [], 0
-        for chunk in resp.iter_content(65536):
-            size += len(chunk)
-            if size > max_bytes:
-                resp.close()
-                raise ReadRefused(f"kaynak {max_bytes} bayt sınırını aşıyor")
-            chunks.append(chunk)
+        try:
+            for chunk in resp.iter_content(65536):
+                size += len(chunk)
+                if size > max_bytes:
+                    raise ReadRefused(f"kaynak {max_bytes} bayt sınırını aşıyor", code="SIZE_LIMIT")
+                chunks.append(chunk)
+        finally:
+            resp.close()
         content = b"".join(chunks)
         outcome = classify_access(
             locator, http_status=resp.status_code, final_url=getattr(resp, "url", None),
@@ -157,7 +174,10 @@ def read_table_for_profiling(
         if session is None:
             from ..web.session import default_session
             session = default_session()
-        from ..web.fetch import FetchRefused, guarded_get   # döngüsel import: web.html → builder.read
+        from ..web.fetch import (  # döngüsel import: web.html → builder.read
+            FetchRefused,
+            guarded_get,
+        )
         try:
             resp, _final = guarded_get(session, locator, timeout=30, stream=True)
         except FetchRefused as exc:
@@ -165,12 +185,14 @@ def read_table_for_profiling(
         except Exception:  # noqa: BLE001 — DNS/TLS/timeout → unreachable
             return None, classify_access(locator, http_status=None, environ=environ)
         chunks, size = [], 0
-        for chunk in resp.iter_content(65536):
-            size += len(chunk)
-            if size > max_bytes:
-                resp.close()
-                raise ReadRefused(f"kaynak {max_bytes} bayt sınırını aşıyor")
-            chunks.append(chunk)
+        try:
+            for chunk in resp.iter_content(65536):
+                size += len(chunk)
+                if size > max_bytes:
+                    raise ReadRefused(f"kaynak {max_bytes} bayt sınırını aşıyor", code="SIZE_LIMIT")
+                chunks.append(chunk)
+        finally:
+            resp.close()
         content = b"".join(chunks)
         outcome = classify_access(
             locator, http_status=resp.status_code, final_url=getattr(resp, "url", None),
@@ -193,4 +215,37 @@ def read_table_for_profiling(
     return frame, classify_access(str(path), http_status=200, environ=environ)
 
 
-__all__ = ["MAX_BYTES_DEFAULT", "ReadRefused", "excel_sheets", "read_bytes_for_profiling", "read_table_for_profiling"]
+def read_tabular_for_profiling(
+    locator: str,
+    *,
+    allowed_roots: Iterable[Path],
+    max_bytes: int = MAX_BYTES_DEFAULT,
+    session: Any = None,
+    environ: dict[str, str] | None = None,
+    sheet: str | int | None = None,
+) -> tuple[TabularParseResult | None, AccessOutcome]:
+    """Rich generic intake result used by new callers.
+
+    The older ``read_table_for_profiling`` API remains available and returns
+    the lossless frame for backwards compatibility.
+    """
+    content, _media, outcome = read_bytes_for_profiling(
+        locator, allowed_roots=allowed_roots, max_bytes=max_bytes,
+        session=session, environ=environ,
+    )
+    if content is None or not outcome.ok:
+        return None, outcome
+    parsed = urlparse(locator)
+    name = Path(parsed.path if parsed.scheme in ("http", "https", "file") else locator).name
+    return read_tabular_bytes(content, name or "upload.csv", sheet=sheet), outcome
+
+
+__all__ = [
+    "MAX_BYTES_DEFAULT",
+    "ReadRefused",
+    "excel_sheets",
+    "read_bytes_for_profiling",
+    "read_table_for_profiling",
+    "read_tabular_bytes",
+    "read_tabular_for_profiling",
+]

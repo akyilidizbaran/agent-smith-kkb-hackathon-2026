@@ -14,19 +14,30 @@ from __future__ import annotations
 import re
 from collections import OrderedDict
 from pathlib import Path
-from typing import Literal, Any
+from typing import Any, Literal
 from urllib.parse import urlparse, urlunparse
 
 from pydantic import BaseModel, Field
 
+from ..builder.temporal import (
+    TemporalNormalizationError,
+    enrichment_intent,
+    infer_temporal,
+    normalize_frequency,
+    persistence_intent,
+    requested_columns_from_text,
+    requested_frequency,
+    requested_months_from_text,
+    validate_completion,
+)
 from ..contracts.lakehouse import QueryProvenance
 from ..core.access_policy import decide, detect_source_constraint, render_for_model, to_tool_error
-from ..core.intent import locator_from_user
 from ..core.errors import ToolError
+from ..core.intent import locator_from_user
 from ..core.preview import preview_table
 from ..core.tool import Tool, ToolResult
-from ..core.workspace import AnalysisWorkspace
 from ..core.web_routing import source_domains, within_domains
+from ..core.workspace import AnalysisWorkspace
 from ..web.crawl import CrawlBudget, CrawlResult, crawl, keywords_of
 from ..web.fetch import FetchRefused, RobotsCache, private_host
 from ..web.search import TavilySearch
@@ -430,6 +441,39 @@ class WebUrlTool(Tool):
             local_index = next((i for (pp, i, tt) in tables if pp is page and tt is table), 0)
             labels = getattr(page.page, "table_labels", []) or []
             table_label = labels[local_index] if local_index < len(labels) else ""
+            raw_table = table
+            request_text = " ".join(part for part in (question, params.purpose) if part)
+            requested_grain = requested_frequency(request_text)
+            source_temporal = infer_temporal(raw_table)
+            normalized = None
+            temporal_notes: list[str] = []
+            requested_columns = requested_columns_from_text(
+                raw_table, request_text, period_column=source_temporal.period_column or ""
+            )
+            if requested_grain:
+                try:
+                    normalized = normalize_frequency(
+                        raw_table,
+                        temporal=source_temporal,
+                        requested=requested_grain,
+                        requested_columns=requested_columns,
+                    )
+                    table = normalized.frame
+                    temporal_notes.append(
+                        f"ZAMAN NORMALİZASYONU: kaynak={source_temporal.frequency}, "
+                        f"istenen={requested_grain}, {len(raw_table)}→{len(table)} satır; "
+                        f"anahtar=period_month."
+                    )
+                    temporal_notes.extend(f"ZAMAN NOTU: {warning}." for warning in normalized.metadata.warnings)
+                except TemporalNormalizationError as exc:
+                    # Keep the raw table visible for diagnosis, but make the
+                    # incomplete contract explicit.  Never silently claim a
+                    # monthly/aggregated result when a safe rule was absent.
+                    temporal_notes.append(
+                        f"KISMI SONUÇ: {source_temporal.frequency} kaynak "
+                        f"{requested_grain} isteğine güvenli biçimde dönüştürülemedi "
+                        f"({exc.code}); ham tablo gösteriliyor."
+                    )
             # Uygunluk kapısı (V3 §3.9, 15 Eyl): soru ne istiyor × tablo ne sunuyor — tablo aktif olmadan ÖNCE.
             # Ret → tablo YÜKLENMEZ, kart tabloda ne olduğunu söyler; kullanıcı "yine de yükle" derse aşılır.
             # Ölçüldü (UEB 14 Eyl): yüklenip uyarı verilen yanlış tablo iki koşuda da tam analizle cevaplandı (B02/B07).
@@ -461,9 +505,91 @@ class WebUrlTool(Tool):
                              f"toplam PDF sayfası: {page.page.extraction.get('total_pages', '—')}. "]
                             if page.page.extraction else [])
                          + (list(page.page.notes) if page.page.ocr and page.page.notes else []),  # type: ignore[union-attr]
+                metadata={
+                    "source_frequency": source_temporal.frequency,
+                    "requested_frequency": requested_grain,
+                    "temporal_confidence": source_temporal.confidence,
+                    "temporal_evidence": list(source_temporal.evidence),
+                    "rows_before": len(raw_table),
+                    "rows_after": len(table),
+                    "normalization": (normalized.metadata.__dict__ if normalized else None),
+                    "persistence_state": "SESSION_ONLY",
+                },
             )
-            self.workspace.set_table(table, description=params.purpose, provenance=prov)
+            enrichment_requested = enrichment_intent(request_text)
+            join_completed = False
+            enrichment_metadata: dict[str, object] = {}
+            if enrichment_requested and normalized is not None and self.workspace.has_table:
+                left_temporal = infer_temporal(self.workspace.table)  # type: ignore[arg-type]
+                if left_temporal.period_column:
+                    try:
+                        enrichment_columns = [c for c in table.columns if c != "period_month"]
+                        enrichment_metadata = self.workspace.enrich_table(
+                            table,
+                            left_period=left_temporal.period_column,
+                            right_period="period_month",
+                            columns=enrichment_columns,
+                            description=params.purpose,
+                            provenance=prov,
+                        )
+                        table = self.workspace.table  # type: ignore[assignment]
+                        join_completed = True
+                        temporal_notes.append(
+                            f"WORKSPACE ZENGİNLEŞTİRME: mevcut tablo korunarak "
+                            f"{len(enrichment_columns)} sütun eklendi; {enrichment_metadata.get('matched_rows', 0)} "
+                            "dönem eşleşti."
+                        )
+                    except (TemporalNormalizationError, ValueError) as exc:
+                        temporal_notes.append(f"KISMI SONUÇ: workspace zenginleştirme tamamlanamadı ({exc}).")
+            if not join_completed:
+                self.workspace.set_table(table, description=params.purpose, provenance=prov)
             self.workspace.title = params.purpose
+            persistence_state = "SESSION_ONLY"
+            persistence_requested = persistence_intent(request_text) == "PERSIST_TO_LAKEHOUSE"
+            if persistence_requested:
+                temporal_notes.append(
+                    "PERSISTENCE DURUMU: SESSION_ONLY — web_url sonucu yalnız oturum tablosunda; "
+                    "Lakehouse'a eklenmiş sayılmaz."
+                )
+            result_frequency = requested_grain if normalized is not None else source_temporal.frequency
+            result_months = [str(v) for v in table["period_month"].tolist()] if "period_month" in table.columns else []
+            requested_months = requested_months_from_text(request_text)
+            if not requested_months and source_temporal.coverage_start and source_temporal.coverage_end:
+                requested_months = [
+                    f"{year:04d}-{month:02d}"
+                    for year in range(source_temporal.coverage_start.year, source_temporal.coverage_end.year + 1)
+                    for month in range(1, 13)
+                    if (year, month) >= (source_temporal.coverage_start.year, source_temporal.coverage_start.month)
+                    and (year, month) <= (source_temporal.coverage_end.year, source_temporal.coverage_end.month)
+                ]
+            completion = validate_completion(
+                requested_frequency=requested_grain,
+                result_frequency=result_frequency,
+                requested_columns=requested_columns or (),
+                result_columns=table.columns,
+                requested_months=requested_months if requested_grain == "monthly" else (),
+                result_months=result_months,
+                enrichment_requested=enrichment_requested,
+                join_completed=join_completed,
+                persistence_requested=persistence_requested,
+                persistence_state=persistence_state,
+            )
+            self.workspace.last_completion = {
+                "status": completion.status,
+                "failures": list(completion.failures),
+                "requested_frequency": requested_grain,
+                "result_frequency": result_frequency,
+                "requested_columns": list(requested_columns or ()),
+                "result_columns": list(map(str, table.columns)),
+                "enrichment_requested": enrichment_requested,
+                "join_completed": join_completed,
+                "persistence_requested": persistence_requested,
+                "persistence_state": persistence_state,
+                "source_frequency": source_temporal.frequency,
+                "rows_before": len(raw_table),
+                "rows_after": len(table),
+                "enrichment": enrichment_metadata,
+            }
             web_artifact["used"] = page.url
             web_artifact.update({
                 "table_loaded": True,
@@ -471,6 +597,13 @@ class WebUrlTool(Tool):
                 "table_label": table_label or None,
                 "table_rows": len(table),
                 "table_columns": len(table.columns),
+                "source_frequency": source_temporal.frequency,
+                "requested_frequency": requested_grain,
+                "normalization_applied": normalized is not None,
+                "enriched_current_workspace": join_completed,
+                "persistence_state": persistence_state,
+                "completion_status": completion.status,
+                "completion_failures": list(completion.failures),
             })
             selected_visit = next((v for v in web_artifact["visited"] if v.get("url") == page.url), None)
             if selected_visit is not None:
@@ -480,6 +613,11 @@ class WebUrlTool(Tool):
                     "table_label": table_label or None,
                     "table_rows": len(table),
                     "table_columns": len(table.columns),
+                    "source_frequency": source_temporal.frequency,
+                    "requested_frequency": requested_grain,
+                    "normalization_applied": normalized is not None,
+                    "enriched_current_workspace": join_completed,
+                    "persistence_state": persistence_state,
                 })
             content = [
                 f"TABLO YÜKLENDİ: #{params.table_index} ({len(table)} satır, {len(table.columns)} sütun) — {page.url}"
@@ -488,6 +626,7 @@ class WebUrlTool(Tool):
                 preview_table(table, render=_plain),   # ≤24 satır tamamı, üstü baş+son (core/preview, PART 41)
                 f"Kaynak: {page.page.title or page.url} | sha256 {page.fetch.sha256[:12]}… | çekim {page.fetch.fetched_at:%Y-%m-%d %H:%M} UTC",
                 *[f"NOT: {n}" for n in page.page.notes],  # type: ignore[union-attr]
+                *temporal_notes,
                 *[f"BOYUT SINIRI: {url} indirilemedi ({reason})" for url, reason in result.limit_exceeded],
                 self._year_note(question, [page]),
                 *(fit.lines() if fit is not None else []),

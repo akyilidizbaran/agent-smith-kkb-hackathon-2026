@@ -66,6 +66,9 @@ class AnalysisWorkspace:
         self._sources: dict[str, SourceTable] = {}             # k1, k2, … — join ve workspace_query için
         self._source_seq = 0
         self.active_source_id: str | None = None
+        # The latest structured delivery contract.  Answer narration reads
+        # this instead of guessing completion from the presence of a frame.
+        self.last_completion: dict[str, object] = {}
 
     # ---------- durum ----------
     @property
@@ -148,6 +151,39 @@ class AnalysisWorkspace:
                 self._column_sources[str(column)] = provenance
         self._record("transform", description, None, columns_added=columns_added or [])
         self._register_source(description)
+
+    def enrich_table(
+        self,
+        frame: pd.DataFrame,
+        *,
+        left_period: str,
+        right_period: str,
+        columns: list[str],
+        description: str,
+        provenance: QueryProvenance | None = None,
+    ) -> dict[str, object]:
+        """Add validated period-aligned columns without replacing the workspace.
+
+        Temporal key construction and cardinality checks live in the generic
+        builder; this method owns the workspace snapshot/history/provenance
+        contract so enrichment remains reversible and auditable.
+        """
+        if self._table is None:
+            raise ValueError("Önce bir tablo oluşturulmalı (set_table).")
+        from ..builder.temporal import enrich_frames
+
+        enriched, metadata = enrich_frames(
+            self._table, frame, left_period=left_period, right_period=right_period,
+            columns=columns, description=description,
+        )
+        self._snapshot()
+        self._table = enriched
+        if provenance is not None:
+            for column in columns:
+                self._column_sources[column] = provenance
+        self._record("enrich", description, provenance, columns_added=list(columns))
+        self._register_source(description)
+        return metadata
 
     # ---------- kimlikli kaynak tablolar (M11) ----------
     def _register_source(self, title: str) -> str:
@@ -272,6 +308,7 @@ class AnalysisWorkspace:
             return False
         self._table = self._snapshots.pop()
         self.generation += 1
+        self.last_completion = {}
         if self._history:
             self._history.pop()
         return True
@@ -311,6 +348,7 @@ class AnalysisWorkspace:
     # ---------- iç ----------
     def _snapshot(self) -> None:
         if self._table is not None:
+            self.last_completion = {}
             self._snapshots.append(self._table.copy())
             # Bellek kontrolü: uzun konuşmalarda sınırsız geçmiş tutmayalım.
             if len(self._snapshots) > 20:

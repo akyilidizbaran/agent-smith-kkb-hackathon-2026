@@ -574,7 +574,15 @@ class LakehouseQueryTool(Tool):
             return ToolError(
                 error_code="SOURCE_MISMATCH", layer="policy", retryable=True,
                 message="Sorgudaki kaynak kullanıcının istediği kaynakla uyuşmuyor; başka kaynağın verisi sessizce kullanılamaz.",
-                hint="İstenen kaynak için doğru seriyi lakehouse_search ile bulup sorgula.",
+                # 23 Eyl demo: takipte (aktif tablo varken) model mevcut mevduat sütunlarını başka seriden yeniden çekmeye
+                # çalıştı, bu ret tekrar tekrar döndü ve tur sabit metinle kapandı. Aktif tablo varken doğru yol, yalnız
+                # yeni istenen seriyi getirip tabloya eklemektir.
+                hint=("Aktif tabloda veri zaten var: onu yeniden çekme. Yalnız kullanıcının yeni istediği seriyi "
+                      "(istenen kaynaktan) getir ve tabloya ekle: fiyat endeksiyle reel değer için workspace_real_value "
+                      "(index_dataset_id=<endeks serisi>, base_period=YYYY-MM, her tutar sütunu için ayrı çağrı); "
+                      "başka bir seri için workspace_add_column."
+                      if self.workspace.has_table else
+                      "İstenen kaynak için doğru seriyi lakehouse_search ile bulup sorgula."),
                 candidates=[spec.dataset_id for spec in used if source_matches(str(getattr(spec, "source", "")), facets.sources)],
             )
         return _acik_seri_uyusmazligi(question, specs, used)
@@ -631,7 +639,37 @@ class LakehouseQueryTool(Tool):
                 return written, f"evds:{written}"
         return None
 
+    def _maturity_buckets_in(self, sql: str) -> list[str]:
+        """SQL'de adı geçen vade kovası serileri (ilişki grafında `vade_ay=` boyutu olanlar)."""
+        named = set(re.findall(r"'([A-Za-z_]\w*:[^'\s]+)'", sql or ""))
+        if len(named) < 2:
+            return []
+        found = []
+        for series_id in named:
+            try:
+                spec = self.lakehouse.get_dataset(series_id)
+            except Exception:  # noqa: BLE001
+                continue
+            if any(str(d).startswith("vade_ay=") for d in (getattr(spec, "dimension_path", None) or ())):
+                found.append(series_id)
+        return sorted(found)
+
     def run(self, params: QueryParams) -> ToolResult:
+        buckets = self._maturity_buckets_in(params.sql)
+        if len(buckets) >= 2 and self._registry is not None and getattr(self._registry, "get", None) \
+                and self._registry.get("lakehouse_breakdown_panel") is not None:
+            # 23 Eyl demo CSV'si: model kovaları SQL ile toplarken "3 aya kadar"dan Vadesiz'i çıkardı. Kova seçimi
+            # modelin yorumuna bırakılmaz (ADR-0108); deterministik araç kovaları ilişki grafından seçer.
+            return ToolResult.fail(
+                "INVALID_ARGS",
+                f"Sorgu {len(buckets)} vade kovasını elle birleştiriyor; vade grupları SQL ile kurulmaz, sorgu çalıştırılmadı.",
+                hint=("lakehouse_breakdown_panel kullan: groups=[{total_series_id: <kovaların toplam serisi>, column_name, "
+                      "max_months: X} ('X aya kadar', Vadesiz dahil) ya da {min_months: X} ('X aydan fazla')], "
+                      "series=[olduğu gibi alınacak toplamlar], stok istenmiyorsa value=monthly_change."),
+                candidates=buckets,
+                layer="policy",
+                retryable=True,
+            )
         misused = self._series_used_as_table(params.sql)
         if misused is not None:
             written, series_id = misused

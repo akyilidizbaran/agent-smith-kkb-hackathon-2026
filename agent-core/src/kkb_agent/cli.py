@@ -43,6 +43,7 @@ from .tools.gold import GOLD_PROMPT_RULES, GoldAlignTool, GoldDecomposeTool, Gol
 from .tools.chart import CHART_PROMPT_RULES, ChartTool
 from .tools.workspace_query import WorkspaceQueryTool
 from .tools.real_value import REAL_VALUE_PROMPT_RULES, WorkspaceRealValueTool
+from .tools.breakdown import BREAKDOWN_PROMPT_RULES, LakehouseBreakdownPanelTool
 from .tools.workspace_join import WorkspaceJoinTool
 from .tools.premise import PREMISE_PROMPT_RULES, CheckPremiseTool
 from .tools.clarify import CLARIFY_PROMPT_RULES, ClarifyTool
@@ -165,6 +166,7 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
             LakehouseDescribeTool(lakehouse),
             LakehouseDistinctValuesTool(lakehouse),
             LakehouseQueryTool(lakehouse, workspace, registry, gold_available=gold_on),
+            LakehouseBreakdownPanelTool(lakehouse, workspace, registry=registry),   # ADR-0108: seri + vade grubu paneli, deterministik
             WorkspaceAddColumnTool(lakehouse, workspace),
             WorkspaceComputeColumnTool(workspace),
             WorkspaceShowTool(workspace),
@@ -203,7 +205,7 @@ def build_agent(max_steps: int = 10, profile: str | None = None) -> AnalyticsAge
     registry.register(
         ChartTool(lakehouse, workspace, chart_dir=settings.chart_dir, geo_dir=settings.geo_dir)
     )
-    system_prompt = (SYSTEM_PROMPT + CHART_PROMPT_RULES + WORKSPACE_QUERY_RULES + ANALYTICS_PROMPT_RULES + REAL_VALUE_PROMPT_RULES
+    system_prompt = (SYSTEM_PROMPT + CHART_PROMPT_RULES + WORKSPACE_QUERY_RULES + ANALYTICS_PROMPT_RULES + REAL_VALUE_PROMPT_RULES + BREAKDOWN_PROMPT_RULES
                      + PREMISE_PROMPT_RULES + CLARIFY_PROMPT_RULES)
     # Dış kaynak (ADR-0034): web_url her zaman; web_search yalnız arama anahtarı varsa.
     settings.ingest_allowed_root.mkdir(parents=True, exist_ok=True)

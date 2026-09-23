@@ -325,7 +325,7 @@ class Fitness:
 
     def lines(self) -> list[str]:
         head = f"uygunluk: {self.label} ({self.score:.2f}) — " + ("; ".join(self.reasons) if self.reasons else "gerekli kavramlar var")
-        return [head, "  soru istiyor: " + (", ".join(self.required) or "—") + " | veride: " + (", ".join(self.present) or "—")]
+        return [head, "  soru istiyor: " + _short_list(self.required) + " | veride: " + _short_list(self.present)]
 
     def stop_message(self) -> str:
         """Ret kartı: modelin ne söyleyeceği — dosyada NE VAR, ne YOK; suçlamayan dil."""
@@ -334,6 +334,15 @@ class Fitness:
                 f"Dosyada olan: kolonlar {', '.join(sig.headers)}"
                 + (f"; dönem {sig.years[0]}–{sig.years[1]}" if sig.years else "")
                 + (f"; frekans {sig.frequency}" if sig.frequency else "") + ".")
+
+
+def _short_list(items: set[str] | list[str], limit: int = 6) -> str:
+    """Uyarıda veri terimleri: teknik sütun adları (`<seri>@<varlık>::<ölçü>`) çıkarılır, en çok `limit` terim yazılır.
+    23 Eyl senaryo koşusu: birleşik tablonun teknik adları insan diline çevrilince aynı ad onlarca kez tekrarlandı."""
+    clean = sorted({str(item) for item in items if "::" not in str(item)})
+    if not clean:
+        return "—"
+    return ", ".join(clean[:limit]) + (f" (+{len(clean) - limit})" if len(clean) > limit else "")
 
 
 def assess(question: str, sig: DataSignature, lexicon: Lexicon | None = None) -> Fitness:
@@ -389,7 +398,7 @@ def assess(question: str, sig: DataSignature, lexicon: Lexicon | None = None) ->
         # Ortak hiçbir kavram yok: ilgisiz (otobüs tarifesi). Gevşek (katalog) kavramlar tek başına ret vermez.
         dims["measure"] = "fail" if measures else "n/a"
         dims["entity"] = "fail" if qualifiers else "n/a"
-        reasons.append(f"soru {', '.join(sorted(req))} istiyor; veride bunların hiçbiri yok" + (f" (veride: {', '.join(sorted(have))})" if have else ""))
+        reasons.append(f"soru {_short_list(req)} istiyor; veride bunların hiçbiri yok" + (f" (veride: {_short_list(have)})" if have else ""))
         return out("reject" if strict(req) else "partial", 0.0 if strict(req) else 0.4)
     if measures and m_have and not (measures & m_have):
         # Dosya BAŞKA bir ölçümü taşıyor (fiyat endeksi ≠ bakiye): niyet açısından yanlış veri.
@@ -408,7 +417,8 @@ def assess(question: str, sig: DataSignature, lexicon: Lexicon | None = None) ->
         competing = strict(have - req)
         labeled = bool(m_have) or bool(competing)
         dims["entity"] = "fail" if (labeled and strict(missing_q)) else "partial"
-        reasons.append(f"varlık/segment {'farklı' if labeled else 'belirsiz'}: eksik {', '.join(sorted(missing_q))}; veride {', '.join(sorted(have)) or '—'}")
+        reasons.append(f"varlık/segment {'farklı' if labeled else 'belirsiz'}: eksik {', '.join(sorted(missing_q))}; "
+                       f"veride {_short_list(have)}")
         return out("reject" if dims["entity"] == "fail" else "partial", 0.2 if labeled else 0.45)
     dims["entity"] = "ok" if qualifiers else "n/a"
     if measures and not m_have:

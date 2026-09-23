@@ -266,6 +266,17 @@ class _GoldTool(Tool):
                 refused.content = "\n".join(
                     line for line in refused.content.split("\n") if not line.startswith("BU HATA TEKRAR DENEMEYLE")
                 ) + "\nTur devam ediyor: önerilen araçla sürdür; aynı çağrıyı tekrarlama."
+            elif self.name == "gold_join" and refused.error is not None:
+                # Çok serili hizalama Gold'un metrik kuralına takılınca (ör. derived seri) tur bitmez (23 Eyl demo,
+                # Senaryo 5): aynı seriler kırılım panelinde katalog toplama kuralıyla tek aylık tabloya gelir.
+                ids = list(getattr(params, "series_ids", []) or [])
+                refused.error.terminal = False
+                refused.content = "\n".join(
+                    line for line in refused.content.split("\n") if not line.startswith("BU HATA TEKRAR DENEMEYLE")
+                ) + ("\nTur devam ediyor: aynı serileri lakehouse_breakdown_panel ile al — series=["
+                     + ", ".join(f"{{series_id: {sid}, column_name: <kısa ad>}}" for sid in ids)
+                     + "], period_from, period_to, value='level'. Haftalık/günlük seriler aylığa iner. "
+                       "Aynı gold_join çağrısını tekrarlama.")
             return refused
         except LakehouseError as exc:
             return ToolResult.fail("TOOL_FAILED", str(exc), layer="harness", retryable=False,
