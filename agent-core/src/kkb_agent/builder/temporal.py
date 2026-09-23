@@ -46,6 +46,10 @@ _MONTH_WORD = re.compile(r"aylık|aylik|her ay|monthly|month", re.IGNORECASE)
 _PERSIST = re.compile(r"lakehouse|veri\s*havuz|katalo(?:ğ|g)a|kalıcı|kalici|persist|ingest|kaydet", re.IGNORECASE)
 _ENRICH = re.compile(r"zenginleştir|zenginlestir|mevcut .*birleştir|mevcut .*ekle|hizala|enrich|join", re.IGNORECASE)
 
+# Bir akım kelimesini toplanamaz kılan niteleyiciler. `_fold_label` çıktısı üzerinde eşleşir,
+# yani küçük harf ve aksansız biçimler yazılır ("başına" değil "basina").
+_PER_UNIT = re.compile(r"fiyat|price|ortalama|average|\bmean\b|medyan|median|birim|unit|basina|\bper\b|\bkur\b|\bkuru\b")
+
 
 class TemporalNormalizationError(ValueError):
     """A safe, user-actionable temporal decision could not be made."""
@@ -302,9 +306,12 @@ def infer_measure_semantics(column: str, *, metadata: Mapping[str, Any] | None =
         if value in MEASURE_TYPES:
             return MeasureSemantics(column, value, "high", ("declared metadata",), value in {"FLOW", "COUNT"})
     label = _fold_label(column)
-    if re.search(r"ortalama|average|\bmean\b|\bavg\b", label):
-        # "Günlük Ortalama İşlem Hacmi": ortalamalar toplanmaz; aylığa iş günü ağırlıklı ortalama ile indirilir.
-        return MeasureSemantics(column, "AVERAGE", "medium", ("column label indicates an average",))
+    if re.search(r"(?:gunluk|haftalik|daily|weekly|per\s+day|is\s+gunu)\s+(?:ortalama|average|mean|avg)|"
+                 r"(?:ortalama|average|mean)\s+(?:gunluk|daily)", label):
+        # "Günlük Ortalama İşlem Hacmi": zaman başına ortalama toplanmaz; aylığa iş günü ağırlıklı ortalamayla iner
+        # (gün ağırlığı bu tanımda kesindir). Zaman birimi söylenmeyen "Ortalama Tutar" işlem başına olabilir; gün
+        # ağırlığı yanlış olur, aşağıdaki akım kuralı onu güvenli kural yok (UNKNOWN) tarafına düşürür.
+        return MeasureSemantics(column, "AVERAGE", "medium", ("column label indicates a per-time average",))
     if re.search(r"faiz|interest|%|rate", label):
         return MeasureSemantics(column, "RATE", "medium", ("column label indicates a rate",))
     if re.search(r"ratio|rasyo|payı|payi|oran", label):
@@ -316,6 +323,12 @@ def infer_measure_semantics(column: str, *, metadata: Mapping[str, Any] | None =
     if re.search(r"adet|count|sayı|sayi", label):
         return MeasureSemantics(column, "COUNT", "medium", ("column label indicates a count",), True)
     if re.search(r"hacim|volume|satış|satis|revenue|gelir|tutar|amount|işlem|islem|flow|inflow|outflow", label):
+        # Akım kelimesi tek başına toplanabilirliği kanıtlamaz: "İşlem Fiyatı" da "Ortalama Tutar"
+        # da bu kalıba uyar ama toplanırsa anlamsız bir sayı çıkar. Niteleyici varsa kapalı tarafa
+        # düşülür; yanlış toplamaktansa "güvenli kural yok" deyip ham tabloyu göstermek yeğdir.
+        if _PER_UNIT.search(label):
+            return MeasureSemantics(column, "UNKNOWN", "low",
+                                    ("additive keyword is qualified by a per-unit/average word",))
         return MeasureSemantics(column, "FLOW", "medium", ("column label indicates an additive flow/amount",), True)
     return MeasureSemantics(column, "UNKNOWN", "low", ("no conservative semantic label match",))
 
@@ -334,7 +347,18 @@ def _number(value: Any) -> float:
         text = text.replace(".", "").replace(",", ".") if text.rfind(",") > text.rfind(".") else text.replace(",", "")
     elif "," in text:
         text = text.replace(",", ".")
-    return float(text)
+    try:
+        return float(text)
+    except ValueError as exc:
+        # Boş ya da sayı olmayan hücre bu modülün diğer belirsizlikleri gibi ele alınır: çıplak
+        # ValueError çağıranın `TemporalNormalizationError` yakalamasından kaçıp aracı düşürüyordu.
+        # Eksik günü atlayıp toplamayı sürdürmek ayı olduğundan küçük gösterirdi, o yüzden kapalı
+        # tarafa düşülür ve ham tablo gösterilir.
+        raise TemporalNormalizationError(
+            f"sayıya çevrilemeyen değer: {str(value)!r}",
+            code="VALUE_PARSE_FAILED",
+            details={"value": str(value)},
+        ) from exc
 
 
 def _canonical_key(period: PeriodValue, frequency: str) -> str:
@@ -448,9 +472,9 @@ def normalize_frequency(
         if temporal.frequency not in {"daily", "weekly"}:
             raise TemporalNormalizationError(f"{temporal.frequency} → monthly dönüşümü için güvenli kural yok",
                                              code="UNSAFE_FREQUENCY_CONVERSION")
-        # Ay sınırını aşan dönem (ör. 29.03–02.04 haftası) iş günü sayısıyla aylara bölüştürülür. Toplanabilir tutar
-        # orantılı dağıtılır, ortalama/oran iş günü ağırlıklı ortalanır, stok/endeks ayın son gözlemidir. Dönemin
-        # içindeki günlük değerler bilinmediği için bölüştürme bir yaklaşımdır ve uyarıda söylenir.
+        # Her dönem BAŞLADIĞI aya yazılır (ör. 29.03–02.04 haftası Mart'tır; bölüştürülmez). Toplanabilir tutar
+        # toplanır, ortalama/oran iş günü ağırlıklı ortalanır, stok/endeks ayın en son biten dönemidir. Aylar
+        # takvim sırasıyla kurulur ve stok dönem sonuna göre seçilir; dosyanın satır sırası sonucu değiştirmez.
         allocations = [_month_allocation(period) for period in parsed]
         months = sorted({month for allocation in allocations for month in allocation})
         crossing = sum(1 for period in parsed if (period.start.year, period.start.month) != (period.end.year, period.end.month))
@@ -474,7 +498,7 @@ def normalize_frequency(
             warnings.append("kapsamı eksik aylar (kaynak bu ayların yalnız bir kısmını içeriyor): " + ", ".join(partial))
         values: dict[str, list[Any]] = {"period_month": months}
         for measure in measures:
-            series = [_number(v) if v is not None and str(v).strip() != "" else None for v in source[measure.column].tolist()]
+            series = [_number(v) if v is not None else None for v in source[measure.column].tolist()]
             column_values: list[Any] = []
             if measure.measure_type == "FLOW" or (measure.measure_type == "COUNT" and measure.additive):
                 for month in months:
