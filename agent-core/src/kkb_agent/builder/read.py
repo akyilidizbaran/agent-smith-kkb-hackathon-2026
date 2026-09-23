@@ -12,12 +12,66 @@ bot engeli, giriş sayfası, 404 burada sınıflandırılır, yorumlanmaz.
 
 from __future__ import annotations
 
+import csv
 import io
+import re
+from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlparse
 
 import pandas as pd
+
+_NUMERIC_CELL = re.compile(r"^[\s]*[-+]?[\d.,\s]*\d[\d.,\s]*%?[\s]*$")
+
+
+def _field_count(line: str, delim: str) -> int:
+    try:
+        return len(next(csv.reader([line], delimiter=delim)))
+    except Exception:  # noqa: BLE001 — bozuk satır: kaba bölmeye düş
+        return len(line.split(delim))
+
+
+def _numeric_fraction(line: str, delim: str) -> float:
+    try:
+        cells = next(csv.reader([line], delimiter=delim))
+    except Exception:  # noqa: BLE001
+        cells = line.split(delim)
+    cells = [c for c in cells if c.strip()]
+    if not cells:
+        return 0.0
+    return sum(1 for c in cells if _NUMERIC_CELL.match(c)) / len(cells)
+
+
+def _detect_delimiter_and_header(lines: list[str]) -> tuple[str, int, list[int]] | None:
+    """Ayraç + başlık satırı + veri satırlarını keşfet (kaynak-bağımsız, preamble'a dayanıklı).
+
+    Ayraç adayları öncelik sırasıyla denenir (';' TR Excel'inde yaygın çünkü ',' ondalıktır).
+    En yüksek KAPSAM (aynı alan sayısına sahip satır oranı) veren ≥2 kolonlu ayraç seçilir; başlık,
+    modal alan sayısına sahip ve çoğunlukla METİN (sayısal değil) olan ilk satırdır — üstündeki
+    farklı-alanlı satırlar (metadata/preamble) atılır, altındaki tutarsız satırlar (Toplam/not) düşer.
+    """
+    idx = [i for i, l in enumerate(lines) if l.strip()]
+    if not idx:
+        return None
+    best: tuple[tuple, str, int, dict[int, int]] | None = None
+    for rank, delim in enumerate((";", "\t", "|", ",")):
+        counts = {i: _field_count(lines[i], delim) for i in idx}
+        modal_pool = Counter(n for n in counts.values() if n >= 2)
+        if not modal_pool:
+            continue
+        modal, hits = modal_pool.most_common(1)[0]
+        coverage = hits / len(idx)
+        score = (round(coverage, 3), modal, -rank)   # yüksek kapsam > çok kolon > öncelikli ayraç
+        if best is None or score > best[0]:
+            best = (score, delim, modal, counts)
+    if best is None:
+        return None
+    _, delim, modal, counts = best
+    modal_lines = [i for i in idx if counts[i] == modal]
+    header_i = next((i for i in modal_lines if _numeric_fraction(lines[i], delim) < 0.5), modal_lines[0])
+    body = [i for i in modal_lines if i > header_i]
+    return delim, header_i, body
 
 from ..contracts.access import AccessOutcome
 from ..core.access_policy import classify_access
@@ -72,8 +126,26 @@ def _table_from_bytes(content: bytes, name: str, *, sheet: str | int | None = No
     if suffix == ".json":
         frame = pd.read_json(io.StringIO(text), dtype=False)
         return frame.astype(str).where(frame.notna(), "")
-    sep = "\t" if suffix == ".tsv" else None  # None → sniff (',' ';' '\t' '|')
-    return pd.read_csv(io.StringIO(text), sep=sep, engine="python", dtype=str, keep_default_na=False).fillna("")
+    # Başlık/preamble keşfi + sağlam ayraç seçimi (aşağı yönlü sayı çevirimi profile.py'de yapılır).
+    lines = text.splitlines()
+    if suffix == ".tsv":
+        detected: tuple[str, int, list[int]] | None = None
+        idx = [i for i, l in enumerate(lines) if l.strip()]
+        if idx:
+            counts = {i: _field_count(lines[i], "\t") for i in idx}
+            modal = Counter(n for n in counts.values() if n >= 1).most_common(1)[0][0]
+            modal_lines = [i for i in idx if counts[i] == modal]
+            header_i = next((i for i in modal_lines if _numeric_fraction(lines[i], "\t") < 0.5), modal_lines[0])
+            detected = ("\t", header_i, [i for i in modal_lines if i > header_i])
+    else:
+        detected = _detect_delimiter_and_header(lines)
+    if detected is None:  # tek kolon / boş: pandas'ın kendi çıkarımına bırak (eski davranış)
+        return pd.read_csv(io.StringIO(text), sep="\t" if suffix == ".tsv" else None,
+                           engine="python", dtype=str, keep_default_na=False).fillna("")
+    delim, header_i, body = detected
+    kept = "\n".join(lines[i] for i in (header_i, *body))
+    return pd.read_csv(io.StringIO(kept), sep=delim, engine="python", dtype=str,
+                       keep_default_na=False).fillna("")
 
 
 def _private_host(host: str) -> bool:
