@@ -33357,17 +33357,44 @@ series:
     dataset_id: evds_fx_usd
     name_tr: ABD Doları Döviz Alış Kuru (TL)
     description: >-
-      TCMB EVDS, "bie_dkdovytl" veri grubu. TCMB gösterge döviz alış kuru, ABD doları, günlük (iş günleri). Fiyat düzeyidir: dönemlere indirgenirken ortalama alınır (kural avg), toplanmaz. Frekans ve birim EVDS'nin kendi metadata'sından
+      YALNIZ kullanıcı açıkça "alış kuru" dediğinde kullanılır; genel "USD/TL", "dolar kuru", "döviz kuru" istekleri için
+      satış kuru evds:TP.DK.USD.S.YTL kullanılır. TCMB EVDS, "bie_dkdovytl" veri grubu. TCMB gösterge döviz alış kuru, ABD doları, günlük (iş günleri). Fiyat düzeyidir: dönemlere indirgenirken ortalama alınır (kural avg), toplanmaz. Frekans ve birim EVDS'nin kendi metadata'sından
       (FREQUENCY_STR, BIRIMI: Türk lirası); ölçüm tipi ve indirgeme kuralı serinin adından ve veri
       grubu tanımından; canlı seri listesi 13 Eylül 2026 (docs/sources/evds.md, 'Küratörlü ek').
     aliases:
+      - dolar alış kuru
+      - usd alış kuru
+      - dolar alış
+      - döviz alış kuru dolar
+    tags: [kur, doviz, usd, tcmb]
+    frequency: daily
+    unit: TRY
+    measure_type: rate
+    default_agg: avg
+    semantic_confidence: verified
+    semantic_source: source_service
+    metadata_url: https://evds3.tcmb.gov.tr/igmevdsms-dis/serieList/type=json&code=bie_dkdovytl
+    status: active
+
+  - series_id: evds:TP.DK.USD.S.YTL
+    native_code: TP.DK.USD.S.YTL
+    dataset_id: evds_fx_usd
+    name_tr: ABD Doları Döviz Satış Kuru (TL)
+    description: >-
+      TCMB EVDS, "bie_dkdovytl" veri grubu. TCMB gösterge döviz satış kuru, ABD doları, günlük (iş günleri). Fiyat düzeyidir: dönemlere indirgenirken ortalama alınır (kural avg), toplanmaz. Frekans ve birim EVDS'nin kendi metadata'sından
+      (FREQUENCY_STR, BIRIMI: Türk lirası); ölçüm tipi ve indirgeme kuralı serinin adından ve veri
+      grubu tanımından; canlı seri listesi 13 Eylül 2026 (docs/sources/evds.md, 'Küratörlü ek'). Genel "USD/TL" / "dolar kuru" ifadeleri bu seriye gider (resmî gösterge satış kurudur); alış kuru ayrıca TP.DK.USD.A.YTL.
+    aliases:
+      - USD/TL döviz satış kuru
       - dolar kuru
       - usd kuru
+      - usd/tl
       - dolar/tl
       - usd/try
       - amerikan doları
       - döviz kuru dolar
-      - dolar alış
+      - dolar satış kuru
+      - döviz satış
     tags: [kur, doviz, usd, tcmb]
     frequency: daily
     unit: TRY
@@ -33461,6 +33488,7 @@ series:
       (FREQUENCY_STR, BIRIMI: Ağırlıklı ortalama (yüzde)); ölçüm tipi ve indirgeme kuralı serinin adından ve veri
       grubu tanımından; canlı seri listesi 13 Eylül 2026 (docs/sources/evds.md, 'Küratörlü ek').
     aliases:
+      - 3 aya kadar vadeli TL mevduat faizi
       - mevduat faizi
       - 3 aylık mevduat faizi
       - tl mevduat faiz oranı

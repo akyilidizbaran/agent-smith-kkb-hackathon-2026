@@ -47,6 +47,21 @@ _BDDK_WEEKLY_PARENTS: dict[int, tuple[int, ...]] = {
     5705: (5706, 5707),
     5709: (5710, 5711),
 }
+# "Mevduat Vade İtibarıyla" (ADR-0108): every item 520-543 publishes six opening-maturity buckets
+# next to its Toplam column, all under the same item id (``520?BirAyUcAy``). The buckets are
+# additive parts of that Toplam; measured live on 2026-09-23 for 520 and 524, 2020-12..2025-12,
+# the six buckets sum to Toplam within the source's own rounding (at most 2 milyon TL).
+# ``vade_ay`` is the bucket's interval in months, machine-readable for deterministic grouping.
+_BDDK_MONTHLY_MATURITY_ITEMS = range(520, 544)
+_BDDK_MONTHLY_MATURITY_TABLE = "Mevduat Vade İtibarıyla"
+_BDDK_MONTHLY_MATURITY_BUCKETS: dict[str, tuple[str, str]] = {
+    "Vadesiz": ("Vadesiz", "[0,0]"),
+    "BirAyaKadar": ("1 Aya Kadar", "(0,1]"),
+    "BirAyUcAy": ("1-3 Ay Arası", "(1,3]"),
+    "UcAyAltiAy": ("3-6 Ay Arası", "(3,6]"),
+    "AltiAyBirYil": ("6-12 Ay Arası", "(6,12]"),
+    "BirYil": ("1 Yıl Üzeri", "(12,inf)"),
+}
 _ADDITIVE_PARENTS = {
     ("bddk_monthly", 1533),
     ("bddk_monthly", 1539),
@@ -241,6 +256,27 @@ def infer_series_relations(rows: Iterable[Mapping[str, Any] | object]) -> list[S
         if ("bddk_monthly", parent) in _ADDITIVE_PARENTS:
             additivity_by_parent[parent_id] = "additive"
 
+    # Maturity buckets: parent is the same item's Toplam column. Both the item id range and the
+    # table name must agree, so an unrelated item that happens to reuse a column suffix is not
+    # attached to a deposit total.
+    maturity_dimensions: dict[str, tuple[str, ...]] = {}
+    maturity_totals = {
+        item.number: item.series_id for item in items
+        if item.source_id == "bddk_monthly" and item.number in _BDDK_MONTHLY_MATURITY_ITEMS
+        and item.native_code.endswith("?Toplam") and _BDDK_MONTHLY_MATURITY_TABLE in item.name_tr
+    }
+    for item in items:
+        if item.source_id != "bddk_monthly" or item.number not in maturity_totals:
+            continue
+        suffix = item.native_code.split("?", 1)[1] if "?" in item.native_code else ""
+        bucket = _BDDK_MONTHLY_MATURITY_BUCKETS.get(suffix)
+        if bucket is None or _BDDK_MONTHLY_MATURITY_TABLE not in item.name_tr:
+            continue
+        parent_id = maturity_totals[item.number]
+        parent_by_child[item.series_id] = parent_id
+        additivity_by_parent[parent_id] = "additive"
+        maturity_dimensions[item.series_id] = (f"vade={bucket[0]}", f"vade_ay={bucket[1]}")
+
     weekly_numbers = ids_by_number("bddk_weekly", {n for pair in _BDDK_WEEKLY_PARENTS.items() for n in (pair[0], *pair[1])})
     for parent, children in _BDDK_WEEKLY_PARENTS.items():
         parent_id = weekly_numbers.get(parent)
@@ -299,6 +335,11 @@ def infer_series_relations(rows: Iterable[Mapping[str, Any] | object]) -> list[S
             item.explicit_confidence or ("verified" if item.explicit_relation_type else "derived"),
             item.explicit_source or ("catalog" if item.explicit_relation_type else "source_adapter"),
         )
+
+    # A maturity bucket is the same concept as its total, seen along the maturity dimension.
+    for child_id, dimensions in maturity_dimensions.items():
+        concept_by_id[child_id] = concept_by_id[parent_by_child[child_id]]
+        dimension_by_id[child_id] = dimensions
 
     # Weekly tree nodes share the root concept even when a node has no textual parent.
     def root(series_id: str) -> str:
