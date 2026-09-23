@@ -65,6 +65,9 @@ class Settings:
     # Profil başlatmada seçilir; oturumda geçiş yalnız ARCHITECT_TOKEN ile (boşsa geçiş kapalı).
     agent_profile: str
     architect_token: str
+    # Oturumda tek tık profil geçişi (ADR-0112): "open" anahtarsız geçişe izin verir (yalnız operatörün açtığı demo),
+    # "token" (varsayılan) Architect'e geçişte ARCHITECT_TOKEN ister.
+    profile_switch: str
     # Bütçeler (M15): tek çağrı zaman aşımı, çıktı sınırı, soru başına toplam süre.
     llm_timeout: float
     llm_max_retries: int
@@ -122,6 +125,7 @@ def load_settings() -> Settings:
         tool_gate=os.getenv("TOOL_GATE", "on").lower() != "off",
         agent_profile=os.getenv("AGENT_PROFILE", "analyst").strip().lower(),
         architect_token=os.getenv("ARCHITECT_TOKEN", "").strip(),
+        profile_switch=("open" if os.getenv("PROFILE_SWITCH", "token").strip().lower() == "open" else "token"),
         # Sağlayıcı çağrı tavanı narration deadline'ını kırpmamalı (100 sn).
         llm_timeout=float(os.getenv("LLM_TIMEOUT", "100")),
         llm_max_retries=int(os.getenv("LLM_MAX_RETRIES", "3")),

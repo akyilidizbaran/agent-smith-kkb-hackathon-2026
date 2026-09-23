@@ -915,11 +915,12 @@ class Session:
     son sohbet kaldığı yerden sürer (ADR-0084); verilmezse sohbet yalnız bellekte. `reset` açık sohbeti siler, ajanı yeniden kurar."""
 
     def __init__(self, agent_factory: Callable[..., Any], *, profile: str = "analyst", architect_token: str = "",
-                 store: ConversationStore | None = None) -> None:
+                 store: ConversationStore | None = None, profile_switch: str = "token") -> None:
         self._factory = agent_factory
         self._lock = threading.Lock()
         self.profile = profile
         self.architect_token = architect_token
+        self.profile_switch_open = profile_switch == "open"
         self.agent = self._build(profile)
         self.store = store
         self.history: list[dict[str, Any]] = []
@@ -946,17 +947,33 @@ class Session:
         except TypeError:                 # sahte ajan fabrikaları profil almayabilir
             return self._factory()
 
+    @property
+    def profile_switch_mode(self) -> str:
+        """open: anahtarsız tek tık (operatör PROFILE_SWITCH=open ile açar) · token: Architect'e geçiş anahtarla · closed."""
+        if self.profile_switch_open:
+            return "open"
+        return "token" if self.architect_token else "closed"
+
     def switch_profile(self, profile: str, token: str) -> None:
-        """Profil başlatmada seçilir; oturumda geçiş yalnız operatör anahtarıyla (istek parametresi yetki vermez)."""
-        if not self.architect_token:
-            raise HTTPException(status_code=403, detail="profil geçişi kapalı: ARCHITECT_TOKEN tanımlı değil; profil başlatmada seçilir (AGENT_PROFILE)")
-        if profile == "architect" and token != self.architect_token:
+        """Oturumda profil geçişi AYNI sohbette olur (ADR-0112): tablo, geçmiş ve yüklemeler yeni profile taşınır.
+
+        Yetki istek parametresinden gelmez: Architect'e geçiş ya operatör anahtarıyla ya da operatörün `PROFILE_SWITCH=open`
+        ile açtığı demo kipinde yapılır. Analyst'e (salt-okunur) dönüş her zaman serbesttir; tam sıfırlama ayrıca onay kodu ister."""
+        if profile not in ("analyst", "architect"):
+            raise HTTPException(status_code=400, detail="profil 'analyst' ya da 'architect' olmalı")
+        mode = self.profile_switch_mode
+        if mode == "closed" and profile == "architect":
+            raise HTTPException(status_code=403, detail="profil geçişi kapalı: ARCHITECT_TOKEN ya da PROFILE_SWITCH=open tanımlı değil; profil başlatmada seçilir (AGENT_PROFILE)")
+        if mode == "token" and profile == "architect" and token != self.architect_token:
             raise HTTPException(status_code=403, detail="Architect anahtarı yanlış")
         with self._lock:
-            self._leave()                                  # ADR-0084: önceki sohbet kayıtlı kalır, geçiş yeni sohbet açar
-            self.profile = profile
+            if profile == self.profile:
+                return
+            state = self._agent_state()
             self.agent = self._build(profile)
-            self._fresh()
+            self._apply_agent_state(state)
+            self.profile = profile
+            self._save()
 
     @property
     def upload_dir(self) -> Path:
@@ -1098,9 +1115,8 @@ class Session:
         else:
             shutil.rmtree(self.upload_dir, ignore_errors=True)
 
-    def _open(self, cid: str) -> None:
-        meta, answers, state = self.store.load(cid)   # type: ignore[union-attr]
-        self._clear_agent_state()
+    def _apply_agent_state(self, state: dict[str, Any]) -> None:
+        """Kaydedilmiş ya da geçiş öncesi alınmış sohbet durumunu mevcut ajana uygular (sohbet açma ve profil geçişi)."""
         agent = self.agent
         ws = getattr(agent, "workspace", None)
         if isinstance(ws, AnalysisWorkspace) and isinstance(state.get("workspace"), dict):
@@ -1115,8 +1131,13 @@ class Session:
         if reg is not None and hasattr(reg, "user_text"):
             reg.user_text = str(state.get("user_text") or "")
             reg.sanctioned_locators = set(state.get("sanctioned_locators") or [])
-        self.answers = list(answers)
         self.tables = {int(k): v for k, v in (state.get("tables") or {}).items()}
+
+    def _open(self, cid: str) -> None:
+        meta, answers, state = self.store.load(cid)   # type: ignore[union-attr]
+        self._clear_agent_state()
+        self._apply_agent_state(state)
+        self.answers = list(answers)
         self.history = [_history_row(p) for p in self.answers]
         self.id, self.title = cid, str(meta.get("title") or "")
         self.created_at = str(meta.get("created_at") or now_iso())
@@ -1196,7 +1217,8 @@ class Session:
         return {
             "readiness": ready,
             "profile": self.profile,
-            "profile_switch": bool(self.architect_token),
+            "profile_switch": self.profile_switch_mode != "closed",
+            "profile_switch_mode": self.profile_switch_mode,
             "uploads": len(self.uploads),
             "upload_kinds": sorted(UPLOAD_KINDS),
             "catalog_series": len(specs) - gold - adhoc + uningested,
@@ -1215,9 +1237,10 @@ class Session:
 
 def create_app(agent_factory: Callable[..., Any], *, profile: str = "analyst", architect_token: str = "",
                reset_paths: "ResetPaths | tuple[Path, Path] | None" = None, bootstrap: Callable[..., tuple[int, str]] | None = None,
-               conversations: ConversationStore | None = None) -> FastAPI:
+               conversations: ConversationStore | None = None, profile_switch: str = "token") -> FastAPI:
     app = FastAPI(title="Agent Smith", docs_url=None, redoc_url=None)
-    session = Session(agent_factory, profile=profile, architect_token=architect_token, store=conversations)
+    session = Session(agent_factory, profile=profile, architect_token=architect_token, store=conversations,
+                      profile_switch=profile_switch)
     app.state.session = session
     pending_reset: dict[str, str] = {}
 
@@ -1424,7 +1447,7 @@ def build_default_app() -> FastAPI:
 
     return create_app(lambda profile="analyst": build_agent(max_steps=12, profile=profile), profile=s.agent_profile,
                       architect_token=s.architect_token, reset_paths=ResetPaths.from_settings(s), bootstrap=bootstrap,
-                      conversations=ConversationStore(Path(s.data_root) / "conversations"))
+                      conversations=ConversationStore(Path(s.data_root) / "conversations"), profile_switch=s.profile_switch)
 
 
 __all__ = ["AskRequest", "Session", "answer_to_dict", "build_default_app", "create_app", "evidence_to_dict", "frame_to_dict",
