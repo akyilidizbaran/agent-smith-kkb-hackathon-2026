@@ -180,3 +180,14 @@ def test_dogru_ve_yanlis_dosya_birlikte_kart_daha_uygun_olani_soyler(tool_env) -
     # hata ipucu aynı oturumda bakılan daha uygun dosyayı adıyla söyler. (13 Eyl ilgi kapısı yıl tuttuğu için yazıyordu.)
     assert not r2.ok and r2.error.error_code == "FILE_IRRELEVANT"
     assert "hiçbiri yok" in r2.content and "konut.csv" in r2.content and "daha uygun" in r2.content.lower()
+
+
+def test_adressiz_istekte_tahmin_edilen_adres_soruya_donusur(tool_env) -> None:
+    """23 Eyl (TEFAS): kullanıcı yalnız sayfa adı yazdı, model adres uydurdu; cevap 'niyet eksikliği' değil 'adres ver' olmalı."""
+    tool, lake, runner, reg = tool_env
+    reg.user_text = "TEFAS İstatistikleri altındaki Toplam İşlem Hacmi Raporundan aylık işlem hacmini lakehouse'a ekle"
+    reg.active_question = reg.user_text
+    r = tool.validate_and_run({"locator": "https://tefas.gov.tr/tefas-istatistikleri", "name": "TEFAS işlem hacmi"})
+    assert not r.ok and r.error.error_code == "INTENT_REQUIRED" and runner.calls == []
+    assert "tahmin" in r.content and "adres" in r.content.lower() and "dosya" in r.content.lower()
+

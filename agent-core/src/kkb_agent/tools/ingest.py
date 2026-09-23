@@ -484,6 +484,18 @@ class IngestFromUrlTool(Tool):
         # Niyet kapısı (ADR-0037): yazma yalnız kullanıcının verdiği kaynağa, kullanıcı istediyse.
         user_text = self._user_text()
         if not locator_from_user(params.locator, user_text):
+            # Kullanıcı metninde hiç adres/dosya yoksa model kaynağı tahmin etmiştir ("TEFAS istatistikleri" gibi bir
+            # sayfa adından adres uydurmak; ölçüldü 23 Eyl). Cevap ret değil, soru olmalı: adres ya da indirilmiş dosya.
+            has_source = bool(re.search(r"https?://|Dosya:\s*\S|\.(csv|xlsx?|pdf|json|tsv)", user_text, re.I))
+            if not has_source:
+                return ToolError(
+                    error_code="INTENT_REQUIRED", layer="policy", retryable=False,
+                    message=(f"Kullanıcının mesajında bir adres ya da dosya yok; '{params.locator}' senin tahminin. "
+                             "Havuza yalnız kullanıcının verdiği kaynak yazılır; tahmin edilen adres çekilmez."),
+                    hint=(f"Kullanıcıya SOR: '{params.name}' için kaynağın tam adresini (https://…) yazmasını ya da raporu "
+                          "indirip dosya olarak (Excel/CSV/PDF) vermesini iste. Ret cümlesi yazma; ne gerektiğini tek "
+                          "cümleyle söyle. Web araması açıksa önce adresi bulmayı dene."),
+                )
             return ToolError(
                 error_code="INTENT_REQUIRED", layer="policy", retryable=False,
                 message=(f"'{params.locator}' kullanıcının mesajında geçmiyor; bir araç çıktısındaki "
