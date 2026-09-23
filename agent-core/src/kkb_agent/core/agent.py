@@ -48,7 +48,16 @@ from .period_intent import choose_containing_window, parse_period_intent
 from .table_summary import deterministic_table_summary
 from .narration_facts import NarrationFacts, build_narration_facts
 from .token_budget import TokenBudgetPolicy
-from .web_routing import catalog_ids_in_sql, general_public_fallback_plan, public_fallback_plan, web_requested
+from .web_routing import (
+    catalog_ids_in_sql,
+    explicit_url_directive,
+    external_source_fallback_plan,
+    external_source_requested,
+    general_public_fallback_plan,
+    public_fallback_plan,
+    research_intent,
+    web_requested,
+)
 from .workspace_fastpath import (
     execute_verified_workspace_transform,
     inspect_existing_verified_transform,
@@ -488,6 +497,19 @@ class AgentStep:
     candidates: list[str] = field(default_factory=list)   # hata zarfının adayları (erişim seçenekleri dâhil)
     # Answer-level projection için bu araç çağrısının tablo snapshot'ı; API trace'ine yazılmaz.
     result_data: pd.DataFrame | None = field(default=None, repr=False, compare=False)
+
+
+def _step_delivers_fresh_data(step: "AgentStep", fresh_tools: frozenset[str]) -> bool:
+    """Adım, mevcut soruya taze veri getirdi mi? web_url ancak tabloyu YÜKLEDİYSE taze sayılır.
+
+    Kanıt sözleşmesiyle uyumlu: metin/aday-only bir web_url okuması (result_data yok) stale-tablo
+    korumasını aşmamalı — yalnız gerçekten veri elde edildiğinde (requested_data_obtained/data_loaded).
+    """
+    if not (step.ok and step.tool_name in fresh_tools):
+        return False
+    if step.tool_name == "web_url":
+        return step.result_data is not None
+    return True
 
 
 @dataclass
@@ -1991,7 +2013,11 @@ class AnalyticsAgent:
             result.error is not None
             and absence_verified(call.name, result.error, result.content)
         ) or status == "CONFIRMED_ABSENT"
-        if not verified:
+        # KN2: kullanıcı web'i AÇIKÇA istediyse ya da yapılandırılmış bir DIŞ KAYNAK adı verdiyse
+        # (TEFAS gibi), yerel arama "henüz yüklenmemiş"/"bulunamadı" dese bile web yolu açılabilmeli —
+        # bu durumda katı "doğrulanmış yokluk" önkoşulu aranmaz (aksi halde eksik veri web'i kilitler).
+        explicit_web = web_requested(question) or external_source_requested(question)
+        if not verified and not explicit_web:
             return None
 
         query_tool = self.registry.get("lakehouse_query")
@@ -2007,10 +2033,16 @@ class AnalyticsAgent:
         plan = public_fallback_plan(question, provenance, lakehouse, search_terms=search_terms)
         if plan is not None:
             return plan
-        # Kullanıcı web'i AÇIKÇA istediyse (internet/web/araştır/URL) ve yerel yokluk doğrulandıysa,
-        # yapılandırılmış resmi kaynak pini olmasa da genel bir web aramasını zorla (Option A).
-        # web_requested kapısı out-of-scope reddini korur: web istenmeyen soruda bu yol hiç açılmaz.
-        if web_requested(question):
+        # GENEL ARAŞTIRMA/yorum niyeti (yorumla/araştır/kırılma…) tek kaynağa PİNLENMEZ: aramayı tek
+        # domaine kısmak alakalı sonuçları eler (0 sonuç / domain-red). Bu durumda genel — ama güvenli —
+        # finans araması yapılır; kabul edilebilir yeni finans domainleri de kullanılabilir (KN, Girdi-5).
+        if not research_intent(question):
+            # Belirli bir dış kaynaktan VERİ ÇEKME (TEFAS/ODMD) → HOST-PINLI arama (config-driven).
+            external_plan = external_source_fallback_plan(question)
+            if external_plan is not None:
+                return external_plan
+        # Kullanıcı web'i açıkça istediyse ya da yapılandırılmış bir dış kaynak adı verdiyse genel arama.
+        if web_requested(question) or external_source_requested(question):
             return general_public_fallback_plan(question)
         return None
 
@@ -2086,6 +2118,12 @@ class AnalyticsAgent:
         recovery_round_pending = False
         web_search_succeeded = False         # arama adayı, veri kaynağı değildir
         web_page_succeeded = False           # gerçek kaynak sayfası bu turda okundu mu?
+        # P0 — Açık URL sözleşmesi: ham mesajda TEK açık http(s) URL + aç/oku/getir/incele/yorumla niyeti
+        # varsa, ilk araç çağrısı DETERMİNİSTİK olarak o URL'yi web_url ile açar (lakehouse/Tavily/model
+        # seçimini beklemez). Güvenlik (SSRF/private/scheme) web_url/fetch içinde AYNEN uygulanır.
+        forced_first_url = explicit_url_directive(question) if native else None
+        if forced_first_url and isinstance(getattr(self.registry, "sanctioned_locators", None), set):
+            self.registry.sanctioned_locators.add(forced_first_url)   # kullanıcının verdiği URL onaylı
         causal_rounds = 0                    # nedensellik dili için geri gönderme sayısı (en çok 2)
         miss_rounds = 0                      # araç çıktısında olmayan sayı için geri gönderme sayısı (en çok 2)
         grounding = ""                       # son ölçüm; AgentAnswer'a taşınır
@@ -2153,17 +2191,25 @@ class AnalyticsAgent:
                         self._usage["tool_free_narration_calls"] = (
                             self._usage.get("tool_free_narration_calls", 0) + 1
                         )
-            response = self._chat(
-                call_messages,
-                tools=call_tools,
-                temperature=temperature,
-                # Tool-selection/recovery turns are bounded by the harness and
-                # do not need a long reasoning chain. Keep reasoning for the
-                # first response after verified data is available.
-                fast_planning=(phase == "planning" and not produced_data and not acted),
-                phase=phase,
-            )
-            llm_duration_ms = self._last_llm_call_ms
+            if i == 1 and forced_first_url:
+                # P0: ilk tur — modele sormadan kullanıcının açık URL'sini deterministik olarak aç.
+                response = LLMResponse(content="", tool_calls=[ToolCall(
+                    id="forced-web-url-1", name="web_url",
+                    arguments={"url": forced_first_url, "purpose": "kullanıcının verdiği adresten istenen veriyi al"},
+                )])
+                llm_duration_ms = 0.0
+            else:
+                response = self._chat(
+                    call_messages,
+                    tools=call_tools,
+                    temperature=temperature,
+                    # Tool-selection/recovery turns are bounded by the harness and
+                    # do not need a long reasoning chain. Keep reasoning for the
+                    # first response after verified data is available.
+                    fast_planning=(phase == "planning" and not produced_data and not acted),
+                    phase=phase,
+                )
+                llm_duration_ms = self._last_llm_call_ms
 
             calls = response.tool_calls if native else self._parse_json_call(response.content)
 
@@ -2370,7 +2416,8 @@ class AnalyticsAgent:
                 # eski aktif tabloyu cevaplamak için taze kanıt sayılmaz. Stale-table kapısını
                 # ancak web_url (FRESH_DATA_TOOLS içinde) başarılı okuması aşabilir.
                 fresh_or_active_action = any(
-                    s.ok and s.tool_name in (self.FRESH_DATA_TOOLS | self.ACTIVE_TABLE_ACTION_TOOLS)
+                    _step_delivers_fresh_data(s, self.FRESH_DATA_TOOLS)
+                    or (s.ok and s.tool_name in self.ACTIVE_TABLE_ACTION_TOOLS)
                     for s in steps
                 )
                 if (self.workspace.has_table and prior_query_context
@@ -2621,20 +2668,36 @@ class AnalyticsAgent:
                         content=narration_system if narration_mode else operational_system,
                     )
                 availability_status = result.artifacts.get("availability_status") if result.ok else None
+                web_ev = ((result.artifacts or {}).get("web", {}) or {}).get("evidence", {}) if result.ok else {}
                 if result.ok and call.name in self.DATA_PRODUCING_TOOLS:
-                    if availability_status not in {"CONFIRMED_ABSENT", "RETRIEVAL_FAILED"}:
+                    # web_url veri ÜRETMİŞ sayılması için İSTENEN veriyi yüklemiş olmalı; anlamlı metin ya da
+                    # indirilebilir dosya bağlantısı bulmak yeterli değil (kanıt sözleşmesi, requested_data_obtained).
+                    web_data_ok = call.name != "web_url" or bool(web_ev.get("requested_data_obtained"))
+                    if availability_status not in {"CONFIRMED_ABSENT", "RETRIEVAL_FAILED"} and web_data_ok:
                         produced_data = True
                         recovery.observe_success(data_produced=True)
                 elif result.ok and call.name in self.ACTING_TOOLS:
                     acted = True
                 if result.ok and call.name == "web_search":
                     web_search_succeeded = True
-                if result.ok and call.name == "web_url":
+                # web_page_succeeded yalnız KULLANILABILIR bir sayfa/tablo/dosya elde edildiğinde açılır
+                # (boş sayfa A1'de zaten ok=False; evidence yoksa geriye dönük True varsayılır).
+                if result.ok and call.name == "web_url" and web_ev.get("usable_evidence", True):
                     web_page_succeeded = True
                 if recovery.availability_status == "CONFIRMED_ABSENT":
                     public_fallback_pending = self._verified_public_fallback_plan(planning_question, call, result)
                 elif recovery.availability_status == "FOUND":
                     public_fallback_pending = None
+                elif (
+                    public_fallback_pending is None
+                    and not result.ok
+                    and call.name in {"lakehouse_search", "lakehouse_query"}
+                    and (web_requested(planning_question) or external_source_requested(planning_question))
+                ):
+                    # KN2: kullanıcı web'i açıkça istedi ya da dış kaynak adı verdi; yerel arama başarısız
+                    # (bulunamadı/bütçe/henüz yüklenmemiş). "Doğrulanmış yokluk" beklemeden web yolunu kur —
+                    # aksi halde eksik/dış veri web erişimini kalıcı kilitliyor (demo: TEFAS Girdi-4, Girdi-5).
+                    public_fallback_pending = self._verified_public_fallback_plan(planning_question, call, result)
                 retrieval_completed = result.ok and call.name in {
                     "lakehouse_search", "lakehouse_describe", "lakehouse_distinct_values",
                 }
@@ -2795,7 +2858,7 @@ class AnalyticsAgent:
                 stale_follow_up = (
                     self.workspace.has_table
                     and self._has_confirmed_follow_up_context()
-                    and not any(s.ok and s.tool_name in self.FRESH_DATA_TOOLS for s in steps)
+                    and not any(_step_delivers_fresh_data(s, self.FRESH_DATA_TOOLS) for s in steps)
                     and not any(s.ok and s.tool_name in self.ACTIVE_TABLE_ACTION_TOOLS for s in steps)
                 )
                 if stale_follow_up:
