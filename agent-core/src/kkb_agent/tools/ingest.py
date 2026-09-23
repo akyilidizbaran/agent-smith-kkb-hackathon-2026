@@ -265,7 +265,7 @@ def year_column_to_dates(frame: Any, column: str) -> tuple[Any, str]:
 
 def _week_anchor_from_dates(semantics, frame: Any, date_column: str | None):
     """Haftalık seride hafta çapası (veri ekibi sözleşmesi: 'friday' gibi) tarihlerin haftanın gününden türetilir;
-    beyan varsa dokunulmaz. Ölçüldü (23 Eyl, TEFAS haftalık PDF'i): çapa yokken CLI kaydı reddetti."""
+    beyan varsa dokunulmaz. Ölçüldü (23 Eyl, haftalık rapor PDF'i): çapa yokken CLI kaydı reddetti."""
     if getattr(semantics, "frequency", None) != "weekly" or getattr(semantics, "week_anchor", None) or not date_column:
         return semantics
     try:
@@ -286,7 +286,7 @@ _FOOTER_RE = re.compile(r"^\s*(?:genel\s+)?(?:toplam|total|ortalama|average|sum|
 
 def drop_footer_rows(frame: Any) -> tuple[Any, str | None]:
     """Dışa aktarımların sonundaki 'Toplam' / 'Ortalama' satırları zaman serisi gözlemi değildir; ilk sütunu bu
-    etiketlerden biri olan SONDAKİ satırlar atılır (ölçüldü 23 Eyl, TEFAS CSV: 261. satır 'Toplam' yüzünden tarih
+    etiketlerden biri olan SONDAKİ satırlar atılır (ölçüldü 23 Eyl, rapor CSV: 261. satır 'Toplam' yüzünden tarih
     kolonu tanınmadı). Ortadaki satırlara dokunulmaz; kaynak dosya değişmez."""
     if frame is None or len(frame) == 0 or len(frame.columns) == 0:
         return frame, None
@@ -303,7 +303,7 @@ def drop_footer_rows(frame: Any) -> tuple[Any, str | None]:
 
 def month_column_to_dates(frame: Any, column: str) -> tuple[Any, str]:
     """"2021-01" / "2021/01" biçimli ay sütunu → ISO ay sonu (2021-01-31): BDDK/EVDS aylık serilerle aynı tarih ekseni
-    (ölçüldü 23 Eyl, TEFAS aylık rapor: ayın 1'ine çözülüyordu, ay sonu tarihli BDDK serisiyle birleşmezdi)."""
+    (ölçüldü 23 Eyl, aylık rapor: ayın 1'ine çözülüyordu, ay sonu tarihli BDDK serisiyle birleşmezdi)."""
     import calendar
     out = frame.copy()
     vals = []
@@ -517,7 +517,7 @@ class IngestFromUrlTool(Tool):
         if content is None or not outcome.ok:
             return None, outcome, None, params.locator
         # Metin katmanlı PDF: önce pdfplumber tabloları (tüm sayfalar, aynı başlık birleşik), OCR yalnız yedek.
-        # Ölçüldü (23 Eyl, TEFAS haftalık işlem hacmi PDF'i, 8 sayfa / 261 satır): OCR yolu yalnız 2. sayfanın 34 satırını
+        # Ölçüldü (23 Eyl, haftalık işlem hacmi raporu PDF'i, 8 sayfa / 261 satır): OCR yolu yalnız 2. sayfanın 34 satırını
         # aldı ve sayıları "doğrulanmadı" diye işaretledi; metin katmanı sayıları birebir taşır.
         if content[:5] == b"%PDF-":
             native = self._native_pdf_table(params, content)
@@ -599,7 +599,7 @@ class IngestFromUrlTool(Tool):
         # Niyet kapısı (ADR-0037): yazma yalnız kullanıcının verdiği kaynağa, kullanıcı istediyse.
         user_text = self._user_text()
         if not locator_from_user(params.locator, user_text):
-            # Kullanıcı metninde hiç adres/dosya yoksa model kaynağı tahmin etmiştir ("TEFAS istatistikleri" gibi bir
+            # Kullanıcı metninde hiç adres/dosya yoksa model kaynağı tahmin etmiştir ("… istatistikleri" gibi bir
             # sayfa adından adres uydurmak; ölçüldü 23 Eyl). Cevap ret değil, soru olmalı: adres ya da indirilmiş dosya.
             has_source = bool(re.search(r"https?://|Dosya:\s*\S|\.(csv|xlsx?|pdf|json|tsv)", user_text, re.I))
             if not has_source:
@@ -732,7 +732,7 @@ class IngestFromUrlTool(Tool):
             derived_notes.append(note)
             if inferred and params.frequency and params.frequency != inferred:
                 # Beyan (aylık) veriyle (haftalık aralıklar) çelişiyor: veri kazanır, beyan not düşülür; istenen frekans
-                # kayıt sonrası gold_align ile üretilir (ölçüldü 23 Eyl: haftalık TEFAS "monthly" beyanıyla yazılıyordu).
+                # kayıt sonrası gold_align ile üretilir (ölçüldü 23 Eyl: haftalık rapor "monthly" beyanıyla yazılıyordu).
                 derived_notes.append(f"Beyan edilen frekans '{params.frequency}' dosyadaki dönem aralıklarıyla ({inferred}) "
                                      f"çelişiyor; seri {inferred} olarak kaydedildi, istenen frekans gold_align ile üretilir.")
                 params = params.model_copy(update={"frequency": inferred})
@@ -909,7 +909,7 @@ class IngestFromUrlTool(Tool):
             asks.append("çapraz kontrol: " + crosscheck.lines()[0] + " — kullanıcıya söyle; dosya mı katalog mu doğru, o karar versin")
         # Dayanaksız model beyanı (kullanıcı mesajında geçmeyen birim/ölçüm tipi/frekans) zaten yukarıda DÜŞÜRÜLDÜ; seri
         # kanıttan gelen değerlerle (frekans tarihlerden, birim başlıktan, ölçüm tipi 'unknown') kaydedilir, uydurma değer
-        # saklanmaz. Kaydı durdurmak jüri sorusunu kilitliyordu (ölçüldü 23 Eyl, TEFAS: "haftalık/akım" model çıkarımıydı,
+        # saklanmaz. Kaydı durdurmak jüri sorusunu kilitliyordu (ölçüldü 23 Eyl, dış rapor: "haftalık/akım" model çıkarımıydı,
         # kullanıcı yalnız "aylık … ekle" demişti; üç deneme "EKLENMEDİ"). Kart bu düşürmeyi açıkça yazar.
         column_invented = [k for k in invented if k.split("=")[0] in ("value_column", "date_column", "entity_column")]
         semantic_invented = [k for k in invented if k not in column_invented]
@@ -998,7 +998,7 @@ class IngestFromUrlTool(Tool):
             *out.provenance_lines(),
         ]
         # Dosyada başka ölçüm sütunları varsa modele söylenir: kullanıcı iki seri istediyse ikinci çağrı gerekir (ölçüldü
-        # 23 Eyl, TEFAS: "Toplam İşlem Hacmi ve Net Takas Tutarı" — ilk seri kaydedilince tur bitti, ikincisi kalmadı).
+        # 23 Eyl, dış rapor: "Toplam İşlem Hacmi ve Net Takas Tutarı" — ilk seri kaydedilince tur bitti, ikincisi kalmadı).
         others = [c.name for c in profile.value_candidates if c.name != mapping.value_column]
         if others:
             card.append("dosyada kaydedilmeyen başka ölçüm sütunları: " + ", ".join(others)

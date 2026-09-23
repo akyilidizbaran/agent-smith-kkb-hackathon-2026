@@ -88,7 +88,7 @@ def _preamble_rows(text: str, sep: str | None) -> int:
     """Başlık öncesi üst bilgi satırlarının sayısı ("Dışa Aktarım Tarihi:,23.09.2026", "Toplam Kayıt Sayısı:,261", boş).
 
     Gerçek başlık, tablonun alan sayısına (satırların çoğunluğundaki alan sayısı) sahip ilk satırdır; ondan önceki
-    satırlar atlanır. Ölçüldü (23 Eyl, TEFAS CSV dışa aktarımı): ilk satır başlık sanıldı, "Dönem" kolonu görünmedi,
+    satırlar atlanır. Ölçüldü (23 Eyl, rapor CSV dışa aktarımı): ilk satır başlık sanıldı, "Dönem" kolonu görünmedi,
     kayıt reddedildi. Düzenli dosyada 0 döner."""
     import csv
     from collections import Counter
