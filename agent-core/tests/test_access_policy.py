@@ -176,3 +176,15 @@ def test_hata_zarfina_donusum_tekrar_denenemez() -> None:
     pinned = classify_access(SRC, http_status=404, environ={})
     assert to_tool_error(pinned, decide(pinned, detect_source_constraint("bu siteden getir"))).terminal is True, \
         "kaynak sabit: tur biter, kullanıcıya sorulur"
+
+
+def test_buyuk_govdede_yapilandirma_icindeki_captcha_sozcugu_engel_degildir() -> None:
+    """23 Eyl demo: commons.wikimedia (101 KB) JS ayarındaki "hcaptcha" yüzünden CAPTCHA sayıldı, grafik okunmadı."""
+    big = classify_access(SRC, http_status=200, body_excerpt='"wgConfirmEditCaptchaNeededForGenericEdit":"hcaptcha"',
+                          environ={}, content_length=101_000)
+    assert big.status == "ok"
+    small = classify_access(SRC, http_status=200, body_excerpt='<div class="g-recaptcha">', environ={}, content_length=2_500)
+    assert small.status == "blocked" and small.reason == "captcha"
+    rejected = classify_access(SRC, http_status=200, body_excerpt="The requested URL was rejected", environ={}, content_length=90_000)
+    assert rejected.status == "blocked" and rejected.reason == "bot_challenge"
+

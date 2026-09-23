@@ -113,10 +113,14 @@ class PromoteDraftTool(Tool):
                 hint="Sebep taslak olmaması ya da gözlemi olmamasıysa kullanıcıya söyle; tekrar deneme.",
                 layer="harness", retryable=False,
             )
+        # Silver değişti → Gold tabloları bayat; yenilenmezse bir sonraki Gold okuması GOLD_STALE ile düşer (ölçüldü 23 Eyl
+        # demo: onaydan hemen sonraki analiz sorusu "GOLD_STALE" ile boş kaldı). ingest_source ile aynı kural.
+        gold_ok, gold_note = self.cli.refresh_gold() if hasattr(self.cli, "refresh_gold") else (False, "refresh_gold yok")
         card = [
             f"ONAYLANDI: {params.series_id} — {params.purpose}",
             f"durum: taslak → aktif (kullanıcı onayı, semantik kaynağı 'manual')",
             f"Silver'a kopyalanan gözlem: {kv.get('rows_promoted', '?')}; provenance (artifact, run, vintage) korundu",
+            ("Gold tabloları yeniden kuruldu." if gold_ok else f"UYARI: Gold yenilenemedi ({gold_note[:120]}); Gold okumaları bayat kalabilir."),
             "semantik güveni: derived — doğrulanmadı; Gold hesapları için kullanıcı 'doğrulanmamış olsa da kullan' demeli",
             "YAPACAĞIN: kullanıcıya serinin artık sorgulanabilir olduğunu ve Gold için onay gerektiğini söyle.",
         ]

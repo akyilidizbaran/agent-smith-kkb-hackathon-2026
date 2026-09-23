@@ -155,7 +155,7 @@ def read_bytes_for_profiling(
         content = b"".join(chunks)
         outcome = classify_access(
             locator, http_status=resp.status_code, final_url=getattr(resp, "url", None),
-            body_excerpt=content[:4096].decode("utf-8", errors="ignore"), environ=environ,
+            body_excerpt=content[:4096].decode("utf-8", errors="ignore"), environ=environ, content_length=len(content),
         )
         headers = {str(k).lower(): v for k, v in (getattr(resp, "headers", {}) or {}).items()}
         media = str(headers.get("content-type") or "").split(";")[0].strip().lower()
@@ -210,7 +210,7 @@ def read_table_for_profiling(
         content = b"".join(chunks)
         outcome = classify_access(
             locator, http_status=resp.status_code, final_url=getattr(resp, "url", None),
-            body_excerpt=content[:4096].decode("utf-8", errors="ignore"), environ=environ,
+            body_excerpt=content[:4096].decode("utf-8", errors="ignore"), environ=environ, content_length=len(content),
         )
         if not outcome.ok:
             return None, outcome
