@@ -147,7 +147,7 @@ def test_kapanista_aracsiz_islem_iddiasi_gecmez() -> None:
 
 def test_promote_draft_taze_veri_araci_sayilir() -> None:
     assert "promote_draft" in AnalyticsAgent.FRESH_DATA_TOOLS and "ingest_from_url" in AnalyticsAgent.FRESH_DATA_TOOLS
-    # 22 Eyl (benchmark R06 / jüri "faiz ekle"): aktif tabloya katalogdan kolon eklemek de taze kaynaktır; aksi hâlde
+    # 22 Eyl (benchmark R06, "faiz ekle"): aktif tabloya katalogdan kolon eklemek de taze kaynaktır; aksi hâlde
     # başarılı ekleme sonrası cevap "mevcut analiz tablosuyla uyumlu değil" ile siliniyordu.
     assert {"workspace_add_column", "workspace_join"} <= AnalyticsAgent.FRESH_DATA_TOOLS
 

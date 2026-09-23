@@ -186,14 +186,22 @@ class LakehouseBreakdownPanelTool(Tool):
             return False
         return all(str(m).startswith(("stock", "flow")) for m in data.iloc[:, 0])
 
+    _EVIDENCE = re.compile(r"::(?!value$)|^(?:contributing_series|absent_series|is_complete_period)$")
+
     def _join_session_tables(self, table: pd.DataFrame) -> tuple[pd.DataFrame, list[str], list[str]]:
-        """Oturumdaki tablolar ay anahtarıyla eklenir; ay başına birden çok satır varsa tablo alınmaz."""
+        """Oturumdaki tablolar ay anahtarıyla eklenir; ay başına birden çok satır varsa tablo alınmaz.
+
+        Döner: (tablo, eklenen TUTAR sütunları, kart satırları). Canlı koşu (23 Eyl): önceki turların tabloları aynı
+        sütunları k1_/k3_/k4_ önekleriyle tekrar ekliyor, kanıt sütunlarını (::observations) ve faiz/kur serilerini
+        tutar sanıp endeksliyordu. Kanıt sütunu alınmaz, tabloda zaten olan sütun tekrar eklenmez; katalog serisi tutar
+        değilse (oran, kur) eklenir ama reel yapılmaz ve endekslenmez."""
         from ..builder.temporal import canonical_month, infer_temporal
 
-        joined: list[str] = []
+        amounts: list[str] = []
         lines: list[str] = []
         months = pd.to_datetime(table["donem"]).dt.strftime("%Y-%m")
         sources = self.workspace.sources() if hasattr(self.workspace, "sources") else []
+        seen = {str(c) for c in table.columns}
         for source in sources:
             frame = source.frame
             if frame is None or frame.empty:
@@ -206,20 +214,27 @@ class LakehouseBreakdownPanelTool(Tool):
                 lines.append(f"NOT: {source.id} ({source.title[:50]}) aylık tekil anahtar taşımıyor; eklenmedi.")
                 continue
             numeric = [c for c in frame.columns if c != temporal.period_column
+                       and not self._EVIDENCE.search(str(c))
                        and pd.api.types.is_numeric_dtype(pd.to_numeric(frame[c], errors="coerce"))
                        and pd.to_numeric(frame[c], errors="coerce").notna().any()
-                       and not re.search(r"ortalama|oran|faiz|%|endeks|period|donem|dönem|yil|year|month|ay$",
+                       and not re.search(r"ortalama|oran|faiz|%|endeks|period|donem|dönem|yil|year|month|ay$|"
+                                         r"_reel$|_rejim$|_anomali$|_skor$",
                                          str(c), re.I)]
             added = []
             for column in numeric:
-                name = str(column) if str(column) not in table.columns else f"{source.id}_{column}"
+                name = str(column)
+                if name in seen:
+                    continue
+                seen.add(name)
                 lookup = dict(zip(keys, pd.to_numeric(frame[column], errors="coerce")))
                 table[name] = months.map(lookup)
                 added.append(name)
+                series = re.match(r"^(.+)::value$", name)
+                if series is None or self._is_amount([series.group(1)]):
+                    amounts.append(name)
             if added:
-                joined.extend(added)
                 lines.append(f"OTURUM TABLOSU: {source.id} ({source.title[:60]}) ay üzerinden eklendi: {', '.join(added)}")
-        return table, joined, lines
+        return table, amounts, lines
 
     def validate_refs(self, params: BreakdownPanelParams) -> ToolError | None:
         if not params.series and not params.groups:
@@ -400,6 +415,11 @@ class LakehouseBreakdownPanelTool(Tool):
                 base_value = pd.to_numeric(row[column], errors="coerce").iloc[0]
                 if base_value is None or pd.isna(base_value) or base_value == 0:
                     extra_lines.append(f"NOT: {column} için {params.index_base} değeri yok ya da sıfır; endekslenmedi.")
+                    continue
+                if (pd.to_numeric(table[column], errors="coerce").dropna() <= 0).any():
+                    # Aylık hareket (akım) ya da değişim serisi: taban ayına göre endeks işaret değiştirir, anlamsızdır.
+                    extra_lines.append(f"NOT: {column} sıfır/negatif değer taşıyor (aylık hareket serisi); endeks "
+                                       "seviyede kuruldu, bu sütun endekslenmedi.")
                     continue
                 table[f"{column}_endeks"] = pd.to_numeric(table[column], errors="coerce") / base_value * 100
             extra_lines.append(f"ENDEKS: tutar serileri {params.index_base}=100; faiz, kur ve fiyat endeksi kendi biriminde.")

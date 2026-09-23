@@ -182,7 +182,7 @@ def explicit_url_directive(question: str) -> str | None:
 def enrich_intent(question: str) -> bool:
     """Soru, YENİ bir kaynağı MEVCUT tabloya EKLEMEK/hizalamak istiyor mu (üzerine yazmak değil)?
 
-    'zenginleştir', 'mevcut veri setine ekle', 'aynı aylık tarih ekseninde hizala' gibi ifadeler:
+    'zenginleştir', 'mevcut veri setine ekle', 'ay bazında hizala' gibi ifadeler:
     yeni kaynak ayrı bir aktif tablo olarak set_table ile ÜZERİNE YAZILMAMALI; Tarih üzerinden
     join edilmeli (deterministik). Bkz. WebUrlTool enrich-join.
     """

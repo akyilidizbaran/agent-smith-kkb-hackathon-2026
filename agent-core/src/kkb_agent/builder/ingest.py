@@ -112,7 +112,7 @@ class LakehouseCLI:
         """Silver değiştikten sonra Gold tablolarını yeniden kurar (`python -m lakehouse gold`).
 
         Ölçüldü (21 Eyl, gerçek DB): Gold 15 Eylül'de 116.413 Silver satırıyla kurulmuş, 18 Eylül'deki genişletme
-        Silver'ı 232.217'ye çıkarmış; yedi Gold tablosu da "bayat" sayılıp jürinin aylık faiz sorusu GOLD_STALE ile
+        Silver'ı 232.217'ye çıkarmış; yedi Gold tablosu da "bayat" sayılıp aylık faiz sorusu GOLD_STALE ile
         reddedildi. Architect'in Silver'a yazan her yolu (kaynaktan çekme, terfi) bunu çağırır; Gold tablosu Silver'ın
         parmak izine bağlı olduğu için yalnız ilgili tabloyu yenilemek mümkün değil, hepsi kurulur (saniyeler)."""
         cmd = [*self.launcher.split(), "-m", "lakehouse", "gold",

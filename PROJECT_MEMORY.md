@@ -1406,3 +1406,26 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
 - **Doğrulama:** agent-core 1027 test geçti. lakehouse-core'da değişen alanların testleri geçti (ilişki, kalite, üretici);
   tam suite bu adımın başında 1139 geçmişti; sonraki katalog takma ad değişikliklerinden sonra kullanıcı kararıyla yeniden
   koşulmadı.
+
+### 2.149 Açık PR'ların entegrasyonu ve endeksin seviyede kurulması (23 Eylül, ADR-0110)
+- **Entegrasyon:** PR #27 (Büşra), PR #23 (Elif) ve PR #21 (Zümral) `integration/q4-q5-gates` dalında bu dalla birleştirildi.
+  - Dosya okuma: başlık tespiti PR #26 ayrıştırıcısında tek yerde kaldı.
+  - Kayıt: PR #21'in akışı esas alındı, PR #27'nin korunan parçaları üstüne eklendi.
+  - Katalog: 18 çift vade kimliği teke indirildi ve `verified` oldu.
+  - Tur niyeti: `classify` mimarisi korundu.
+- **Canlı katalog:** `meta.series` yenilendi (6839 seri; Silver değişmedi, 255.413 satır). Öncesi
+  `data/lakehouse_pre_integration_20260923.duckdb` olarak yedeklendi.
+- **Q5'in iki kök nedeni:** Endeks akım sütununda kuruluyordu; seviyeleri getirecek panel de tablo koruma kuralına
+  takılıyordu. Düzeltmeler:
+  - akım sütununda endeks reddi (turu bitirmez);
+  - endeks isteği panel yeteneği oldu;
+  - `index_base`/`join_session` taşıyan panel tablo korumasını geçiyor;
+  - oturum birleştirmesi seçici.
+- **Gerçek koşu:** Her tekrar ayrı bir veritabanı kopyasında koşuldu; zenginleştirme turunun taslak kaydı canlı havuza
+  yazılmadı.
+  - İlk üç tur her tekrarda beklenen değerleri verdi (7–13 sn).
+  - Zenginleştirme turunda kaynak değerleri tuttu.
+  - Son tekrarda yorum turu endeksi seviyede kurdu; kırılma analizi ve web araştırması yapıldı.
+- **Doğrulama:** agent-core 1161 test geçti; lakehouse-core hedefli alt küme (katalog, kalite, ayrıştırıcı, bağlayıcı) 122 geçti.
+  Tam lakehouse suite kullanıcı kararıyla koşulmadı.
+- **Bağımlılıklar:** pdfplumber, playwright ve xlrd venv'e kuruldu (`uv sync --frozen --extra dev`).

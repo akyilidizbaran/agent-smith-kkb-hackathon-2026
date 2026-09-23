@@ -273,6 +273,39 @@ class ComputeColumnParams(BaseModel):
     purpose: str = Field(description="Bu hesabın ne yaptığını anlatan tek cümlelik Türkçe açıklama")
 
 
+
+# Taban ayına göre endeks (X / X(taban) × 100) yalnız pozitif seviyede anlamlıdır. Canlı koşu (23 Eyl): "tutarları
+# 2021-01=100 endeksle" isteğinde model endeksi aylık hareket (akım) sütunlarında kurdu; taban ay negatif olunca
+# endeksin işareti döndü (-7122 gibi değerler). Araç bunu hesaplamaz, doğru yolu söyler.
+_INDEX_FORMULA = re.compile(r"FIRST_VALUE\s*\(|\*\s*100\b|\b100\s*\*", re.I)
+_INDEX_NAME = re.compile(r"endeks|index|idx", re.I)
+
+
+def _flow_index_refusal(params: "ComputeColumnParams", table: "pd.DataFrame") -> ToolError | None:
+    expression = params.expression or ""
+    if not (_INDEX_NAME.search(params.column_name or "") and _INDEX_FORMULA.search(expression)):
+        return None
+    referenced = [str(c) for c in table.columns
+                  if (f'"{c}"' in expression or re.search(rf"(?<![\w\"]){re.escape(str(c))}(?![\w\"])", expression))]
+    signed = []
+    for column in referenced:
+        values = pd.to_numeric(table[column], errors="coerce").dropna()
+        if len(values) and (values <= 0).any():
+            signed.append(column)
+    if not signed:
+        return None
+    # Yönlendiren ret turu bitirmez (terminal=False): INVALID_ARGS kurtarma kodu olduğu için aksi hâlde tur "ARAÇ ÇAĞIRMA"
+    # notuyla kapanıyor, istenen endeks / analitik / web adımlarına hiç geçilmiyordu (canlı koşu, 23 Eyl).
+    return ToolError(
+        error_code="INVALID_ARGS", layer="policy", retryable=True, terminal=False,
+        message=(f"Endeks hesaplanmadı: {', '.join(signed)} sıfır ya da negatif değer taşıyor (aylık hareket / değişim "
+                 "serisi). Taban ayına göre endeks yalnız pozitif SEVİYE (stok, hacim) serisinde anlamlıdır."),
+        hint=("Endeksi seviye serisi üzerinden kur: aynı seriler için lakehouse_breakdown_panel(value='level', "
+              "index_base='YYYY-MM', join_session=true[, deflator_series_id=<TÜFE>]) çağır; araç seviyeleri getirir, "
+              "oturumdaki tabloyu ay üzerinden taşır ve tutarları endeksler. Pozitif sütunlar (ör. işlem hacmi) için "
+              "bu formül kullanılabilir."),
+    )
+
 class WorkspaceComputeColumnTool(Tool):
     """Mevcut sütunlardan yeni sütun türetir — hesap yine motorda yapılır.
 
@@ -307,7 +340,7 @@ class WorkspaceComputeColumnTool(Tool):
                 error_code="COLUMN_EXISTS", message=f"'{params.column_name}' zaten tabloda var.",
                 hint="Farklı bir ad seç.", candidates=list(table.columns), layer="workspace",
             )
-        return None
+        return _flow_index_refusal(params, table)
 
     def check_policy(self, params: ComputeColumnParams) -> ToolError | None:
         if _UNSAFE.search(params.expression):
