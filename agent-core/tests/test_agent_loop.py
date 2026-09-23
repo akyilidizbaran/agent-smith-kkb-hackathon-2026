@@ -49,6 +49,28 @@ class _CountingTool(Tool):
         )
 
 
+class _SearchParams(BaseModel):
+    query: str
+
+
+class _SearchOnlyTool(Tool):
+    """Arama adayı üretir; sayfa okunmadığı için veri kanıtı üretmez."""
+
+    name = "web_search"
+    description = "test web araması"
+    Params = _SearchParams
+
+    def run(self, params: _SearchParams) -> ToolResult:
+        return ToolResult(
+            content="Arama adayı bulundu; sayfa henüz okunmadı.",
+            artifacts={"web_search": {
+                "query": params.query,
+                "hits": ["https://example.test/report"],
+                "results": [{"url": "https://example.test/report", "title": "Rapor"}],
+            }},
+        )
+
+
 class _ScriptedLLM:
     """Kendisine verilen turları sırayla oynar; bittiğinde sonuncuyu tekrarlar."""
 
@@ -439,6 +461,30 @@ def test_aktif_tablo_donusumu_stale_guard_tarafindan_bastirilmaz() -> None:
     assert transform.calls == 1
     assert "mevcut analiz tablosuyla uyumlu değil" not in answer.text
     assert "Aylık değişim" in answer.text
+
+
+def test_search_only_cannot_release_stale_active_table() -> None:
+    """web_search kaynak adayıdır; web_url okunmadan eski tablodaki sayı anlatılamaz."""
+
+    registry = ToolRegistry()
+    registry.register(_SearchOnlyTool())
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[ToolCall(
+            id="search", name="web_search", arguments={"query": "küresel piyasalar"},
+        )]),
+        LLMResponse(content="Eski tablodaki değer 987654321; dünya piyasaları böyleydi."),
+    ])
+    workspace = AnalysisWorkspace()
+    workspace.set_table(pd.DataFrame({"donem": ["2025-01"], "deger": [987654321]}), description="önceki tablo")
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=workspace, max_steps=4)
+    agent._catalog_specs = lambda: []
+    agent._follow_up_context = FollowUpContext(metric="bakiye", series="test:seri", frequency="monthly")
+
+    answer = agent.ask("İnternetten araştır: 2024 küresel faiz ve konut piyasalarında hangi gelişmeler yaşandı?")
+
+    assert "987654321" not in answer.text
+    assert "mevcut analiz tablosuyla uyumlu değil" in answer.text
+    assert answer.reused_verified_table is False
 
 
 def test_basariyla_katalog_kesfedilince_ikinci_turda_gerekli_faz_acilir() -> None:

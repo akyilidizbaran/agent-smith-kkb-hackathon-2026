@@ -98,7 +98,14 @@ def run_case(case: GoldenCase) -> CaseOutcome:
         answer = agent.ask(case.follow_up)
         steps += answer.steps
         for key, value in answer.usage.items():
-            usage[key] = usage.get(key, 0) + value
+            prev = usage.get(key, 0)
+            # usage bazı alanlarda tanı amaçlı list/dict taşır (llm_calls, web_research…).
+            # Yalnız sayısalları topla; sayısal olmayanı son turun değeriyle koru (dict+dict çökmesini önler).
+            if (isinstance(prev, (int, float)) and not isinstance(prev, bool)
+                    and isinstance(value, (int, float)) and not isinstance(value, bool)):
+                usage[key] = prev + value
+            else:
+                usage[key] = value
 
     duration = time.perf_counter() - started
     tools = [s.tool_name for s in steps if s.tool_name]

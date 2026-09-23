@@ -979,13 +979,33 @@ class Session:
         self.uploads.append(info)
         return info
 
+    def _augment_with_uploads(self, question: str) -> str:
+        """Yüklenen dosyanın GERÇEK yolunu ajana yüzeye çıkar (KN4).
+
+        Kullanıcı dosyayı yalnız adıyla anar (ör. 'tefas.csv'); gerçek yol uuid önekli ve oturum
+        dizinindedir. Bu yol ajana verilmezse model bare adı okumaya çalışır ve hiçbir araç çözemez
+        (ACCESS_BLOCKED). Soruda adı geçen (ya da tek/sonuncu) yüklemenin tam yolunu ekleriz; not
+        `locator_from_user` denetiminden de geçer (yol artık kullanıcı metninde).
+        """
+        live = [u for u in self.uploads if isinstance(u, dict) and Path(str(u.get("path", ""))).is_file()]
+        if not live:
+            return question
+        low = question.casefold()
+        named = [u for u in live if str(u.get("name", "")).casefold() in low]
+        chosen = named or ([live[-1]] if re.search(r"dosya|yükl|yukle|\.csv|\.xlsx|\bekle\b|yorumla|oku\b", low) else [])
+        if not chosen:
+            return question
+        lines = "; ".join(f"{u.get('name')} → {u.get('path')}" for u in chosen)
+        return (f"{question}\n\n[YÜKLENEN DOSYA(LAR) — okumak/eklemek için tam yolu kullan: {lines}]")
+
     def ask(self, question: str, on_event: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
         """`on_event` verilirse soru süresince canlı adım olayları ona gider (ADR-0079); cevap yükü aynıdır."""
         with self._lock:
             started = time.perf_counter()
             table_before = getattr(self.agent.workspace, "table", None)
+            agent_question = self._augment_with_uploads(question)
             with live_hooks(self.agent, on_event) if on_event is not None else nullcontext():
-                answer = self.agent.ask(question)
+                answer = self.agent.ask(agent_question)
             payload = answer_to_dict(answer, self.agent, table_before=table_before, question=question)
             payload["elapsed_s"] = round(time.perf_counter() - started, 1)
             payload["question"] = question

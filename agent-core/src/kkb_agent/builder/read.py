@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
@@ -21,6 +22,57 @@ from typing import Any
 from urllib.parse import urlparse
 
 import pandas as pd
+
+_NUMERIC_CELL = re.compile(r"^[\s]*[-+]?[\d.,\s]*\d[\d.,\s]*%?[\s]*$")
+
+
+def _field_count(line: str, delim: str) -> int:
+    try:
+        return len(next(csv.reader([line], delimiter=delim)))
+    except Exception:  # noqa: BLE001 — bozuk satır: kaba bölmeye düş
+        return len(line.split(delim))
+
+
+def _numeric_fraction(line: str, delim: str) -> float:
+    try:
+        cells = next(csv.reader([line], delimiter=delim))
+    except Exception:  # noqa: BLE001
+        cells = line.split(delim)
+    cells = [c for c in cells if c.strip()]
+    if not cells:
+        return 0.0
+    return sum(1 for c in cells if _NUMERIC_CELL.match(c)) / len(cells)
+
+
+def _detect_delimiter_and_header(lines: list[str]) -> tuple[str, int, list[int]] | None:
+    """Ayraç + başlık satırı + veri satırlarını keşfet (kaynak-bağımsız, preamble'a dayanıklı).
+
+    Ayraç adayları öncelik sırasıyla denenir (';' TR Excel'inde yaygın çünkü ',' ondalıktır).
+    En yüksek KAPSAM (aynı alan sayısına sahip satır oranı) veren ≥2 kolonlu ayraç seçilir; başlık,
+    modal alan sayısına sahip ve çoğunlukla METİN (sayısal değil) olan ilk satırdır — üstündeki
+    farklı-alanlı satırlar (metadata/preamble) atılır, altındaki tutarsız satırlar (Toplam/not) düşer.
+    """
+    idx = [i for i, l in enumerate(lines) if l.strip()]
+    if not idx:
+        return None
+    best: tuple[tuple, str, int, dict[int, int]] | None = None
+    for rank, delim in enumerate((";", "\t", "|", ",")):
+        counts = {i: _field_count(lines[i], delim) for i in idx}
+        modal_pool = Counter(n for n in counts.values() if n >= 2)
+        if not modal_pool:
+            continue
+        modal, hits = modal_pool.most_common(1)[0]
+        coverage = hits / len(idx)
+        score = (round(coverage, 3), modal, -rank)   # yüksek kapsam > çok kolon > öncelikli ayraç
+        if best is None or score > best[0]:
+            best = (score, delim, modal, counts)
+    if best is None:
+        return None
+    _, delim, modal, counts = best
+    modal_lines = [i for i in idx if counts[i] == modal]
+    header_i = next((i for i in modal_lines if _numeric_fraction(lines[i], delim) < 0.5), modal_lines[0])
+    body = [i for i in modal_lines if i > header_i]
+    return delim, header_i, body
 
 from ..contracts.access import AccessOutcome
 from ..core.access_policy import classify_access

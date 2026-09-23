@@ -16,7 +16,7 @@ from typing import Any
 DEFAULT_PATH = Path(__file__).resolve().parent / "config_data" / "source_hints.json"
 EMPTY: dict[str, Any] = {"source_words": {}, "credential_env_by_host": {}, "institutions": (), "source_names": {},
                          "derived_sources": (), "official_hosts": (), "url_patterns": (),
-                         "institution_hosts": {}, "public_source_domains": {}}
+                         "institution_hosts": {}, "public_source_domains": {}, "financial_sources": {}}
 
 
 @lru_cache(maxsize=4)
@@ -40,6 +40,18 @@ def _load(path: str) -> dict[str, Any]:
                               for k, v in (data.get("institution_hosts") or {}).items()},
         "public_source_domains": {str(k).casefold(): tuple(str(h).lower() for h in v)
                                   for k, v in (data.get("public_source_domains") or {}).items()},
+        # Yerelde karşılığı olmayan, web'den çekilen dış kaynaklar. Anahtar '_note' meta; atlanır.
+        "financial_sources": {
+            str(k): {
+                "aliases": tuple(str(a) for a in (spec.get("aliases") or ())),
+                "hosts": tuple(str(h).lower() for h in (spec.get("hosts") or ())),
+                "canonical_url": str(spec.get("canonical_url") or "") or None,
+                "access_mode": str(spec.get("access_mode") or "") or None,
+                "adapter_key": str(spec.get("adapter_key")) if spec.get("adapter_key") else None,
+            }
+            for k, spec in (data.get("financial_sources") or {}).items()
+            if isinstance(spec, dict) and not str(k).startswith("_")
+        },
     }
 
 
