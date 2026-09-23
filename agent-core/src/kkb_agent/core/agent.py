@@ -1143,8 +1143,7 @@ class AnalyticsAgent:
         # Kayıt/terfi kartları olguların BAŞINA: anlatım "yalnız aşağıdaki olguları kullan" der, not sınırı 6'dır; kartlar
         # sona düşünce kesiliyordu ve model iki seri EKLENDİ demişken "eklenmedi" anlattı (ölçüldü 23 Eyl, TEFAS).
         record_notes = [
-            "KAYIT (havuzun taslak katmanına EKLENDİ; 'eklenmedi' deme — kataloğa/Gold'a geçmesi için kullanıcı onayı "
-            "gerekir, bunu 'onaylıyorum, kataloğa al' diye isteyebilir): " + step.result_summary.split("\n")[0] + (" | " + " | ".join(
+            "KAYIT: " + step.result_summary.split("\n")[0] + (" | " + " | ".join(
                 line for line in step.result_summary.split("\n")[1:6] if line.startswith(("satır:", "anlam:", "katman:"))))
             for step in steps if step.ok and step.tool_name in write_tools and step.result_summary
         ]
