@@ -11,7 +11,7 @@ yoksa adaptör sessizce seed'e düşüyor: yanlış DB'yle demo yapılabilir.
 ## Karar
 1. **Veri kodu repo ağacında.** `origin/feature/lakehouse-catalog-breadth:lakehouse-core` dizini
    `lakehouse-core/` altına ağaç anlık görüntüsü olarak alındı (`git read-tree --prefix`); tarihçe
-   veri dalında kalır, sha `docs/M01_ORTAM.md`'de. Yenileme: `scripts/sync_lakehouse_core.sh`.
+   veri dalında kalır, sha `docs/calisma-notlari/M01_ORTAM.md`'de. Yenileme: `scripts/sync_lakehouse_core.sh`.
    Subtree/merge yerine anlık görüntü: iki tarihçe ortak atasız, main birleştirmesi M17'de ayrıca.
 2. **DATA_ROOT.** Tüm veri yolları repo kökündeki `data/` altında (gitignore): DB, RAW/Bronze,
    incoming, charts, cache. Göreli yollar repo köküne göre çözülür. Kod dizini veri taşımaz.

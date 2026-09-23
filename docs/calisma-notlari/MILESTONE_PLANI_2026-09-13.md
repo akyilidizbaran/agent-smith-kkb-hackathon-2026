@@ -24,10 +24,10 @@
 1. [21 branchin incelenmesi ve yeniden üretilen bulgular](REPO_BRANCH_INCELEMESI_2026-09-13.md).
 2. [Kullanıcının 14 soruya yanıtlarının ve kapsamın kaydı](KAPSAM_VE_MENTOR_NETLESTIRMESI_2026-09-13.md).
 3. [Mentörün paylaşılan soru/cevap metni](mentor/2026-09-13-kullanici-paylasimi.txt).
-4. [Kick-off tam transkripti](../KKB_Hackathon_2026_Kick_Off_Tam_Transkript.md): 09:11–11:02 veri kapsamı/hizalama; 12:33–12:55 jeneriklik; 14:06–15:55 asgari araçlar; 16:22–18:05 demo akışı; 24:11 tekrar kurulum; 24:47 yerel demo; 29:04 güçlü harness.
-5. [Proje hafızası](../PROJECT_MEMORY.md), [mimari](ARCHITECTURE.md), [agent/veri sözleşmesi](LAKEHOUSE_CONTRACT.md), [ADR indeksi](adr/README.md).
+4. [Kick-off tam transkripti](KKB_Hackathon_2026_Kick_Off_Tam_Transkript.md): 09:11–11:02 veri kapsamı/hizalama; 12:33–12:55 jeneriklik; 14:06–15:55 asgari araçlar; 16:22–18:05 demo akışı; 24:11 tekrar kurulum; 24:47 yerel demo; 29:04 güçlü harness.
+5. [Proje hafızası](../../PROJECT_MEMORY.md), [mimari](../ARCHITECTURE.md), [agent/veri sözleşmesi](../LAKEHOUSE_CONTRACT.md), [ADR indeksi](../adr/README.md).
 
-Transkript otomatik üretilmiştir; kendi uyarısına göre kritik belirsizlikte ilgili video zamanı esas alınmalıdır. Yeni mentör metninde ikinci soru grubunun cevap bölümü eksiktir. Kota ve yardımcı modeller konusunda [ADR-0021](adr/0021-mia-search-retrieval-ayristirma.md) eski bir özet sağlar; eksik yeni cevap alınmış gibi davranılmaz.
+Transkript otomatik üretilmiştir; kendi uyarısına göre kritik belirsizlikte ilgili video zamanı esas alınmalıdır. Yeni mentör metninde ikinci soru grubunun cevap bölümü eksiktir. Kota ve yardımcı modeller konusunda [ADR-0021](../adr/0021-mia-search-retrieval-ayristirma.md) eski bir özet sağlar; eksik yeni cevap alınmış gibi davranılmaz.
 
 ### 2.2 Değişmez ürün ilkeleri
 
@@ -78,7 +78,7 @@ Bu test sayıları birbirleriyle toplanarak başarı oranı veya motor üstünl�
 | M13 | İddia doğrulama ve kanıtın doğru sunulması | P0 | Mevcut kod; M03/M07/M11 ile entegrasyon | Agent + veri + UI | Çekirdek tamamlandı (13 Eyl, ADR-0050); T04/T07/T11/T12 açık | · 14 Eyl (K04-T01/T02): T09 yeniden açılıp D06 ile kapandı; T04/T07 K02-T14 ile kapandı; D02 (ADR-0066) doğrulanamayan sayı son çıkışta yayımlanmaz; T11/T12 kısmi kalır
 | M14 | Kullanıcı arayüzü ve tam çıktı indirme | P1 | M10, M11, M13 | UI + API | Çekirdek tamamlandı (14 Eyl, ADR-0055); T11/T12 açık |
 | M15 | Süre/çıktı bütçeleri ve otomatik kontroller | P1/P2 | M01; M02 ölçümleri | Agent + geliştirme altyapısı | Çekirdek tamamlandı (14 Eyl, ADR-0061); ölçüm T01/T02 M16'dan |
-| M16 | Birleşik kabul ve görülmemiş veri provası | P0 | Tüm zorunlu uygulama milestone'ları | Ekip + değerlendirme | Çekirdek tamamlandı (14 Eyl, ADR-0063, `docs/M16_KABUL_RAPORU.md`); T02/T04/T07/T10 kısmi, T11 ekip | · 14 Eyl (K04-T02): T02 temiz kurulum provası (K02-T01) ve T04 geçici kökte boş katalogla finans dışı alan (K01, K01-T07) kanıtla kapandı; matris §3a'da 33/33; T07 canlı kesinti provası ve T10 eşik kararı (K03-T01) açık
+| M16 | Birleşik kabul ve görülmemiş veri provası | P0 | Tüm zorunlu uygulama milestone'ları | Ekip + değerlendirme | Çekirdek tamamlandı (14 Eyl, ADR-0063, `docs/calisma-notlari/M16_KABUL_RAPORU.md`); T02/T04/T07/T10 kısmi, T11 ekip | · 14 Eyl (K04-T02): T02 temiz kurulum provası (K02-T01) ve T04 geçici kökte boş katalogla finans dışı alan (K01, K01-T07) kanıtla kapandı; matris §3a'da 33/33; T07 canlı kesinti provası ve T10 eşik kararı (K03-T01) açık
 | M17 | Teslim, belgeler, merge ve freeze | P0 | M16 | Ekip koordinasyonu | Hazırlık tamamlandı (14 Eyl): belgeler, merge provası, sır taraması, operasyon tarifi; main'e birleştirme, freeze etiketi ve T09/T11/T12 kullanıcı/ekip kararı |
 
 Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki belirli hatalar motor seçimini beklemeden mevcut kodda düzeltilebilir. Paralel çalışma ancak sorumlular ve dosya sahiplikleri belli olduktan sonra yapılır; bu belge arka planda agent veya görev başlatmaz.
@@ -438,7 +438,7 @@ Numaralar tek bir seri geliştirme sırası değildir. M05, M07, M12 ve M13'teki
 
 **Teslimat:** Son aday commitleriyle tekrarlı kabul raporu; her vaka için giriş, beklenen durum, gözlenen sonuç, iz, kaynak ve çıktı dosyası.
 
-- [x] **M16-T01** (14 Eyl: kabul matrisi A01–A33 test eşlemesi 14 tam/19 kısmi/0 yok; modelden bağımsız durum kontrolleri `scripts/acceptance_m16.py`; başarısız koşular raporda — `docs/M16_KABUL_RAPORU.md`): Aşağıdaki kabul matrisi için fikstür ve modelden bağımsız beklenen sonuçları hazırla; başarısız koşuları rapordan çıkarma.
+- [x] **M16-T01** (14 Eyl: kabul matrisi A01–A33 test eşlemesi 14 tam/19 kısmi/0 yok; modelden bağımsız durum kontrolleri `scripts/acceptance_m16.py`; başarısız koşular raporda — `docs/calisma-notlari/M16_KABUL_RAPORU.md`): Aşağıdaki kabul matrisi için fikstür ve modelden bağımsız beklenen sonuçları hazırla; başarısız koşuları rapordan çıkarma.
 - [~] **M16-T02** (2016+ canlı kurulum ayrı kökte ölçüldü (M08, 681/681) ve data/ ile yer değişti; aynı gece temiz makinede bootstrap→UI tek zincir tekrar koşulmadı): Temiz kurulumdan RAW/Bronze/Silver/Gold ve UI'ye kadar çalıştır; seed ile demo verisini ayrı koşular olarak kaydet. — **14 Eyl (K02-T01):** temiz klon → `make setup` → `.env` → geçici kökte canlı veri → ön kontrol → `make serve` → canlı soru tek zincirde koşuldu (commit 9eaf60e, `docs/experiments/k02_t01_kurulum_2026-09-14_1321/`); kapanış kanıtı bu. Başka üye provası M16-T11/K03-T06.
 - [x] **M16-T03** (çok turlu finans senaryosu tek oturumda canlı koşuldu; tablo koruma ve hizalama her turda denetlendi, sonuçlar raporda): Zorunlu finans sorularını tek oturumda ardışık uygula; önceki tabloyu koruma ve kaynaklar arası hizalamayı her turda kontrol et.
 - [~] **M16-T04** (bellek-içi finans dışı adaptör + fikstürler aynı motorda; canlı ajanda finans dışı dosyalar; boş katalogla canlı prova Architect sıfırlaması gerektirir, demo DB korunarak yapılmadı): Ayrı temiz ortamda finans kataloğu olmadan finans dışı veriyle aynı motoru çalıştır; gerçek finans DB'sini bu prova için silme. — **14 Eyl (K01, K01-T07):** geçici kökte finans kataloğu olmadan (`--catalog none` sıfırlaması) finans dışı dosyayla aynı motor gerçek CLI ve arayüzle çalıştı, demo DB özeti değişmedi (`k01_kabul_2026-09-14_1227.json`, `k01_ui_kabul_2026-09-14_1319`); kapanış kanıtı bu.

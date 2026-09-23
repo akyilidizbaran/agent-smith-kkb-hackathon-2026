@@ -17,7 +17,7 @@
 
 ### R01 — P1: İki tabloda farklı kimlikler sessizce eşleşiyor
 
-Kaynak: [workspace_join.py](../agent-core/src/kkb_agent/tools/workspace_join.py), `_norm_key`, satır 33–45. Milestone: M03/M11, A09.
+Kaynak: [workspace_join.py](../../agent-core/src/kkb_agent/tools/workspace_join.py), `_norm_key`, satır 33–45. Milestone: M03/M11, A09.
 
 Sayısal anahtarlar ve sayıya benzeyen metinler `float64`'e dönüştürülüyor. Bu dönüşüm kimlikler için kayıpsız değil. Yeniden üretim:
 
@@ -33,7 +33,7 @@ Sayısal anahtarlar ve sayıya benzeyen metinler `float64`'e dönüştürülüyo
 
 ### R02 — P1: Yanlış sayı iki yeniden yazımdan sonra hâlâ nihai cevaba giriyor
 
-Kaynak: [agent.py](../agent-core/src/kkb_agent/core/agent.py), satır 641–691. Milestone: M13/M16.
+Kaynak: [agent.py](../../agent-core/src/kkb_agent/core/agent.py), satır 641–691. Milestone: M13/M16.
 
 Sahte araç 2025 Ocak=100, Aralık=110 döndürdü. Sahte model her yeniden yazımda “Aralık bakiyesi 999 milyon TL.” dedi. Gerçek harness sonucu:
 
@@ -51,7 +51,7 @@ Kesin değerler için tabloya bakın.)
 
 ### R03 — P1: Architect eski onayı kullanarak güncel reddi aşabiliyor
 
-Kaynak: [promote.py](../agent-core/src/kkb_agent/tools/promote.py), satır 53–55 ve 70–85. Milestone: M04-T07/T09, A21b.
+Kaynak: [promote.py](../../agent-core/src/kkb_agent/tools/promote.py), satır 53–55 ve 70–85. Milestone: M04-T07/T09, A21b.
 
 `_user_text()` önce birikmiş bütün kullanıcı metnini alıyor. Şu kontrollü politika çağrısında ret üretilmedi:
 
@@ -68,7 +68,7 @@ Bu tur sadece politika fonksiyonu çalıştırıldı; CLI ve gerçek DB yazımı
 
 ### R04 — P1: Tam sıfırlama boş katalog bırakmıyor
 
-Kaynaklar: [web_app.py](../agent-core/src/kkb_agent/web_app.py), `build_default_app` satır 629–632; [bootstrap.py](../lakehouse-core/src/lakehouse/db/bootstrap.py), `bootstrap_database`; [application.py](../lakehouse-core/src/lakehouse/application.py), `run_bootstrap`. Milestone: M03/M04/M16, A21c.
+Kaynaklar: [web_app.py](../../agent-core/src/kkb_agent/web_app.py), `build_default_app` satır 629–632; [bootstrap.py](../../lakehouse-core/src/lakehouse/db/bootstrap.py), `bootstrap_database`; [application.py](../../lakehouse-core/src/lakehouse/application.py), `run_bootstrap`. Milestone: M03/M04/M16, A21c.
 
 UI resetinin ardından çağrılan `lakehouse bootstrap`, varsayılan finans kataloğunu tekrar yüklüyor. Aynı uygulama fonksiyonunu yeni geçici DB üzerinde çalıştırdım: **`catalog_series_count=2214`**.
 
@@ -78,7 +78,7 @@ Bu, gözlemleri sıfırlama ile boş katalogdan yeni alan kurma arasındaki fark
 
 ### R05 — P2: Tam sıfırlamada eski grafikler kalıyor, silme başarısı denetlenmiyor
 
-Kaynak: [web_app.py](../agent-core/src/kkb_agent/web_app.py), satır 321 ve 344–357. Milestone: M04-T06/T08, A21c.
+Kaynak: [web_app.py](../../agent-core/src/kkb_agent/web_app.py), satır 321 ve 344–357. Milestone: M04-T06/T08, A21c.
 
 `CHART_DIR` varsayılanı `DATA_ROOT/charts`, fakat bu dizin reset listesinde yok. Geçici kökte `charts/old.png` oluşturup mevcut plan/execute resetini çalıştırdım: dosya kaldı. Ayrıca `rmtree(ignore_errors=True)` başarısız silmeyi bastırıyor, hedef yine `removed` listesine ekleniyor.
 
@@ -86,7 +86,7 @@ Kaynak: [web_app.py](../agent-core/src/kkb_agent/web_app.py), satır 321 ve 344�
 
 ### R06 — P2: Eksik RAW/Bronze zinciri hâlâ tam gösterilebiliyor
 
-Kaynak: [evidence.py sözleşmesi](../agent-core/src/kkb_agent/contracts/evidence.py), satır 53–60 ve `EvidencePanel.chain_ok`. Milestone: M13-T09, A23.
+Kaynak: [evidence.py sözleşmesi](../../agent-core/src/kkb_agent/contracts/evidence.py), satır 53–60 ve `EvidencePanel.chain_ok`. Milestone: M13-T09, A23.
 
 `file_present`, dolu `bronze_path` varsa diske bakmadan `True` döndürüyor. RAW yokken Bronze tek başına da tam zinciri geçiriyor. Geçici dosyalı deney:
 
@@ -101,7 +101,7 @@ Adaptörün nesneyi oluştururken Bronze yolunu doğrulaması, daha sonra dosya 
 
 ### R07 — P1: Join kullanıcının `__k` kolonunu sessizce siliyor
 
-Kaynak: [workspace_join.py](../agent-core/src/kkb_agent/tools/workspace_join.py), satır 99–100 ve 127. Milestone: M03/M11, A09.
+Kaynak: [workspace_join.py](../../agent-core/src/kkb_agent/tools/workspace_join.py), satır 99–100 ve 127. Milestone: M03/M11, A09.
 
 Araç geçici anahtar için sabit `__k` kolonunu kullanıp sonunda düşürüyor. Sol tablo `id=a, __k=preserve-me`, sağ tablo `id=a, value=99` olduğunda başarılı sonuç yalnız `id=a, value=99` içeriyor; kullanıcının kolonu kayboluyor. `_merge` gibi diğer yardımcı adlar da kullanıcı kolonlarıyla çakışabilir.
 

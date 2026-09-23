@@ -10,7 +10,7 @@ Bu klasör production agent çıktısı değildir. Gerçek KKB/BDDK/EVDS gözlem
 | `retrieval_results.json` | 20 sentetik metadata kaydı, 36 soru, 32 puanlanan sorgu; yalnız BM25 çalıştı. |
 | `synthetic_embeddings.json` | Ancak yetkili başarılı MIA koşusundan sonra oluşur; şu an yok. |
 
-Mevcut `docs/mia_capability_matrix.md` eski bir yerel ölçüm kaydıdır. Rapor bu kaydı bu oturumda tekrar doğrulanmış sonuç diye sunmaz. Başarısız ağ denemesinin script hash'i, o anda çalıştırılan sürüme aittir; sonraki offline test/fixture-hash iyileştirmeleriyle betik değişmiştir.
+Mevcut `docs/calisma-notlari/mia_capability_matrix.md` eski bir yerel ölçüm kaydıdır. Rapor bu kaydı bu oturumda tekrar doğrulanmış sonuç diye sunmaz. Başarısız ağ denemesinin script hash'i, o anda çalıştırılan sürüme aittir; sonraki offline test/fixture-hash iyileştirmeleriyle betik değişmiştir.
 
 Çevrimdışı doğrulama:
 

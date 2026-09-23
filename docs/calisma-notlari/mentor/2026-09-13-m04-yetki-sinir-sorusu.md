@@ -1,6 +1,6 @@
 # Mentöre soru taslağı — Analyst/Architect yetki sınırı (M04)
 
-**Durum:** taslak, gönderilmedi. Kullanıcı gönderir. Cevap `docs/mentor/` altına kaynaklı kaydedilir.
+**Durum:** taslak, gönderilmedi. Kullanıcı gönderir. Cevap `docs/calisma-notlari/mentor/` altına kaynaklı kaydedilir.
 
 ---
 

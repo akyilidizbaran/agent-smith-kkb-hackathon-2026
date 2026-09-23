@@ -1,6 +1,6 @@
 """Uygunluk kapısı — "soru ne istiyor × veri ne sunuyor", tablo aktif olmadan ÖNCE (V3 §3.9; Büşra, 15 Eyl).
 
-Neden var (ölçüldü, 14 Eyl UEB, docs/HUMAN_ERROR_RESEARCH_2026-09-14.md PART 14/19–22): profilci
+Neden var (ölçüldü, 14 Eyl UEB, docs/calisma-notlari/HUMAN_ERROR_RESEARCH_2026-09-14.md PART 14/19–22): profilci
 biçime bakar (tarih kolonu var mı, sayı okunuyor mu), 13 Eylül ilgi kapısı sözcük örtüşmesine bakar;
 ikisi de "konut fiyat endeksi" dosyasını "konut kredisi bakiyesi" sorusuna geçirdi (anlamca yakın
 yanlış dosya: repo kapısı hard-negative'lerin %6'sını, bu modülün ablation kolu %98'ini reddetti;

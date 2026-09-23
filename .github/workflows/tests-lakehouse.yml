@@ -22,7 +22,7 @@ concurrency:
 env:
   SHARD_A: tests/acceptance tests/cli tests/scripts tests/security
   SHARD_B: tests/adhoc
-  SHARD_C: tests/catalog tests/infrastructure
+  SHARD_C: tests/catalog tests/infrastructure tests/quality
   SHARD_D: tests/connectors tests/contract
   SHARD_E: tests/generic
   SHARD_F: tests/gold

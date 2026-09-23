@@ -39,7 +39,7 @@ Golden set ve benchmark'ımızdaki 18 vakanın 4'ü (G5 karşılaştırma, G6 s�
 
 ## 3. İstek B — gerçek veriyle üretilmiş `lakehouse.duckdb` (P0) `[REC]`
 
-Baran'ın `DATA_TEAM_REQUESTS_R2.md` madde 1 ile aynı: `python -m lakehouse bootstrap` + `ingest` ile sıfırdan üretilebilen, 2021-01 → 2026-06 aralığını beş (+ İstek A ile sekiz) seri için içeren veritabanı. Dosya repoya girmesin; **üretim komutları ve süresi** `docs/branches/lakehouse-operational-cli.md`'de olsun. Agent tarafında değişecek tek şey `LAKEHOUSE_PATH` `[SRC]` (ADR-0024).
+Baran'ın `DATA_TEAM_REQUESTS_R2.md` madde 1 ile aynı: `python -m lakehouse bootstrap` + `ingest` ile sıfırdan üretilebilen, 2021-01 → 2026-06 aralığını beş (+ İstek A ile sekiz) seri için içeren veritabanı. Dosya repoya girmesin; **üretim komutları ve süresi** `docs/calisma-notlari/branches/lakehouse-operational-cli.md`'de olsun. Agent tarafında değişecek tek şey `LAKEHOUSE_PATH` `[SRC]` (ADR-0024).
 
 Bugün EVDS için `evds_cpi` dispatch edilebiliyor `[SRC]`; `TP.KTF12` ve `TP.KFE.TR` için de kayıt gerekiyor (`(source_id, dataset_id)` registry'sine iki satır `[INF]`).
 
@@ -59,7 +59,7 @@ Beş seride bugün önemi yok; katalog genişlerken (ek §A) şart olacak. Şimd
 
 - Gold fonksiyonları ve ad-hoc yol agent aracı olarak sarılıyor (Baran, `DATA_TEAM_REQUESTS_R2.md`).
 - `search_series` iki aşamalı tasarlanıyor; `concept_id` gelene kadar `dataset_id` üzerinden geçici gruplama.
-- Sorularınız için: `docs/BENCHMARK_PROTOCOL.md`, `docs/PROGRESS_2026-09-10.md`.
+- Sorularınız için: `docs/calisma-notlari/BENCHMARK_PROTOCOL.md`, `docs/calisma-notlari/PROGRESS_2026-09-10.md`.
 
 ---
 

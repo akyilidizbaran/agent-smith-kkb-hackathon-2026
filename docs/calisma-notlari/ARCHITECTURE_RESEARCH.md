@@ -150,7 +150,7 @@ Upstream model gerçekleri (deployment'ta **doğrulanmadı**):
 
 ## PART 4 — MIA Capability Matrix
 
-**Ölçüldü (10 Eylül, `scripts/mia_probe.py` → `docs/mia_capability_matrix.md`) `[EMP]`.** Özet: native tool calling ve tek turda paralel `tool_calls` (3/3/3) çalışıyor; thinking varsayılan açık, `reasoning_content` ayrı alanda, `enable_thinking=false`/`reasoning_effort=none` kapatıyor; thinking açıkken de tool_calls parse ediliyor; `response_format=json_object` ve `json_schema` çalışıyor; prompt-only JSON 27/30 ham, 30/30 extract sonrası; 49.9k token prompt 4.7 s; prefix caching kazancı yok; 5 paralel istek sorunsuz; T=0+seed deterministik; streaming var; embedding 4096 boyut, `dimensions` reddediliyor, batch 64 OK; ikinci system mesajı 400; rate-limit header'ı yok; system talimatına uyum 7/10. Aşağıdaki tablo tarihsel test tasarımı olarak kalır; sonuç sütunu için matris dosyasına bakın:
+**Ölçüldü (10 Eylül, `scripts/mia_probe.py` → `docs/calisma-notlari/mia_capability_matrix.md`) `[EMP]`.** Özet: native tool calling ve tek turda paralel `tool_calls` (3/3/3) çalışıyor; thinking varsayılan açık, `reasoning_content` ayrı alanda, `enable_thinking=false`/`reasoning_effort=none` kapatıyor; thinking açıkken de tool_calls parse ediliyor; `response_format=json_object` ve `json_schema` çalışıyor; prompt-only JSON 27/30 ham, 30/30 extract sonrası; 49.9k token prompt 4.7 s; prefix caching kazancı yok; 5 paralel istek sorunsuz; T=0+seed deterministik; streaming var; embedding 4096 boyut, `dimensions` reddediliyor, batch 64 OK; ikinci system mesajı 400; rate-limit header'ı yok; system talimatına uyum 7/10. Aşağıdaki tablo tarihsel test tasarımı olarak kalır; sonuç sütunu için matris dosyasına bakın:
 
 | Capability | Dokümante? | Org. teyit? | Test | Başarı kriteri | Mimari etkisi |
 |---|---|---|---|---|---|
@@ -877,7 +877,7 @@ flowchart TB
 ## Ek A — Bugün yapılacaklar
 
 1. Organizatöre O2, O3, O6 e-postası.
-2. `MIA_API_KEY` ile `python scripts/mia_probe.py --out docs/mia_capability_matrix.md`.
+2. `MIA_API_KEY` ile `python scripts/mia_probe.py --out docs/calisma-notlari/mia_capability_matrix.md`.
 3. Data ekibiyle: `meta.series` alanlarına `is_subtotal/components/nominal_real/regulatory_notes` eklenmesi; FTS `ignore` regex kararı.
 4. `.env.example` güncellemesi: `LLM_MODEL=kkbhackathon2026/Qwen3.8-27B`, `EMBEDDING_MODEL=kkbhackathon2026/Qwen3-Embedding-8B`, `OCR_MODEL=kkbhackathon2026/Unlimited-OCR`, `LLM_BASE_URL=https://mia.csp.kloudeks.com/v1` (repo'daki "deepseek/qwen3:8b" notları eski).
 

@@ -87,4 +87,4 @@ dört kusur buldu. Rapor rapordan çıkarılmadı: `docs/experiments/acceptance_
 ## Sonuç
 
 Ajan birim testleri 377 → 391 (guard, kapı ×2, grafik ×2, RAW yolu, RAW özeti, rozet bağımsızlığı, düzey sıçraması, sürücü harfi; A26/A07 indirme ve A27 model kesintisi). Canlı etki M16 ikinci koşusunda ölçülür
-(`docs/M16_KABUL_RAPORU.md`).
+(`docs/calisma-notlari/M16_KABUL_RAPORU.md`).

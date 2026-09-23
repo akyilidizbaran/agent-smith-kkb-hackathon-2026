@@ -102,7 +102,7 @@ Aşağıda “önceki kayıt”, [yerel matrisi](mia_capability_matrix.md); “y
 | Multimodal | Evet, ≤5 | Rehber | Sentetik görselde known text, 1/5/6 giriş | Eski matriste sonuç yok | Limits + doğruluk bağımsız test |
 | OCR | Evet, ≤3 | Rehber | Hücre adresli ground truth; 1/3/4 görüntü | E7 raporu ve PDF fixture var; hücre bazlı oracle/ham OCR cevabı burada sunulmuyor (Ek D) | Tek sayfa raporunu genel OCR doğruluğu sayma |
 
-Yeni [mia_evidence_audit.py](../scripts/mia_evidence_audit.py), sentetik verilerle sıkı JSON doğrulaması, system çatışması, tool round-trip, küçük concurrency, multimodal ve embedding kontrolünü hazırlar. Maksimum context, sunucu yük limiti, logprobs veya geniş OCR doğruluğunu ölçtüğü iddiasında değildir. Rehberin dokümante etmediği parametreler deneysel test girdileridir.
+Yeni [mia_evidence_audit.py](../../scripts/mia_evidence_audit.py), sentetik verilerle sıkı JSON doğrulaması, system çatışması, tool round-trip, küçük concurrency, multimodal ve embedding kontrolünü hazırlar. Maksimum context, sunucu yük limiti, logprobs veya geniş OCR doğruluğunu ölçtüğü iddiasında değildir. Rehberin dokümante etmediği parametreler deneysel test girdileridir.
 
 **Önceki test yorumlarına düzeltmeler:** Aynı basit sorunun beş kez aynı yanıtlanması seed'in etkisini izole etmez. `max_tokens` ile kesilen yanıt şema başarısızlığından ayrılmalıdır. Sistem talimatına uyum testi Türkçe büyük harf/tek kelime ölçümüyle finansal güvenilirliği ölçmez. HTTP 200, desteklenmeyen parametrenin sessizce yok sayılmadığını kanıtlamaz. `%93` gibi küçük örneklem eşikleri gerçek garanti değildir; 30/30 başarı bile tüm gelecek isteklerin doğru olacağını göstermez.
 
@@ -186,7 +186,7 @@ Anomali için başlangıç baseline'ı rolling median/MAD; mevsimsel yeterlilik 
 
 ## PART 7 — Retrieval Bake-Off Design
 
-Çalıştırılan [tanı seti](../tests/benchmark/retrieval_audit_fixture.json) 20 sentetik metadata kaydı ve 36 sorgu içerir. 32 cevaplanabilir sorgu IR metriğine girer; iki eksik veri, bir belirsiz ve bir adversarial sorgu ayrı tutulur. Bu ayrım, retrieval sıralamasını agent'ın doğru reddetme davranışıyla karıştırmaz. Fixture model çağrısından önce oluşturuldu; soru başına ranking ve evaluator/fixture hash'leri kaydedildi.
+Çalıştırılan [tanı seti](../../tests/benchmark/retrieval_audit_fixture.json) 20 sentetik metadata kaydı ve 36 sorgu içerir. 32 cevaplanabilir sorgu IR metriğine girer; iki eksik veri, bir belirsiz ve bir adversarial sorgu ayrı tutulur. Bu ayrım, retrieval sıralamasını agent'ın doğru reddetme davranışıyla karıştırmaz. Fixture model çağrısından önce oluşturuldu; soru başına ranking ve evaluator/fixture hash'leri kaydedildi.
 
 | Yöntem | Recall@1 | Recall@3 | Recall@5 | Precision@1 | Precision@3 | Precision@5 | MRR | nDCG@5 | Durum |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---|
@@ -198,7 +198,7 @@ Anomali için başlangıç baseline'ı rolling median/MAD; mevsimsel yeterlilik 
 
 Sonuçlar: [retrieval_results.json](research_audit/retrieval_results.json). BM25 `k1=1.5`, `b=0.75`; stemming/stopword yok, Türkçe I/İ/ı normalizasyonu var. Bu, DuckDB FTS implementasyonunun ölçümü değildir. Çok ilgili belgeli sorularda Recall@1 ile Precision@1'in farklı olması beklenir. Precision@5'in düşük olması, çoğu soruda tek relevant belge bulunmasının da sonucudur; tek başına kötü retrieval iddiası değildir.
 
-Ekibin ayrı [retrieval bake-off raporu](experiments/RETRIEVAL_bakeoff.md), 300 sentetik seri/50 sorguda BM25 R@3=0,96 ve hybrid R@3=0,98 bildiriyor. Bu oturumun bağımsız 20/36 fixture'sıyla aynı deney değildir; oranlar birleştirilemez. Bu önceki kayıt hybrid için olumlu fakat tek soruluk ek başarı sinyalidir; kaynak/schema bazlı kör set ve paired belirsizlik analizi hâlâ gereklidir. Ayrıntı Ek D'de.
+Ekibin ayrı [retrieval bake-off raporu](../experiments/RETRIEVAL_bakeoff.md), 300 sentetik seri/50 sorguda BM25 R@3=0,96 ve hybrid R@3=0,98 bildiriyor. Bu oturumun bağımsız 20/36 fixture'sıyla aynı deney değildir; oranlar birleştirilemez. Bu önceki kayıt hybrid için olumlu fakat tek soruluk ek başarı sinyalidir; kaynak/schema bazlı kör set ve paired belirsizlik analizi hâlâ gereklidir. Ayrıntı Ek D'de.
 
 Bu küçük tanı seti, açıklayıcı alias'larla kolaylaştırılmıştır ve aynı kişi tarafından yazılan soru/metadataya bağlıdır. Başarı oranlarını yarışma setine genellemek, dense'in kazanacağını söylemek veya eşik kalibre etmek için kullanılamaz. Toplam pipeline gecikmesi/RSS bellek ölçülmedi; dosyadaki birleşik ranking CPU zamanı ağ, embedding ve index build süresini içermez.
 
@@ -458,7 +458,7 @@ Trace ile provenance farklıdır: trace “hangi işlem ne zaman?”; provenance
 
 ## PART 21 — Evaluation
 
-Mevcut [queries_v0.jsonl](../tests/benchmark/queries_v0.jsonl) bir başlangıç senaryo listesidir; örnek resmi seri/popülasyon kodları ve birimler kaynak fixture'sıyla doğrulanmadan gold truth sayılmaz. Yeni 36 sorgulu set yalnız retrieval tanısı içindir. Agent'ın sayısal doğruluğu, SQL güvenliği veya unseen-schema onboarding başarısı bu setle ölçülmüş değildir.
+Mevcut [queries_v0.jsonl](../../tests/benchmark/queries_v0.jsonl) bir başlangıç senaryo listesidir; örnek resmi seri/popülasyon kodları ve birimler kaynak fixture'sıyla doğrulanmadan gold truth sayılmaz. Yeni 36 sorgulu set yalnız retrieval tanısı içindir. Agent'ın sayısal doğruluğu, SQL güvenliği veya unseen-schema onboarding başarısı bu setle ölçülmüş değildir.
 
 | Seviye | En az üç temsilî test | Oracle |
 |---|---|---|
@@ -644,7 +644,7 @@ Son kalite kapısı: doğru referans ve birim; no unsafe tool execution; bozulma
 
 ## PART 30 — Mermaid Diagram
 
-Bağımsız dosya: [architecture_evidence_v2.mmd](diagrams/architecture_evidence_v2.mmd).
+Bağımsız dosya: [architecture_evidence_v2.mmd](../diagrams/architecture_evidence_v2.mmd).
 
 ```mermaid
 flowchart TD
@@ -750,7 +750,7 @@ Bu liste mevcut dosyaları sessizce değiştirmez. Takımın önceden yaptığı
 
 ## Ek D — Ek takım deneyleri ve kanıt değerlendirmesi
 
-Son workspace kontrolünde [RETRIEVAL_bakeoff.md](experiments/RETRIEVAL_bakeoff.md), [E7_ocr_vs_text.md](experiments/E7_ocr_vs_text.md), [E8_catalog_threshold.md](experiments/E8_catalog_threshold.md) ve bunları üreten betikler bulundu. Bunlar bu oturumun MIA API çağrılarıyla üretilmedi. Rapor ve test tasarımı incelendi; canlı sonuçlar tekrar çalıştırılmadı. İlk envantere göre yeni görünen bu belgeler, “hiç veri yok” gibi genel bir iddiaya dayanak olamaz: Borsa İstanbul PDF örneği mevcut; gerçek BDDK/EVDS zaman serisi ve çalışan agent harness eksikliği ise sürüyor.
+Son workspace kontrolünde [RETRIEVAL_bakeoff.md](../experiments/RETRIEVAL_bakeoff.md), [E7_ocr_vs_text.md](../experiments/E7_ocr_vs_text.md), [E8_catalog_threshold.md](../experiments/E8_catalog_threshold.md) ve bunları üreten betikler bulundu. Bunlar bu oturumun MIA API çağrılarıyla üretilmedi. Rapor ve test tasarımı incelendi; canlı sonuçlar tekrar çalıştırılmadı. İlk envantere göre yeni görünen bu belgeler, “hiç veri yok” gibi genel bir iddiaya dayanak olamaz: Borsa İstanbul PDF örneği mevcut; gerçek BDDK/EVDS zaman serisi ve çalışan agent harness eksikliği ise sürüyor.
 
 | Deney | Yerel raporun bildirdiği sonuç | Ne destekler? | Ne kanıtlamaz? |
 |---|---|---|---|
@@ -775,7 +775,7 @@ Web kaynakları 10 Eylül 2026'da kontrol edildi. Sürekli güncellenen doküman
 
 [^L1]: KKB açılış toplantısı, sağlanan ekran görüntüleri: [slayt 1](toplanti/acilis-slayt-01.jpeg), [2](toplanti/acilis-slayt-02.jpeg), [3](toplanti/acilis-slayt-03.jpeg), [4](toplanti/acilis-slayt-04.jpeg), [5](toplanti/acilis-slayt-05.jpeg), [6](toplanti/acilis-slayt-06.jpeg), [7](toplanti/acilis-slayt-07.jpeg), [8](toplanti/acilis-slayt-08.jpeg), [9](toplanti/acilis-slayt-09.jpeg). Yerel kaynak; dışarıdan özgünlük doğrulaması yapılmadı. İlgili requirement slayt bazında belirtilmiştir.
 [^L2]: Kloudeks, `MIA_Hackathon_Rehberi.md`, sağlanan yerel dosya `C:/Users/bsroz/Downloads/MIA_Hackathon_Rehberi.md`, metin/embedding/OCR ve anahtar güvenliği bölümleri. Yayın tarihi dosyada belirtilmiyor. Organizatör Q&A aktarımı ayrıca kullanıcının sağladığı görev metninin §5 bölümündendir; orijinal yazışma görülmedi.
-[^L3]: Ekip tasarım belgesi, [LAKEHOUSE_CONTRACT_FILLED.md](LAKEHOUSE_CONTRACT_FILLED.md), 8 Eylül 2026; §§0–23. Bu belge organizatör şartnamesi değildir. Önceki çalışma kayıtları: [MIA matrisi](mia_capability_matrix.md), [V3](ARCHITECTURE_V3.md), [araştırma V2](ARCHITECTURE_RESEARCH.md), [AGENT](AGENT.md).
+[^L3]: Ekip tasarım belgesi, [LAKEHOUSE_CONTRACT_FILLED.md](LAKEHOUSE_CONTRACT_FILLED.md), 8 Eylül 2026; §§0–23. Bu belge organizatör şartnamesi değildir. Önceki çalışma kayıtları: [MIA matrisi](mia_capability_matrix.md), [V3](ARCHITECTURE_V3.md), [araştırma V2](ARCHITECTURE_RESEARCH.md), [AGENT](../AGENT.md).
 [^S1]: Coderspace/KKB, [KKB Hackathon: Agentic Data Analytics](https://coderspace.io/etkinlikler/kkb-hackathon-agentic-data-analytics/), 2026 etkinliği; format/takvim/teknoloji FAQ. Takvim ve Python beklentisi; jüri puan ağırlığı veya repo freeze teyidi olarak kullanılmadı.
 [^S2]: Qwen Team, [Qwen3.8-27B model card](https://huggingface.co/Qwen/Qwen3.8-27B), 2026. Upstream context ve multimodal kullanım; MIA deployment garantisi değil.
 [^S3]: Qwen Team, [Qwen3-Embedding-8B model card](https://huggingface.co/Qwen/Qwen3-Embedding-8B), 2025; Zhang ve diğerleri, [Qwen3 Embedding: Advancing Text Embedding and Reranking Through Foundation Models](https://arxiv.org/abs/2506.05176), 2025. Embedding boyutu/instruction/multilingual retrieval.

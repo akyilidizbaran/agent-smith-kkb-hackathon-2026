@@ -1,7 +1,7 @@
 # Motor karşılaştırma raporu — 11 Eylül 2026
 
 > Kimden: Büşra (V3 motoru, `feature/busra/agent-v3`) · Kime: Baran (ekip motoru, `feature/agent-engine`)
-> Protokol: `docs/BENCHMARK_PROTOCOL.md` · Ham sonuçlar: `docs/experiments/benchmark_all_2026-09-11_{seed,silver}_r3.md/.json` (adım düzeyi ayrıntı JSON'da)
+> Protokol: `docs/calisma-notlari/BENCHMARK_PROTOCOL.md` · Ham sonuçlar: `docs/experiments/benchmark_all_2026-09-11_{seed,silver}_r3.md/.json` (adım düzeyi ayrıntı JSON'da)
 > Etiketler: `[EMP]` ölçüldü · `[SRC]` repodan · `[INF]` çıkarım · `[REC]` öneri
 
 ## 1. Ne ölçüldü

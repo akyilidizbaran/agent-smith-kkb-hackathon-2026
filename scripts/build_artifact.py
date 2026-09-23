@@ -1,4 +1,4 @@
-"""Build the artifact HTML from docs/ARCHITECTURE_V3.md + docs/ARCHITECTURE_RESEARCH.md.
+"""Build the artifact HTML from docs/calisma-notlari/ARCHITECTURE_V3.md + docs/calisma-notlari/ARCHITECTURE_RESEARCH.md.
 
 Every ```mermaid fence is lifted out as a static <pre class="mermaid"> block (native rendering);
 the markdown chunks around them are rendered client-side with marked.

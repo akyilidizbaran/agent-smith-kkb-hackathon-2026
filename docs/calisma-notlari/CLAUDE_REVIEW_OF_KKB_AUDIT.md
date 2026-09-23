@@ -10,16 +10,16 @@ Rapor 21:57'de yazıldı. Hangi kanıt raporun görebileceği yerde vardı, hang
 
 | Kanıt | Nerede | Zaman | Rapor görebilir miydi? |
 |---|---|---|---|
-| `docs/mia_capability_matrix.md` (benim probe, MIA'ya gerçek çağrı, 25 satır) | repo working tree | 21:11 | Evet; rapor "önceki yerel ölçüm" olarak doğru sınıflandırmış |
+| `docs/calisma-notlari/mia_capability_matrix.md` (benim probe, MIA'ya gerçek çağrı, 25 satır) | repo working tree | 21:11 | Evet; rapor "önceki yerel ölçüm" olarak doğru sınıflandırmış |
 | `docs/experiments/{E7,E8,RETRIEVAL}` + `scripts/exp_*` | repo working tree | 21:29–21:43 | Evet; Ek D'de incelenmiş |
-| `docs/research_audit/mia_observations.json` (raporun kendi MIA denemesi) | repo | 21:29 | Raporun kendi çıktısı; **iki `ConnectError`**, başarılı çağrı yok |
+| `docs/calisma-notlari/research_audit/mia_observations.json` (raporun kendi MIA denemesi) | repo | 21:29 | Raporun kendi çıktısı; **iki `ConnectError`**, başarılı çağrı yok |
 | `feature/agent-engine` dalı: `agent-core/` (harness, 49 birim testi, golden runner, 21 ADR) | `origin/feature/agent-engine` (remote branch) | dal 10 Eylül öncesi | **Görebilirdi** (remote branch), ama yalnız working tree'ye baktı; "checkout'ta yok" ifadesi working tree için doğru, repo için eksik |
 | Golden set MIA taban çizgisi 7/7, 56 s, `golden_baseline.json` | **repo dışı** scratchpad kopyası | 21:50 | Hayır (repo dışı) |
 | Blok C konfigürasyon deneyleri (`experiments_blockC.md`, kısmi) | repo dışı scratchpad | 22:00–devam | Hayır; **rapor sonrası kanıt** |
 
 Bu ayrım aşağıda her bulguda korunmuştur.
 
-Çevrimdışı koşulan testler (bu inceleme sırasında): `python -m unittest discover -s tests -p test_research_audit.py` → **4/4 geçti**; `scripts/retrieval_evidence_audit.py` **scratchpad kopyasında** koşuldu (orijinal `docs/research_audit/retrieval_results.json`'u üzerine yazdığı için) → raporun BM25 özetiyle birebir aynı sonuç (R@1 0,625 · R@3 0,8125 · R@5 0,844 · MRR 0,746 · nDCG@5 0,756). Tokenizer davranışı ayrıca doğrulandı (A-3).
+Çevrimdışı koşulan testler (bu inceleme sırasında): `python -m unittest discover -s tests -p test_research_audit.py` → **4/4 geçti**; `scripts/retrieval_evidence_audit.py` **scratchpad kopyasında** koşuldu (orijinal `docs/calisma-notlari/research_audit/retrieval_results.json`'u üzerine yazdığı için) → raporun BM25 özetiyle birebir aynı sonuç (R@1 0,625 · R@3 0,8125 · R@5 0,844 · MRR 0,746 · nDCG@5 0,756). Tokenizer davranışı ayrıca doğrulandı (A-3).
 
 ---
 
