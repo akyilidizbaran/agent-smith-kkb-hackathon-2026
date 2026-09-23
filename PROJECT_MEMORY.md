@@ -1429,3 +1429,18 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
 - **Doğrulama:** agent-core 1161 test geçti; lakehouse-core hedefli alt küme (katalog, kalite, ayrıştırıcı, bağlayıcı) 122 geçti.
   Tam lakehouse suite kullanıcı kararıyla koşulmadı.
 - **Bağımlılıklar:** pdfplumber, playwright ve xlrd venv'e kuruldu (`uv sync --frozen --extra dev`).
+
+### 2.150 Kanıt paneli gecikmesi ve tarayıcıda bot engeli (23 Eylül, ADR-0111)
+- **Kanıt paneli:** Canlı arayüzde üçüncü turda cevap hazırken "Kanıt zinciri kuruluyor" adımı ~130 sn sürdü (model 4 sn,
+  araçlar 1 sn). Neden: gözlem başına bronze klasörünü baştan tarayan `rglob` (16.991 dosya, 0,065 sn). Klasör bir kez taranıyor;
+  1300 arama 84 sn → 0,12 sn.
+- **Adresle istenen rapor:**
+  - Kaynak başsız tarayıcıya "Request Rejected" döndürüyor; bu bir bot koruması, aşılmaz (mentör 12 Eyl, ADR-0028).
+  - Tarayıcı engeli artık ~1 sn'de tanıyor; `web_url` erişim kararı ve seçenekler dönüyor, engelli host 10 dk yeniden
+    açılmıyor.
+  - Kaynağın dışa aktarım yolu yapılandırmadan (`manual_export`) geliyor; cevap araç kartından deterministik kuruluyor.
+  - Tur 105 sn → 2,9 sn.
+- **Araştırma:** Aynı rapor kurumun ikinci sitesinde de aynı engelin arkasında; bulunan üçüncü taraf bülten yalnız tek haftayı
+  kapsıyor. Demoda dosya yükleme yolu kullanılır.
+- **Doğrulama:** agent-core 1167 test geçti. Dosyalı beş tur gerçek koşuda: ilk dört tur tam, yorum turu seviyede endeks, kırılma
+  analizi ve web araştırmasıyla bitti.
