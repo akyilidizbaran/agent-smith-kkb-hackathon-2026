@@ -595,24 +595,7 @@ class LakehouseQueryTool(Tool):
             return False
         group_part = text.rsplit("group by", 1)[1]
         select_part = text[text.find("select"):text.find(" from ")] if " from " in text else text
-        hit = self._PERIOD_AGG.search(group_part) or self._PERIOD_AGG.search(select_part)
-        if not hit:
-            return False
-        # Ay kutusu (strftime %Y-%m / date_trunc month / extract month) ve okunan her seri zaten aylıksa bu frekans
-        # dönüşümü değil, aynı aydaki serilerin toplanmasıdır (vade dilimleri: Vadesiz + 1 Ay + 1-3 Ay). Ölçüldü (23 Eyl):
-        # altı aylık vade serisinin ay bazında toplamı GOLD_REQUIRED ile reddedildi, Gold ise 6 seriyi yan yana koyar,
-        # toplamaz. Çeyrek/yıl kutusu ya da daha ince seri (günlük/haftalık) yine Gold'a gider.
-        expr = hit.group(0)
-        month_bucket = ("%y-%m" in expr and "%d" not in expr) or "'month'" in expr or re.search(r"month", expr) is not None
-        if month_bucket:
-            try:
-                specs = list(self.lakehouse.list_datasets())
-            except Exception:  # noqa: BLE001
-                return True
-            used = [sp for sp in specs if re.search(rf"(?<![\w.]){re.escape(sp.dataset_id)}(?![\w])", sql, re.I)]
-            if used and all(str(getattr(getattr(sp, "frequency", None), "value", getattr(sp, "frequency", ""))).lower() == "monthly" for sp in used):
-                return False
-        return True
+        return bool(self._PERIOD_AGG.search(group_part) or self._PERIOD_AGG.search(select_part))
 
     _FREKANS_SOZ = (
         ("günlük", Frequency.DAILY), ("gunluk", Frequency.DAILY),
