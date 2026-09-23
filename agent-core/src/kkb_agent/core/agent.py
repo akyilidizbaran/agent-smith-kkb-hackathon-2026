@@ -66,7 +66,7 @@ _CHART_ASK = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harit
 _ANALYTICS_ASK = re.compile(r"anomali|aykır|sapan|sapma|olağan ?dışı|sıra ?dışı|kırılma|rejim değişi|öncül|önden mi|korelasyon|granger|mevsimsel|seasonal|\bmad\b|medyan mutlak", re.I)
 # Terfi onayı (tools/promote.py `_CONFIRM` ile aynı sözlük) ve dosya/adres kayıt isteği (mesajda ek + yazma fiili).
 _PROMOTE_ASK = re.compile(r"\b(onayl[ıi]yorum|onayla|onaylayalım|kataloğa al|kataloga al|terfi ettir|yayınla|yayinla)\b", re.I)
-_INGEST_ASK = re.compile(r"(?=.*(?:\n\s*Dosya:\s*\S|https?://))(?=.*\b(?:kaydet|kaydedelim|taslak (?:seri )?olarak|havuza|içe aktar|ingest|lakehouse'?[ae]\s+(?:ekle|aktar|yaz)|havuzuna\s+(?:ekle|aktar)|katalo[ğg]a\s+ekle|seri\s+olarak\s+ekle)\b)", re.I | re.S)   # 23 Eyl (TEFAS): 'lakehouse'a ekle' de kayıt isteğidir
+_INGEST_ASK = re.compile(r"(?=.*(?:\n\s*Dosya:\s*\S|https?://))(?=.*\b(?:kaydet|kaydedelim|taslak (?:seri )?olarak|havuza|içe aktar|ingest|lakehouse'?[ae]\s+(?:ekle|aktar|yaz)|havuzuna\s+(?:ekle|aktar)|katalo[ğg]a\s+ekle|seri\s+olarak\s+ekle)\b)", re.I | re.S)   # 23 Eyl (fon raporu): 'lakehouse'a ekle' de kayıt isteğidir
 #: Aktif tablo ya da üretilmiş veri gerektirmeyen yetenekler (yazma yolu): geri gönderme koşulu tabloya bakmaz.
 _TABLE_FREE_CAPABILITIES = frozenset({"terfi", "kayıt"})
 # A table transformation request is distinct from a new retrieval request.
@@ -1141,7 +1141,7 @@ class AnalyticsAgent:
         discovery_tools = {"lakehouse_search", "lakehouse_describe", "lakehouse_distinct_values"}
         write_tools = {"ingest_from_url", "promote_draft", "ingest_source"}
         # Kayıt/terfi kartları olguların BAŞINA: anlatım "yalnız aşağıdaki olguları kullan" der, not sınırı 6'dır; kartlar
-        # sona düşünce kesiliyordu ve model iki seri EKLENDİ demişken "eklenmedi" anlattı (ölçüldü 23 Eyl, TEFAS).
+        # sona düşünce kesiliyordu ve model iki seri EKLENDİ demişken "eklenmedi" anlattı (ölçüldü 23 Eyl, dış rapor).
         record_notes = [
             "KAYIT (havuzun taslak katmanına EKLENDİ; 'eklenmedi' deme — kataloğa/Gold'a geçmesi için kullanıcı onayı "
             "gerekir, bunu 'onaylıyorum, kataloğa al' diye isteyebilir): " + step.result_summary.split("\n")[0] + (" | " + " | ".join(
@@ -1387,7 +1387,7 @@ class AnalyticsAgent:
     @staticmethod
     def _is_write_turn(steps: list[AgentStep]) -> bool:
         """Kayıt/terfi turu: teslim edilen şey kayıt kartıdır, tablo değil. Deterministik tablo teslimi bu turda
-        kapanmaz; model kartı anlatır ve gerekirse ikinci ölçüm sütununu da kaydeder (ölçüldü 23 Eyl, TEFAS CSV:
+        kapanmaz; model kartı anlatır ve gerekirse ikinci ölçüm sütununu da kaydeder (ölçüldü 23 Eyl, rapor CSV:
         ilk seri kaydedilir kaydedilmez hızlı yol turu bitirdi, Net Takas Tutarı hiç kaydedilmedi)."""
         return any(getattr(s, "tool_name", None) in ("ingest_from_url", "promote_draft", "ingest_source") for s in steps)
 
@@ -2379,7 +2379,7 @@ class AnalyticsAgent:
                     messages.append(ChatMessage(role="user", content=GENERAL_KNOWLEDGE_NOTE))
                     continue
 
-                # SQL JOIN'li lakehouse_query ya da gold_join da birleştirmedir (ölçüldü 23 Eyl, TEFAS: iki taslak seri SQL
+                # SQL JOIN'li lakehouse_query ya da gold_join da birleştirmedir (ölçüldü 23 Eyl, dış rapor: iki taslak seri SQL
                 # ile birleştirildi, "workspace_join çağrılmadı" diye geri gönderilince tablo düştü).
                 joined = any(
                     s.ok and (s.tool_name in ("workspace_join", "gold_join") or (
@@ -2627,7 +2627,7 @@ class AnalyticsAgent:
                 elif (call.name == "clarify" and _INGEST_ASK.search(question)
                       and self.registry.get("ingest_from_url") is not None):
                     # Kayıt isteğinde kayıt yapılmadan netleştirme sorulmaz: dosyanın frekansı gözlemlenir ve olduğu gibi
-                    # beyan edilir; istenen frekans (aylık) kayıt sonrası dönüşümdür. Ölçüldü (23 Eyl, TEFAS haftalık
+                    # beyan edilir; istenen frekans (aylık) kayıt sonrası dönüşümdür. Ölçüldü (23 Eyl, dış rapor haftalık
                     # CSV): model "haftalıkları aya nasıl indirgeyeyim?" diye sorup turu bitirdi, hiçbir seri kaydedilmedi.
                     result = ToolResult.fail(
                         "CLARIFY_NOT_ALLOWED",
@@ -3576,7 +3576,7 @@ class AnalyticsAgent:
 
     def _record_truth(self, text: str, artifacts: list) -> str:
         """Kayıt kartı doğruluk kaynağıdır: bu turda kayıt/terfi BAŞARILIYSA ve anlatı bunun tersini söylüyorsa
-        deterministik kayıt özeti öne konur (ölçüldü 23 Eyl, TEFAS: iki seri EKLENDİ kartıyla yazıldı, model 'kayıt
+        deterministik kayıt özeti öne konur (ölçüldü 23 Eyl, dış rapor: iki seri EKLENDİ kartıyla yazıldı, model 'kayıt
         kapısı geçilemedi' diye anlattı). Anlatı silinmez; kartın söylediği ilk satırda görünür."""
         records = [a for a in artifacts if a.get("kind") == "record" and a.get("series_id")]
         if not records or not self._RECORD_DENIAL.search(text or ""):
