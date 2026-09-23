@@ -108,7 +108,7 @@ Kök neden veridedir:
     tutarları endeksler.
 - **Kurallar:**
   - SQL ile iki ya da daha fazla vade kovasını elle toplayan sorgu reddedilir ve panele yönlendirilir.
-  - Soru "stok olmasın / o aydaki / aylık hareket" diyorsa panel `value=level` çağrısını reddeder.
+  - Soru stok değil aylık hareket (akım) istiyorsa panel `value=level` çağrısını reddeder.
   - Panel istenen tabloyu ürettiyse ve soru türev, grafik ya da yorum istemiyorsa tur deterministik teslim edilir.
 - **Madde 7 (aktif tablo korunur):**
   - "Mevcut veri seti / reel / fiyatlarıyla" takibinde önceki turdan kalan tabloyu baştan kuran çağrılar (`gold_*`,
@@ -131,14 +131,14 @@ Kök neden veridedir:
   vadeli TL mevduat faizi". Teslim özeti yalnız kullanıcıya görünen sütunları, arayüzle aynı etiketlerle listeler.
 
 ## Gerçek koşu düzeltmeleri (23 Eylül akşam)
-Uygulama, demo senaryosunun birebir soru metinleriyle, aynı sohbette ve her tekrarda temiz ajanla gerçek uçtan uca koşuldu
-(mock yok). Soru metinleri ve beklenen çıktılar repoya girmez. Koşularda görülen hatalar ve düzeltmeleri:
+Uygulama gerçek modelle, çok turlu ve uçtan uca (mock yok), her tekrarda temiz ajanla koşuldu. Görülen hatalar ve
+düzeltmeleri:
 - **Grup toplamı kendiliğinden:** Grubu istenen toplam `series` alanında yoksa panel onu tabloya ekler (`tp_toplam`). Model
   toplamı unutunca tablo yalnız grupları taşıyordu.
 - **Önceki tablo taşınır (madde 7'nin tamamlayıcısı):** Takipte yeni bir seri ekleniyorsa (reel isteği değilse) tabloyu
   yeniden kuran çağrı çalışır; önceki tur tablosunun sütunları ay anahtarıyla yeni tabloya taşınır. Kanıt sütunları
-  (`::quality_flag`, `::observations` …) taşınmaz. Faiz/kur takibi mevduat tablosunu düşürüyordu; "mevcut mevduat veri seti"
-  ifadesi koruma deseninde yoktu, desen genişletildi.
+  (`::quality_flag`, `::observations` …) taşınmaz. Yeni seri ekleyen takip önceki tabloyu düşürüyordu; "mevcut <ad> veri
+  seti" biçimi koruma deseninde yoktu, desen genişletildi.
 - **Reel değer yedeği:** Soru reel değer istiyor ve tur `workspace_real_value` (ya da panel) çağrılmadan kapanacaksa harness
   aracı bir kez kendisi uygular: doğrulanmış fiyat endeksi (TÜFE Genel önce), aktif tablodaki tutar sütunları, sorudaki baz ay
   ya da tablonun son ayı. Yeniden kurma reddi ya da kaynak uyuşmazlığından sonra sıradaki iterasyonda çalışır ve o
@@ -151,13 +151,8 @@ Uygulama, demo senaryosunun birebir soru metinleriyle, aynı sohbette ve her tek
   sütunlarını almaz.
 - **Uygunluk metni kısa:** Uygunluk gerekçelerindeki seri listeleri en fazla 6 okunur adla sınırlandı (`::` iç adları çıkar).
 
-**Sonuç (3 tekrar, gerçek model):**
-- İlk tur: aylık hareket, vade grupları ve kontrol ayları 12/12, 3/3 tekrar.
-- İkinci tur: TÜFE 3/3, dört tutar sütununun reel karşılığı, baz ayda reel = nominal; 3/3 tekrar.
-- Üçüncü tur: 3 aya kadar vadeli TL mevduat faizi ve USD/TL satış kuru 3/3, 3/3 tekrar.
-
 **Açık (bu ADR'de çözülmedi):**
 - Soru hem "enflasyondan arındır" hem çok kaynaklı birleştirme istediğinde tablo koruma kuralı paneli (`join_session`)
   engelliyor. Model bu durumda endeksi `workspace_compute_column` ile aylık hareket sütunlarında kuruyor; taban ayı negatif
   olan akım serisinin "endeksi" anlamsız çıkıyor. Endeks seviye (stok) serisi üzerinden kurulmalı.
-- Yüklenen dosyayla zenginleştirme ve çok kaynaklı yorum turları bu PR'ın kapsamı dışında, ayrıca ele alınıyor.
+- Yüklenen dosyayla zenginleştirme ve çok kaynaklı yorum bu ADR'nin kapsamı dışında, ayrıca ele alınıyor.

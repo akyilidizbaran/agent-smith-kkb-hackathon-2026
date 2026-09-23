@@ -67,7 +67,7 @@ def test_d_unknown_semantics_fails_closed():
 
 def test_e_cross_month_interval_goes_to_its_start_month_and_is_reported():
     """ADR-0108 ek (23 Eyl): ay sınırını aşan hafta başladığı aya yazılır; bölüştürülmez, uydurulmaz, uyarıda söylenir.
-    Kaynağın kendi aylık raporu da haftayı başladığı aya sayar (TEFAS Ocak 2021 = Ocak'ta başlayan dört hafta)."""
+    Kaynağın kendi aylık raporu da haftayı başladığı aya sayar (kaynağın aylık raporuyla karşılaştırıldı)."""
     frame = pd.DataFrame({"period": ["2021/05 (29.01.21-02.02.21)", "2021/06 (05.02.21-09.02.21)", "Toplam"],
                           "volume": [10, 20, 30]})
     result = normalize_frequency(frame, requested="monthly", requested_columns=["volume"])

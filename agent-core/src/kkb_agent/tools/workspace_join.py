@@ -319,7 +319,7 @@ class WorkspaceJoinTool(Tool):
             if k is not None:
                 rmap.setdefault(k, j)
 
-        # Varsayılan seçim kanıt sütunlarını taşımaz (23 Eyl senaryo koşusu: Gold tablosunun gözlem tarihi listeleri ve
+        # Varsayılan seçim kanıt sütunlarını taşımaz (canlı koşu, 23 Eyl: Gold tablosunun gözlem tarihi listeleri ve
         # artifact özetleri kullanıcı tablosuna "_k2" sütunları olarak girdi). Açıkça istenirse columns ile alınır.
         evidence_suffixes = ("::series_id", "::quality_flag", "::measure_type", "::unit", "::aggregation",
                              "::observations", "::missing_observations", "::warned_observations",

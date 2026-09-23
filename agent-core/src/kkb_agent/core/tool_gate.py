@@ -47,7 +47,7 @@ PREMISE = frozenset({"check_premise"})
 _CHART = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
 _ANALYTICS = re.compile(r"anomali|aykır|sapan|sapma|olağan ?dışı|sıra ?dışı|kırılma|rejim değişi|öncül|önden mi|korelasyon|granger|ilişki|mevsimsel|seasonal|\bmad\b|medyan mutlak", re.I)
 _WEB = re.compile(r"https?://|www\.|\.pdf\b|\.png\b|\.jpe?g\b|\.csv\b|\.xlsx?\b|sayfa|siteden|linkten|adres|internet|web|\barama\b|\bara\b|bul\b|"
-                  # Kırılma dönemlerini "yorumla" isteği dönemin gelişmelerine dayanır; web araştırması açılır (23 Eyl demo).
+                  # Kırılma dönemlerini "yorumla" isteği dönemin gelişmelerine dayanır; web araştırması açılır (canlı koşu, 23 Eyl).
                   r"kırılma[\s\S]{0,120}yorumla|kirilma[\s\S]{0,120}yorumla", re.I)
 _ARCHITECT = re.compile(r"taslak|onayl|kataloğa al|kataloga al|ekle\b|yükle|yukle|kaydet|ingest|terfi|yayınla", re.I)
 _WORKSPACE_HINT = re.compile(

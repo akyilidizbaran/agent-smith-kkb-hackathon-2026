@@ -150,7 +150,7 @@ class WorkspaceRealValueTool(Tool):
         if confidence in (None, "verified") or self._consent():
             return None
         verified = [sid for sid, _ in self.loaded_index_series() if self._confidence(sid) == "verified"]
-        # Doğrulanmış bir endeks varsa ret turu bitirmez: model aynı çağrıyı o endeksle yineler (23 Eyl senaryo koşusu:
+        # Doğrulanmış bir endeks varsa ret turu bitirmez: model aynı çağrıyı o endeksle yineler (canlı koşu, 23 Eyl:
         # model eski bazlı TP.FG.J0'ı seçti, ret turu kapattı, doğrulanmış TÜFE hiç denenmedi).
         return ToolError(
             terminal=False if verified else None,

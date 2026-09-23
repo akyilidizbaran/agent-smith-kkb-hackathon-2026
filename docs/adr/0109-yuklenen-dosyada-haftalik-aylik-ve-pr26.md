@@ -33,7 +33,7 @@ Bir fon işlem hacmi dışa aktarımıyla yapılan denemede dosya aylık istendi
 - Haftalık dışa aktarımlar aylık istendiğinde aylığa iner. Ay sınırını aşan haftalar yüzünden ay toplamı, günlere bölünmüş
   bir hesaptan farklıdır; kural cevapta açıkça yazar.
 - PR #26'nın "ay sınırını aşan dönem reddedilir" testi bu kurala göre güncellendi.
-- Aynı raporun farklı filtreli dışa aktarımları farklı sayılar verir. Beklenen çıktıyla karşılaştırmada dışa aktarım
+- Aynı raporun farklı filtreli dışa aktarımları farklı sayılar verir. Kaynakla karşılaştırmada dışa aktarım
   filtresi (ör. "Genel (TL)") aynı olmalıdır.
 
 ## Ek (23 Eylül akşam)

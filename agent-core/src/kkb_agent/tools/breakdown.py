@@ -42,7 +42,7 @@ gibi kullan, cevapta vade kırılımından söz etme. \
 index_base='2021-01' ver: araç dosyayı ay üzerinden ekler, reel hâle getirir ve tutarları endeksler. Paneli İKİNCİ kez \
 çağırma (önceki tabloyu değiştirir); vade gruplarını da aynı çağrının groups alanına koy. Sonra tabloya dayanarak yorumla."""
 
-# "Stok olmasın" niyeti (23 Eyl demo): model aynı soruda bir kez hareket, bir kez stok seçti. Değer türü soruda açıkça
+# Akım niyeti (canlı koşu, 23 Eyl): model aynı soruda bir kez hareket, bir kez stok seçti. Değer türü soruda açıkça
 # söylenmişse modele bırakılmaz.
 FLOW_INTENT = re.compile(
     r"stok\s+(?:veri\s+)?olma|stok\s+değil|stok\s+degil|o\s+aydaki|aylık\s+hareket|aylik\s+hareket|"
@@ -264,7 +264,7 @@ class LakehouseBreakdownPanelTool(Tool):
         fetch_from = first - 1 if params.value == "monthly_change" else first
 
         plan: list[tuple[str, list[str]]] = [(s.column_name, [s.series_id]) for s in params.series]
-        # Grubu istenen toplam, seriler arasında yoksa tabloya kendiliğinden girer (23 Eyl senaryo koşusu: model toplamı
+        # Grubu istenen toplam, seriler arasında yoksa tabloya kendiliğinden girer (canlı koşu, 23 Eyl: model toplamı
         # unuttu, tablo yalnız grupları taşıdı). Ad, grup sütunlarının ortak ön ekinden türer: tp_3aya_kadar → tp_toplam.
         listed = {s.series_id for s in params.series}
         for total_id in dict.fromkeys(g.total_series_id for g in params.groups):
@@ -313,7 +313,7 @@ class LakehouseBreakdownPanelTool(Tool):
         raw = result.data if result.data is not None else pd.DataFrame(columns=["series_id", "observation_date", "value"])
         raw = raw.assign(month=pd.to_datetime(raw["observation_date"], errors="coerce").dt.to_period("M"))
         # Haftalık/günlük seri aylığa katalog kuralıyla iner (faiz/kur: ortalama, stok: son gözlem, akım: toplam).
-        # Senaryo 5 (23 Eyl): mevduat, faiz, kur ve TÜFE tek panelde, tek aylık eksende.
+        # Farklı frekanstaki tutar, faiz, kur ve endeks serileri tek panelde, tek aylık eksende.
         rules = self._aggregation_rules(wanted)
         aggregated_notes: list[str] = []
         frames = []

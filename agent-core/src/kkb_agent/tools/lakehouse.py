@@ -574,7 +574,7 @@ class LakehouseQueryTool(Tool):
             return ToolError(
                 error_code="SOURCE_MISMATCH", layer="policy", retryable=True,
                 message="Sorgudaki kaynak kullanıcının istediği kaynakla uyuşmuyor; başka kaynağın verisi sessizce kullanılamaz.",
-                # 23 Eyl demo: takipte (aktif tablo varken) model mevcut mevduat sütunlarını başka seriden yeniden çekmeye
+                # Canlı koşu (23 Eyl): takipte (aktif tablo varken) model mevcut mevduat sütunlarını başka seriden yeniden çekmeye
                 # çalıştı, bu ret tekrar tekrar döndü ve tur sabit metinle kapandı. Aktif tablo varken doğru yol, yalnız
                 # yeni istenen seriyi getirip tabloya eklemektir.
                 hint=("Aktif tabloda veri zaten var: onu yeniden çekme. Yalnız kullanıcının yeni istediği seriyi "
@@ -622,7 +622,7 @@ class LakehouseQueryTool(Tool):
         """SQL bir seri kimliğini tablo adı olarak kullanıyor mu? (yazılan hedef, katalog kimliği)
 
         Seriler tek uzun tabloda satır kümesidir; kimlik FROM'a yazılınca DuckDB `TP.KKHARTUT.KT1`'i katalog.şema.tablo
-        sanıp "Catalog "TP" does not exist" der. Ölçüldü (23 Eyl demo, ADIM 4): hata genel SQL_FAILED + "kolon adlarını
+        sanıp "Catalog "TP" does not exist" der. Ölçüldü (canlı koşu, 23 Eyl): hata genel SQL_FAILED + "kolon adlarını
         karşılaştır" ipucuyla döndü, model yolu bulamadı. Gold tabloları gerçek tablodur, işaretlenmez."""
         for match in self._FROM_TARGET.finditer(sql or ""):
             written = next(g for g in match.groups() if g)
@@ -658,7 +658,7 @@ class LakehouseQueryTool(Tool):
         buckets = self._maturity_buckets_in(params.sql)
         if len(buckets) >= 2 and self._registry is not None and getattr(self._registry, "get", None) \
                 and self._registry.get("lakehouse_breakdown_panel") is not None:
-            # 23 Eyl demo CSV'si: model kovaları SQL ile toplarken "3 aya kadar"dan Vadesiz'i çıkardı. Kova seçimi
+            # Canlı koşu (23 Eyl): model kovaları SQL ile toplarken "3 aya kadar"dan Vadesiz'i çıkardı. Kova seçimi
             # modelin yorumuna bırakılmaz (ADR-0108); deterministik araç kovaları ilişki grafından seçer.
             return ToolResult.fail(
                 "INVALID_ARGS",

@@ -176,7 +176,7 @@ def test_table_from_previous_turn_is_protected_but_tables_built_this_turn_are_no
     agent.workspace.set_table(pd.DataFrame({"donem": ["2021-01"], "tp": [1.0]}), description="önceki tur")
     agent._turn_start_generation = agent.workspace.generation
     call = SimpleNamespace(name="gold_join", arguments={})
-    question = "TÜFE'yi getir, mevcut veri setiyle hizala ve reel hale getir."
+    question = "Kredi tablosuna TÜFE ekle ve bakiyeleri reel göster."
     assert agent._table_rebuild_blocked(call, question) is not None
     assert agent._table_rebuild_blocked(SimpleNamespace(name="lakehouse_query", arguments={"as_active_table": False}),
                                         question) is None
@@ -201,7 +201,7 @@ def test_multi_source_join_question_gets_wider_limits_and_session_tables_note() 
 
 
 def test_group_total_is_added_when_the_model_forgets_it(lake) -> None:
-    """23 Eyl senaryo koşusu: model grupları istedi, toplamı series'e koymadı; tablo toplamsız kaldı."""
+    """Canlı koşu (23 Eyl): model grupları istedi, toplamı series'e koymadı; tablo toplamsız kaldı."""
     r = _panel(lake).validate_and_run({
         "series": [{"series_id": OTHER, "column_name": "yp"}],
         "groups": [{"total_series_id": TOTAL, "column_name": "tp_3aya_kadar", "max_months": 3},
@@ -241,7 +241,7 @@ def test_join_does_not_carry_gold_evidence_columns_by_default() -> None:
 
 
 def test_rebuilding_follow_up_carries_the_previous_turn_table_by_month() -> None:
-    """23 Eyl senaryo koşusu: "mevcut mevduat veri setiyle hizala" takibinde faiz/kur tablosu mevduat tablosunu düşürdü.
+    """Canlı koşu (23 Eyl): yeni seri ekleyen takipte yeni tablo önceki turun tablosunu düşürdü.
     Yeniden kuran araç artık çalışır ve önceki tur tablosu ay üzerinden yeni tabloya taşınır."""
     from kkb_agent.core.agent import AnalyticsAgent
     from kkb_agent.core.registry import ToolRegistry

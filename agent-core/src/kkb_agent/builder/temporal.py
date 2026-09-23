@@ -415,7 +415,7 @@ def _business_days(start: date, end: date) -> list[date]:
 def _month_allocation(period: PeriodValue) -> dict[str, int]:
     """Dönem BAŞLADIĞI aya yazılır: {'2021-03': 5} (29.03–02.04 haftası Mart'tır).
 
-    Kaynağın kendi aylık raporu da haftayı başladığı aya sayar (TEFAS, 23 Eyl beklenen çıktı: Ocak 2021 = Ocak'ta başlayan
+    Kaynağın kendi aylık raporu da haftayı başladığı aya sayar (fon işlem hacmi raporu, 23 Eyl kaynakla karşılaştırıldı: bir ay = o ayda başlayan
     dört hafta). Değer günlere bölünmez; bölüştürme kaynağın yayımlamadığı bir günlük dağılım varsayardı."""
     key = f"{period.start.year:04d}-{period.start.month:02d}"
     return {key: len(_business_days(period.start, period.end))}

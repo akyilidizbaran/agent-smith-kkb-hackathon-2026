@@ -3,7 +3,7 @@
 **Durum:** Kabul edildi · **Tarih:** 2026-09-23 · **İlgili:** ADR-0105, ADR-0106
 
 ## Bağlam
-Demo incelemesinde (ADIM 4) ajan EVDS serisi `TP.KKHARTUT.KT1`'i sorgularken DuckDB `Binder Error: Catalog "TP" does not exist`
+Canlı incelemede ajan EVDS serisi `TP.KKHARTUT.KT1`'i sorgularken DuckDB `Binder Error: Catalog "TP" does not exist`
 verdi. ADR-0105 bu hatanın sonucunu yumuşatıyordu (cevap silinmiyor, dürüst not ekleniyor) ama nedenini kapatmıyordu.
 
 Seri-merkezli lakehouse'ta (`adapters/silver_lakehouse.py`) her seri bir `DatasetSpec`'tir; fiziksel veri tek uzun tablodadır:
