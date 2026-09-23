@@ -1,6 +1,7 @@
 # Agentic Analytics Engine — Mimari
 
-> **Durum:** 14 Eylül 2026 · 386 ajan birim testi + 1.086 lakehouse testi (CI'da) · 63 ADR · 681 seri 2016+ canlı yüklü ·
+> **Durum:** 22 Eylül 2026 · 856 ajan birim testi + ~1.150 lakehouse testi (CI'da) · 80+ ADR · 6.306 seri (2021-01 → 2026-06) canlı yüklü ·
+> tamamlanma sözleşmesi ve arama defteri (`core/completion.py`, `core/search_ledger.py`, 22 Eyl) ·
 > birleşik kabul: [M16_KABUL_RAPORU.md](M16_KABUL_RAPORU.md). §1 çizimindeki "planlı" etiketleri 10 Eylül tarihlidir;
 > güncel araç ve katmanlar §15 sonrasındaki "YAZILDI" bölümlerinde ve §14–15'tedir.
 > Bu belge kodun *ne yaptığını* değil, *neden öyle yapıldığını* anlatır; her karar

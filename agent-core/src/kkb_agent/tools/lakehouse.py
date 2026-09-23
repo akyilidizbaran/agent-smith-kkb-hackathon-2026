@@ -77,6 +77,10 @@ class SearchParams(BaseModel):
     query: str = Field(
         description="Aranan konuyu anlatan kısa Türkçe ifade, ör. 'aylık {example_entity}'"
     )
+    limit: int = Field(
+        default=5, ge=1, le=40,
+        description="Kaç aday listelensin (varsayılan 5). Kullanıcı eşleşen serileri LİSTELEMEK istiyorsa 40 ver.",
+    )
 
 
 class LakehouseSearchTool(Tool):
@@ -102,16 +106,22 @@ class LakehouseSearchTool(Tool):
         self.lakehouse = lakehouse
         self._empty_streak = 0
         self._pending_streak = 0
+        # Arama defteri (core/search_ledger): tur içinde tekil adayları, yeni aday üretimini ve istenen yüzleri izler.
+        # Aramayı çağrı sayısı değil verim durdurur; ajan `ledger.begin_turn(soru)` ile turu açar.
+        from ..core.search_ledger import SearchLedger
+        self.ledger = SearchLedger()
 
     def begin_turn(self, turn_id: int) -> None:
         """Search limits apply inside one turn, never to a later user intent."""
         del turn_id
         self._empty_streak = 0
         self._pending_streak = 0
+        self.ledger.begin_turn("")
 
     def run(self, params: SearchParams) -> ToolResult:
-        specs = self.lakehouse.search_datasets(params.query)
+        specs = self.lakehouse.search_datasets(params.query, limit=int(params.limit))
         if not specs:
+            self.ledger.record(params.query, [])
             self._empty_streak += 1
             search_un = getattr(self.lakehouse, "search_uningested", None)
             pending = list(search_un(params.query, 5)) if callable(search_un) else []
@@ -134,6 +144,7 @@ class LakehouseSearchTool(Tool):
                 )
             return ToolResult(content="\n".join(lines), ok=True)
         self._empty_streak = 0
+        verdict = self.ledger.record(params.query, specs)
         terms = getattr(self.lakehouse, "last_search_terms", {}) or {}
         from ..labels import spec_origin
         lines = ["Bulunan tablolar:"]
@@ -188,7 +199,17 @@ class LakehouseSearchTool(Tool):
         else:
             self._pending_streak = 0
         lines.append("\nSorgu yazmadan önce lakehouse_describe ile kolonları incele.")
-        return ToolResult(content="\n".join(lines))
+        lines.append(verdict.line())
+        rows = self.ledger.candidates_frame().to_dict("records")
+        if verdict.saturated:
+            # Doygunluk: son aramalar yeni aday üretmedi. Bütçe dolduğu için değil, arama artık bir şey katmadığı için
+            # durulur; tam aday listesi burada (model kısa anlatısıyla listenin yerine geçemez, ajan tabloya da koyar).
+            lines.append(f"SEARCH_SATURATED: arama doydu ({verdict.searches} arama, {verdict.total_unique} tekil aday). "
+                         "YENİDEN ARAMA YAPMA. Ya adaylardan uygun olanı seçip sorgula ya da istenen yüz "
+                         "(frekans/il/kaynak) adaylarda yoksa bunu kullanıcıya açıkça söyle; 'veri yok' deme, adayları say.")
+            lines.append("Tüm adaylar: " + "; ".join(f"{r['series_id']} ({r['frequency']}, {r['source']})" for r in rows))
+        return ToolResult(content="\n".join(lines),
+                          artifacts={"candidates": rows, "search_ledger": self.ledger.summary()})
 
     def _access_sql(self, spec) -> str | None:
         """Kimliğin tablo adı olmadığı adaptörler için çalıştırılabilir erişim kalıbı.
@@ -570,7 +591,11 @@ class LakehouseQueryTool(Tool):
                 hint="İstenen il için doğru seriyi lakehouse_search ile bulup sorgula.",
                 candidates=[spec.dataset_id for spec, province in zip(used, used_provinces) if province in facets.provinces],
             )
-        if facets.sources and any(not source_matches(str(getattr(spec, "source", "")), facets.sources) for spec in used):
+        # İstenen kaynaktan EN AZ BİR seri sorgudaysa öbür kaynaklar ek bağlamdır (EVDS politika faizi + BDDK konut stoku);
+        # kullanıcının kendi getirdiği (adhoc) seri hiç ikame sayılmaz ("dış kaynağı BDDK–EVDS setiyle birleştir": taslak dış rapor
+        # serisini okumak isteğin kendisidir). Yalnız dış kaynaklı serilerin hiçbiri istenen kaynaktan değilse ret (23 Eyl).
+        external = [spec for spec in used if str(getattr(spec, "source", "")) != "adhoc"]
+        if facets.sources and external and not any(source_matches(str(getattr(spec, "source", "")), facets.sources) for spec in external):
             return ToolError(
                 error_code="SOURCE_MISMATCH", layer="policy", retryable=True,
                 message="Sorgudaki kaynak kullanıcının istediği kaynakla uyuşmuyor; başka kaynağın verisi sessizce kullanılamaz.",
@@ -581,7 +606,7 @@ class LakehouseQueryTool(Tool):
                       "(istenen kaynaktan) getir ve tabloya ekle: fiyat endeksiyle reel değer için workspace_real_value "
                       "(index_dataset_id=<endeks serisi>, base_period=YYYY-MM, her tutar sütunu için ayrı çağrı); "
                       "başka bir seri için workspace_add_column."
-                      if self.workspace.has_table else
+                      if getattr(getattr(self, "workspace", None), "has_table", False) else
                       "İstenen kaynak için doğru seriyi lakehouse_search ile bulup sorgula."),
                 candidates=[spec.dataset_id for spec in used if source_matches(str(getattr(spec, "source", "")), facets.sources)],
             )
@@ -842,8 +867,34 @@ class LakehouseQueryTool(Tool):
         )
 
     def _is_period_aggregation(self, sql: str) -> bool:
+        """Dönem kutusuna (ay/çeyrek/yıl) toplama: dönem ifadesi GROUP BY'da ya da SELECT listesinde olmalı.
+
+        WHERE'deki `EXTRACT(year …) BETWEEN` bir filtredir, kutu değil. Ölçüldü (22 Eyl, boş katalog provası): iki ülkeyi
+        aynı tarih taneli satırlarda yan yana koyan pivot (`MAX(CASE WHEN entity_id=…)` + `GROUP BY observation_date`,
+        yıl filtresi WHERE'de) yanlışlıkla frekans dönüşümü sayılıp GOLD_REQUIRED ile reddedildi."""
         text = sql.lower()
-        return bool(self._PERIOD_AGG.search(text) and self._AGG_FN.search(text) and "group by" in text)
+        if "group by" not in text or not self._AGG_FN.search(text):
+            return False
+        group_part = text.rsplit("group by", 1)[1]
+        select_part = text[text.find("select"):text.find(" from ")] if " from " in text else text
+        hit = self._PERIOD_AGG.search(group_part) or self._PERIOD_AGG.search(select_part)
+        if not hit:
+            return False
+        # Ay kutusu (strftime %Y-%m / date_trunc month / extract month) ve okunan her seri zaten aylıksa bu frekans
+        # dönüşümü değil, aynı aydaki serilerin toplanmasıdır (vade dilimleri: Vadesiz + 1 Ay + 1-3 Ay). Ölçüldü (23 Eyl):
+        # altı aylık vade serisinin ay bazında toplamı GOLD_REQUIRED ile reddedildi, Gold ise 6 seriyi yan yana koyar,
+        # toplamaz. Çeyrek/yıl kutusu ya da daha ince seri (günlük/haftalık) yine Gold'a gider.
+        expr = hit.group(0)
+        month_bucket = ("%y-%m" in expr and "%d" not in expr) or "'month'" in expr or re.search(r"month", expr) is not None
+        if month_bucket:
+            try:
+                specs = list(self.lakehouse.list_datasets())
+            except Exception:  # noqa: BLE001
+                return True
+            used = [sp for sp in specs if re.search(rf"(?<![\w.]){re.escape(sp.dataset_id)}(?![\w])", sql, re.I)]
+            if used and all(str(getattr(getattr(sp, "frequency", None), "value", getattr(sp, "frequency", ""))).lower() == "monthly" for sp in used):
+                return False
+        return True
 
     _FREKANS_SOZ = (
         ("günlük", Frequency.DAILY), ("gunluk", Frequency.DAILY),
@@ -1075,13 +1126,20 @@ class LakehouseDistinctValuesTool(Tool):
         # Alt toplam bayrağı varsa birlikte göster: mükerrer sayımı önleyen sinyal.
         has_flag = spec.column("is_alt_toplam") is not None
         select = f"{col}, is_alt_toplam" if has_flag else col
-        where = ""
+        conditions = []
+        relation, base_where = self._scope(params.dataset_id)
+        if base_where:
+            conditions.append(base_where)
         if params.contains:
+            # Aksana ve büyük/küçük harfe duyarsız: kaynaklar varlık adını kendi dilinde yazar ("Turkiye", "IZMIR");
+            # kullanıcı Türkçe yazar ("Türkiye", "İzmir"). Ölçüldü (22 Eyl, boş katalog provası): "Türkiye", "Turkey"
+            # ve "Tür" aramaları "Turkiye" kaydını bulamadı, karşılaştırma yapılamadı. Dil listesi yok: strip_accents.
             safe = params.contains.replace("'", "''")
-            where = f"WHERE {col} ILIKE '%{safe}%'"
+            conditions.append(f"strip_accents(lower({col})) LIKE '%' || strip_accents(lower('{safe}')) || '%'")
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
         sql = (
-            f"SELECT DISTINCT {select} FROM {_relation_sql(self.lakehouse, params.dataset_id)} {where} "
+            f"SELECT DISTINCT {select} FROM {relation} {where} "
             f"ORDER BY 1 LIMIT {int(params.limit)}"
         )
         try:
@@ -1134,11 +1192,25 @@ class LakehouseDistinctValuesTool(Tool):
         )
         return ToolResult(content="\n".join(lines), data=result.data)
 
+    def _scope(self, dataset_id: str) -> tuple[str, str]:
+        """(ilişki, temel WHERE): seri kimliği tablo adı olmayan yerleşimlerde adaptör söyler (Silver: uzun tablo + series_id
+        filtresi; Gold: tablonun kendisi). Adaptör bilmiyorsa (seed) kimlik tablo adıdır. Ölçüldü (22 Eyl): 'adhoc:dunya_nufus'
+        FROM'a yazılınca "Table … does not exist", varlık listesi hiç alınamadı."""
+        scope = getattr(self.lakehouse, "series_scope", None)
+        if callable(scope):
+            try:
+                relation, where = scope(dataset_id)
+                return str(relation), str(where or "")
+            except Exception:  # noqa: BLE001 — kapsam üretilemezse eski davranış
+                pass
+        return dataset_id, ""
+
     def _toplam_deger_sayisi(self, dataset_id: str, column: str) -> int:
         """Kolondaki toplam distinct değer sayısı — limit uygulanmadan önceki hâli."""
+        relation, base_where = self._scope(dataset_id)
         try:
             r = self.lakehouse.execute_sql(
-                f"SELECT COUNT(DISTINCT {column}) AS n FROM {_relation_sql(self.lakehouse, dataset_id)}"
+                f"SELECT COUNT(DISTINCT {column}) AS n FROM {relation}" + (f" WHERE {base_where}" if base_where else "")
             )
             return int(r.data.iloc[0, 0]) if not r.is_empty else 0
         except LakehouseError:

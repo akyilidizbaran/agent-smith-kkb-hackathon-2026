@@ -43,7 +43,7 @@ ALIGNED_COLUMNS: Final[tuple[str, ...]] = (
 """Gold aligned-frame columns, in contract order."""
 
 GOLD_QUALITY_FLAGS: Final[frozenset[str]] = frozenset(
-    {"ok", "source_warning", "partial_period", "boundary_missing", "missing_value"}
+    {"ok", "source_warning", "partial_period", "boundary_missing", "boundary_shifted", "missing_value"}
 )
 """Period-level quality vocabulary.
 
@@ -53,7 +53,12 @@ Precedence, strongest first:
 - ``boundary_missing`` -- a boundary rule (``last``/``first``) selected an observation that
   the source published as missing. The period has readings, but not the one the rule asks
   for, so the result is NULL. This is distinct from ``missing_value``: "we have data but not
-  the closing reading" is a different fact from "we have no data".
+  the closing reading" is a different fact from "we have no data". Applies to ``stock``-like
+  series only; see ``boundary_shifted``.
+- ``boundary_shifted`` -- the boundary reading of an ``index`` or ``rate`` series was a
+  calendar gap (a market holiday, a weekend the source lists as NULL) and the rule took the
+  nearest published reading inside the period instead: the month's closing index is by
+  definition its last trading day's close. ``source_observation_dates`` names that day.
 - ``partial_period`` -- some observations were missing, so a value rule rests on fewer
   readings than the period contains.
 - ``source_warning`` -- a parser warning applies to at least one contributing observation.
@@ -69,6 +74,17 @@ These must pick from **all** observations in the period, not from the non-missin
 stock whose closing reading is missing has an unknown closing balance; reaching back to an
 earlier week would be carrying the previous value forward, which is exactly the interpolation
 this layer promises never to do.
+"""
+
+_CALENDAR_GAP_TYPES: Final[frozenset[str]] = frozenset({"index", "rate"})
+"""Measure types whose boundary reading may legitimately fall on a calendar gap.
+
+A price index or a market rate is quoted only on trading days; the source still publishes the
+holiday as a NULL row (EVDS, BIST 100: 31 March 2025 and 1 April 2025 were a public holiday,
+so "March 2025" closed on the 28th). Skipping that NULL is not a forward fill of an unknown
+balance -- the month's closing quote *is* the last trading day's quote. Measured 22 Sept 2026:
+without this the agent reported "March 2025 missing" for an index the exchange published every
+trading day. Stocks keep the strict rule above: a missing closing balance stays unknown.
 """
 
 
@@ -131,9 +147,18 @@ def _period_row(
         # published. `members` is chronological, so `last` really is the period's final
         # reading and `first` its opening one.
         selected = members[0] if rule == "first" else members[-1]
+        shifted = False
+        if selected.is_missing and semantics.measure_type in _CALENDAR_GAP_TYPES:
+            # Calendar gap on a quoted series: the nearest published reading inside the
+            # period is the boundary quote (see _CALENDAR_GAP_TYPES). `present` is non-empty
+            # here because the all-missing case returned above.
+            selected = present[0] if rule == "first" else present[-1]
+            shifted = True
         value = selected.value
         if selected.is_missing:
             flag = "boundary_missing"
+        elif shifted:
+            flag = "boundary_shifted"
         elif missing:
             flag = "partial_period"
         elif warned:

@@ -134,6 +134,12 @@ def promote_draft_series(connection: duckdb.DuckDBPyConnection, series_id: str) 
             [series_id],
         )
         promoted = copy_active_adhoc_to_silver(connection, series_id=series_id)
+        # Coverage is an operational fact derived from Silver (silver/coverage.py). Without this the promoted
+        # series kept first_obs/last_obs NULL until the next full `lakehouse silver` rebuild, and the agent
+        # answered "coverage unknown" for a series whose rows were already in Silver (observed 20 Sep).
+        from ..silver.coverage import refresh_series_coverage
+
+        refresh_series_coverage(connection)
         connection.commit()
     except Exception:
         connection.rollback()

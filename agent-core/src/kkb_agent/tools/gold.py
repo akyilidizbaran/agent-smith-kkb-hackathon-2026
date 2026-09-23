@@ -236,6 +236,19 @@ class _GoldTool(Tool):
                 return missing
         return None
 
+    def _verified_alternatives(self, series_id: str | None, limit: int = 3) -> list[str]:
+        """Reddedilen serinin adıyla arayıp semantiği doğrulanmış, başka kimlikli serileri döndürür (en çok `limit`)."""
+        if not series_id:
+            return []
+        try:
+            spec = self.lakehouse.get_dataset(series_id)
+            hits = self.lakehouse.search_datasets(str(getattr(spec, "name", "") or series_id), limit=8)
+        except Exception:  # noqa: BLE001 — öneri üretilemezse ret yine geçerli
+            return []
+        return [str(h.dataset_id) for h in hits
+                if str(h.dataset_id) != series_id and getattr(h, "semantic_confidence", None) == "verified"
+                and not str(h.dataset_id).startswith("gold.")][:limit]
+
     # ---- çağrı
     def _call(self, params: BaseModel) -> QueryResult:
         raise NotImplementedError
@@ -250,18 +263,32 @@ class _GoldTool(Tool):
             reason = exc.reason
             tr = REASON_TR.get(reason, exc.detail)
             alt = _ALTERNATIVE_TR.get(reason, "")
+            verified = self._verified_alternatives(exc.series_id) if reason == "UNVERIFIED_SEMANTICS" else []
+            if verified:
+                # Ölçüldü (benchmark P04, 22 Eyl): model "Toplam Krediler (Krediler tablosu)" — semantiği doğrulanmamış —
+                # seçti, Gold reddetti, tur bitti; aynı kavramın doğrulanmış serisi (Bilanço "Krediler, Toplam") duruyordu.
+                # Aday genel: aynı adla aranan, semantiği doğrulanmış, başka kimlikli seriler.
+                alt = (alt + " Aynı kavramın DOĞRULANMIŞ serisi var: " + ", ".join(verified)
+                       + " — onay istemeden önce aynı işlemi bu seriyle yeniden dene.").strip()
             refused = ToolResult.fail(
                 "GOLD_REFUSED",
                 f"Gold reddetti [{reason}]{f' ({exc.series_id})' if exc.series_id else ''}: {tr} "
                 f"(veri katmanı: {exc.detail})",
                 hint=("Kullanıcıya bu sebebi sade Türkçeyle söyle; sayı üretme, aynı işi SQL ile "
                       "yapmaya kalkma. " + alt).strip(),
-                layer="policy", retryable=False,
+                layer="policy", retryable=False, candidates=verified,
             )
             # Ret bir sonraki doğru aracı gösteriyorsa (ör. "önce gold_decompose çağır") tur bitmez: önceden hata
             # tekrar denenemez sayıldığı için tur terminale düşüyor, model önerilen aracı çağıramıyordu (envanter, 23 Eyl).
             # Kullanıcı onayı gereken ret (UNVERIFIED_SEMANTICS) ve alternatifsiz retler turu yine kapatır.
-            if reason in _ACTIONABLE_ALTERNATIVES and refused.error is not None:
+            if verified and refused.error is not None and self.name != "gold_join":
+                # Doğrulanmış eşdeğer varken tur bitmez (PR #21): model aynı işlemi o seriyle yeniden dener. Kapanış satırı
+                # ("tekrar denemeyle çözülmez") bu durumda modele çelişkili söz olur; çıkarılır.
+                refused.error.terminal = False
+                refused.content = "\n".join(
+                    line for line in refused.content.split("\n") if not line.startswith("BU HATA TEKRAR DENEMEYLE")
+                ) + "\nTur devam ediyor: aynı işlemi doğrulanmış seriyle yinele."
+            elif reason in _ACTIONABLE_ALTERNATIVES and refused.error is not None:
                 refused.error.terminal = False
                 refused.content = "\n".join(
                     line for line in refused.content.split("\n") if not line.startswith("BU HATA TEKRAR DENEMEYLE")

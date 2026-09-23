@@ -555,8 +555,6 @@ series:
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
-  # --- üretilmiş: BDDK Aylık Bülten, tüm tablo grupları ---
-
   - series_id: bddk_monthly:1_Toplam
     native_code: "1?Toplam"
     dataset_id: bddk_monthly_nakit_degerler_1_toplam
@@ -9236,8 +9234,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 1   TP Mevduat / Katılım Fonları - Yurt İçi Yerleşik (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=520?Vadesiz; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - tp mevduat / katılım fonları - yurt i̇çi yerleşik vadesiz
@@ -9249,7 +9247,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -9263,8 +9261,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 1   TP Mevduat / Katılım Fonları - Yurt İçi Yerleşik (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=520?BirAyaKadar; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - tp mevduat / katılım fonları - yurt i̇çi yerleşik 1 aya kadar
@@ -9276,7 +9274,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -9290,8 +9288,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 1   TP Mevduat / Katılım Fonları - Yurt İçi Yerleşik (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=520?BirAyUcAy; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - tp mevduat / katılım fonları - yurt i̇çi yerleşik 1-3 ay arası
@@ -9303,7 +9301,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -9317,8 +9315,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 1   TP Mevduat / Katılım Fonları - Yurt İçi Yerleşik (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=520?UcAyAltiAy; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - tp mevduat / katılım fonları - yurt i̇çi yerleşik 3-6 ay arası
@@ -9330,7 +9328,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -9344,8 +9342,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 1   TP Mevduat / Katılım Fonları - Yurt İçi Yerleşik (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=520?AltiAyBirYil; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - tp mevduat / katılım fonları - yurt i̇çi yerleşik 6-12 ay arası
@@ -9357,7 +9355,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -9371,8 +9369,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 1   TP Mevduat / Katılım Fonları - Yurt İçi Yerleşik (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=520?BirYil; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - tp mevduat / katılım fonları - yurt i̇çi yerleşik 1 yıl üzeri
@@ -9384,7 +9382,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -9988,8 +9986,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 2   Döviz Tevdiat Hesabı / Katılım Fonları - Yurt İçi Yerleşik (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=524?Vadesiz; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - döviz tevdiat hesabı / katılım fonları - yurt i̇çi yerleşik vadesiz
@@ -10001,7 +9999,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -10015,8 +10013,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 2   Döviz Tevdiat Hesabı / Katılım Fonları - Yurt İçi Yerleşik (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=524?BirAyaKadar; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - döviz tevdiat hesabı / katılım fonları - yurt i̇çi yerleşik 1 aya kadar
@@ -10028,7 +10026,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -10042,8 +10040,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 2   Döviz Tevdiat Hesabı / Katılım Fonları - Yurt İçi Yerleşik (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=524?BirAyUcAy; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - döviz tevdiat hesabı / katılım fonları - yurt i̇çi yerleşik 1-3 ay arası
@@ -10055,7 +10053,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -10069,8 +10067,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 2   Döviz Tevdiat Hesabı / Katılım Fonları - Yurt İçi Yerleşik (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=524?UcAyAltiAy; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - döviz tevdiat hesabı / katılım fonları - yurt i̇çi yerleşik 3-6 ay arası
@@ -10082,7 +10080,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -10096,8 +10094,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 2   Döviz Tevdiat Hesabı / Katılım Fonları - Yurt İçi Yerleşik (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=524?AltiAyBirYil; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - döviz tevdiat hesabı / katılım fonları - yurt i̇çi yerleşik 6-12 ay arası
@@ -10109,7 +10107,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -10123,8 +10121,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 2   Döviz Tevdiat Hesabı / Katılım Fonları - Yurt İçi Yerleşik (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=524?BirYil; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - döviz tevdiat hesabı / katılım fonları - yurt i̇çi yerleşik 1 yıl üzeri
@@ -10136,7 +10134,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -13560,8 +13558,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 9  TOPLAM MEVDUAT (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=543?Vadesiz; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - toplam mevduat vadesiz
@@ -13573,7 +13571,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -13587,8 +13585,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 9  TOPLAM MEVDUAT (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=543?BirAyaKadar; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - toplam mevduat 1 aya kadar
@@ -13600,7 +13598,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -13614,8 +13612,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 9  TOPLAM MEVDUAT (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=543?BirAyUcAy; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - toplam mevduat 1-3 ay arası
@@ -13627,7 +13625,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -13641,8 +13639,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 9  TOPLAM MEVDUAT (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=543?UcAyAltiAy; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - toplam mevduat 3-6 ay arası
@@ -13654,7 +13652,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -13668,8 +13666,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 9  TOPLAM MEVDUAT (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=543?AltiAyBirYil; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - toplam mevduat 6-12 ay arası
@@ -13681,7 +13679,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
@@ -13695,8 +13693,8 @@ series:
       Dönem sonu bakiyesidir (stok): dönemler toplanmaz, daha düşük frekansa indirilirken dönemin son değeri alınır.
       BİRİM: TRY_mn — kaynağın kendi rapor başlığı "Mevduat Vade İtibarıyla - 9  TOPLAM MEVDUAT (milyon TL)" diyor (2026-09-23 canlı yoklaması).
       KİMLİK: kalemSutun=543?BirYil; kaynağın kendi kalem kimliği ve sütun adıdır, seri kimliğinin dayanağıdır. taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi; kalem tek tek insan
-      tarafından incelenmediği için semantic_confidence 'derived'.
+      Bu giriş scripts/generate_bddk_monthly_catalog.py ile üretildi. Birim, ölçüm tipi ve 2021-01→2026-06 gözlemleri
+      elle doğrulandı (23 Eyl 2026, PR #21); semantic_confidence 'verified'.
       VADE KOVASI: açılış vadesine göre kırılımdır ve aynı kalemin Toplam sütununun toplanabilir parçasıdır; altı kovanın toplamı Toplam'a eşittir (kaynak her sütunu yuvarladığı için en çok ±3 milyon TL fark, 2026-09-23 ölçümü; ADR-0108).
     aliases:
       - toplam mevduat 1 yıl üzeri
@@ -13708,7 +13706,7 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
+    semantic_confidence: verified
     semantic_source: source_docs
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active

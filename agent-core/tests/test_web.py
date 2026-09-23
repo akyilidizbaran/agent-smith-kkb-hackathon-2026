@@ -731,6 +731,18 @@ def test_k02_t10_tavily_http_hatasi_ve_baglanti_kopmasi_kontrollu_doner() -> Non
     assert not r.ok and r.error.error_code == "ACCESS_BLOCKED" and "unreachable" in r.content
 
 
+def test_pdf_icin_bayt_siniri_daha_genis_html_icin_degil() -> None:
+    """Arkadaş bulgusu (22 Eyl): 8 MiB üstü faaliyet raporu PDF'i CONTENT_TOO_LARGE ile açılamıyordu."""
+    from kkb_agent.web.fetch import PDF_MAX_BYTES
+    body = b"%PDF-1.4 " + b"x" * 500
+    s = Session({"https://site.example/rapor.pdf": Resp(200, body, ctype="application/pdf")})
+    r = fetch_url("https://site.example/rapor.pdf", session=s, max_bytes=100)
+    assert r.outcome.ok and len(r.content) == len(body) and PDF_MAX_BYTES > 8 * 1024 * 1024
+    s = Session({"https://site.example/big": Resp(200, b"x" * 1000)})
+    with pytest.raises(FetchRefused):
+        fetch_url("https://site.example/big", session=s, max_bytes=100)
+
+
 def test_fallback_is_not_consumed_when_research_state_denies_the_search() -> None:
     """İnceleme (22 Eyl): fallback planı authorize_search reddinden ÖNCE 'consumed' işaretleniyordu."""
     from kkb_agent.core.web_research import WebResearchState

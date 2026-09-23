@@ -10,6 +10,7 @@ paket değil.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Callable
@@ -32,8 +33,13 @@ def subprocess_env(source: dict[str, str] | None = None) -> dict[str, str]:
 
 
 def subprocess_runner(command: list[str], cwd: Path, *, timeout: float = 600) -> tuple[int, str, str]:
-    proc = subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False,
-                          timeout=timeout, env=subprocess_env())
+    env = subprocess_env()
+    # Windows CreateProcess may prefer the parent interpreter's directory over
+    # PATH for a bare "python". Resolve it first so the configured core venv wins.
+    executable = shutil.which(command[0], path=env.get("PATH"))
+    resolved_command = [executable or command[0], *command[1:]]
+    proc = subprocess.run(resolved_command, cwd=cwd, capture_output=True, text=True, check=False,
+                          timeout=timeout, env=env)
     return proc.returncode, proc.stdout, proc.stderr
 
 
