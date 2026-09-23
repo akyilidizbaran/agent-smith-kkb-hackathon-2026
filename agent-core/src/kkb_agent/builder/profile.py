@@ -78,7 +78,7 @@ def _parse_number(text: str, decimal: str, thousands: str | None) -> float | Non
 
 
 #: "2021/01 (04.01.21-08.01.21)", "04.01.2021 - 08.01.2021": dönem etiketi + tarih aralığı. Değer aralığın BİTİŞ tarihidir
-#: (dönem sonu kuralı). Yıl iki ya da dört haneli, ayraç nokta/eğik çizgi/tire. Ölçüldü (23 Eyl, dış rapor haftalık işlem hacmi
+#: (dönem sonu kuralı). Yıl iki ya da dört haneli, ayraç nokta/eğik çizgi/tire. Ölçüldü (23 Eyl, TEFAS haftalık işlem hacmi
 #: PDF'i): "Dönem" kolonu tarih sayılmadı, kayıt reddedildi.
 _RANGE_RE = re.compile(r"(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})\s*[-–]\s*(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})")
 RANGE_END = "range_end"

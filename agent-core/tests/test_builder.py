@@ -180,7 +180,7 @@ def test_ciplak_yil_sutunu_yillik_tarih_adayidir_sayi_kolonu_degil() -> None:
 
 
 def test_donem_arali_hucre_bitis_tarihi_olarak_taninir() -> None:
-    """23 Eyl (haftalık işlem hacmi raporu PDF'i): "2021/01 (04.01.21-08.01.21)" tarih sayılmadı, kayıt reddedildi."""
+    """23 Eyl (TEFAS haftalık işlem hacmi PDF'i): "2021/01 (04.01.21-08.01.21)" tarih sayılmadı, kayıt reddedildi."""
     import pandas as pd
     from kkb_agent.builder.profile import RANGE_END, parse_date, profile_table, range_end_date
     from kkb_agent.tools.ingest import range_column_to_dates
@@ -196,7 +196,7 @@ def test_donem_arali_hucre_bitis_tarihi_olarak_taninir() -> None:
 
 
 def test_sondaki_toplam_satiri_atilir_ortadaki_kalir() -> None:
-    """23 Eyl (rapor CSV): son satır 'Toplam' olunca tarih kolonu tanınmadı."""
+    """23 Eyl (TEFAS CSV): son satır 'Toplam' olunca tarih kolonu tanınmadı."""
     import pandas as pd
     from kkb_agent.tools.ingest import drop_footer_rows
     frame = pd.DataFrame({"Dönem": ["2021/01 (04.01.21-08.01.21)", "2021/02 (11.01.21-15.01.21)", "Toplam"], "v": ["1", "2", "3"]})
@@ -207,7 +207,7 @@ def test_sondaki_toplam_satiri_atilir_ortadaki_kalir() -> None:
 
 
 def test_yil_ay_sutunu_ay_sonu_tarihine_cevrilir() -> None:
-    """23 Eyl (aylık rapor): "2021-01" ayın 1'ine çözülüyordu; BDDK/EVDS aylık serileri ay sonu tarihli."""
+    """23 Eyl (TEFAS aylık rapor): "2021-01" ayın 1'ine çözülüyordu; BDDK/EVDS aylık serileri ay sonu tarihli."""
     import pandas as pd
     from kkb_agent.tools.ingest import month_column_to_dates
     out, note = month_column_to_dates(pd.DataFrame({"Dönem": ["2021-01", "2021-02", "2024-02"], "v": ["1", "2", "3"]}), "Dönem")

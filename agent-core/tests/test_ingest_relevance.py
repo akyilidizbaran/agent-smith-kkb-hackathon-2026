@@ -183,11 +183,11 @@ def test_dogru_ve_yanlis_dosya_birlikte_kart_daha_uygun_olani_soyler(tool_env) -
 
 
 def test_adressiz_istekte_tahmin_edilen_adres_soruya_donusur(tool_env) -> None:
-    """23 Eyl (fon raporu): kullanıcı yalnız sayfa adı yazdı, model adres uydurdu; cevap 'niyet eksikliği' değil 'adres ver' olmalı."""
+    """23 Eyl (TEFAS): kullanıcı yalnız sayfa adı yazdı, model adres uydurdu; cevap 'niyet eksikliği' değil 'adres ver' olmalı."""
     tool, lake, runner, reg = tool_env
-    reg.user_text = "Fon İstatistikleri altındaki Toplam İşlem Hacmi Raporundan aylık işlem hacmini lakehouse'a ekle"
+    reg.user_text = "TEFAS İstatistikleri altındaki Toplam İşlem Hacmi Raporundan aylık işlem hacmini lakehouse'a ekle"
     reg.active_question = reg.user_text
-    r = tool.validate_and_run({"locator": "https://ornek-kaynak.gov.tr/istatistikler", "name": "Fon işlem hacmi"})
+    r = tool.validate_and_run({"locator": "https://tefas.gov.tr/tefas-istatistikleri", "name": "TEFAS işlem hacmi"})
     assert not r.ok and r.error.error_code == "INTENT_REQUIRED" and runner.calls == []
     assert "tahmin" in r.content and "adres" in r.content.lower() and "dosya" in r.content.lower()
 
