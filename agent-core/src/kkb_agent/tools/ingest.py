@@ -53,6 +53,12 @@ class IngestParams(BaseModel):
     table_index: int | None = Field(default=None, description="PDF/görselde birden çok tablo varsa hangisi (0 tabanlı); boşsa en büyük tablo")
     pages: str | None = Field(default=None, description="PDF için hangi sayfalar: '3', '2-4' (varsayılan ilk 5)")
     sheet: str | None = Field(default=None, description="Excel'de sayfa adı ya da 0 tabanlı indeks; birden çok sayfa varsa zorunlu")
+    value_column: str | None = Field(
+        default=None,
+        description=("Dosyada birden çok değer kolonu varsa hangisi seri olacak (kolon adı, dosyadaki gibi). "
+                     "Soru kolonları adıyla sayıyorsa kullanıcıya SORMA: her kolon için bu alanı ve farklı bir "
+                     "series_key'i vererek aracı ayrı ayrı çağır. Boşsa profilci en güçlü adayı seçer."),
+    )
     name: str = Field(description="Serinin okunabilir adı, ör. 'İl bazında konut satışları'")
     series_key: str | None = Field(
         default=None,
@@ -162,7 +168,9 @@ class IngestFromUrlTool(Tool):
         "veri havuzuna TASLAK seri olarak ekler ve ne yaptığını belgeler. Dosyanın hangi kolonunun "
         "tarih, hangisinin değer olduğunu veriye bakarak kanıtıyla önerir; belirsizse eklemeden "
         "önce kullanıcıya sorar. Kullanıcı 'bu dosyayı ekle', 'şu linkteki veriyi yükle' dediğinde "
-        "BU aracı kullan."
+        "BU aracı kullan. Her çağrı TEK seri yazar: dosyada birden çok değer kolonu varsa ve soru "
+        "hangilerini istediğini adıyla söylüyorsa kullanıcıya sorma — her kolon için value_column "
+        "ve farklı series_key ile aracı ayrı ayrı çağır."
     )
     Params = IngestParams
 
@@ -325,10 +333,30 @@ class IngestFromUrlTool(Tool):
             return ToolResult(content=err.render(), ok=False, error=err)
 
         # 2. profil + öneri
-        key = params.series_key or _slug(_UPLOAD_PREFIX.sub("", Path(params.locator.split("?")[0]).stem))
+        stem = _UPLOAD_PREFIX.sub("", Path(params.locator.split("?")[0]).stem)
+        # Aynı dosyadan ikinci bir kolon eklenirken anahtar çakışmasın: kolon adı anahtara girer.
+        key = params.series_key or _slug(stem + (f"_{params.value_column}" if params.value_column else ""))
         series_id = f"adhoc:{key}"
         profile = profile_table(frame)
         mapping, semantics = propose(profile, frame, series_id=series_id)
+        if params.value_column is not None and mapping is not None:
+            # Kullanıcı/soru kolonu adıyla istedi: profilcinin sıralaması değil, o kolon yazılır.
+            # Ölçüldü (23 Eyl, TEFAS): üç değer kolonlu dosyada araç kolon seçtiremeyince model
+            # soruda adı geçen kolonları kullanıcıya yeniden soruyordu.
+            if params.value_column not in frame.columns:
+                return ToolResult.fail(
+                    "TOOL_FAILED",
+                    f"value_column {params.value_column!r} dosyada yok; kolonlar: {', '.join(map(str, frame.columns))}.",
+                    hint="Kolon adını dosyadaki gibi ver.", layer="data", retryable=False,
+                )
+            from dataclasses import replace
+            from ..builder.profile import Evidence
+            evidence = [e for e in mapping.evidence if e.field != "value_column"]
+            evidence.append(Evidence("value_column", params.value_column, "kullanıcı/soru bu kolonu adıyla istedi", "strong"))
+            mapping = replace(
+                mapping, value_column=params.value_column, evidence=tuple(evidence),
+                alternatives={k: v for k, v in mapping.alternatives.items() if k != "value_column"},
+            )
         invented = undeclared(params, self._user_text())
         if invented:
             # Kullanıcının söylemediği beyan yok sayılır; alan boş kalır ve aşağıda sorulur.
@@ -426,6 +454,9 @@ class IngestFromUrlTool(Tool):
             lines += [f"  {e.field} = {e.value!r}  [{e.confidence}] {e.reason}" for e in semantics.evidence]
             if mapping.alternatives:
                 lines.append("ALTERNATİFLER: " + "; ".join(f"{k}: {', '.join(v)}" for k, v in mapping.alternatives.items()))
+                if "value_column" in mapping.alternatives:
+                    lines.append("  (soru bu kolonlardan birini/birkaçını adıyla istiyorsa kullanıcıya sorma: her biri için "
+                                 "value_column + farklı series_key ile ayrı çağrı yap)")
             lines.append("\nYAPACAĞIN: yukarıdaki soruları kullanıcıya sor; cevap gelince aynı aracı "
                          "series_key ile yeniden çağır. Sayı uydurma, seriyi eklenmiş sayma.")
             return ToolResult(content="\n".join(lines), ok=True,
