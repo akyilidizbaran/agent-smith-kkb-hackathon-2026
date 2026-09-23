@@ -57,7 +57,35 @@
   .askrow button { height: 44px; padding: 0 18px; background: var(--ink); color: var(--paper); border: 0; border-radius: 8px; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; }
   .askrow button[disabled] { opacity: .5; cursor: wait; }
   .askrow .ghost { background: transparent; color: var(--muted); border: 1px solid #d9d3c7; }
+  /* Profil düğmesi (ADR-0112): tek tık Analyst ↔ Architect; aynı sohbet sürer. */
+  .seg { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid #d9d3c7; border-radius: 999px; background: #fff; }
+  .seg button { height: 24px; padding: 0 11px; border: 0; border-radius: 999px; background: transparent; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .seg button:hover:not(:disabled):not([aria-pressed="true"]) { color: var(--ink); background: #f4f1ea; }
+  .seg button[aria-pressed="true"] { background: var(--teal-bg); color: var(--teal-ink); font-weight: 600; cursor: default; }
+  .seg button[data-p="architect"][aria-pressed="true"] { background: var(--amber-bg); color: var(--amber-ink); }
+  .seg button:disabled { opacity: .5; cursor: not-allowed; }
+  .seg button:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
+  .seg.busy { opacity: .6; pointer-events: none; }
   .ev-head { padding: 18px 20px 12px 20px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+  /* Kanıt zinciri paneli açılır-kapanır: kapalıyken 48px'lik şeride iner, sohbet genişler; tercih tarayıcıda hatırlanır. */
+  .layout { transition: grid-template-columns .2s ease; }
+  .layout.ev-collapsed { grid-template-columns: 248px minmax(0, 1fr) 48px; }
+  .ev-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .ev-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  .ev-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 0; border: 0; background: transparent; cursor: pointer; font: inherit; color: inherit; border-radius: 4px; }
+  .ev-toggle:hover .label { color: var(--teal); }
+  .ev-toggle:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  .ev-toggle .chev { display: inline-block; font-size: 13px; line-height: 1; color: var(--muted2); transition: transform .2s ease; }
+  .layout.ev-collapsed .ev-toggle .chev { transform: rotate(180deg); }
+  .layout.ev-collapsed aside.right { overflow: hidden; cursor: pointer; }
+  .layout.ev-collapsed .ev-head { padding: 14px 0; border-bottom: 0; align-items: center; }
+  .layout.ev-collapsed .ev-top { flex-direction: column; justify-content: flex-start; gap: 12px; }
+  .layout.ev-collapsed .ev-toggle { flex-direction: column; gap: 10px; padding: 4px; }
+  .layout.ev-collapsed .ev-toggle .label { writing-mode: vertical-rl; }
+  .layout.ev-collapsed .ev-actions { flex-direction: column; }
+  .layout.ev-collapsed .jbtn, .layout.ev-collapsed #ev-mini, .layout.ev-collapsed #ev-summary, .layout.ev-collapsed .ev-body { display: none !important; }
+  .layout.ev-collapsed #ev-badge { padding: 3px 6px; font-size: 11px; }
+  @media (prefers-reduced-motion: reduce) { .layout, .ev-toggle .chev { transition: none; } }
   .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
   .badge.ok { background: var(--teal-bg); color: var(--teal-ink); } .badge.gap { background: var(--amber-bg); color: var(--amber-ink); } .badge.none { background: #f1eee7; color: var(--muted); }
   .ev-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
@@ -276,15 +304,15 @@
   @media (max-width: 720px) { header .sub { display: none; } }
   .num { cursor: pointer; }
   /* Orta genişlikte önce sağdaki kanıt paneli gizlenir; sohbet listesi solda kalır (ADR-0084). Çok dar ekranda sol panel de gizlenir. */
-  @media (max-width: 1100px) { .layout { grid-template-columns: 248px minmax(0, 1fr); } aside.right { display: none; } }
-  @media (max-width: 760px) { .layout { grid-template-columns: minmax(0, 1fr); } aside.left { display: none; } }
+  @media (max-width: 1100px) { .layout, .layout.ev-collapsed { grid-template-columns: 248px minmax(0, 1fr); } aside.right { display: none; } }
+  @media (max-width: 760px) { .layout, .layout.ev-collapsed { grid-template-columns: minmax(0, 1fr); } aside.left { display: none; } }
 </style>
 </head>
 <body>
 <header>
   <div style="display:flex;align-items:center;gap:10px"><img src="/static/agent-smith.svg" alt="Agent Smith" width="32" height="32" style="display:block;border-radius:8px"><span class="brand">Agent Smith</span><span class="sub">Lakehouse Agent · KKB Hackathon 2026</span><button type="button" class="nbtn" id="btn-new" title="Yeni sohbet başlat; bu sohbet menüde kalır"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M7 2.5 V11.5 M2.5 7 H11.5"/></svg>Yeni sohbet</button></div>
   <div style="display:flex;align-items:center;gap:10px">
-    <span class="pill" id="pill-profile" title="Profil: Analyst okur; Architect kataloğa yazar. Geçiş operatör anahtarıyla.">profil …</span>
+    <div class="seg" id="profile-seg" role="group" aria-label="Profil"><button type="button" data-p="analyst" aria-pressed="false" title="Analyst: salt-okunur analiz">Analyst</button><button type="button" data-p="architect" aria-pressed="false" title="Architect: dosyayı havuza kaydetme, kataloğa alma, sıfırlama">Architect</button></div>
     <span class="pill" id="pill-model">bağlanıyor…</span>
     <span class="pill" id="pill-budget"></span>
   </div>
@@ -330,7 +358,7 @@
 
   <aside class="right">
     <div class="ev-head">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><div class="label">Kanıt zinciri</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><button class="jbtn" id="btn-journey" disabled title="Zinciri halka halka izle">Yolculuğu izle</button><button class="jbtn" id="btn-steps" disabled title="Ajanın araç adımlarını sırayla izle">Adımları izle</button><span class="badge none" id="ev-badge">—</span></div></div>
+      <div class="ev-top"><button type="button" class="ev-toggle" id="ev-toggle" aria-expanded="true" aria-controls="ev-body" title="Kanıt zincirini gizle"><span class="chev" aria-hidden="true">›</span><span class="label">Kanıt zinciri</span></button><div class="ev-actions"><button class="jbtn" id="btn-journey" disabled title="Zinciri halka halka izle">Yolculuğu izle</button><button class="jbtn" id="btn-steps" disabled title="Ajanın araç adımlarını sırayla izle">Adımları izle</button><span class="badge none" id="ev-badge">—</span></div></div>
       <button type="button" class="jmini" id="ev-mini" hidden></button>
       <div style="font-size:13px;color:#4a463f;line-height:1.45" id="ev-summary">Cevap gelince her sayı hücreye, sorguya, gözleme ve kaynağa bağlanır.</div>
     </div>
@@ -374,8 +402,15 @@ async function loadStatus() {
     $("st-line").textContent = `retrieval: ${s.retrieval_mode || "–"} · araç: ${s.tools.length} · kapı: ${s.tool_gate ? "açık" : "kapalı"}`;
     $("pill-model").textContent = `Veri havuzu bağlı · ${s.model || "model"}`;
     $("pill-budget").textContent = s.search_budget_remaining === null || s.search_budget_remaining === undefined ? "web_search kapalı" : `Arama bütçesi ${s.search_budget_remaining}`;
-    const prof = s.profile || "analyst"; $("pill-profile").textContent = `Profil: ${prof === "architect" ? "Architect (yazma açık)" : "Analyst (salt-okunur)"}${s.profile_switch ? " ▾" : ""}`;
-    $("pill-profile").style.borderColor = prof === "architect" ? "var(--amber)" : "#d9d3c7"; $("btn-wipe").hidden = prof !== "architect";
+    const prof = s.profile || "analyst"; const mode = s.profile_switch_mode || (s.profile_switch ? "token" : "closed");
+    document.querySelectorAll("#profile-seg button").forEach((b) => {
+      const on = b.dataset.p === prof; b.setAttribute("aria-pressed", String(on));
+      b.disabled = !on && b.dataset.p === "architect" && mode === "closed";
+    });
+    $("profile-seg").title = mode === "closed" && prof !== "architect"
+      ? "Architect'e geçiş kapalı: .env'de PROFILE_SWITCH=open ya da ARCHITECT_TOKEN tanımlayın"
+      : `Profil: ${prof === "architect" ? "Architect (yazma açık)" : "Analyst (salt-okunur)"} · geçişte sohbet sürer`;
+    $("btn-wipe").hidden = prof !== "architect";
     lastStatus = s;
   } catch (e) { $("pill-model").textContent = "durum alınamadı"; }
 }
@@ -404,17 +439,37 @@ async function openStatus() {       // veri havuzu kartları ve üst rozetler �
   showModal("Sistem durumu", `<div class="kv">${rows.map(([k, v]) => `<div class="k">${esc(k)}</div><div class="v">${esc(v ?? "–")}</div>`).join("")}</div>`);
 }
 ["st-catalog", "st-loaded", "st-silver", "st-gold", "pill-model", "pill-budget"].forEach((id) => { const el = $(id); (el.closest(".stat") || el).addEventListener("click", openStatus); });
-// ---- Profil geçişi (M04): istek parametresi yetki vermez; Architect için operatör anahtarı istenir
-$("pill-profile").addEventListener("click", () => {
-  if (!lastStatus || !lastStatus.profile_switch) { showModal("Profil", `<div class="kv"><div class="k">Durum</div><div class="v">Profil başlatmada seçilir (AGENT_PROFILE). Oturumda geçiş için ARCHITECT_TOKEN tanımlı değil.</div></div>`); return; }
-  const cur = lastStatus.profile || "analyst";
-  showModal("Profil değiştir", `<div class="kv"><div class="k">Şu an</div><div class="v">${esc(cur)}</div><div class="k">Hedef</div><div class="v"><select id="pf-sel"><option value="analyst" ${cur === "analyst" ? "selected" : ""}>Analyst — salt-okunur</option><option value="architect" ${cur === "architect" ? "selected" : ""}>Architect — kataloğa yazma, terfi, sıfırlama</option></select></div><div class="k">Operatör anahtarı</div><div class="v"><input id="pf-tok" type="password" placeholder="ARCHITECT_TOKEN" style="width:260px"></div><div class="k"></div><div class="v"><button id="pf-go" class="jbtn">Geç</button> <span id="pf-msg" class="status"></span></div><div class="k">Not</div><div class="v">Geçiş yeni bir sohbet açar; önceki sohbet menüde kalır.</div></div>`);
-  $("pf-go").addEventListener("click", async () => {
-    const r = await fetch("/api/profile", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({profile: $("pf-sel").value, token: $("pf-tok").value})});
+// ---- Profil geçişi (ADR-0112): tek tık, aynı sohbet sürer. Yetki istek parametresinden gelmez: sunucu ya operatörün açtığı
+// demo kipinde (PROFILE_SWITCH=open) ya da ARCHITECT_TOKEN ile geçirir; anahtar bu sekmede bir kez sorulur ve hatırlanır.
+const ARCHITECT_TOKEN_KEY = "kkb.architectToken";
+async function switchProfile(target, token) {
+  const seg = $("profile-seg"); seg.classList.add("busy");
+  try {
+    const r = await fetch("/api/profile", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({profile: target, token: token || ""})});
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) { $("pf-msg").textContent = d.detail || r.status; return; }
-    clearChatView(); loadStatus(); loadConversations();
-  });
+    if (!r.ok) return {ok: false, detail: d.detail || String(r.status)};
+    await loadStatus(); loadConversations();
+    return {ok: true};
+  } catch (e) { return {ok: false, detail: String(e)}; } finally { seg.classList.remove("busy"); }
+}
+function askArchitectToken(message) {
+  showModal("Architect'e geç", `<div class="kv"><div class="k">Operatör anahtarı</div><div class="v"><input id="pf-tok" type="password" placeholder="ARCHITECT_TOKEN" style="width:260px" autocomplete="off"> <button id="pf-go" class="jbtn">Geç</button> <span id="pf-msg" class="status">${esc(message || "")}</span></div><div class="k">Not</div><div class="v">Anahtar bu sekmede hatırlanır; sonraki geçişler tek tıktır. Sohbet ve tablolar korunur.</div></div>`);
+  const go = async () => {
+    const tok = $("pf-tok").value; const res = await switchProfile("architect", tok);
+    if (res.ok) { try { sessionStorage.setItem(ARCHITECT_TOKEN_KEY, tok); } catch (e) { /* hatırlanamazsa bir dahaki geçişte yine sorulur */ } const gm = $("gmodal"); if (gm) gm.hidden = true; }
+    else $("pf-msg").textContent = res.detail;
+  };
+  $("pf-go").addEventListener("click", go); $("pf-tok").addEventListener("keydown", (e) => { if (e.key === "Enter") go(); }); $("pf-tok").focus();
+}
+$("profile-seg").addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-p]"); if (!b || b.disabled || b.getAttribute("aria-pressed") === "true") return;
+  const target = b.dataset.p; const mode = (lastStatus || {}).profile_switch_mode || "token";
+  let token = ""; try { token = sessionStorage.getItem(ARCHITECT_TOKEN_KEY) || ""; } catch (err) { /* depolama kapalı */ }
+  if (target === "architect" && mode === "token" && !token) { askArchitectToken(); return; }
+  const res = await switchProfile(target, token);
+  if (res.ok) return;
+  if (target === "architect" && mode === "token") { try { sessionStorage.removeItem(ARCHITECT_TOKEN_KEY); } catch (err) { /* yok */ } askArchitectToken(res.detail); }
+  else showModal("Profil", `<div class="kv"><div class="k">Geçilemedi</div><div class="v">${esc(res.detail)}</div></div>`);
 });
 // ---- Architect tam sıfırlama (ADR-0056, ADR-0069): önizleme → kapsama bağlı onay kodu → silme, doğrulama, yeniden kurulum
 async function wipePreview(catalog) {
@@ -799,6 +854,19 @@ function evidenceStages(ev) {
   }
   return stages;
 }
+// ---- Kanıt zinciri paneli açılır-kapanır (tercih tarayıcıda hatırlanır; kapalıyken şeride tıklamak da açar)
+const EV_COLLAPSED_KEY = "kkb.evidenceCollapsed";
+function setEvidenceCollapsed(collapsed) {
+  const layout = document.querySelector(".layout"); const btn = $("ev-toggle");
+  layout.classList.toggle("ev-collapsed", collapsed);
+  btn.setAttribute("aria-expanded", String(!collapsed));
+  btn.title = collapsed ? "Kanıt zincirini göster" : "Kanıt zincirini gizle";
+  try { localStorage.setItem(EV_COLLAPSED_KEY, collapsed ? "1" : "0"); } catch (e) { /* tercih kaydedilemezse panel yine çalışır */ }
+}
+$("ev-toggle").addEventListener("click", (e) => { e.stopPropagation(); setEvidenceCollapsed(!document.querySelector(".layout").classList.contains("ev-collapsed")); });
+document.querySelector("aside.right").addEventListener("click", () => { if (document.querySelector(".layout").classList.contains("ev-collapsed")) setEvidenceCollapsed(false); });
+try { if (localStorage.getItem(EV_COLLAPSED_KEY) === "1") setEvidenceCollapsed(true); } catch (e) { /* varsayılan: açık */ }
+
 function renderEvidence(p, animate) {
   const ev = p.evidence; const body = $("ev-body"); const badge = $("ev-badge");
   lastEvidence = ev || null; lastQuestion = p.question || ""; lastAnswer = p; $("btn-journey").disabled = !ev; $("btn-steps").disabled = !(p.steps || []).some((s) => s.tool); renderMini(ev || null);
