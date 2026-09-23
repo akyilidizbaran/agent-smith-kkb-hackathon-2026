@@ -205,3 +205,11 @@ def test_sondaki_toplam_satiri_atilir_ortadaki_kalir() -> None:
     same, none = drop_footer_rows(pd.DataFrame({"a": ["Toplam", "x"], "v": ["1", "2"]}))
     assert len(same) == 2 and none is None
 
+
+def test_yil_ay_sutunu_ay_sonu_tarihine_cevrilir() -> None:
+    """23 Eyl (TEFAS aylık rapor): "2021-01" ayın 1'ine çözülüyordu; BDDK/EVDS aylık serileri ay sonu tarihli."""
+    import pandas as pd
+    from kkb_agent.tools.ingest import month_column_to_dates
+    out, note = month_column_to_dates(pd.DataFrame({"Dönem": ["2021-01", "2021-02", "2024-02"], "v": ["1", "2", "3"]}), "Dönem")
+    assert out["Dönem"].tolist() == ["2021-01-31", "2021-02-28", "2024-02-29"] and "ay sonu" in note
+
