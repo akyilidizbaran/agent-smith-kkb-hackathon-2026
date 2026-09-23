@@ -2379,8 +2379,15 @@ class AnalyticsAgent:
                     messages.append(ChatMessage(role="user", content=GENERAL_KNOWLEDGE_NOTE))
                     continue
 
+                # SQL JOIN'li lakehouse_query ya da gold_join da birleştirmedir (ölçüldü 23 Eyl, TEFAS: iki taslak seri SQL
+                # ile birleştirildi, "workspace_join çağrılmadı" diye geri gönderilince tablo düştü).
+                joined = any(
+                    s.ok and (s.tool_name in ("workspace_join", "gold_join") or (
+                        s.tool_name == "lakehouse_query" and isinstance(s.tool_args, dict)
+                        and re.search(r"join", str(s.tool_args.get("sql", "")), re.I)))
+                    for s in steps)
                 if (not join_nudged and _JOIN_ASK.search(question) and len(self.workspace.sources()) >= 2
-                        and not any(s.tool_name == "workspace_join" for s in steps)
+                        and not joined
                         and _MATCH_TALK.search(self._strip_reasoning(response.content or ""))):
                     join_nudged = True
                     steps.append(AgentStep(index=i, role="validate", ok=False,
