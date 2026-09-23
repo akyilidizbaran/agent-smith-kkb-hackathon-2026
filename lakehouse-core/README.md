@@ -45,7 +45,7 @@ is implemented and tested for four captured real series. A fifth TÜFE mapping i
 contract-tested with an explicitly synthetic EVDS envelope while its official
 `TP.FG.J0` capture and base-year evidence remain pending. Gold P0 functions are
 implemented. The agent (`agent-core`) reads Silver and Gold through read-only SQL and writes only
-through this CLI (`ingest-file`, `promote-draft`); see [`../docs/02-moduler-kod-yapisi.md`](../docs/02-moduler-kod-yapisi.md).
+through this CLI (`ingest-file`, `promote-draft`); see [`../02-MODULER-KOD-YAPISI.md`](../02-MODULER-KOD-YAPISI.md).
 
 ## Current Delivery Status
 

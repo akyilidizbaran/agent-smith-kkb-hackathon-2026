@@ -180,18 +180,18 @@ sha256'sında ve çekim zamanında biter. OCR ile okunan sayılar "doğrulanmad�
 
 | ADR | Karar |
 |---|---|
-| [0001](adr/0001-kendi-harness.md) | Kendi harness'ımız (framework yok) |
-| [0006](adr/0006-analysis-workspace.md) | Konuşma boyunca yaşayan analiz tablosu |
-| [0025](adr/0025-yapilandirilmis-hata-zarfi.md) | Yapılandırılmış hata zarfı ve döngü kilidi |
-| [0027](adr/0027-anlati-dogrulama-grounding-guard.md) | Cevaptaki her sayı araç çıktısında olmalı |
-| [0028](adr/0028-erisim-politikasi-ve-geri-cekilme-sozlesmesi.md) | Erişim politikası, kaynak sadakati, sessiz geçiş yok |
-| [0033](adr/0033-kanit-paneli-sayidan-kaynak-baytlarina.md) | Kanıt paneli: sayı → … → RAW → URL |
-| [0043](adr/0043-kademeli-retrieval-yuzler-arac-kapisi.md) | Kademeli katalog araması + araç kapısı |
-| [0056](adr/0056-profiller-ve-tam-sifirlama.md) | Analyst / Architect profilleri |
-| [0066](adr/0066-yanlis-sayiyi-yayimlamayan-son-cikis.md) | Doğrulanamayan sayı taşıyan birim cevaptan çıkar |
-| [0104](adr/0104-tur-niyeti-ve-yonlendiren-retler.md) | Tur niyeti tek yerde |
-| [0108](adr/0108-mevduat-vade-kovalari.md) | Kırılım paneli ve vade kovaları deterministik |
-| [0110](adr/0110-entegrasyon-ve-endeksin-seviyede-kurulmasi.md) | Taban ayı endeksi yalnız seviyede |
-| [0111](adr/0111-tarayici-engeli-hizli-sonuc-ve-disa-aktarim-yolu.md) | Bot engeli aşılmaz, açık sonuç |
+| [0001](docs/adr/0001-kendi-harness.md) | Kendi harness'ımız (framework yok) |
+| [0006](docs/adr/0006-analysis-workspace.md) | Konuşma boyunca yaşayan analiz tablosu |
+| [0025](docs/adr/0025-yapilandirilmis-hata-zarfi.md) | Yapılandırılmış hata zarfı ve döngü kilidi |
+| [0027](docs/adr/0027-anlati-dogrulama-grounding-guard.md) | Cevaptaki her sayı araç çıktısında olmalı |
+| [0028](docs/adr/0028-erisim-politikasi-ve-geri-cekilme-sozlesmesi.md) | Erişim politikası, kaynak sadakati, sessiz geçiş yok |
+| [0033](docs/adr/0033-kanit-paneli-sayidan-kaynak-baytlarina.md) | Kanıt paneli: sayı → … → RAW → URL |
+| [0043](docs/adr/0043-kademeli-retrieval-yuzler-arac-kapisi.md) | Kademeli katalog araması + araç kapısı |
+| [0056](docs/adr/0056-profiller-ve-tam-sifirlama.md) | Analyst / Architect profilleri |
+| [0066](docs/adr/0066-yanlis-sayiyi-yayimlamayan-son-cikis.md) | Doğrulanamayan sayı taşıyan birim cevaptan çıkar |
+| [0104](docs/adr/0104-tur-niyeti-ve-yonlendiren-retler.md) | Tur niyeti tek yerde |
+| [0108](docs/adr/0108-mevduat-vade-kovalari.md) | Kırılım paneli ve vade kovaları deterministik |
+| [0110](docs/adr/0110-entegrasyon-ve-endeksin-seviyede-kurulmasi.md) | Taban ayı endeksi yalnız seviyede |
+| [0111](docs/adr/0111-tarayici-engeli-hizli-sonuc-ve-disa-aktarim-yolu.md) | Bot engeli aşılmaz, açık sonuç |
 
-Tüm kararlar: [`docs/adr/README.md`](adr/README.md).
+Tüm kararlar: [`docs/adr/README.md`](docs/adr/README.md).

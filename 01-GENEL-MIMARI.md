@@ -100,7 +100,7 @@ sequenceDiagram
     S-->>K: canlı adımlar, cevap, kanıt zinciri, CSV/XLSX/HTML
 ```
 
-Ayrıntılı karar akışı [`03-agent-karar-ve-gorev-isleme.md`](03-agent-karar-ve-gorev-isleme.md) belgesindedir.
+Ayrıntılı karar akışı [`03-agent-karar-ve-gorev-isleme.md`](03-AGENT-KARAR-VE-GOREV-ISLEME.md) belgesindedir.
 
 ## 1.3 Tasarım ilkeleri
 
