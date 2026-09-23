@@ -45,3 +45,12 @@ Bir fon işlem hacmi dışa aktarımıyla yapılan denemede dosya aylık istendi
   (dönem `YYYY-MM`, altta "Toplam" satırı). Aylık değerlerin toplamı kaynağın "Toplam" satırıyla birebir tutuyor. Aynı
   raporun haftalık, filtreli dışa aktarımı ise ilk haftayı içermeyebilir; aylığa indirilen haftalık dosya bu yüzden
   kaynağın aylık raporundan farklı çıkabilir. Karşılaştırmada dışa aktarımın türü (aylık/haftalık) ve filtresi aynı olmalı.
+- **main ile birleştirme (PR #26 ve 6626a77, Büşra):** PR #26 main'e birleşti; ardından gelen 6626a77'nin üç düzeltmesi
+  bu dalın kurallarıyla birleştirildi:
+  1. *Satır sırası:* Bu daldaki dönüşüm ayları zaten takvim sırasıyla kuruyor, stok değerini dönem sonuna göre seçiyor;
+     azalan sıralı dosyada da aynı sonuç (Büşra'nın iki testi değişmeden geçiyor).
+  2. *Niteleyicili akım kelimesi:* Kabul edildi. Bu daldaki "ortalama → iş günü ağırlıklı ortalama" kuralı yalnız zaman
+     başına ortalamaya ("günlük / haftalık ortalama") daraltıldı; gün ağırlığı yalnız bu tanımda kesin. Zaman birimi
+     olmayan "Ortalama Tutar" işlem başına olabilir; UNKNOWN olur ve ham tablo gösterilir.
+  3. *Sayıya çevrilemeyen hücre:* Kabul edildi. Boş hücre artık o ayı sessizce boş bırakmıyor, VALUE_PARSE_FAILED ile
+     ham tabloya düşüyor.
