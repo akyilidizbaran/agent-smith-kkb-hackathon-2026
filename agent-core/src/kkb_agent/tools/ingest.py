@@ -127,7 +127,10 @@ def _slug(text: str) -> str:
 
 
 _MEASURE_WORDS = {
-    "stock": ("stok", "bakiye", "stock"), "flow_periodic": ("akım", "akim", "dönemlik", "flow"),
+    "stock": ("stok", "bakiye", "stock"),
+    # "hacim/işlem hacmi/hareket": dönem içinde olan biten — TEFAS işlem hacmi, aylık mevduat hareketi
+    # (ölçüldü 23 Eyl: soru "aylık Toplam İşlem Hacmi" derken beyan sözlükte yok diye reddediliyordu)
+    "flow_periodic": ("akım", "akim", "dönemlik", "flow", "hacim", "hacmi", "işlem hacmi", "hareket", "aylık toplam"),
     "flow_ytd": ("yıl başından", "ytd", "birikimli"), "flow_cumulative": ("kümülatif", "kumulatif", "cumulative"),
     "rate": ("oran", "faiz", "yüzde", "rate", "%"), "ratio": ("rasyo", "ratio"),
     "index": ("endeks", "index", "seviye"), "count": ("adet", "sayı", "sayi", "count"),
@@ -396,6 +399,16 @@ class IngestFromUrlTool(Tool):
                 alternatives={k: v for k, v in mapping.alternatives.items() if k != "value_column"},
             )
         invented = undeclared(params, self._user_text())
+        if invented and semantics is not None:
+            # Profilcinin VERİDEN kanıtıyla çıkardığı sonuçla örtüşen beyan uydurma değildir: model
+            # yeni bir şey söylemiyor, veriye bakan katmanla aynı şeyi söylüyor. Yalnız veriden
+            # çıkmayan beyan kullanıcıya sorulur.
+            corroborated = {
+                f"{field}={getattr(params, field)!r}"
+                for field in ("measure_type", "frequency", "default_agg", "unit")
+                if getattr(params, field) is not None and getattr(semantics, field, None) == getattr(params, field)
+            }
+            invented = [item for item in invented if item not in corroborated]
         if invented:
             # Kullanıcının söylemediği beyan yok sayılır; alan boş kalır ve aşağıda sorulur.
             params = params.model_copy(update={k.split("=")[0]: None for k in invented})
