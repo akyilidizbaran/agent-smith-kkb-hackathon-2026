@@ -118,7 +118,6 @@ def classify_access(
     body_excerpt: str = "",
     robots_disallow: bool = False,
     environ: Mapping[str, str] | None = None,
-    content_length: int | None = None,
 ) -> AccessOutcome:
     """HTTP gözlemlerinden erişim sonucu. Sıra önemli: en kesin işaret önce.
 
@@ -168,13 +167,9 @@ def classify_access(
                        "Kaynak otomatik istemciyi engelledi; bu engel hesapla da aşılmaz ve aşılmaya çalışılmaz.")
         return out("needs_credential", "forbidden", "Kaynak erişimi reddetti (403); hesap gerekebilir.")
     if 200 <= http_status < 300:
-        # Engel/CAPTCHA ara sayfaları küçüktür. Büyük gövdede (≥ 60 KB) ilk 4 KB'daki "captcha" sözcüğü içerik değil
-        # yapılandırmadır (ölçüldü 23 Eyl: tr.wikipedia ve commons.wikimedia sayfaları JS ayarındaki "hcaptcha" yüzünden
-        # "CAPTCHA istiyor" sayıldı). "Request Rejected" gövdesi (bot_challenge) bu kuraldan etkilenmez.
-        substantial = content_length is not None and content_length >= 60_000
-        if hit_captcha and not substantial:
+        if hit_captcha:
             return out("blocked", "captcha", "Sayfa CAPTCHA istiyor; otomatik olarak geçilmez.")
-        if hit_bot and not (substantial and "the requested url was rejected" not in hit_bot):
+        if hit_bot:
             if "the requested url was rejected" in hit_bot:
                 return out("blocked", "bot_challenge",
                            "Sunucu HTTP 200 döndürdü ancak istenen dosya/içerik yerine "

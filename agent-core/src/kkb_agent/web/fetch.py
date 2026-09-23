@@ -269,7 +269,7 @@ def fetch_url(
     content = b"".join(chunks)
     outcome = classify_access(
         url, http_status=resp.status_code, final_url=final_url,
-        body_excerpt=content[:4096].decode("utf-8", errors="ignore"), environ=environ, content_length=len(content),
+        body_excerpt=content[:4096].decode("utf-8", errors="ignore"), environ=environ,
     )
     return FetchResult(
         url=url, final_url=final_url, http_status=resp.status_code, media_type=_media_type(resp, final_url or url),
