@@ -21,6 +21,7 @@ dependencies = [
     "pillow>=12.3.0",
     "lxml>=6.1.3",
     "pdfplumber>=0.11",
+    "playwright>=1.55",  # JS/dinamik resmi kaynaklar; mevcut sistem Chrome'u kullanır, tarayıcı indirmez
 ]
 
 [project.optional-dependencies]

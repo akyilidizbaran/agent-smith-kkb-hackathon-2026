@@ -105,6 +105,11 @@ __all__ = ["is_small_talk", "small_talk_reply", "trim_unsolicited_offers"]
 _CAP_WEB = re.compile(r"(?<![\w])(internet\w*|web(?:'?(?:de|den|te|ten))?|çevrimiçi|cevrimici|online|google)(?![\w])"
                       r".{0,40}?(?<![\w])(araştır|arastir|arama|ara(?:r|yabil)|bakabil|bulabil|eriş|eris)\w*", re.I)
 _CAP_ASK = re.compile(r"m[ıiuü]s[ıiuü]n|yapabil|edebil|olur mu|mümkün mü|mumkun mu|\?", re.I)
+# Yalnız YETENEK sorusu ("… yapabiliyor musun?") deterministik cevaplanmalı; İSTEK ("bunu internetten
+# araştırır mısın", "şunu web'de ara") gerçek aramaya gitmeli. Ayrım: yetenek yardımcı fiili var mı.
+_CAP_ABILITY = re.compile(
+    r"[ae]bil(?:ir|iyor|iyo|ecek)?|olur\s*mu\b|mümkün|mumkun|erişim\s+var", re.I
+)
 # "nasıl / ne tür / ne çeşit" ve "hangi verilerle çalışıyorsun" (15 Eyl arayüz denemesi): "Elinde nasıl veriler var" kalıba uymadı,
 # modele gitti; model 5 aramadan sonra "Hazır Gold tabloları" başlığı ve doğrulanmamış "687+ seri" yazdı (ADR-0082).
 _CAP_DATA = re.compile(
@@ -208,7 +213,7 @@ def capability_reply(question: str, *, tools: set[str], datasets) -> str | None:
     from ..source_hints import load_source_hints
 
     hints = load_source_hints()
-    if _CAP_WEB.search(text) and _CAP_ASK.search(text):
+    if _CAP_WEB.search(text) and _CAP_ABILITY.search(text):
         if "web_search" in tools:
             hosts = list(hints.get("official_hosts", ()))[:3]
             extra = f" Resmi kaynakların ({', '.join(hosts)} gibi) adreslerini kendim açabilirim." if hosts and "web_url" in tools else ""

@@ -36,7 +36,7 @@ from ..core.errors import ToolError
 from ..core.intent import locator_from_user
 from ..core.preview import preview_table
 from ..core.tool import Tool, ToolResult
-from ..core.web_routing import source_domains, within_domains
+from ..core.web_routing import enrich_intent, source_domains, within_domains
 from ..core.workspace import AnalysisWorkspace
 from ..web.crawl import CrawlBudget, CrawlResult, crawl, keywords_of
 from ..web.fetch import FetchRefused, RobotsCache, private_host
@@ -121,6 +121,116 @@ def _plain(frame) -> str:
         return "  ".join(v.rjust(w) if n else v.ljust(w) for v, w, n in zip(values, widths, numeric)).rstrip()
 
     return "\n".join([line([str(c) for c in cols]), *(line(r) for r in rows)])
+
+
+def web_evidence(
+    *, transport_ok: bool, table_count: int, has_meaningful_text: bool, data_loaded: bool,
+    downloadable_resource_count: int, extraction_status: str,
+) -> dict[str, Any]:
+    """`web_url` sonucunun tek kanıt sözleşmesi (web.py üretir, agent.py okur — kriter tek yerde).
+
+    ÖNEMLİ: anlamlı metin ya da indirilebilir dosya bağlantısı bulunması, İSTENEN VERİNİN elde
+    edildiği anlamına GELMEZ. `requested_data_obtained` yalnız yapılandırılmış tablo gerçekten
+    yüklendiğinde (`data_loaded`) doğrudur; `produced_data`, stale-tablo temizleme ve Senaryo-2
+    başarısı yalnız bu iki bayrağa bakmalıdır.
+    """
+    usable = bool(data_loaded or table_count > 0 or has_meaningful_text or downloadable_resource_count > 0)
+    if data_loaded or table_count > 0:
+        content_kind = "table"
+    elif downloadable_resource_count > 0:
+        content_kind = "data_file"
+    elif has_meaningful_text:
+        content_kind = "document_no_table" if extraction_status == "failed" else "text"
+    else:
+        content_kind = "empty"
+    return {
+        "transport_ok": bool(transport_ok),
+        "usable_evidence": usable,
+        "requested_data_obtained": bool(data_loaded),
+        "data_loaded": bool(data_loaded),
+        "next_action_available": bool(table_count > 0 or downloadable_resource_count > 0),
+        "content_kind": content_kind,
+        "has_meaningful_text": bool(has_meaningful_text),
+        "table_count": int(table_count),
+        "downloadable_resource_count": int(downloadable_resource_count),
+        "extraction_status": extraction_status,
+    }
+
+
+_DATE_COL_NAME = re.compile(r"tarih|dönem|donem|period|date|\bay\b", re.IGNORECASE)
+# Geçerli aylık anahtar: yıl 19xx/20xx + ay 01-12. Ayraç opsiyonel (2025-12, 2025-12-01, 202512, 2026/09).
+# Parasal büyük sayılar (ör. 1572692395037) buradan GEÇMEZ: geçerli yıl+ay deseni taşımaz.
+_YM = re.compile(r"(?:^|[^\d])((?:19|20)\d{2})[-/.]?(0[1-9]|1[0-2])(?:[^\d]|$)")
+
+
+def _month_key_one(value: Any) -> str:
+    m = _YM.search(str(value))
+    return f"{m.group(1)}{m.group(2)}" if m else ""
+
+
+def _month_key(series: Any) -> Any:
+    """Sütunu DOĞRULANMIŞ aylık anahtara (YYYYMM) indirger; geçersiz/parasal değer → '' (join'e girmez)."""
+    return series.astype(str).map(_month_key_one)
+
+
+def _find_date_col(df: Any) -> str | None:
+    """Ada göre (tarih/dönem/period) ya da değer deseni (≥%60 satır GEÇERLİ YYYYMM) tarih sütunu bul.
+
+    Yalnız GEÇERLİ ay anahtarı üreten sütun seçilir; büyük parasal sütun yanlışlıkla tarih sanılmaz.
+    """
+    named = [c for c in df.columns if _DATE_COL_NAME.search(str(c)) and len(df) and (_month_key(df[c]) != "").mean() >= 0.6]
+    if named:
+        return named[0]
+    for c in df.columns:
+        if len(df) and (_month_key(df[c]) != "").mean() >= 0.6:
+            return c
+    return None
+
+
+def monthly_enrich_join(left: Any, right: Any) -> tuple[Any | None, str | None]:
+    """MEVCUT tabloyu (left) YENİ kaynağın (right) sütunlarıyla Tarih üzerinden zenginleştirir.
+
+    Deterministik ve GÜVENLİ: (merged, None) başarıda; (None, sebep) başarısızlıkta. Başarısızlıkta
+    çağıran mevcut tabloyu ASLA üzerine yazmamalı. left'in TÜM satırları korunur (left join); right'in
+    tarih-dışı sütunları DOĞRULANMIŞ ay anahtarıyla eşleşen aya eklenir. Duplicate ay sessizce
+    çözülmez — kaynak kuralı yoksa hata. Çakışan sütun adı ' (web)' ekiyle ayrılır.
+    """
+    import pandas as pd
+    if left is None or not len(left):
+        return None, "mevcut (sol) tablo yok ya da boş"
+    if right is None or not len(right):
+        return None, "yeni kaynak (sağ) tablo yok ya da boş"
+    lcol, rcol = _find_date_col(left), _find_date_col(right)
+    if lcol is None:
+        return None, "mevcut tabloda tarih/dönem kolonu bulunamadı"
+    if rcol is None:
+        return None, "yeni kaynakta tarih/dönem kolonu bulunamadı"
+    lkey, rkey = _month_key(left[lcol]), _month_key(right[rcol])
+    common = set(lkey[lkey != ""]) & set(rkey[rkey != ""])
+    if not common:
+        return None, "iki tarafta ortak geçerli ay (YYYYMM) yok; tarih üzerinden hizalama yapılamadı"
+    right_valid = right[rkey != ""].copy()
+    right_valid["__k"] = rkey[rkey != ""].values
+    dup = right_valid["__k"].duplicated(keep=False)
+    if dup.any():
+        aylar = sorted(set(right_valid.loc[dup, "__k"]))
+        return None, f"yeni kaynakta duplicate ay(lar) var ({', '.join(aylar)}); tekilleştirme kuralı yok"
+    right_lookup = right_valid.set_index("__k")
+    merged = left.copy()
+    existing = set(map(str, merged.columns))
+    added = 0
+    for col in right.columns:
+        if col == rcol:
+            continue
+        name = str(col) if str(col) not in existing else f"{col} (web)"
+        merged[name] = lkey.map(right_lookup[col]).values
+        existing.add(name)
+        added += 1
+    if not added:
+        return None, "yeni kaynaktan eklenecek (tarih dışı) kolon yok"
+    if len(merged) != len(left) or not set(map(str, left.columns)).issubset(set(map(str, merged.columns))):
+        return None, "join sonrası mevcut satır/kolonlar korunamadı"
+    return merged, None
 
 
 class WebUrlParams(BaseModel):
@@ -343,6 +453,21 @@ class WebUrlTool(Tool):
             # Failed discoveries are never cached. The cache is turn-scoped and
             # bounded by both entry count and fetched bytes.
             self._remember_result(cache_key, result, turn=turn)
+        # Dinamik/JS sayfa statik okuyucuda boş bir uygulama kabuğuysa, aynı güvenli URL'yi
+        # opsiyonel gerçek-Chrome katmanıyla render et. Kaynağa özel etkileşim adapter kayıt
+        # defterinde yaşar; browser/Playwright yoksa mevcut güvenli davranış aynen sürer.
+        static_first = result.first
+        if static_first is not None and static_first.ok and static_first.page is not None:
+            static_text = (static_first.page.text or "").strip()
+            static_title = (static_first.page.title or "").strip()
+            if not static_first.page.tables and (not static_text or static_text == static_title):
+                from ..web.browser import browser_crawl_result
+
+                rendered = browser_crawl_result(params.url, question, environ=self.environ)
+                if rendered is not None and rendered.first is not None and rendered.first.ok:
+                    result = rendered
+                    reuse_discovery = False
+                    self._remember_result(cache_key, result, turn=turn)
         web_artifact = {
             "start_url": params.url,
             "used": None,
@@ -545,6 +670,25 @@ class WebUrlTool(Tool):
                         )
                     except (TemporalNormalizationError, ValueError) as exc:
                         temporal_notes.append(f"KISMI SONUÇ: workspace zenginleştirme tamamlanamadı ({exc}).")
+                        # PR #23 (Elif, P5): "mevcut veri setine ekle / zenginleştir / hizala" isteğinde yeni kaynak aktif tabloyu
+            # ezmez. Normalizasyonlu zenginleştirme yapılamadıysa aylık tarih birleştirmesi denenir; o da olmazsa mevcut
+            # tablo korunur ve açık hata döner.
+            active_q = getattr(self._registry, "active_question", "") or ""
+            if not join_completed and self.workspace.has_table and (enrichment_requested or enrich_intent(active_q)):
+                enriched, join_err = monthly_enrich_join(self.workspace.table, table)
+                if enriched is None:
+                    failure = ToolResult.fail(
+                        "JOIN_MISMATCH",
+                        f"Yeni kaynak Tarih üzerinden mevcut tabloya eklenemedi: {join_err}. Mevcut tablo korundu.",
+                        hint="Tarih/dönem kolonlarını ve ortak aylık ekseni doğrula; gerekirse dosyayı düzelt.",
+                        layer="data", retryable=False,
+                    )
+                    failure.artifacts = {"web": web_artifact}
+                    return failure
+                self.workspace.set_table(enriched, description=params.purpose, provenance=prov)
+                web_artifact["enrich_join"] = {"rows": len(enriched), "columns": list(map(str, enriched.columns))}
+                table = enriched   # kanıt/önizleme birleştirilmiş tabloyu yansıtsın
+                join_completed = True
             if not join_completed:
                 self.workspace.set_table(table, description=params.purpose, provenance=prov)
             self.workspace.title = params.purpose
@@ -643,6 +787,11 @@ class WebUrlTool(Tool):
                  "YAPACAĞIN: sayıları bu tablodan ver; birimi sayfanın yazdığı gibi aktar.")
                 + (" Kartta UYARI ya da 'uygunluk: kısmen' varsa cevabın İLK cümlesi o uyarıdır." if quality or (fit is not None and fit.decision == "partial") else ""),
             ]
+            web_artifact["evidence"] = web_evidence(
+                transport_ok=True, table_count=max(1, len(getattr(page.page, "tables", []) or [])),
+                has_meaningful_text=bool((getattr(page.page, "text", "") or "").strip()),
+                data_loaded=True, downloadable_resource_count=0, extraction_status="ok",
+            )
             artifacts: dict[str, Any] = {"web": web_artifact}
             if fit is not None:
                 artifacts["fitness"] = {"decision": fit.decision, "score": fit.score, "reasons": list(fit.reasons), "dims": dict(fit.dims),
@@ -718,6 +867,34 @@ class WebUrlTool(Tool):
         else:
             lines.append("YAPACAĞIN: uygun tabloyu table_index ile yükle; tablo yoksa ve metinde de veri yoksa "
                          "kullanıcıya bu sayfada bulunmadığını söyle, başka kaynağa kendiliğinden geçme.")
+        # Kanıt sözleşmesi (tek yer): başlık = kullanılabilir metin değil; boyut-sınırı gerçek kısmi durumdur.
+        body_text = (full_text or "").strip()
+        page_title = (getattr(first.page, "title", "") or "").strip()
+        has_meaningful_text = bool(body_text) and body_text != page_title
+        extraction_tried = bool(first.page and getattr(first.page, "extraction", None))
+        downloadable = sum(1 for p in result.pages
+                           if (getattr(p, "url", "") or "").split("?")[0].lower().endswith((".csv", ".xlsx", ".xls", ".json")))
+        extraction_status = ("failed" if (index == 0 and extraction_tried and not has_meaningful_text)
+                             else "no_table" if index == 0 else "ok")
+        evidence = web_evidence(
+            transport_ok=True, table_count=index, has_meaningful_text=has_meaningful_text,
+            data_loaded=False, downloadable_resource_count=downloadable, extraction_status=extraction_status,
+        )
+        web_artifact["evidence"] = evidence
+        # A1: kullanılabilir kanıt yok (tablo yok + anlamlı metin yok + indirilebilir dosya yok) ve boyut-sınırı
+        # gibi kısmi durum da yoksa → açık hata. Aksi halde ok=True kalır, ajan "sayfa okundu" sanır.
+        if not evidence["usable_evidence"] and not result.limit_exceeded:
+            code = "DOCUMENT_EXTRACTION_FAILED" if extraction_tried else "EMPTY_RESULT"
+            message = ("Sayfa açıldı ancak yapılandırılmış tablo veya kullanılabilir metin çıkarılamadı."
+                       if extraction_tried else
+                       "Sayfa açıldı ancak kullanılabilir içerik (tablo/metin) bulunamadı.")
+            failure = ToolResult.fail(
+                code, message,
+                hint="Belgeyi CSV/XLSX olarak iste ya da doğru sayfayı/tabloyu belirt; veri yokluğu iddia etme.",
+                layer="parse", retryable=False,
+            )
+            failure.artifacts = {"web": web_artifact}
+            return failure
         return ToolResult(content="\n".join(lines), artifacts={"web": web_artifact})
 
     @staticmethod
@@ -817,7 +994,11 @@ class WebSearchTool(Tool):
             domains = [domain for raw in raw_domains if (domain := self._allowed_domain(raw))]
             max_results = min(int(fallback_plan.get("max_results", 5)), 10)
             topic = str(fallback_plan.get("topic") or "finance")
-            if not query or not domains or len(domains) != len(raw_domains):
+            # "general": harness'in ürettiği, kullanıcı web'i açıkça istediğinde açılan yetkili genel
+            # arama (Option A). Domain pini olmadan tek arama meşrudur — ama YALNIZ bu bayrakta.
+            # Diğer (resmi-kaynak) fallback'lar hâlâ dolu, tümü geçerli domain listesini şart koşar.
+            is_general = str(fallback_plan.get("scope") or "") == "general"
+            if not query or len(domains) != len(raw_domains) or (not domains and not is_general):
                 return ToolResult.fail(
                     "INTENT_REQUIRED", "Doğrulanmış ve kaynakla sınırlandırılmış arama planı bulunamadı.",
                     layer="policy", retryable=False,

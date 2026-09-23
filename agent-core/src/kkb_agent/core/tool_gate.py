@@ -46,7 +46,12 @@ PREMISE = frozenset({"check_premise"})
 
 _CHART = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
 _ANALYTICS = re.compile(r"anomali|aykır|sapan|sapma|olağan ?dışı|sıra ?dışı|kırılma|rejim değişi|öncül|önden mi|korelasyon|granger|ilişki|mevsimsel|seasonal|\bmad\b|medyan mutlak", re.I)
-_WEB = re.compile(r"https?://|www\.|\.pdf\b|\.png\b|\.jpe?g\b|\.csv\b|\.xlsx?\b|sayfa|siteden|linkten|adres|internet|web|\barama\b|\bara\b|bul\b|"
+# Dış-bağlam sinyalleri (dünya/küresel/uluslararası…) de web ailesini açar: yerel havuz Türkiye
+# bankacılık/EVDS verisi; bu ifadeler veri havuzunda karşılığı olmayan, web'den bulunabilir bilgiyi ister.
+# Genel web sinyalleri. "pdf"/"link"/"bağlant" kelime sınırıyla (pdfindeki, linkinden, bağlantısı) yakalanır.
+# Kaynak/kurum ADLARI burada YOK: dış-kaynak tanıma config-driven'dır (source_hints.financial_sources →
+# web_routing.external_source_requested), böylece çekirdek regex kaynağa özel kalmaz.
+_WEB = re.compile(r"https?://|www\.|\bpdf|\.png\b|\.jpe?g\b|\.csv\b|\.xlsx?\b|sayfa|siteden|\blink|\bbağlant|adres|internet|web|\barama\b|\bara\b|bul\b|dünya|küresel|global|uluslararası|yurt ?dışı|yurtdışı|dış piyasa|"
                   # Kırılma dönemlerini "yorumla" isteği dönemin gelişmelerine dayanır; web araştırması açılır (canlı koşu, 23 Eyl).
                   r"kırılma[\s\S]{0,120}yorumla|kirilma[\s\S]{0,120}yorumla", re.I)
 _ARCHITECT = re.compile(r"taslak|onayl|kataloğa al|kataloga al|ekle\b|yükle|yukle|kaydet|ingest|terfi|yayınla", re.I)
@@ -145,9 +150,14 @@ def decide(
         allowed.update(initial_tools)
     opened: list[str] = []
     closed: list[str] = []
+    # Config-driven dış kaynak: kaynak adı/hostu source_hints.financial_sources'ta tanımlı ve yerelde
+    # karşılığı yoksa (TEFAS/ODMD gibi) web ailesi açılır — kaynak adı çekirdek koda gömülmeden.
+    from .web_routing import external_source_requested
+    external_source = external_source_requested(question) or external_source_requested(user_text)
     for family, names, pattern in (("grafik", CHART, _CHART), ("analitik", ANALYTICS, _ANALYTICS), ("web", WEB, _WEB),
                                    ("öncül", PREMISE, _PREMISE_Q)):
-        if pattern.search(question) or (family == "web" and pattern.search(user_text)):
+        web_signal = family == "web" and (pattern.search(user_text) or external_source)
+        if pattern.search(question) or web_signal:
             allowed |= names
             opened.append(family)
         else:
