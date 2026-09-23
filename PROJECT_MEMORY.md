@@ -1359,3 +1359,17 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
   - S06: belirsiz seride netleştirme yerine seçim.
   - F01.1: veri yerine kapsam özeti kuruluyor.
 - **Doğrulama:** suite 984 geçti. Site yeni kodla yeniden başlatıldı; tünel etkilenmedi. Commit ve push edilmedi.
+
+### 2.146 Seri kimliği tablo adı değil: "Catalog TP does not exist" (23 Eylül, ADR-0107)
+- **Bulgu:** Demo incelemesinde EVDS `TP.KKHARTUT.KT1` sorgusu `Catalog "TP" does not exist` verdi. Koşu kayıtlarında 11 vakada
+  33 kez görüldü.
+- **Kök neden 1 (araç):** `lakehouse_distinct_values` kimliği doğrudan FROM'a yazıyordu. `evds:TP.KTF17`,
+  `bddk_finturk:ANKARA_…` gibi her seri kimliğiyle patlıyordu; aynısı değer sayımında ve `core/context.py` ön yüklemesinde de
+  vardı.
+- **Kök neden 2 (model):** `lakehouse_query`'de kimlik tablo adı yazılınca genel SQL_FAILED ve yanıltıcı "kolon adlarını
+  karşılaştır" ipucu dönüyordu.
+- **Düzeltme:** `SilverLakehouse.relation_sql()` üç yerde kullanılıyor. `lakehouse_query` FROM/JOIN'deki seri kimliğini ya da
+  çıplak `TP.` kodunu çalıştırmadan, tam doğru kalıpla (INVALID_ARGS, tekrar denenebilir) geri gönderiyor. Gold tabloları ve doğru
+  sorgular etkilenmiyor.
+- **Doğrulama:** Canlı lakehouse'ta üç kimlik de kırılım aracında çalışıyor; hatalı üç SQL biçimi yakalanıyor. Suite 985 geçti.
+  Demo sunucusu yeniden başlatılmadı; düzeltme sunucu yeniden başlatılınca devreye girer.

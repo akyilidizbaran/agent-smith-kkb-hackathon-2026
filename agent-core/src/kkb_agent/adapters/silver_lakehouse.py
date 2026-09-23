@@ -690,6 +690,16 @@ class SilverLakehouse:
             ),
         )
 
+    def relation_sql(self, dataset_id: str) -> str:
+        """Bir katalog kimliğinin SQL FROM ifadesi. Seri kimliği tablo adı değildir: `evds:TP.KTF17` doğrudan FROM'a
+        yazılınca DuckDB `TP`'yi şema sanıp "Catalog/schema TP does not exist" der (L04, S06; 23 Eyl). Gold tabloları
+        gerçek tablodur ve olduğu gibi kalır."""
+        self.get_dataset(dataset_id)
+        if self._is_gold(dataset_id):
+            return dataset_id
+        sid = dataset_id.replace("'", "''")
+        return f"(SELECT * FROM {self._relation_for(dataset_id)} WHERE series_id = '{sid}') AS _seri"
+
     def preview(self, dataset_id: str, n: int = 5) -> QueryResult:
         self.get_dataset(dataset_id)
         if self._is_gold(dataset_id):

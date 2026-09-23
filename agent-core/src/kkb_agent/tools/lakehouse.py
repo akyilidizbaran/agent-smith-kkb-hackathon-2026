@@ -605,7 +605,48 @@ class LakehouseQueryTool(Tool):
             return f"WHERE EXTRACT(year FROM <dönem_kolonu>) <= {yil}"
         return f"WHERE EXTRACT(year FROM <dönem_kolonu>) = {yil}"
 
+    # FROM/JOIN hedefi: tırnaklı ad, `kaynak:kod` biçimli kimlik ya da çıplak EVDS kodu (TP.KKHARTUT.KT1).
+    _FROM_TARGET = re.compile(
+        r'\b(?:FROM|JOIN)\s+(?:"([^"]+)"|([A-Za-z_]\w*:[^\s,;()]+)|(TP\.[A-Za-z0-9_.]+))', re.I,
+    )
+
+    def _series_used_as_table(self, sql: str) -> tuple[str, str] | None:
+        """SQL bir seri kimliğini tablo adı olarak kullanıyor mu? (yazılan hedef, katalog kimliği)
+
+        Seriler tek uzun tabloda satır kümesidir; kimlik FROM'a yazılınca DuckDB `TP.KKHARTUT.KT1`'i katalog.şema.tablo
+        sanıp "Catalog "TP" does not exist" der. Ölçüldü (23 Eyl demo, ADIM 4): hata genel SQL_FAILED + "kolon adlarını
+        karşılaştır" ipucuyla döndü, model yolu bulamadı. Gold tabloları gerçek tablodur, işaretlenmez."""
+        for match in self._FROM_TARGET.finditer(sql or ""):
+            written = next(g for g in match.groups() if g)
+            for candidate in (written, f"evds:{written}" if written.upper().startswith("TP.") else None):
+                if not candidate:
+                    continue
+                try:
+                    self.lakehouse.get_dataset(candidate)
+                except Exception:  # noqa: BLE001 — katalogda yok: gerçek tablo adı olabilir
+                    continue
+                if _relation_sql(self.lakehouse, candidate) != candidate:
+                    return written, candidate
+            if written.upper().startswith("TP."):
+                return written, f"evds:{written}"
+        return None
+
     def run(self, params: QueryParams) -> ToolResult:
+        misused = self._series_used_as_table(params.sql)
+        if misused is not None:
+            written, series_id = misused
+            relation = getattr(self.lakehouse, "_relation_for", lambda _sid: "silver.fact_observation")(series_id)
+            return ToolResult.fail(
+                "INVALID_ARGS",
+                f"'{written}' bir seri kimliği, tablo adı değil; sorgu çalıştırılmadı. Bütün seriler tek tabloda, "
+                f"series_id satırlarıdır.",
+                hint=(f"Şu kalıbı kullan: SELECT observation_date, value FROM {relation} "
+                      f"WHERE series_id = '{series_id}' AND observation_date BETWEEN '<başlangıç>' AND '<bitiş>' "
+                      "ORDER BY observation_date. Birden çok seri için series_id IN (...) ve pivot (MAX(CASE ...))."),
+                candidates=[series_id],
+                layer="reference",
+                retryable=True,
+            )
         # SQL guard sınır doğrulayıcıda çalıştı (UNSAFE_SQL orada); buraya gelen bir
         # hata artık çalışma hatasıdır ve tekrar denemeyle çözülebilir.
         try:
@@ -945,6 +986,13 @@ class DistinctValuesParams(BaseModel):
     limit: int = Field(default=20, description="En fazla kaç değer döndürülsün")
 
 
+def _relation_sql(lakehouse: Any, dataset_id: str) -> str:
+    """Katalog kimliğini FROM ifadesine çevirir. Seri-merkezli lakehouse'ta kimlik tablo adı değildir (`relation_sql`);
+    kimliği gerçek tablo olan adaptörlerde (eski DuckDB, testler) olduğu gibi kalır."""
+    relation = getattr(lakehouse, "relation_sql", None)
+    return relation(dataset_id) if callable(relation) else dataset_id
+
+
 class LakehouseDistinctValuesTool(Tool):
     """Modelin en sık yaptığı hatayı kapatan araç.
 
@@ -995,7 +1043,7 @@ class LakehouseDistinctValuesTool(Tool):
             where = f"WHERE {col} ILIKE '%{safe}%'"
 
         sql = (
-            f"SELECT DISTINCT {select} FROM {params.dataset_id} {where} "
+            f"SELECT DISTINCT {select} FROM {_relation_sql(self.lakehouse, params.dataset_id)} {where} "
             f"ORDER BY 1 LIMIT {int(params.limit)}"
         )
         try:
@@ -1052,7 +1100,7 @@ class LakehouseDistinctValuesTool(Tool):
         """Kolondaki toplam distinct değer sayısı — limit uygulanmadan önceki hâli."""
         try:
             r = self.lakehouse.execute_sql(
-                f"SELECT COUNT(DISTINCT {column}) AS n FROM {dataset_id}"
+                f"SELECT COUNT(DISTINCT {column}) AS n FROM {_relation_sql(self.lakehouse, dataset_id)}"
             )
             return int(r.data.iloc[0, 0]) if not r.is_empty else 0
         except LakehouseError:

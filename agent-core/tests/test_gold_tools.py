@@ -339,3 +339,30 @@ def test_workspace_view_json_tarihlerini_gercek_tarih_tipine_dondurur() -> None:
     view = workspace_view(frame)
     assert view["period_end"].iloc[0] == date(2024, 1, 31)
     assert all(isinstance(value, date) for value in view["period_end"])
+
+
+def test_seri_kimligi_tablo_adi_olarak_kullanilmaz(env) -> None:
+    """23 Eyl demo, ADIM 4: `evds:TP.KTF12` / `TP.KTF12` FROM'a yazılınca DuckDB 'Catalog "TP" does not exist' dedi.
+    lakehouse_distinct_values kimliği kendisi FROM'a yazıyordu (araç hatası); lakehouse_query'de model yazınca hata
+    genel SQL_FAILED + yanıltıcı ipucuyla dönüyordu. Artık kırılım aracı doğru ilişkiyi kullanır, sorgu aracı çalıştırmadan
+    doğru kalıbı söyler; gold tablosu ve doğru yazılmış seri sorgusu etkilenmez."""
+    from kkb_agent.tools.lakehouse import LakehouseDistinctValuesTool, LakehouseQueryTool
+
+    lake, ws, _ = env
+    assert lake.relation_sql("evds:TP.KTF12").startswith("(SELECT * FROM silver.fact_observation WHERE series_id = ")
+
+    distinct = LakehouseDistinctValuesTool(lake).validate_and_run({"dataset_id": "evds:TP.KTF12", "column": "quality_flag"})
+    assert distinct.ok, distinct.content
+
+    query = LakehouseQueryTool(lake, ws)
+    for sql in ("SELECT observation_date, value FROM evds:TP.KTF12",
+                "SELECT observation_date, value FROM TP.KTF12",
+                'SELECT observation_date, value FROM "evds:TP.KTF12"'):
+        r = query.validate_and_run({"sql": sql, "purpose": "faiz"})
+        assert not r.ok and r.error.error_code == "INVALID_ARGS" and r.error.is_retryable, sql
+        assert "series_id = 'evds:TP.KTF12'" in r.content and r.error.candidates == ["evds:TP.KTF12"]
+
+    ok = query.validate_and_run({"sql": "SELECT observation_date, value FROM silver.fact_observation "
+                                        "WHERE series_id = 'evds:TP.KTF12' AND observation_date BETWEEN '2025-01-01' "
+                                        "AND '2025-03-31' ORDER BY observation_date", "purpose": "faiz"})
+    assert ok.ok, ok.content
