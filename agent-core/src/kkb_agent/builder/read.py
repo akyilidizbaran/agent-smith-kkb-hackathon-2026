@@ -12,28 +12,33 @@ bot engeli, giriş sayfası, 404 burada sınıflandırılır, yorumlanmaz.
 
 from __future__ import annotations
 
-import csv
 import io
 from collections import Counter
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 from urllib.parse import urlparse
 
 import pandas as pd
 
 from ..contracts.access import AccessOutcome
 from ..core.access_policy import classify_access
+from .tabular import TabularParseError, TabularParseResult, parse_tabular_bytes
 
 MAX_BYTES_DEFAULT = 25 * 1024 * 1024
 
-_DELIMITERS = (",", ";", "\t", "|")
 MAX_PREAMBLE_ROWS = 20
 """Başlıktan önce atlanabilecek en fazla önsöz satırı. Daha uzun bir giriş rapor önsözü
 değildir; orada tahmin etmek yerine dosya olduğu gibi okunur."""
 
 
 class ReadRefused(Exception):
-    """Politika reddi: izinsiz kök, özel IP, boyut, biçim. Erişim sonucu değil, yerel karar."""
+    """Politika/parser reddi with a stable machine-readable error code."""
+
+    def __init__(self, message: str, *, code: str = "READ_REFUSED", details: dict | None = None):
+        super().__init__(message)
+        self.code = code
+        self.details = details or {}
 
 
 def _under(path: Path, roots: Iterable[Path]) -> bool:
@@ -49,8 +54,12 @@ def _under(path: Path, roots: Iterable[Path]) -> bool:
 
 def excel_sheets(content: bytes) -> list[str]:
     """XLSX sayfa adları (M10-T05): birden çok sayfa varsa kullanıcı/model seçer, sessizce ilki alınmaz."""
-    with pd.ExcelFile(io.BytesIO(content)) as xf:
-        return [str(n) for n in xf.sheet_names]
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True, keep_links=False)
+        return [str(n) for n in wb.sheetnames]
+    except Exception as exc:
+        raise ReadRefused(f"Excel dosyası okunamadı: {type(exc).__name__}", code="XLSX_CORRUPT") from exc
 
 
 def _tag_preamble(frame: pd.DataFrame, preamble: list[str]) -> pd.DataFrame:
@@ -129,72 +138,6 @@ def frame_from_grid(rows: list[list[Any]]) -> tuple[pd.DataFrame, list[str]]:
     return _tag_preamble(frame, preamble), preamble
 
 
-def _delimited_preamble(text: str) -> tuple[int, list[str]]:
-    """(atlanacak fiziksel satır sayısı, atlanan satırlar) — sınırlayıcıyı kendisi bulur.
-
-    TEFAS/EVDS gibi dışa aktarımlar tablonun üstüne "Dışa Aktarım Tarihi", "Toplam Kayıt
-    Sayısı" gibi dar rapor satırları koyar. Bunlar pandas'ın gözünde ilk satır, yani başlık
-    olur; dört sütunluk tablo iki sütuna sıkışır. Burada başlık satırı bulunur ve önsöz
-    yalnızca *atlanır*, yorumlanmaz — hangi satırların atlandığı çağırana geri verilir.
-    """
-    best: tuple[tuple[int, int], str, list[list[str]], list[int]] | None = None
-    for delimiter in _DELIMITERS:
-        try:
-            reader = csv.reader(io.StringIO(text, newline=""), delimiter=delimiter)
-            rows = [row for _, row in zip(range(MAX_PREAMBLE_ROWS + 200), reader)]
-        except csv.Error:
-            continue
-        counts = [len(row) for row in rows]
-        width = _table_width(counts)
-        if width < 2:
-            continue
-        score = (sum(1 for count in counts if count == width), width)
-        if best is None or score > best[0]:
-            best = (score, delimiter, rows, counts)
-    if best is None:
-        return 0, []
-    _score, delimiter, rows, counts = best
-    index = _header_index(counts, _table_width(counts))
-    if index == 0:
-        return 0, []
-
-    # Atlanacak olan fiziksel satır sayısıdır, alan satırı sayısı değil: tırnak içindeki bir
-    # satır sonu ikisini ayırır. `line_num` okuyucunun gerçekten tükettiği satırı verir.
-    probe = csv.reader(io.StringIO(text, newline=""), delimiter=delimiter)
-    physical = 0
-    for position, _row in enumerate(probe):
-        if position == index - 1:
-            physical = probe.line_num
-            break
-    skipped = [", ".join(cell.strip() for cell in row if cell.strip()) for row in rows[:index]]
-    return physical, [line for line in skipped if line]
-
-
-def _xlsx_preamble(content: bytes, sheet_name: str) -> tuple[int, list[str]]:
-    """XLSX'te başlık satırının indeksi ve atlanan önsöz satırları.
-
-    CSV ile aynı ölçüt; XLSX'te "Rapor Bilgileri" gibi tek hücrelik bir başlık daha olabildiği
-    için sabit bir `skiprows` değeri doğru olmaz, genişlik ölçülür.
-    """
-    import openpyxl
-
-    workbook = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-    try:
-        sheet = workbook[sheet_name]
-        counts: list[int] = []
-        texts: list[str] = []
-        for position, row in enumerate(sheet.iter_rows(values_only=True)):
-            cells = [str(cell).strip() for cell in row if cell is not None and str(cell).strip()]
-            counts.append(len(cells))
-            texts.append(", ".join(cells))
-            if position > MAX_PREAMBLE_ROWS + 200:
-                break
-    finally:
-        workbook.close()
-    index = _header_index(counts, _table_width(counts))
-    return index, [line for line in texts[:index] if line]
-
-
 def _table_from_bytes(content: bytes, name: str, *, sheet: str | int | None = None) -> pd.DataFrame:
     """Tip çıkarımı YOK: her hücre metin. Boş hücre boş kalır, NaN olmaz.
 
@@ -202,37 +145,33 @@ def _table_from_bytes(content: bytes, name: str, *, sheet: str | int | None = No
     sayfa listesi döner (belirsizlik sorulur). Legacy .xls desteklenmez (xlrd yok) — açıkça söylenir.
     """
     suffix = Path(name.split("?")[0]).suffix.lower()
-    if suffix == ".xls":
-        raise ReadRefused("eski Excel (.xls) desteklenmiyor; dosyayı .xlsx olarak kaydedin")
-    if suffix in (".xlsx", ".xlsm"):
-        names = excel_sheets(content)
-        if sheet is None and len(names) > 1:
-            raise ReadRefused("Excel dosyasında birden çok sayfa var: " + ", ".join(names) + " — `sheet` ile birini seç")
-        target: str | int = 0 if sheet is None else sheet
-        if isinstance(target, str) and target.isdigit():
-            target = int(target)
-        if isinstance(target, str) and target not in names:
-            raise ReadRefused(f"sayfa '{target}' yok; sayfalar: {', '.join(names)}")
-        if isinstance(target, int) and not (0 <= target < len(names)):
-            raise ReadRefused(f"sayfa indeksi {target} yok; {len(names)} sayfa var")
-        sheet_name = names[target] if isinstance(target, int) else target
-        skip, preamble = _xlsx_preamble(content, sheet_name)
-        frame = pd.read_excel(
-            io.BytesIO(content), sheet_name=target, dtype=str, keep_default_na=False,
-            engine="openpyxl", skiprows=skip,
-        )
-        return _tag_preamble(frame.fillna(""), preamble)
-    text = content.decode("utf-8-sig", errors="replace")
     if suffix == ".json":
+        try:
+            text = content.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise ReadRefused("JSON kodlaması UTF-8 değil", code="ENCODING_UNSUPPORTED") from exc
         frame = pd.read_json(io.StringIO(text), dtype=False)
         return frame.astype(str).where(frame.notna(), "")
-    sep = "\t" if suffix == ".tsv" else None  # None → sniff (',' ';' '\t' '|')
-    skip, preamble = _delimited_preamble(text)
-    frame = pd.read_csv(
-        io.StringIO(text), sep=sep, engine="python", dtype=str, keep_default_na=False,
-        skiprows=skip,
-    ).fillna("")
-    return _tag_preamble(frame, preamble)
+    try:
+        # Önsöz/başlık bulma artık `builder.tabular` ayrıştırıcısının işi (PR #26). Bizim eski
+        # genişlik kuralımız kaldırıldı: ölçüldü, onun puanlamalı yöntemi tam genişlikte önsözü
+        # ve 20 satırdan uzun girişi de doğru çözüyordu, bizimki ikisinde de sessizce pes ediyordu.
+        # Atlanan önsöz metni kanıt zincirinde kalsın diye `attrs["preamble"]` köprüsü aşağıda.
+        frame = parse_tabular_bytes(content, source_name=name, sheet=sheet).raw_frame
+    except TabularParseError as exc:
+        raise ReadRefused(str(exc), code=exc.code, details=exc.details) from exc
+    return _tag_preamble(frame, list(frame.attrs.get("tabular_quality").skipped_text or ()))
+
+
+def read_tabular_bytes(content: bytes, name: str, *, sheet: str | int | None = None) -> TabularParseResult:
+    """Parse bytes and expose raw/typed frames plus the deterministic quality report."""
+    suffix = Path(name.split("?")[0]).suffix.lower()
+    if suffix == ".json":
+        raise ReadRefused("JSON için tabular kalite raporu desteklenmiyor; JSON ingest yolunu kullanın", code="JSON_UNSUPPORTED")
+    try:
+        return parse_tabular_bytes(content, source_name=name, sheet=sheet)
+    except TabularParseError as exc:
+        raise ReadRefused(str(exc), code=exc.code, details=exc.details) from exc
 
 
 def _private_host(host: str) -> bool:
@@ -261,7 +200,10 @@ def read_bytes_for_profiling(
         if session is None:
             from ..web.session import default_session
             session = default_session()
-        from ..web.fetch import FetchRefused, guarded_get   # döngüsel import: web.html → builder.read
+        from ..web.fetch import (  # döngüsel import: web.html → builder.read
+            FetchRefused,
+            guarded_get,
+        )
         try:
             resp, _final = guarded_get(session, locator, timeout=30, stream=True)
         except FetchRefused as exc:
@@ -269,12 +211,14 @@ def read_bytes_for_profiling(
         except Exception:  # noqa: BLE001
             return None, "", classify_access(locator, http_status=None, environ=environ)
         chunks, size = [], 0
-        for chunk in resp.iter_content(65536):
-            size += len(chunk)
-            if size > max_bytes:
-                resp.close()
-                raise ReadRefused(f"kaynak {max_bytes} bayt sınırını aşıyor")
-            chunks.append(chunk)
+        try:
+            for chunk in resp.iter_content(65536):
+                size += len(chunk)
+                if size > max_bytes:
+                    raise ReadRefused(f"kaynak {max_bytes} bayt sınırını aşıyor", code="SIZE_LIMIT")
+                chunks.append(chunk)
+        finally:
+            resp.close()
         content = b"".join(chunks)
         outcome = classify_access(
             locator, http_status=resp.status_code, final_url=getattr(resp, "url", None),
@@ -316,7 +260,10 @@ def read_table_for_profiling(
         if session is None:
             from ..web.session import default_session
             session = default_session()
-        from ..web.fetch import FetchRefused, guarded_get   # döngüsel import: web.html → builder.read
+        from ..web.fetch import (  # döngüsel import: web.html → builder.read
+            FetchRefused,
+            guarded_get,
+        )
         try:
             resp, _final = guarded_get(session, locator, timeout=30, stream=True)
         except FetchRefused as exc:
@@ -324,12 +271,14 @@ def read_table_for_profiling(
         except Exception:  # noqa: BLE001 — DNS/TLS/timeout → unreachable
             return None, classify_access(locator, http_status=None, environ=environ)
         chunks, size = [], 0
-        for chunk in resp.iter_content(65536):
-            size += len(chunk)
-            if size > max_bytes:
-                resp.close()
-                raise ReadRefused(f"kaynak {max_bytes} bayt sınırını aşıyor")
-            chunks.append(chunk)
+        try:
+            for chunk in resp.iter_content(65536):
+                size += len(chunk)
+                if size > max_bytes:
+                    raise ReadRefused(f"kaynak {max_bytes} bayt sınırını aşıyor", code="SIZE_LIMIT")
+                chunks.append(chunk)
+        finally:
+            resp.close()
         content = b"".join(chunks)
         outcome = classify_access(
             locator, http_status=resp.status_code, final_url=getattr(resp, "url", None),
@@ -352,5 +301,40 @@ def read_table_for_profiling(
     return frame, classify_access(str(path), http_status=200, environ=environ)
 
 
-__all__ = ["MAX_BYTES_DEFAULT", "MAX_PREAMBLE_ROWS", "ReadRefused", "excel_sheets", "frame_from_grid",
-           "read_bytes_for_profiling", "read_table_for_profiling", "strip_preamble_rows"]
+def read_tabular_for_profiling(
+    locator: str,
+    *,
+    allowed_roots: Iterable[Path],
+    max_bytes: int = MAX_BYTES_DEFAULT,
+    session: Any = None,
+    environ: dict[str, str] | None = None,
+    sheet: str | int | None = None,
+) -> tuple[TabularParseResult | None, AccessOutcome]:
+    """Rich generic intake result used by new callers.
+
+    The older ``read_table_for_profiling`` API remains available and returns
+    the lossless frame for backwards compatibility.
+    """
+    content, _media, outcome = read_bytes_for_profiling(
+        locator, allowed_roots=allowed_roots, max_bytes=max_bytes,
+        session=session, environ=environ,
+    )
+    if content is None or not outcome.ok:
+        return None, outcome
+    parsed = urlparse(locator)
+    name = Path(parsed.path if parsed.scheme in ("http", "https", "file") else locator).name
+    return read_tabular_bytes(content, name or "upload.csv", sheet=sheet), outcome
+
+
+__all__ = [
+    "MAX_BYTES_DEFAULT",
+    "MAX_PREAMBLE_ROWS",
+    "ReadRefused",
+    "excel_sheets",
+    "frame_from_grid",
+    "read_bytes_for_profiling",
+    "read_table_for_profiling",
+    "read_tabular_bytes",
+    "read_tabular_for_profiling",
+    "strip_preamble_rows",
+]

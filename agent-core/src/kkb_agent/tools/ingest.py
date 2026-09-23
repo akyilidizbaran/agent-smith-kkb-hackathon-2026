@@ -23,25 +23,31 @@ from typing import Any, Literal
 import pandas as pd
 from pydantic import BaseModel, Field
 
+from ..adapters.duckdb_lakehouse import release_connections
+from ..builder.crosscheck import cross_check, file_points
 from ..builder.ingest import LakehouseCLI
 from ..builder.profile import profile_table, propose
-from ..builder.read import (
-    ReadRefused, frame_from_grid, read_bytes_for_profiling, read_table_for_profiling,
-)
-from ..builder.crosscheck import cross_check, file_points
 from ..builder.quality import table_quality
-from ..builder.relevance import assess as assess_relevance, catalog_entries, user_confirmed
-from ..core.fitness import _LOCATOR as _LOCATOR_RE, Lexicon, assess as assess_fitness, signature_of
+from ..builder.read import (
+    ReadRefused,
+    frame_from_grid,
+    read_bytes_for_profiling,
+    read_table_for_profiling,
+)
+from ..builder.relevance import assess as assess_relevance
+from ..builder.relevance import catalog_entries, user_confirmed
 from ..builder.unit_guess import guess_unit
 from ..builder.verify import verify_mapping
-from ..adapters.duckdb_lakehouse import release_connections
 from ..contracts.lakehouse import LakehouseClient
 from ..core.access_policy import decide, detect_source_constraint, render_for_model, to_tool_error
+from ..core.errors import ToolError
+from ..core.fitness import _LOCATOR as _LOCATOR_RE
+from ..core.fitness import Lexicon, signature_of
+from ..core.fitness import assess as assess_fitness
 from ..core.intent import locator_from_user, write_intent
+from ..core.tool import Tool, ToolResult
 from ..vision.ocr import is_document, ocr_document
 from ..web.html import extract_ocr_page
-from ..core.errors import ToolError
-from ..core.tool import Tool, ToolResult
 
 
 class OcrUnavailable(RuntimeError):
@@ -163,6 +169,7 @@ def undeclared(params: IngestParams, user_text: str) -> list[str]:
 def _apply_declared(mapping, semantics, params: IngestParams):
     """Kullanıcı beyanı öneriyi tamamlar ya da geçersiz kılar; her alan kanıt satırıyla."""
     from dataclasses import replace
+
     from ..builder.profile import Evidence
 
     sem_updates: dict[str, Any] = {}
@@ -354,6 +361,13 @@ class IngestFromUrlTool(Tool):
         if not outcome.ok or frame is None:
             err = to_tool_error(outcome, decision)
             return ToolResult(content=err.render(), ok=False, error=err)
+
+        # Generic parser quality is attached to the frame so this path can
+        # explain encoding/delimiter/header decisions without persisting raw
+        # prompts or uploaded contents.
+        # Bu iki okuma `_drop_aggregate_rows`'tan ÖNCE yapılır: o yeni bir tablo döndürür ve
+        # `attrs` onunla gelmez, sonra okunursa ikisi de sessizce boş çıkar.
+        parse_quality = getattr(frame, "attrs", {}).get("tabular_quality")
 
         # 1b. rapor süsleri veri değildir: üstteki önsöz okuyucuda ayrıldı, alttaki 'Toplam' burada
         # ayrılır. Veri ekibinin CLI'ı dosyayı ham okur; o da aynı şeyleri başlık/tarih sanmasın diye
@@ -564,7 +578,7 @@ class IngestFromUrlTool(Tool):
             *([f"OCR: {doc_note}"] if doc_note else []),
             f"satır: {report.rows_mapped} eşlendi, {report.rows_null_value} boş değer korundu"
             + (f"; yazılan {out.rows_written}, değişmeyen {out.rows_unchanged}" if out.rows_written is not None else ""),
-            f"katman: adhoc (taslak) — Silver'a ve Gold'a girmez; bir insan onaylayınca kataloğa alınır",
+            "katman: adhoc (taslak) — Silver'a ve Gold'a girmez; bir insan onaylayınca kataloğa alınır",
             "eşleme: " + ", ".join(f"{e.field}={e.value!r}" for e in mapping.evidence if e.field in
                                    ("observation_date_column", "date_format", "value_column", "decimal_separator", "entity_id_column")),
             f"anlam: frekans={semantics.frequency} ölçüm={semantics.measure_type} birim={semantics.unit}"
@@ -579,6 +593,12 @@ class IngestFromUrlTool(Tool):
         if relevance.period_ok is False:
             card.append("⚠ dosyanın tarih aralığı sorudaki yılı KAPSAMIYOR; o yıl için bu seriden sayı çıkmaz")
         card += [f"UYARI: {q}" for q in quality]
+        if parse_quality is not None:
+            card.append(
+                f"okuma kalitesi: {parse_quality.status}; parser={parse_quality.parser}; "
+                f"başlık satırı={parse_quality.header_row}; güven={parse_quality.confidence:.2f}"
+            )
+            card.extend(f"UYARI: {w}" for w in parse_quality.warnings)
         if better:
             card.append(f"NOT: bu oturumda bakılan {', '.join(better)} bu soruya daha uygun görünüyor")
         if crosscheck is not None:
@@ -594,7 +614,8 @@ class IngestFromUrlTool(Tool):
                                      "fitness": {"decision": fit.decision, "score": fit.score, "reasons": list(fit.reasons),
                                                  "dims": dict(fit.dims), "required": list(fit.required), "present": list(fit.present),
                                                  "signature": sig.describe(), "coverage": sig.coverage(), "source": params.locator,
-                                                 "quality": list(quality),
+                                     "quality": list(quality),
+                                                 "parse_quality": (parse_quality.to_dict() if parse_quality is not None else None),
                                                  "confirmed": bool(confirmed)},
                                      **({"crosscheck": crosscheck} if crosscheck is not None else {})})
 
