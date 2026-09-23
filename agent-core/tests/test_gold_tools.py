@@ -342,7 +342,7 @@ def test_workspace_view_json_tarihlerini_gercek_tarih_tipine_dondurur() -> None:
 
 
 def test_seri_kimligi_tablo_adi_olarak_kullanilmaz(env) -> None:
-    """23 Eyl demo, ADIM 4: `evds:TP.KTF12` / `TP.KTF12` FROM'a yazılınca DuckDB 'Catalog "TP" does not exist' dedi.
+    """Canlı koşu (23 Eyl): `evds:TP.KTF12` / `TP.KTF12` FROM'a yazılınca DuckDB 'Catalog "TP" does not exist' dedi.
     lakehouse_distinct_values kimliği kendisi FROM'a yazıyordu (araç hatası); lakehouse_query'de model yazınca hata
     genel SQL_FAILED + yanıltıcı ipucuyla dönüyordu. Artık kırılım aracı doğru ilişkiyi kullanır, sorgu aracı çalıştırmadan
     doğru kalıbı söyler; gold tablosu ve doğru yazılmış seri sorgusu etkilenmez."""
@@ -370,7 +370,7 @@ def test_seri_kimligi_tablo_adi_olarak_kullanilmaz(env) -> None:
 
 
 def test_gold_join_reddi_turu_bitirmez_kirilim_paneline_yonlendirir(env) -> None:
-    """23 Eyl demo: çok serili hizalama Gold kuralına (ör. derived seri) takılınca tur bitiyordu; ajan panele geçemedi.
+    """Canlı koşu (23 Eyl): çok serili hizalama Gold kuralına (ör. derived seri) takılınca tur bitiyordu; ajan panele geçemedi.
     gold_join reddi artık tur bitirmez ve aynı serileri lakehouse_breakdown_panel ile almayı söyler."""
     lake, ws, runner = env
     runner.refusal = ("UNVERIFIED_SEMANTICS", "semantik doğrulanmadı")

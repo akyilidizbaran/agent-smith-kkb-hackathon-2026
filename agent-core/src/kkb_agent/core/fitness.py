@@ -338,7 +338,7 @@ class Fitness:
 
 def _short_list(items: set[str] | list[str], limit: int = 6) -> str:
     """Uyarıda veri terimleri: teknik sütun adları (`<seri>@<varlık>::<ölçü>`) çıkarılır, en çok `limit` terim yazılır.
-    23 Eyl senaryo koşusu: birleşik tablonun teknik adları insan diline çevrilince aynı ad onlarca kez tekrarlandı."""
+    Canlı koşu (23 Eyl): birleşik tablonun teknik adları insan diline çevrilince aynı ad onlarca kez tekrarlandı."""
     clean = sorted({str(item) for item in items if "::" not in str(item)})
     if not clean:
         return "—"

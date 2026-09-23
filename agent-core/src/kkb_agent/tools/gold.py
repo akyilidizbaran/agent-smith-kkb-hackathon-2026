@@ -267,8 +267,8 @@ class _GoldTool(Tool):
                     line for line in refused.content.split("\n") if not line.startswith("BU HATA TEKRAR DENEMEYLE")
                 ) + "\nTur devam ediyor: önerilen araçla sürdür; aynı çağrıyı tekrarlama."
             elif self.name == "gold_join" and refused.error is not None:
-                # Çok serili hizalama Gold'un metrik kuralına takılınca (ör. derived seri) tur bitmez (23 Eyl demo,
-                # Senaryo 5): aynı seriler kırılım panelinde katalog toplama kuralıyla tek aylık tabloya gelir.
+                # Çok serili hizalama Gold'un metrik kuralına takılınca (ör. derived seri) tur bitmez (canlı koşu,
+                # 23 Eyl): aynı seriler kırılım panelinde katalog toplama kuralıyla tek aylık tabloya gelir.
                 ids = list(getattr(params, "series_ids", []) or [])
                 refused.error.terminal = False
                 refused.content = "\n".join(

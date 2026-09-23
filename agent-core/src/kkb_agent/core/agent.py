@@ -85,7 +85,7 @@ _REQUESTED_CAPABILITIES: tuple[tuple[str, "re.Pattern[str]", frozenset[str], str
     ("öncül", _PREMISE_ASK, frozenset({"check_premise"}),
      "Soru bir yön varsayıyor ama check_premise ile doğrulamadın. Öncülü araçla sına (seri, kırılım değeri, yıl, "
      "iddia edilen yön); kart ÇELİŞİYOR derse cevabın ilk cümlesi düzeltme olsun. Sonra cevabını yaz."),
-    # 23 Eyl senaryo koşusu: "reel hale getir" takibinde tablo koruma kuralı yeniden kurmayı doğru engelledi, ama model
+    # Canlı koşu (23 Eyl): reel değer isteyen takipte tablo koruma kuralı yeniden kurmayı doğru engelledi, ama model
     # reel değer aracını hiç çağırmadan "tamamlanamadı" yazdı.
     ("reel", re.compile(r"\breel\b|enflasyondan\s+arınd|enflasyondan\s+arind|sabit\s+fiyat|fiyatlarıyla|fiyatlariyla", re.I),
      frozenset({"workspace_real_value", "lakehouse_breakdown_panel"}),
@@ -96,7 +96,7 @@ _REQUESTED_CAPABILITIES: tuple[tuple[str, "re.Pattern[str]", frozenset[str], str
     ("web araştırması", re.compile(r"kırılma[\s\S]{0,120}yorumla|kirilma[\s\S]{0,120}yorumla", re.I),
      frozenset({"web_search", "web_url"}),
      "Kullanıcı kırılma dönemlerini yorumlamanı istedi ama web araştırması yapmadın. Tespit ettiğin 2–3 kırılma dönemi için "
-     "web_search ile dönemin faiz, enflasyon, kur ve finansal gelişmelerini ara (dönem başına bir sorgu); yorumu bulduğun "
+     "web_search ile o döneme ait gelişmeleri ara (dönem başına bir sorgu, tabloda yer alan göstergelerle ilgili); yorumu bulduğun "
      "kaynaklara dayandır ve kaynağı yaz. Sonra cevabını yaz."),
     ("dönüşüm", _TRANSFORMATION_ASK, _TRANSFORMATION_TOOL_NAMES,
      "Kullanıcı mevcut tablo üzerinde bir dönüşüm/analiz istedi ama dönüşüm aracı çağırmadın. "
@@ -761,7 +761,7 @@ class AnalyticsAgent:
     _SOURCE_NAMES = re.compile(r"\bbddk\b|\bevds\b|\btcmb\b|\btefas\b|\btüik\b|\btuik\b|\bspk\b", re.I)
 
     def _multi_source_scale(self, question: str) -> int:
-        """Birden çok kaynağı birleştiren analiz (23 Eyl demo, Senaryo 5): 6–7 kavramı tek turda bulmak için arama bütçesi
+        """Birden çok kaynağı birleştiren analiz (canlı koşu, 23 Eyl): 6–7 kavramı tek turda bulmak için arama bütçesi
         ve adım sınırı 8'de tükeniyordu. İki ya da daha fazla kaynak adı + birleştirme isteğinde sınırlar artar."""
         sources = {m.group(0).lower().replace("tuik", "tüik") for m in self._SOURCE_NAMES.finditer(question or "")}
         if len(sources) >= 2 and self._SESSION_JOIN_ASK.search(question or ""):
@@ -1880,7 +1880,7 @@ class AnalyticsAgent:
         parts = [f"{len(frame):,}".replace(",", ".") + " satır"]
         if facts is not None and facts.period_start and facts.period_end:
             parts.append(f"dönem {facts.period_start} – {facts.period_end}")
-        # Kullanıcının gördüğü sütunlar ve arayüzle aynı etiketler (23 Eyl demo): Gold tablosunun kanıt sütunları
+        # Kullanıcının gördüğü sütunlar ve arayüzle aynı etiketler (canlı koşu, 23 Eyl): Gold tablosunun kanıt sütunları
         # (::quality_flag, ::observations ...) de listeleniyor, hepsi serinin adına çevrilince aynı etiket altı kez
         # tekrarlanıyordu.
         visible = [str(c) for c in frame.columns
@@ -2418,7 +2418,7 @@ class AnalyticsAgent:
                         )
                     )
                     # İstenip henüz karşılanmamış yetenek (ör. reel değer) kurtarma istemine yazılır: kurtarma turu konuşmayı
-                    # kısalttığı için yetenek denetimine sıra gelmeden cevap yazılıyordu (23 Eyl senaryo koşusu, tur 2).
+                    # kısalttığı için yetenek denetimine sıra gelmeden cevap yazılıyordu (canlı koşu, 23 Eyl).
                     unmet = [cap for cap in requested if not any(s.ok and s.tool_name in cap[2] for s in steps)]
                     messages = self._compact_recovery_messages(
                         planning_question,
@@ -2822,7 +2822,7 @@ class AnalyticsAgent:
                     prior_table = None
                     if blocked is not None and not self._REAL_ASK.search(question or ""):
                         # Yeni seri ekleniyor (reel değil): yeniden kuran araç çalışır, önceki tur tablosu ay üzerinden
-                        # yeni tabloya taşınır (23 Eyl senaryo koşusu: faiz/kur tablosu mevduat tablosunu düşürdü).
+                        # yeni tabloya taşınır (canlı koşu, 23 Eyl: yeni seri tablosu önceki turun tablosunu düşürdü).
                         prior_table = self.workspace.table.copy() if self.workspace.table is not None else None
                         blocked = None
                     result = blocked if blocked is not None else self.registry.execute(call.name, call.arguments)
@@ -3566,7 +3566,7 @@ class AnalyticsAgent:
     def _table_rebuild_blocked(self, call: Any, question: str) -> ToolResult | None:
         """Takipte aktif tablo korunur: onu yenisiyle değiştiren çağrı çalıştırılmaz, doğru yol söylenir.
 
-        Ölçüldü (23 Eyl demo, D08): "mevcut veri setiyle hizala, reel hale getir" takibinde model gold_join ile TÜFE'yi
+        Ölçüldü (canlı koşu, 23 Eyl): tabloyu koruyup reel değer isteyen takipte model gold_join ile TÜFE'yi
         başka bir mevduat serisiyle birleştirip aktif tabloyu ezdi; vade sütunları kayboldu."""
         if not self.workspace.has_table or not self._KEEP_TABLE_ASK.search(question or ""):
             return None
@@ -3596,7 +3596,7 @@ class AnalyticsAgent:
     def _breakdown_panel_delivery(self, question: str, steps: list[AgentStep]) -> str | None:
         """Kırılım paneli istenen tabloyu ürettiyse tur deterministik biter (ADR-0108).
 
-        Ölçüldü (23 Eyl demo): panel doğru tabloyu kurduktan sonra model istenmeyen pay sütunları hesapladı (aylık
+        Ölçüldü (canlı koşu, 23 Eyl): panel doğru tabloyu kurduktan sonra model istenmeyen pay sütunları hesapladı (aylık
         harekette %117 gibi anlamsız değerler) ve anlatımda hareketi stok sandı. Soru türev, grafik ya da yorum
         istemiyorsa panel kartındaki tanımlar cevaptır."""
         last = next((s for s in reversed(steps) if s.tool_name == "lakehouse_breakdown_panel" and s.ok), None)
@@ -3628,9 +3628,9 @@ class AnalyticsAgent:
     )
 
     def _session_sources_note(self, question: str) -> str | None:
-        """Oturumda doğrulanmış birden çok tablo varken birleştirme isteği: önce onları kullan (23 Eyl demo, Senaryo 4).
+        """Oturumda doğrulanmış birden çok tablo varken birleştirme isteği: önce onları kullan (canlı koşu, 23 Eyl).
 
-        Ölçüldü: BDDK + EVDS + TEFAS tablolarını birleştir isteğinde ajan önceki turların hazır tablolarını görmeden her
+        Ölçüldü: birden çok kaynağın tablolarını birleştirme isteğinde ajan önceki turların hazır tablolarını görmeden her
         seriyi katalogda yeniden aradı, arama bütçesi bitti ve hiçbir çıktı üretmedi."""
         sources = self.workspace.sources() if hasattr(self.workspace, "sources") else []
         if len(sources) < 2 or not self._SESSION_JOIN_ASK.search(question or ""):
@@ -3645,10 +3645,8 @@ class AnalyticsAgent:
             "OTURUMDA HAZIR TABLOLAR (bu konuşmanın önceki turlarında doğrulandı; bu serileri katalogda YENİDEN ARAMA):\n"
             + "\n".join(lines)
             + "\nÖnce bunları workspace_join ile ay üzerinden birleştir (left='aktif' ya da kN, right=kM, key_policy='ay', "
-            "how='outer'); yalnız hiçbir tabloda olmayan seriyi ara. Tutar serilerini 202101=100 endeksle "
-            "(workspace_compute_column: <sütun> / FIRST_VALUE(<sütun>) OVER (ORDER BY <tarih sütunu>) * 100); faiz yüzde, "
-            "kur kendi biriminde kalır. TEFAS işlem hacmi mevduattan fonlara para geçişi DEĞİLDİR; fon piyasasındaki işlem "
-            "aktivitesini gösteren destekleyici veridir. Kırılma dönemlerini dönemin faiz, enflasyon ve kur gelişmeleriyle yorumla."
+            "how='outer'); yalnız hiçbir tabloda olmayan seriyi ara. Oran ve kur sütunları kendi biriminde kalır; bir sütunun "
+            "ölçtüğü şeyi (ör. işlem hacmi ile net akış) birbirinin yerine yorumlama."
         )
 
     _NON_AMOUNT_COLUMN = re.compile(r"faiz|oran|rate|kur\b|usd|eur|endeks|index|tufe|tüfe|%|pay|pct|_reel", re.I)
@@ -3658,7 +3656,7 @@ class AnalyticsAgent:
                          ) -> tuple[AgentStep, str] | None:
         """Reel değer istenip `workspace_real_value` çağrılmadan tur kapanacaksa harness onu bir kez uygular.
 
-        Ölçüldü (23 Eyl senaryo koşusu, üç tekrar): "mevcut tabloyu reel hale getir" takibinde tablo koruma kuralı yeniden
+        Ölçüldü (canlı koşu, 23 Eyl, üç tekrar): reel değer isteyen takipte tablo koruma kuralı yeniden
         kurmayı doğru engelledi, geri gönderme ve kurtarma istemi reel aracı söyledi, model yine de çağırmadı."""
         if not any(cap[0] == "reel" for cap in requested):
             return None

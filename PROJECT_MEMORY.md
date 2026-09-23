@@ -1361,7 +1361,7 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
 - **Doğrulama:** suite 984 geçti. Site yeni kodla yeniden başlatıldı; tünel etkilenmedi. Commit ve push edilmedi.
 
 ### 2.146 Seri kimliği tablo adı değil: "Catalog TP does not exist" (23 Eylül, ADR-0107)
-- **Bulgu:** Demo incelemesinde EVDS `TP.KKHARTUT.KT1` sorgusu `Catalog "TP" does not exist` verdi. Koşu kayıtlarında 11 vakada
+- **Bulgu:** Canlı incelemede EVDS `TP.KKHARTUT.KT1` sorgusu `Catalog "TP" does not exist` verdi. Koşu kayıtlarında 11 vakada
   33 kez görüldü.
 - **Kök neden 1 (araç):** `lakehouse_distinct_values` kimliği doğrudan FROM'a yazıyordu. `evds:TP.KTF17`,
   `bddk_finturk:ANKARA_…` gibi her seri kimliğiyle patlıyordu; aynısı değer sayımında ve `core/context.py` ön yüklemesinde de
@@ -1389,7 +1389,7 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
 - **Sıradaki:** Faz 1 (katalog üretecine grup kapsamlı sütun seçimi, 144 seri, ilişki kuralı, yükleme, kova toplamı = Toplam
   kalite kapısı). `lakehouse-core` artık bizim sorumluluğumuzda.
 
-### 2.148 Faz 1–2 uygulandı; demo senaryosunun ilk üç turu gerçek koşuda 3/3 (23 Eylül, ADR-0108/0109)
+### 2.148 Faz 1–2 uygulandı; gerçek koşu düzeltmeleri (23 Eylül, ADR-0108/0109)
 - **Faz 1 (veri, lakehouse-core):**
   - `generate_bddk_monthly_catalog.py --group --add-columns` ile 24 kalem × 6 vade kovası = 144 aylık seri eklendi.
     Mevcut katalog girişleri byte düzeyinde değişmedi.
@@ -1401,9 +1401,8 @@ uv run python -m lakehouse gold   --database data/lakehouse.duckdb --data-root d
     katalog ve betiklerden yeniden kurulur.
 - **Faz 2 (ajan, agent-core):** `lakehouse_breakdown_panel` ve ADR-0108 "Gerçek koşu düzeltmeleri" bölümündeki kurallar.
   PR #26'nın (Elif) CSV/XLSX okuma ve zaman normalizasyonu yerelde entegre edildi (ADR-0109).
-- **Gerçek koşu:** Demo senaryosu birebir metinlerle, 3 tekrar, gerçek modelle koşuldu (sorular ve beklenen çıktılar
-  yalnız yerelde, repoya girmez). İlk üç tur her tekrarda beklenen değerleri verdi. Yüklenen dosya ve çok kaynaklı yorum
-  turları ekip arkadaşlarınca ayrıca ele alınıyor; ADR-0108 "Açık" maddesi gözlenen sorunu kaydediyor.
+- **Gerçek koşu:** Çok turlu uçtan uca koşu gerçek modelle 3 tekrar yapıldı; bulunan hatalar ADR-0108
+  "Gerçek koşu düzeltmeleri" bölümünde. Açık kalan konu aynı bölümün "Açık" maddesinde.
 - **Doğrulama:** agent-core 1027 test geçti. lakehouse-core'da değişen alanların testleri geçti (ilişki, kalite, üretici);
   tam suite bu adımın başında 1139 geçmişti; sonraki katalog takma ad değişikliklerinden sonra kullanıcı kararıyla yeniden
   koşulmadı.

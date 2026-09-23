@@ -115,7 +115,7 @@ def test_kfe_sutun_eklerken_birim_baz_donem_karti_kaynak_kolonlar_korunur() -> N
 
 
 def test_reel_deger_birden_cok_sutunu_tek_cagrida_cevirir_ve_endeksi_bir_kez_ekler() -> None:
-    """ADR-0108 (23 Eyl demo): "mevduat tutarlarını reel hale getir" takibinde model yalnız iki sütunu çevirdi; araç
+    """ADR-0108 (canlı koşu, 23 Eyl): tutarların reel değerini isteyen takipte model yalnız iki sütunu çevirdi; araç
     value_columns ile bütün tutarları tek çağrıda alır, endeks sütunu bir kez eklenir, önceki sütunlar değişmez."""
     ws = _ws()
     ws.add_column("diger", pd.Series([50.0, 55.0, 60.5], index=ws.table.index), description="ikinci tutar")
@@ -132,7 +132,7 @@ def test_reel_deger_birden_cok_sutunu_tek_cagrida_cevirir_ve_endeksi_bir_kez_ekl
 
 
 def test_harness_reel_istenip_arac_cagrilmazsa_dogrulanmis_endeksle_kendisi_uygular() -> None:
-    """23 Eyl senaryo koşusu: reel dönüşüm istendi, tablo koruma kuralı yeniden kurmayı engelledi, model aracı hiç
+    """Canlı koşu (23 Eyl): reel dönüşüm istendi, tablo koruma kuralı yeniden kurmayı engelledi, model aracı hiç
     çağırmadı. Harness doğrulanmış endeksle (KFE derived olduğu için TÜFE) önceki turun tablosuna bir kez uygular."""
     from kkb_agent.core.agent import _REQUESTED_CAPABILITIES, AnalyticsAgent
     from kkb_agent.core.registry import ToolRegistry
@@ -151,7 +151,7 @@ def test_harness_reel_istenip_arac_cagrilmazsa_dogrulanmis_endeksle_kendisi_uygu
 
 
 def test_tablo_yeniden_kurma_engellenince_harness_reel_donusumu_sonraki_adimda_uygular() -> None:
-    """23 Eyl senaryo koşusu: reel takibinde model tabloyu yeniden çekmeye çalıştı, engellendi, sonra kaynak reddiyle tur
+    """Canlı koşu (23 Eyl): reel takibinde model tabloyu yeniden çekmeye çalıştı, engellendi, sonra kaynak reddiyle tur
     kapandı. Harness engelden sonraki ilk adımda reel dönüşümü uygular; model yalnız anlatır."""
     from pydantic import BaseModel as _BM
 
@@ -195,7 +195,7 @@ def test_tablo_yeniden_kurma_engellenince_harness_reel_donusumu_sonraki_adimda_u
     agent = AnalyticsAgent(llm=_LLM(), registry=registry, workspace=ws, max_steps=5, tool_gate=False)
     agent._catalog_specs = lambda: []
 
-    answer = agent.ask("TÜFE'yi mevcut veri setiyle hizala ve tutarları 2025-03 fiyatlarıyla reel hale getir.")
+    answer = agent.ask("Kredi tablosuna TÜFE ekle ve bakiyeleri 2025-03 fiyatlarıyla göster, reel olsun.")
 
     assert _Query.calls == 0, "önceki turun tablosunu yeniden kuran sorgu çalışmadı"
     auto = [s for s in answer.steps if s.tool_name == "workspace_real_value"]
