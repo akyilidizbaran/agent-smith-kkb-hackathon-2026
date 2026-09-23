@@ -131,7 +131,7 @@ def web_evidence(
 
     ÖNEMLİ: anlamlı metin ya da indirilebilir dosya bağlantısı bulunması, İSTENEN VERİNİN elde
     edildiği anlamına GELMEZ. `requested_data_obtained` yalnız yapılandırılmış tablo gerçekten
-    yüklendiğinde (`data_loaded`) doğrudur; `produced_data`, stale-tablo temizleme ve Senaryo-2
+    yüklendiğinde (`data_loaded`) doğrudur; `produced_data`, stale-tablo temizleme ve yükleme akışı
     başarısı yalnız bu iki bayrağa bakmalıdır.
     """
     usable = bool(data_loaded or table_count > 0 or has_meaningful_text or downloadable_resource_count > 0)

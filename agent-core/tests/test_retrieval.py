@@ -426,7 +426,7 @@ def test_sayili_vade_frekans_yuzu_degildir_ve_embedding_dusunce_bm25_kalir() -> 
 
 
 def test_esitlik_bandinda_dogrulanmis_kayit_one_bant_disinda_sira_degismez() -> None:
-    """Jüri sorusu (21 Eyl, gerçek katalog, BM25): otomatik alias'lı stok faiz serisi 33,84, doğrulanmış akım
+    """Canlı soru (21 Eyl, gerçek katalog, BM25): otomatik alias'lı stok faiz serisi 33,84, doğrulanmış akım
     serisi 33,31, Gold aylık ortalama 33,14 — alias sayısı stok serisini öne çıkarıyordu. Bant (%5) içinde
     doğrulanmış/Gold öne; bant dışındaki doğrulanmış kayıt sırasını korur. Puanlar ölçümden alındı."""
     stock = CatalogRecord(id="evds:TP.BKR.TRY.18", name="Konut Kredisi (TL, Stok, %)", frequency="monthly", source="evds")

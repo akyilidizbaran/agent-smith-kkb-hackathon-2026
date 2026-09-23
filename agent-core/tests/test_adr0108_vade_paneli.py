@@ -272,3 +272,43 @@ def test_breakpoint_interpretation_requires_web_research() -> None:
     from kkb_agent.core.agent import _REQUESTED_CAPABILITIES
     web = next(cap for cap in _REQUESTED_CAPABILITIES if cap[0] == "web araştırması")
     assert web[1].search("serideki kırılma noktalarını bul ve yorumla") and "web_search" in web[2]
+
+
+def test_index_is_not_built_on_a_signed_flow_column() -> None:
+    """Canlı koşu (23 Eyl): taban ayı negatif olan aylık hareket sütununda endeks işaret değiştirir; araç reddeder."""
+    from kkb_agent.tools.workspace import WorkspaceComputeColumnTool
+
+    ws = AnalysisWorkspace()
+    ws.set_table(pd.DataFrame({"donem": pd.to_datetime(["2022-05-31", "2022-06-30"]),
+                               "tp_hareket": [-9.0, 12.0], "hacim": [10.0, 15.0]}), description="t")
+    tool = WorkspaceComputeColumnTool(ws)
+    refused = tool.validate_and_run({"column_name": "endeks_tp", "purpose": "endeks",
+                                     "expression": "tp_hareket / FIRST_VALUE(tp_hareket) OVER (ORDER BY donem) * 100"})
+    assert not refused.ok and "seviye" in refused.content and "lakehouse_breakdown_panel" in refused.content
+    ok = tool.validate_and_run({"column_name": "endeks_hacim", "purpose": "endeks",
+                                "expression": "hacim / FIRST_VALUE(hacim) OVER (ORDER BY donem) * 100"})
+    assert ok.ok and ws.table["endeks_hacim"].tolist() == [100.0, 150.0]
+
+
+def test_index_request_is_a_capability_served_by_the_panel() -> None:
+    from kkb_agent.core.agent import _REQUESTED_CAPABILITIES
+    cap = next(c for c in _REQUESTED_CAPABILITIES if c[0] == "endeks")
+    assert cap[1].search("tutarları 2020-06=100 olacak şekilde karşılaştır") and "lakehouse_breakdown_panel" in cap[2]
+    assert not cap[1].search("kredi bakiyesini 100 milyon TL üstü bankalar için göster")
+
+
+def test_session_join_skips_evidence_duplicates_and_does_not_index_rates(lake) -> None:
+    """Canlı koşu (23 Eyl): önceki turların tabloları k1_/k3_ önekiyle tekrar ekleniyor, kanıt sütunları ve faiz/kur
+    serileri endeksleniyordu."""
+    ws = AnalysisWorkspace()
+    ws.set_table(pd.DataFrame({"period_end": pd.to_datetime(["2022-05-31", "2022-06-30"]), "tp": [1.0, 2.0],
+                               "evds:TP.X::value": [17.5, 18.0], "evds:TP.X::observations": [4, 4],
+                               "hacim": [10.0, 12.0]}), description="önceki tur")
+    tool = _panel(lake, ws)
+    tool._is_amount = lambda ids: not any(i == "evds:TP.X" for i in ids)
+    base = pd.DataFrame({"donem": pd.to_datetime(["2022-05-31", "2022-06-30"]), "tp": [100.0, 110.0]})
+    table, amounts, _lines = tool._join_session_tables(base)
+    assert "evds:TP.X::observations" not in table.columns and not any(c.startswith("k1_") for c in table.columns)
+    assert table["tp"].tolist() == [100.0, 110.0]                      # panelin seviyesi korunur, akım eklenmez
+    assert "evds:TP.X::value" in table.columns and "evds:TP.X::value" not in amounts
+    assert amounts == ["hacim"]

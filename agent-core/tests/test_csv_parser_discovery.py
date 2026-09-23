@@ -13,14 +13,14 @@ from kkb_agent.builder.read import _table_from_bytes
 def test_semicolon_turkish_numbers_split_cleanly():
     csv = (
         "Dönem;Toplam İşlem Hacmi (TL);Net Takas Tutarı (TL)\n"
-        "2021-01;1.470.922.962.137,41;287.776.881.511,80\n"
-        "2024-11;18.107.041.090,70;3.434.067.109,63\n"
+        "2021-01;1.234.567.890.123,45;234.567.890.123,40\n"
+        "2024-11;12.345.678.901,20;2.345.678.901,30\n"
     ).encode()
     df = _table_from_bytes(csv, "x.csv")
     assert list(df.columns) == ["Dönem", "Toplam İşlem Hacmi (TL)", "Net Takas Tutarı (TL)"]
     assert df.shape == (2, 3)
     # Hücreler ham string kalır (sayı çevirimi profile katmanında); binlik/ondalık BÖLÜNMEZ.
-    assert df.iloc[1, 1] == "18.107.041.090,70"
+    assert df.iloc[1, 1] == "12.345.678.901,20"
 
 
 def test_preamble_rows_are_skipped_not_crashing():
@@ -30,8 +30,8 @@ def test_preamble_rows_are_skipped_not_crashing():
         "Başlangıç: 2022-05 Bitiş: 2024-11\n"
         "\n"
         "Dönem;Toplam İşlem Hacmi (TL);Net Takas Tutarı (TL)\n"
-        "2024-11;18.107.041.090,70;3.434.067.109,63\n"
-        "2023-03;118.064.781.638,91;25.997.250.882,28\n"
+        "2024-11;12.345.678.901,20;2.345.678.901,30\n"
+        "2023-03;98.765.432.109,80;19.876.543.210,90\n"
     ).encode()
     df = _table_from_bytes(csv, "x.csv")
     assert list(df.columns) == ["Dönem", "Toplam İşlem Hacmi (TL)", "Net Takas Tutarı (TL)"]
@@ -39,7 +39,7 @@ def test_preamble_rows_are_skipped_not_crashing():
 
 
 def test_tab_delimited_with_preamble():
-    tsv = "Rapor başlığı\nAy\tHacim\tTakas\n2025-12\t12000\t2500\n".encode()
+    tsv = "Rapor başlığı\nAy\tHacim\tTakas\n2025-12\t12345\t2345\n".encode()
     df = _table_from_bytes(tsv, "x.tsv")
     assert list(df.columns) == ["Ay", "Hacim", "Takas"]
     assert df.shape == (1, 3)
@@ -53,16 +53,16 @@ def test_plain_header_first_row_still_works():
     assert df.shape == (2, 2)
 
 
-def test_real_tefas_export_comma_quoted_turkish_decimals_with_preamble():
-    # GERÇEK TEFAS dışa aktarımı: virgül ayraç + TIRNAKLI Türkçe ondalık virgül + metadata preamble + Toplam satırı.
+def test_tefas_style_export_comma_quoted_turkish_decimals_with_preamble():
+    # TEFAS biçimli dışa aktarım (değerler sentetik): virgül ayraç + TIRNAKLI Türkçe ondalık virgül + metadata preamble + Toplam satırı.
     real = (
         "Dışa Aktarım Tarihi:,23.09.2026 11:12:23\n"
         "Toplam Kayıt Sayısı:,3\n"
         "Dönem,Toplam İşlem Hacmi (TL),Günlük Ortalama İşlem Hacmi (TL),Net Takas Tutarı (TL)\n"
-        '2021-01,"12000000000,70","800000000,54","2500000000,63"\n'
-        '2023-03,"118.064.781.638,91","5.000.000.000,00","25.997.250.882,28"\n'
-        '2024-11,"9900000000,41","4400000000,84","1800000000,80"\n'
-        'Toplam,"1.607.094.785.867,02","65.900.000.000,00","317.208.199.503,71"\n'
+        '2021-01,"12345678901,20","617283945,06","2345678901,30"\n'
+        '2023-03,"98.765.432.109,80","5.000.000.000,00","19.876.543.210,90"\n'
+        '2024-11,"1234567890123,45","53676864788,12","234567890123,40"\n'
+        'Toplam,"1.345.679.001.134,45","65.900.000.000,00","256.790.112.235,60"\n'
     ).encode()
     df = _table_from_bytes(real, "tefas.csv")
     # 1) metadata başlık sanılmadı; gerçek başlık bulundu.
@@ -71,15 +71,15 @@ def test_real_tefas_export_comma_quoted_turkish_decimals_with_preamble():
     ]
     # 2) tırnaklı TR ondalık virgüller BÖLÜNMEDİ; hücreler ham string.
     row = df[df["Dönem"] == "2021-01"].iloc[0]
-    assert row["Toplam İşlem Hacmi (TL)"] == "12000000000,70"
-    assert row["Net Takas Tutarı (TL)"] == "2500000000,63"
+    assert row["Toplam İşlem Hacmi (TL)"] == "12345678901,20"
+    assert row["Net Takas Tutarı (TL)"] == "2345678901,30"
     # 3) gerçek veri satırları korundu (Dönem + Toplam dahil ham okundu; Toplam temizliği semantik katmanda).
     assert set(df["Dönem"]) >= {"2024-11", "2023-03", "2021-01"}
     # 6) kontrol değerleri (exact) — tüm üç dönem:
     for donem, hacim, takas in [
-        ("2021-01", "12000000000,70", "2500000000,63"),
-        ("2023-03", "118.064.781.638,91", "25.997.250.882,28"),
-        ("2024-11", "9900000000,41", "1800000000,80"),
+        ("2021-01", "12345678901,20", "2345678901,30"),
+        ("2023-03", "98.765.432.109,80", "19.876.543.210,90"),
+        ("2024-11", "1234567890123,45", "234567890123,40"),
     ]:
         r = df[df["Dönem"] == donem].iloc[0]
         assert r["Toplam İşlem Hacmi (TL)"] == hacim, donem
@@ -92,7 +92,7 @@ def test_toplam_summary_row_is_excluded_from_monthly_join():
     from kkb_agent.tools.web import monthly_enrich_join
     left = pd.DataFrame({"Tarih": ["2024-11-01", "2023-03-01"], "TP": [1, 2]})
     right = pd.DataFrame({"Dönem": ["2024-11", "2023-03", "Toplam"],
-                          "Hacim": ["18.107", "118.064", "136.171"]})
+                          "Hacim": ["12.345", "98.765", "111.110"]})
     merged, err = monthly_enrich_join(left, right)
     assert err is None and len(merged) == 2                       # Toplam satırı taban satır eklemedi
-    assert merged.loc[merged["Tarih"] == "2024-11-01", "Hacim"].iloc[0] == "18.107"
+    assert merged.loc[merged["Tarih"] == "2024-11-01", "Hacim"].iloc[0] == "12.345"

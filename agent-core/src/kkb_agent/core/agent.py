@@ -107,6 +107,15 @@ _REQUESTED_CAPABILITIES: tuple[tuple[str, "re.Pattern[str]", frozenset[str], str
      "Kullanıcı reel (enflasyondan arındırılmış) değer istedi ama workspace_real_value çağırmadın. Tabloyu yeniden kurma: "
      "fiyat endeksi serisini (TÜFE) gerekirse lakehouse_search ile bul, sonra workspace_real_value(value_columns=[aktif "
      "tablodaki BÜTÜN tutar sütunları], index_dataset_id=<endeks serisi>, base_period=YYYY-MM) çağır ve cevabını yaz."),
+    # Taban ayına göre endeks (ör. 2021-01=100) seviye serisinde kurulur; SQL ile akım sütununda kurulan endeks anlamsızdır
+    # (canlı koşu, 23 Eyl). Panel seviyeleri getirir, oturum tablolarını ay üzerinden ekler, reel yapar ve endeksler.
+    ("endeks", re.compile(r"\b\d{4}-?\d{2}\s*=\s*100\b|=\s*100\s+olacak|100\s+olacak\s+şekilde", re.I),
+     frozenset({"lakehouse_breakdown_panel"}),
+     "Kullanıcı tutarların taban ayına göre (=100) endekslenmesini istedi ama endeksi kuran aracı çağırmadın. Endeksi SQL "
+     "ile elle kurma. lakehouse_breakdown_panel'i TEK çağrıda kullan: tablodaki tutar serilerinin katalog kimlikleri "
+     "(series; vade grupları için groups), value='level', period_from/period_to, join_session=true (yüklenen dosya ve "
+     "önceki tablolar ay üzerinden eklenir), reel istendiyse deflator_series_id=<TÜFE>, index_base='YYYY-MM'. Sonra "
+     "tabloya dayanarak cevabını yaz."),
     # Kırılma dönemlerinin "yorumu" dönemin gelişmelerine dayanır; web araştırması yapılmadan yorum yazılmaz (23 Eyl).
     ("web araştırması", re.compile(r"kırılma[\s\S]{0,120}yorumla|kirilma[\s\S]{0,120}yorumla", re.I),
      frozenset({"web_search", "web_url"}),
@@ -648,7 +657,7 @@ class AnalyticsAgent:
         "web_url", "ingest_source", "ingest_from_url", "promote_draft",
         # Aktif tabloya katalogdan yeni kolon/tablo getirir; taze kaynaktır. Ölçüldü (22 Eyl, benchmark R06):
         # "mevcut tabloya TÜFE ekle" turunda workspace_add_column 72 gözlemi eklemişken cevap bayat-tablo
-        # guard'ı ("uyumlu değil") tarafından siliniyordu — jürinin "faiz ekle / KFE sütunu ekle" adımları da bu.
+        # guard'ı ("uyumlu değil") tarafından siliniyordu — "tabloya bir seri daha ekle" takipleri de bu.
         "workspace_add_column", "workspace_join",
     })
 
@@ -2295,7 +2304,7 @@ class AnalyticsAgent:
             return plan
         # GENEL ARAŞTIRMA/yorum niyeti (yorumla/araştır/kırılma…) tek kaynağa PİNLENMEZ: aramayı tek
         # domaine kısmak alakalı sonuçları eler (0 sonuç / domain-red). Bu durumda genel — ama güvenli —
-        # finans araması yapılır; kabul edilebilir yeni finans domainleri de kullanılabilir (KN, Girdi-5).
+        # finans araması yapılır; kabul edilebilir yeni finans domainleri de kullanılabilir (canlı koşu, 23 Eyl).
         if not research_intent(question):
             # Belirli bir dış kaynaktan VERİ ÇEKME (TEFAS/ODMD) → HOST-PINLI arama (config-driven).
             external_plan = external_source_fallback_plan(question)
@@ -3009,7 +3018,11 @@ class AnalyticsAgent:
                         call.arguments = {**call.arguments, "limit": 40}
                     blocked = self._table_rebuild_blocked(call, question)
                     prior_table = None
-                    if blocked is not None and not self._REAL_ASK.search(question or ""):
+                    carries_session = (call.name == "lakehouse_breakdown_panel" and isinstance(call.arguments, dict)
+                                       and bool(call.arguments.get("index_base") or call.arguments.get("join_session")))
+                    if blocked is not None and (not self._REAL_ASK.search(question or "") or carries_session):
+                        # Endeks / oturum birleştirmesi isteyen panel de çalışır (canlı koşu, 23 Eyl): taban ayına göre
+                        # endeks seviye serisinde kurulur, önceki tablo (akım, yüklenen dosya) ay üzerinden taşınır.
                         # Yeni seri ekleniyor (reel değil): yeniden kuran araç çalışır, önceki tur tablosu ay üzerinden
                         # yeni tabloya taşınır (canlı koşu, 23 Eyl: yeni seri tablosu önceki turun tablosunu düşürdü).
                         prior_table = self.workspace.table.copy() if self.workspace.table is not None else None
@@ -3122,7 +3135,7 @@ class AnalyticsAgent:
                 ):
                     # KN2: kullanıcı web'i açıkça istedi ya da dış kaynak adı verdi; yerel arama başarısız
                     # (bulunamadı/bütçe/henüz yüklenmemiş). "Doğrulanmış yokluk" beklemeden web yolunu kur —
-                    # aksi halde eksik/dış veri web erişimini kalıcı kilitliyor (demo: TEFAS Girdi-4, Girdi-5).
+                    # aksi halde eksik/dış veri web erişimini kalıcı kilitliyor (canlı koşu, 23 Eyl).
                     public_fallback_pending = self._verified_public_fallback_plan(planning_question, call, result)
                 retrieval_completed = result.ok and call.name in {
                     "lakehouse_search", "lakehouse_describe", "lakehouse_distinct_values",

@@ -573,7 +573,7 @@ def test_kaynak_uyusmazligi_adhoc_ve_karma_join_icin_uygulanmaz() -> None:
 
     tool = LakehouseQueryTool.__new__(LakehouseQueryTool)
     tool.lakehouse = Lake()
-    tool._registry = SimpleNamespace(active_question="Fon verilerini mevcut BDDK–EVDS veri setiyle aynı aylık formata dönüştürerek ekle")
+    tool._registry = SimpleNamespace(active_question="Fon verisini mevcut kredi tablosuna aylık olarak ekle")
     assert tool._boyut_uyusmazligi("SELECT * FROM silver.fact_observation WHERE series_id = 'adhoc:fon_islem_hacmi'") is None
     tool._registry = SimpleNamespace(active_question="TCMB politika faizi ile aylık konut kredisi stoku arasında ilişki var mı?")
     assert tool._boyut_uyusmazligi("SELECT * FROM silver.fact_observation WHERE series_id IN ('evds:TP.BISPOLFAIZ.TUR', 'bddk_monthly:1534_Toplam')") is None

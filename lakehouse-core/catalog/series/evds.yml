@@ -33591,7 +33591,7 @@ series:
     status: active
 
   # --- Borsa İstanbul endeksleri (bie_mkbrgn; canlı seri listesi 21 Eylül 2026) ---------------
-  # Demo senaryosu "BIST 100 endeksi günlük/aylık değişimi" için. borsaistanbul.com/endeks/xtumy
+  # Borsa endeksi günlük/aylık değişim soruları için. borsaistanbul.com/endeks/xtumy
   # sayfası JavaScript ile dolar ve bot engeli uygular; resmî kamu kaynağı TCMB EVDS'dir.
   # DİKKAT: XTUMY "BIST Tüm-100"dür, BIST 100 (XU100) değil; iki seri ayrı girilmiştir.
   - series_id: evds:TP.MK.F.BILESIK

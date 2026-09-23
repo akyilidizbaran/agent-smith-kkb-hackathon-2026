@@ -1,12 +1,11 @@
-"""Araç kapısı — dış-kaynak/link/pdf sinyalleri web ailesini açar (demo Girdi-4 TEFAS, Senaryo-1 ODMD).
+"""Araç kapısı — dış-kaynak/link/pdf sinyalleri web ailesini açar (URL'siz başlık metni, dış kaynak adı, link/pdf ekleri).
 
-Demo hatası: UI bağlantıyı yalnız başlık metni olarak aktarınca (URL gömülü değil) `_WEB` hiçbir
+Gözlenen hata: UI bağlantıyı yalnız başlık metni olarak aktarınca (URL gömülü değil) `_WEB` hiçbir
 sinyale uymuyordu; web araçları modele sunulmuyor, ajan yerel katalog döngüsünde tıkanıyordu.
 Bu düzeltme routing katmanındadır: kapı yalnız sunulan şemayı genişletir, yürütme yetkisini değil.
 
 Dış-kaynak tanıma CONFIG-DRIVEN'dır: kaynak adları çekirdek koda gömülü değil, `source_hints.json`
-→ `financial_sources` yapısından okunur. Bu testler exact demo promptlarını KABUL testi olarak
-tutar; çekirdeğin kaynak adına özel olmadığını (yapılandırılmamış ad web açmaz) da doğrular.
+→ `financial_sources` yapısından okunur. Bu testler temsilî istemlerle kapıyı sınar; çekirdeğin kaynak adına özel olmadığını (yapılandırılmamış ad web açmaz) da doğrular.
 """
 from __future__ import annotations
 
@@ -15,18 +14,16 @@ from kkb_agent.core.web_routing import matched_external_source
 
 _REGISTERED = frozenset(tool_gate.ALWAYS) | tool_gate.WEB | tool_gate.ARCHITECT | tool_gate.CHART
 
-# Girdi-4 (TEFAS) — bağlantı yalnız başlık metni olarak; URL gömülü DEĞİL.
+# Dış kaynak — bağlantı yalnız başlık metni olarak; URL gömülü DEĞİL.
 TEFAS_TITLE = (
-    "Mevcut analizi TEFAS verileriyle zenginleştir. TEFAS İstatistikleri altında yer alan Toplam "
-    "İşlem Hacmi Raporu üzerinden 202101–202512 dönemine ait aylık Toplam İşlem Hacmi (TL) ve Net "
-    "Takas Tutarı (TL) verilerini tek sorguda getir. Verileri mevcut BDDK–EVDS veri setiyle aynı "
-    "aylık tarih formatına dönüştürerek lakehouse'a ekle.\n\n"
-    "TEFAS İstatistikleri - Fon Piyasası Analizi ve Verileri | TEFAS"
+    "Fon piyasası tarafını da görelim: TEFAS istatistik raporundaki aylık işlem hacmini ve takas "
+    "tutarını al, elimizdeki aylık tabloya ay bazında ekle ve havuza kaydet.\n\n"
+    "TEFAS | İstatistikler"
 )
-# Senaryo-1 ODMD PDF — "linkinden ... pdfindeki"; URL gömülü DEĞİL.
+# Sektör raporu PDF — "linkinden ... pdfindeki"; URL gömülü DEĞİL.
 ODMD_TITLE = (
-    "Taşıt kredileri ve faiz oranlarını Pazar - Otomobil & Hafif Ticari linkinden "
-    '"2026 Ağustos Otomobil ve Hafif Ticari Araç Pazar Değerlendirme" pdfindeki veriler ile yorumla.'
+    "Otomotiv satışlarını birlik sitesindeki pazar raporları linkinden "
+    '"2026 Temmuz Pazar Değerlendirme" pdfindeki tablolarla karşılaştır.'
 )
 
 

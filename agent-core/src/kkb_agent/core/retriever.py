@@ -188,7 +188,7 @@ def apply_facets(records: Sequence[CatalogRecord], ranked: Sequence[Candidate], 
     (sonra daha ince olanlar: Gold kaba yapabilir; kaba olanlar en sona); kaynak ipucu varsa öne.
 
     Eşitlik bandı (21 Eyl): en iyi puanın %5'i içindeki adaylar arasında semantiği doğrulanmış seri ya da
-    Gold metriği, otomatik üretilmiş girişin önüne geçer. Ölçüldü: jürinin "aylık konut kredisi faiz oranı"
+    Gold metriği, otomatik üretilmiş girişin önüne geçer. Ölçüldü: "aylık konut kredisi faiz oranı"
     sorusunda otomatik alias'lı stok serisi 33,84, Gold aylık ortalama tablosu 33,14 puan aldı; puan farkı
     alias sayısından geliyordu, anlamdan değil. Bant dışında (açıkça daha iyi eşleşen) sıra değişmez."""
     by_id = {r.id: r for r in records}

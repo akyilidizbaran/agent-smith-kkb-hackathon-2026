@@ -226,7 +226,7 @@ def test_web_url_kesfi_onceki_turdan_yeniden_kullanilmaz() -> None:
 
 def test_web_url_bos_sayfa_basari_saymaz_acik_hata_doner() -> None:
     # A1: HTTP 200 ama tablo yok + kullanılabilir metin yok → ok=True DÖNMEMELİ. Aksi halde ajan
-    # "sayfa okundu" (web_page_succeeded) sanıp stale-tablo korumasını yanlış aşar (demo: TEFAS/CSV).
+    # "sayfa okundu" (web_page_succeeded) sanıp stale-tablo korumasını yanlış aşar (yüklenen dosya).
     empty = b"<html><head><title>Bos</title></head><body></body></html>"
     s = Session({"https://site.example/bos": Resp(200, empty, url="https://site.example/bos")})
     tool, ws = _tool(s, "Şu sayfadan verileri getir: https://site.example/bos")
@@ -244,7 +244,7 @@ def test_web_url_enrich_intent_joins_instead_of_overwriting(tmp_path: Path) -> N
     import pandas as pd
     csv = tmp_path / "tefas.csv"
     csv.write_text("Dönem;TEFAS Hacim (TL);Net Takas (TL)\n2024-11;12000;2500\n2023-03;34000;7800\n", encoding="utf-8")
-    q = f"Mevcut analizi TEFAS verileriyle zenginleştir; aynı aylık tarih ekseninde hizala: {csv}"
+    q = f"Elimizdeki tabloya fon verisini ekle, ay bazında hizala: {csv}"
     tool, ws = _tool(Session({}), q, tmp_path=tmp_path)
     prior = pd.DataFrame({"Tarih": ["2024-11-01", "2023-03-01", "2022-05-01"], "TP Mevduat": [500000, 300000, -8000]})
     ws.set_table(prior, description="BDDK-EVDS mevduat")
@@ -266,7 +266,7 @@ def test_web_url_enrich_join_failure_does_not_overwrite_active_table(tmp_path: P
     import pandas as pd
     csv = tmp_path / "baska.csv"
     csv.write_text("Dönem;Hacim\n2019-01;5\n2018-03;7\n", encoding="utf-8")  # taban tabloyla ortak ay yok
-    q = f"Mevcut analizi zenginleştir; aynı aylık tarih ekseninde hizala: {csv}"
+    q = f"Mevcut tabloyu bu dosyayla zenginleştir, ay bazında hizala: {csv}"
     tool, ws = _tool(Session({}), q, tmp_path=tmp_path)
     prior = pd.DataFrame({"Tarih": ["2024-11-01", "2023-03-01"], "TP Mevduat": [500000, 300000]})
     ws.set_table(prior, description="BDDK-EVDS")

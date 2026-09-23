@@ -137,7 +137,7 @@ def _slug(text: str) -> str:
 _MEASURE_WORDS = {
     "stock": ("stok", "bakiye", "stock"),
     # "hacim/işlem hacmi/hareket": dönem içinde olan biten — TEFAS işlem hacmi, aylık mevduat hareketi
-    # (ölçüldü 23 Eyl: soru "aylık Toplam İşlem Hacmi" derken beyan sözlükte yok diye reddediliyordu)
+    # (ölçüldü 23 Eyl: "aylık işlem hacmi" gibi bir beyan sözlükte yok diye reddediliyordu)
     "flow_periodic": ("akım", "akim", "dönemlik", "flow", "hacim", "hacmi", "işlem hacmi", "hareket", "aylık toplam"),
     "flow_ytd": ("yıl başından", "ytd", "birikimli"), "flow_cumulative": ("kümülatif", "kumulatif", "cumulative"),
     "rate": ("oran", "faiz", "yüzde", "rate", "%"), "ratio": ("rasyo", "ratio"),
@@ -962,7 +962,7 @@ class IngestFromUrlTool(Tool):
             asks.append("çapraz kontrol: " + crosscheck.lines()[0] + " — kullanıcıya söyle; dosya mı katalog mu doğru, o karar versin")
         # Dayanaksız model beyanı (kullanıcı mesajında geçmeyen birim/ölçüm tipi/frekans) zaten yukarıda DÜŞÜRÜLDÜ; seri
         # kanıttan gelen değerlerle (frekans tarihlerden, birim başlıktan, ölçüm tipi 'unknown') kaydedilir, uydurma değer
-        # saklanmaz. Kaydı durdurmak jüri sorusunu kilitliyordu (ölçüldü 23 Eyl, dış rapor: "haftalık/akım" model çıkarımıydı,
+        # saklanmaz. Kaydı durdurmak kullanıcının isteğini kilitliyordu (ölçüldü 23 Eyl, dış rapor: "haftalık/akım" model çıkarımıydı,
         # kullanıcı yalnız "aylık … ekle" demişti; üç deneme "EKLENMEDİ"). Kart bu düşürmeyi açıkça yazar.
         column_invented = [k for k in invented if k.split("=")[0] in ("value_column", "date_column", "entity_column")]
         semantic_invented = [k for k in invented if k not in column_invented]
