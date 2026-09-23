@@ -29,6 +29,50 @@ from ..core.period_intent import parse_period_intent
 from ..core.lexical import tokenize
 
 
+
+def _measure_signature(spec: Any) -> tuple[str, str]:
+    for column in getattr(spec, "columns", []) or []:
+        role = getattr(getattr(column, "role", None), "value", getattr(column, "role", None))
+        if role == "measure":
+            semantic = getattr(getattr(column, "semantic_type", None), "value", getattr(column, "semantic_type", None))
+            return str(getattr(column, "unit", "") or ""), str(semantic or "")
+    return "", ""
+
+
+def _acik_seri_uyusmazligi(question: str, specs: list[Any], used: list[Any]) -> ToolError | None:
+    """Soruda açıkça yazılan seri kodu (TP.KTF12, 1534_Toplam) varken aynı kaynaktan aynı türde BAŞKA bir seri okunamaz.
+
+    Ölçüldü (ADR-0105, DeepSeek 3 tekrar): C04 ve C07 "EVDS TP.KTF12 konut faizi" dediği hâlde model başka bir faiz
+    serisini sessizce kullandı. Kod rakam ya da nokta içeren ve en az 5 karakterli kimlik parçasıdır; aynı kaynaktaki
+    farklı ölçüm türündeki yardımcı seriler (ör. reel dönüşüm için TÜFE) engellenmez.
+    """
+    if not question or not used:
+        return None
+    named = []
+    for spec in specs:
+        code = str(getattr(spec, "dataset_id", "")).split(":", 1)[-1]
+        if len(code) < 5 or not re.search(r"[\d.]", code):
+            continue
+        if re.search(rf"(?<![\w.]){re.escape(code)}(?![\w])", question):
+            named.append(spec)
+    if not named:
+        return None
+    named_ids = {str(spec.dataset_id) for spec in named}
+    for spec in used:
+        if str(spec.dataset_id) in named_ids:
+            continue
+        rivals = [n for n in named if str(getattr(n, "source", "")) == str(getattr(spec, "source", ""))
+                  and _measure_signature(n) == _measure_signature(spec) and str(n.dataset_id) not in {str(u.dataset_id) for u in used}]
+        if rivals:
+            return ToolError(
+                error_code="SERIES_SEMANTIC_MISMATCH", layer="policy", retryable=True,
+                message=(f"Soruda açıkça {', '.join(str(r.dataset_id).split(':', 1)[-1] for r in rivals)} seri kodu yazılı; sorgu "
+                         f"aynı türde başka bir seri ({spec.dataset_id}) okuyor. Kullanıcının adını verdiği seri sessizce değiştirilemez."),
+                hint="Aynı SQL'i kullanıcının yazdığı serinin kimliğiyle yeniden çalıştır.",
+                candidates=[str(r.dataset_id) for r in rivals],
+            )
+    return None
+
 class SearchParams(BaseModel):
     query: str = Field(
         description="Aranan konuyu anlatan kısa Türkçe ifade, ör. 'aylık {example_entity}'"
@@ -379,7 +423,10 @@ class LakehouseQueryTool(Tool):
             or self._month_key(spec.coverage.end) < end
         ]
         candidates = self._seri_alternatifleri(question, specs, used, start, end)
-        if incomplete:
+        # ADR-0105: yalnız pencereyi tam kapsayan bir alternatif varken reddedilir. Alternatif yoksa seri kendi kapsamıyla
+        # okunur (kapsam çıktıda görünür). Ölçüldü: F01 "her serinin mevcut kapsama başlangıcını ayrı raporla" dediği hâlde
+        # 2019 öncesi olmayan ihracat kredisi serisi, yerine konacak seri olmadan her tekrarda reddedildi.
+        if incomplete and candidates:
             details = "; ".join(
                 f"{spec.dataset_id} ({spec.coverage.start:%Y-%m}→{spec.coverage.end:%Y-%m})"
                 for spec in incomplete
@@ -530,7 +577,7 @@ class LakehouseQueryTool(Tool):
                 hint="İstenen kaynak için doğru seriyi lakehouse_search ile bulup sorgula.",
                 candidates=[spec.dataset_id for spec in used if source_matches(str(getattr(spec, "source", "")), facets.sources)],
             )
-        return None
+        return _acik_seri_uyusmazligi(question, specs, used)
 
     def _bayat_gold(self, sql: str) -> list[str]:
         stale = getattr(self.lakehouse, "stale_gold_tables", None)

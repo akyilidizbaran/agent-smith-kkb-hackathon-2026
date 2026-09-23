@@ -1,0 +1,2040 @@
+{
+ "numeric": {
+  "P01": [
+   {
+    "id": "P01",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "P01",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "P01",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "P02": [
+   {
+    "id": "P02",
+    "mode": "numeric",
+    "notes": [
+     "tablo yok"
+    ],
+    "score": 0,
+    "parts": {
+     "period": 0,
+     "values": 0,
+     "complete": 0,
+     "projection": 0,
+     "narrative": 0
+    }
+   },
+   {
+    "id": "P02",
+    "mode": "numeric",
+    "notes": [
+     "tablo yok"
+    ],
+    "score": 0,
+    "parts": {
+     "period": 0,
+     "values": 0,
+     "complete": 0,
+     "projection": 0,
+     "narrative": 0
+    }
+   },
+   {
+    "id": "P02",
+    "mode": "numeric",
+    "notes": [
+     "tablo yok"
+    ],
+    "score": 0,
+    "parts": {
+     "period": 0,
+     "values": 0,
+     "complete": 0,
+     "projection": 0,
+     "narrative": 0
+    }
+   }
+  ],
+  "P04": [
+   {
+    "id": "P04",
+    "mode": "numeric",
+    "notes": [
+     "fazla kolon: kredi_mevduat_orani_pct"
+    ],
+    "score": 95,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "P04",
+    "mode": "numeric",
+    "notes": [
+     "fazla kolon: kredi_mevduat_orani_pct"
+    ],
+    "score": 95,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "P04",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "P06": [
+   {
+    "id": "P06",
+    "mode": "numeric",
+    "notes": [
+     "fazla dönem 1"
+    ],
+    "score": 82,
+    "parts": {
+     "period": 11.7,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "P06",
+    "mode": "numeric",
+    "notes": [
+     "fazla dönem 1"
+    ],
+    "score": 82,
+    "parts": {
+     "period": 11.7,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "P06",
+    "mode": "numeric",
+    "notes": [
+     "fazla dönem 1"
+    ],
+    "score": 82,
+    "parts": {
+     "period": 11.7,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "R01": [
+   {
+    "id": "R01",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "R01",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "R01",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "R04": [
+   {
+    "id": "R04",
+    "mode": "numeric",
+    "notes": [
+     "tablo yok"
+    ],
+    "score": 0,
+    "parts": {
+     "period": 0,
+     "values": 0,
+     "complete": 0,
+     "projection": 0,
+     "narrative": 0
+    }
+   },
+   {
+    "id": "R04",
+    "mode": "numeric",
+    "notes": [
+     "tablo yok"
+    ],
+    "score": 0,
+    "parts": {
+     "period": 0,
+     "values": 0,
+     "complete": 0,
+     "projection": 0,
+     "narrative": 0
+    }
+   },
+   {
+    "id": "R04",
+    "mode": "numeric",
+    "notes": [
+     "tablo yok"
+    ],
+    "score": 0,
+    "parts": {
+     "period": 0,
+     "values": 0,
+     "complete": 0,
+     "projection": 0,
+     "narrative": 0
+    }
+   }
+  ],
+  "R05": [
+   {
+    "id": "R05",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "R05",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "R05",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "R06": [
+   {
+    "id": "R06",
+    "mode": "numeric",
+    "notes": [
+     "tufe_index: endeks bazı farklı, orantılı eşleşti"
+    ],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "R06",
+    "mode": "numeric",
+    "notes": [
+     "tufe_index: endeks bazı farklı, orantılı eşleşti"
+    ],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "R06",
+    "mode": "numeric",
+    "notes": [
+     "tufe_index: endeks bazı farklı, orantılı eşleşti"
+    ],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "T01": [
+   {
+    "id": "T01",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "T01",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "T01",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "T03": [
+   {
+    "id": "T03",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "T03",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: change_pp (0%)",
+     "istenen kolonlardan biri yok (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 26.2,
+     "complete": 15.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "T03",
+    "mode": "numeric",
+    "notes": [
+     "fazla dönem 23",
+     "kolon eşleşmedi: end_value_pct (0%)",
+     "kolon eşleşmedi: change_pp (0%)",
+     "kolon eşleşmedi: relative_change_pct (0%)",
+     "fazla kolon: aylik_puan_degisimi",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 24,
+    "parts": {
+     "period": 0.0,
+     "values": 8.8,
+     "complete": 5.0,
+     "projection": 0.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "T04": [
+   {
+    "id": "T04",
+    "mode": "numeric",
+    "notes": [
+     "fazla kolon: ay_sayisi"
+    ],
+    "score": 95,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "T04",
+    "mode": "numeric",
+    "notes": [
+     "fazla kolon: ay_sayisi"
+    ],
+    "score": 95,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "T04",
+    "mode": "numeric",
+    "notes": [
+     "fazla kolon: ay_sayisi"
+    ],
+    "score": 95,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "T05": [
+   {
+    "id": "T05",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: cpi_index (2%)",
+     "fazla kolon: reel_aylik_degisim_mn_tl",
+     "istenen kolonlardan biri yok (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 23.6,
+     "complete": 13.3,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "T05",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: nominal_try_mn (2%)",
+     "kolon eşleşmedi: cpi_index (23%)",
+     "kolon eşleşmedi: real_try_mn_at_2022_01 (0%)",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 48,
+    "parts": {
+     "period": 25.0,
+     "values": 2.9,
+     "complete": 0.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "T05",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: nominal_try_mn (2%)",
+     "kolon eşleşmedi: cpi_index (23%)",
+     "kolon eşleşmedi: real_try_mn_at_2022_01 (0%)",
+     "fazla kolon: reel_aylik_degisim_milyon_tl",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 38,
+    "parts": {
+     "period": 25.0,
+     "values": 2.9,
+     "complete": 0.0,
+     "projection": 5.0,
+     "narrative": 5.0
+    }
+   }
+  ],
+  "T06": [
+   {
+    "id": "T06",
+    "mode": "numeric",
+    "notes": [
+     "fazla dönem 1",
+     "kolon eşleşmedi: konut_aylik_fark_mln_tl (0%)",
+     "kolon eşleşmedi: konut_faizi_aylik_puan_degisimi (0%)",
+     "kolon eşleşmedi: tufe_yillik_yuzde_degisimi (0%)",
+     "istenen kolonlardan biri yok (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 12.6,
+     "values": 17.5,
+     "complete": 10.0,
+     "projection": 5.0,
+     "narrative": 5.0
+    }
+   },
+   {
+    "id": "T06",
+    "mode": "numeric",
+    "notes": [
+     "fazla dönem 13",
+     "kolon eşleşmedi: konut_faizi_aylik_ortalama_pct (0%)",
+     "kolon eşleşmedi: konut_faizi_aylik_puan_degisimi (0%)",
+     "kolon eşleşmedi: tufe_2025_100_endeks (0%)",
+     "kolon eşleşmedi: tufe_yillik_yuzde_degisimi (0%)",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 42,
+    "parts": {
+     "period": 8.5,
+     "values": 11.7,
+     "complete": 6.7,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "T06",
+    "mode": "numeric",
+    "notes": [
+     "fazla dönem 13",
+     "kolon eşleşmedi: konut_aylik_fark_mln_tl (0%)",
+     "kolon eşleşmedi: konut_faizi_aylik_puan_degisimi (0%)",
+     "kolon eşleşmedi: tufe_yillik_yuzde_degisimi (0%)",
+     "istenen kolonlardan biri yok (en çok başarısız)"
+    ],
+    "score": 46,
+    "parts": {
+     "period": 8.5,
+     "values": 17.5,
+     "complete": 10.0,
+     "projection": 5.0,
+     "narrative": 5.0
+    }
+   }
+  ],
+  "F01": [
+   {
+    "id": "F01",
+    "mode": "numeric",
+    "notes": [
+     "eksik dönem 24",
+     "fazla dönem 1",
+     "kolon eşleşmedi: ihracat_kredisi_bakiye_mln_tl (0%)",
+     "kolon eşleşmedi: toplam_mevduat_bakiye_mln_tl (0%)",
+     "fazla kolon: gozlem_sayisi",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 5,
+    "parts": {
+     "period": 0.0,
+     "values": 0.0,
+     "complete": 0.0,
+     "projection": 0.0,
+     "narrative": 5.0
+    }
+   },
+   {
+    "id": "F01",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: ihracat_kredisi_bakiye_mln_tl (0%)",
+     "kolon eşleşmedi: toplam_mevduat_bakiye_mln_tl (0%)",
+     "fazla kolon: value",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 40,
+    "parts": {
+     "period": 25.0,
+     "values": 0.0,
+     "complete": 0.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F01",
+    "mode": "numeric",
+    "notes": [
+     "eksik dönem 24",
+     "fazla dönem 1",
+     "kolon eşleşmedi: ihracat_kredisi_bakiye_mln_tl (0%)",
+     "kolon eşleşmedi: toplam_mevduat_bakiye_mln_tl (0%)",
+     "fazla kolon: gozlem_sayisi",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 5,
+    "parts": {
+     "period": 0.0,
+     "values": 0.0,
+     "complete": 0.0,
+     "projection": 0.0,
+     "narrative": 5.0
+    }
+   }
+  ],
+  "F02": [
+   {
+    "id": "F02",
+    "mode": "numeric",
+    "notes": [
+     "monthly_abs_change: referansta dolu 1 hücre çıktıda boş",
+     "yoy_percent_change: referansta dolu 1 hücre çıktıda boş",
+     "veri kaybı: dolu olması gereken hücre boş (en çok kısmi)"
+    ],
+    "score": 84,
+    "parts": {
+     "period": 25.0,
+     "values": 34.4,
+     "complete": 13.3,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F02",
+    "mode": "numeric",
+    "notes": [
+     "monthly_abs_change: referansta dolu 1 hücre çıktıda boş",
+     "yoy_percent_change: referansta dolu 1 hücre çıktıda boş",
+     "veri kaybı: dolu olması gereken hücre boş (en çok kısmi)"
+    ],
+    "score": 84,
+    "parts": {
+     "period": 25.0,
+     "values": 34.4,
+     "complete": 13.3,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F02",
+    "mode": "numeric",
+    "notes": [
+     "monthly_abs_change: referansta dolu 1 hücre çıktıda boş",
+     "yoy_percent_change: referansta dolu 1 hücre çıktıda boş",
+     "veri kaybı: dolu olması gereken hücre boş (en çok kısmi)"
+    ],
+    "score": 84,
+    "parts": {
+     "period": 25.0,
+     "values": 34.4,
+     "complete": 13.3,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "F03": [
+   {
+    "id": "F03",
+    "mode": "numeric",
+    "notes": [
+     "eksik dönem 25",
+     "fazla dönem 18",
+     "kolon eşleşmedi: mevduat_try_mn (0%)",
+     "kolon eşleşmedi: tufe_index (3%)",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 15,
+    "parts": {
+     "period": 0.0,
+     "values": 0.5,
+     "complete": 0.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F03",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: tufe_index (0%)",
+     "istenen kolonlardan biri yok (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 17.5,
+     "complete": 10.0,
+     "projection": 10.0,
+     "narrative": 5.0
+    }
+   },
+   {
+    "id": "F03",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: tufe_index (0%)",
+     "istenen kolonlardan biri yok (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 17.5,
+     "complete": 10.0,
+     "projection": 10.0,
+     "narrative": 5.0
+    }
+   }
+  ],
+  "F04": [
+   {
+    "id": "F04",
+    "mode": "numeric",
+    "notes": [
+     "konut_aylik_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "konut_aylik_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "ihtiyac_aylik_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "ihtiyac_aylik_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "kart_aylik_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "kart_aylik_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "veri kaybı: dolu olması gereken hücre boş (en çok kısmi)"
+    ],
+    "score": 84,
+    "parts": {
+     "period": 25.0,
+     "values": 34.6,
+     "complete": 13.3,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F04",
+    "mode": "numeric",
+    "notes": [
+     "konut_aylik_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "konut_aylik_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "ihtiyac_aylik_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "ihtiyac_aylik_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "kart_aylik_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "kart_aylik_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "veri kaybı: dolu olması gereken hücre boş (en çok kısmi)"
+    ],
+    "score": 84,
+    "parts": {
+     "period": 25.0,
+     "values": 34.6,
+     "complete": 13.3,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F04",
+    "mode": "numeric",
+    "notes": [
+     "konut_aylik_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "konut_aylik_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "ihtiyac_aylik_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "ihtiyac_aylik_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "kart_aylik_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "kart_aylik_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "veri kaybı: dolu olması gereken hücre boş (en çok kısmi)"
+    ],
+    "score": 84,
+    "parts": {
+     "period": 25.0,
+     "values": 34.6,
+     "complete": 13.3,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "F07": [
+   {
+    "id": "F07",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: konut_bakiyesi_mln_tl (0%)",
+     "monthly_abs_change: referansta dolu 1 hücre çıktıda boş",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 17.3,
+     "complete": 5.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F07",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: konut_bakiyesi_mln_tl (0%)",
+     "monthly_abs_change: referansta dolu 1 hücre çıktıda boş",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 17.3,
+     "complete": 5.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F07",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: konut_bakiyesi_mln_tl (0%)",
+     "monthly_abs_change: referansta dolu 1 hücre çıktıda boş",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 17.3,
+     "complete": 5.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "F08": [
+   {
+    "id": "F08",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: konut_bakiye_mln_tl (0%)",
+     "kolon eşleşmedi: ihtiyac_bakiye_mln_tl (0%)",
+     "kolon eşleşmedi: kart_bakiye_mln_tl (0%)",
+     "fazla kolon: konut_kredisi_aylik_degisim, ihtiyac_kredisi_aylik_degisim, bireysel_kredi_karti_aylik_degisim",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 40,
+    "parts": {
+     "period": 25.0,
+     "values": 0.0,
+     "complete": 0.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F08",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: konut_bakiye_mln_tl (0%)",
+     "kolon eşleşmedi: ihtiyac_bakiye_mln_tl (0%)",
+     "kolon eşleşmedi: kart_bakiye_mln_tl (0%)",
+     "fazla kolon: konut_kredisi_aylik_degisim, ihtiyac_kredisi_aylik_degisim, bireysel_kredi_karti_aylik_degisim",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 40,
+    "parts": {
+     "period": 25.0,
+     "values": 0.0,
+     "complete": 0.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F08",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: konut_bakiye_mln_tl (0%)",
+     "kolon eşleşmedi: ihtiyac_bakiye_mln_tl (0%)",
+     "kolon eşleşmedi: kart_bakiye_mln_tl (0%)",
+     "fazla kolon: konut_kredisi_aylik_degisim, ihtiyac_kredisi_aylik_degisim, bireysel_kredi_karti_aylik_degisim",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 40,
+    "parts": {
+     "period": 25.0,
+     "values": 0.0,
+     "complete": 0.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "Q04": [
+   {
+    "id": "Q04",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: parent_value (0%)",
+     "kolon eşleşmedi: child_sum (0%)",
+     "fazla kolon: parent_value, children_sum",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 29,
+    "parts": {
+     "period": 0.2,
+     "values": 11.7,
+     "complete": 6.7,
+     "projection": 0.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "Q04",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: parent_value (0%)",
+     "kolon eşleşmedi: child_sum (0%)",
+     "fazla kolon: parent_value, children_sum",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 29,
+    "parts": {
+     "period": 0.2,
+     "values": 11.7,
+     "complete": 6.7,
+     "projection": 0.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "Q04",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: parent_value (0%)",
+     "kolon eşleşmedi: child_sum (0%)",
+     "fazla kolon: parent_value, children_sum",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 29,
+    "parts": {
+     "period": 0.2,
+     "values": 11.7,
+     "complete": 6.7,
+     "projection": 0.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "Q05": [
+   {
+    "id": "Q05",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: value (0%)",
+     "istenen kolonlardan biri yok (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 23.3,
+     "complete": 13.3,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "Q05",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: value (0%)",
+     "istenen kolonlardan biri yok (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 23.3,
+     "complete": 13.3,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "Q05",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "L01": [
+   {
+    "id": "L01",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "L01",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "L01",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "L02": [
+   {
+    "id": "L02",
+    "mode": "numeric",
+    "notes": [
+     "tuketici_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "tuketici_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "konut_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "konut_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "tasit_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "tasit_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "ihtiyac_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "ihtiyac_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "kart_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "kart_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "veri kaybı: dolu olması gereken hücre boş (en çok kısmi)"
+    ],
+    "score": 84,
+    "parts": {
+     "period": 25.0,
+     "values": 34.7,
+     "complete": 13.3,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "L02",
+    "mode": "numeric",
+    "notes": [
+     "tuketici_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "tuketici_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "konut_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "konut_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "tasit_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "tasit_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "ihtiyac_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "ihtiyac_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "kart_fark_mln_tl: referansta dolu 1 hücre çıktıda boş",
+     "kart_yuzde: referansta dolu 1 hücre çıktıda boş",
+     "veri kaybı: dolu olması gereken hücre boş (en çok kısmi)"
+    ],
+    "score": 84,
+    "parts": {
+     "period": 25.0,
+     "values": 34.7,
+     "complete": 13.3,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "L02",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: tuketici_fark_mln_tl (0%)",
+     "kolon eşleşmedi: tuketici_yuzde (12%)",
+     "kolon eşleşmedi: konut_fark_mln_tl (0%)",
+     "kolon eşleşmedi: konut_yuzde (0%)",
+     "kolon eşleşmedi: tasit_fark_mln_tl (3%)",
+     "kolon eşleşmedi: tasit_yuzde (1%)",
+     "kolon eşleşmedi: ihtiyac_fark_mln_tl (0%)",
+     "kolon eşleşmedi: ihtiyac_yuzde (0%)",
+     "kolon eşleşmedi: kart_fark_mln_tl (0%)",
+     "kolon eşleşmedi: kart_yuzde (0%)",
+     "fazla kolon: konut_pay_yuzde",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 12.1,
+     "complete": 6.7,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "L03": [
+   {
+    "id": "L03",
+    "mode": "numeric",
+    "notes": [
+     "tablo yok"
+    ],
+    "score": 0,
+    "parts": {
+     "period": 0,
+     "values": 0,
+     "complete": 0,
+     "projection": 0,
+     "narrative": 0
+    }
+   },
+   {
+    "id": "L03",
+    "mode": "numeric",
+    "notes": [
+     "tablo yok"
+    ],
+    "score": 0,
+    "parts": {
+     "period": 0,
+     "values": 0,
+     "complete": 0,
+     "projection": 0,
+     "narrative": 0
+    }
+   },
+   {
+    "id": "L03",
+    "mode": "numeric",
+    "notes": [
+     "tablo yok"
+    ],
+    "score": 0,
+    "parts": {
+     "period": 0,
+     "values": 0,
+     "complete": 0,
+     "projection": 0,
+     "narrative": 0
+    }
+   }
+  ],
+  "L05": [
+   {
+    "id": "L05",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: ihtiyac_monthly_change (0%)",
+     "kolon eşleşmedi: kart_monthly_change (0%)",
+     "istenen kolonlardan biri yok (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 17.5,
+     "complete": 10.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "L05",
+    "mode": "numeric",
+    "notes": [
+     "ihtiyac_monthly_change: referansta dolu 1 hücre çıktıda boş",
+     "kart_monthly_change: referansta dolu 1 hücre çıktıda boş",
+     "veri kaybı: dolu olması gereken hücre boş (en çok kısmi)"
+    ],
+    "score": 84,
+    "parts": {
+     "period": 25.0,
+     "values": 34.7,
+     "complete": 15.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "L05",
+    "mode": "numeric",
+    "notes": [
+     "ihtiyac_monthly_change: referansta dolu 1 hücre çıktıda boş",
+     "kart_monthly_change: referansta dolu 1 hücre çıktıda boş",
+     "veri kaybı: dolu olması gereken hücre boş (en çok kısmi)"
+    ],
+    "score": 84,
+    "parts": {
+     "period": 25.0,
+     "values": 34.7,
+     "complete": 15.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "I08": [
+   {
+    "id": "I08",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: raw_value (0%)",
+     "kolon eşleşmedi: value_mln_try (0%)",
+     "kolon eşleşmedi: absolute_change_mln_try (0%)",
+     "fazla kolon: mom_change_pct",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 40,
+    "parts": {
+     "period": 25.0,
+     "values": 0.0,
+     "complete": 0.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "I08",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: raw_value (0%)",
+     "kolon eşleşmedi: value_mln_try (0%)",
+     "kolon eşleşmedi: absolute_change_mln_try (0%)",
+     "fazla kolon: mom_change_pct",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 40,
+    "parts": {
+     "period": 25.0,
+     "values": 0.0,
+     "complete": 0.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "I08",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: raw_value (0%)",
+     "kolon eşleşmedi: value_mln_try (0%)",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 11.7,
+     "complete": 6.7,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "S03": [
+   {
+    "id": "S03",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "S03",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "S03",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ]
+ },
+ "review": [
+  {
+   "id": "P03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "P03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "P03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "P05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "P05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "P05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "R02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "R02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "R02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "R03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "R03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "R03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "T02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "T02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "T02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "T07",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "T07",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "T07",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "T08",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "T08",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "T08",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "F06",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "F06",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "F06",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "Q01",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "Q01",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "Q01",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "Q02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "Q02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "Q02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "Q03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "Q03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "Q03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "Q08",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "Q08",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "Q08",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "L04",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "L04",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "L04",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "A01",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "A01",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "A01",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "A02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "A02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "A02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "A03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "A03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "A03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "A04",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "A04",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "A04",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "A05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "A05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "A05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "A06",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "A06",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "A06",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "A07",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "A07",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "A07",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "A08",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "A08",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "A08",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "D01",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "D01",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "D01",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "D02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "D02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "D02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "D03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "D03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "D03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "D04",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "D04",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "D04",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "D05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "D05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "D05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "D08",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "D08",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "D08",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "C01",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "C01",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "C01",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "C02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "C02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "C02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "C03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "C03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "C03",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "C04",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "C04",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "C04",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "C05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "C05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "C05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "C06",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "C06",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "C06",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "C07",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "C07",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "C07",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "I07",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "I07",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "I07",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "O01",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "O01",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "O01",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "O02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "O02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "O02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "O04",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "O04",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "O04",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "O05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "O05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "O05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "O07",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "O07",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "O07",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "O08",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "O08",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "O08",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "S02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "S02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "S02",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "S05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "S05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "S05",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "S06",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "S06",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "S06",
+   "run": "v2_deepseek_final_r3_20260923.jsonl",
+   "repetition": 3
+  }
+ ]
+}

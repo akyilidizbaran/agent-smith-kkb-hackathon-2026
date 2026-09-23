@@ -37,6 +37,19 @@ _UNSAFE = re.compile(
 )
 
 
+
+def _chronological_text_or_dates(column: pd.Series) -> bool:
+    """Sıralaması zaman sırası veren tarih kolonu: Python date/datetime nesneleri (Gold çıktısı, ADR-0105) ya da
+    ISO YYYY-MM-DD metni. "31.01.2025" gibi biçimler sözlük sırasında zamanı bozar ve reddedilmeye devam eder."""
+    import datetime as _dt
+    values = column.dropna()
+    if values.empty:
+        return False
+    if all(isinstance(v, (_dt.date, _dt.datetime, pd.Timestamp)) for v in values):
+        return True
+    text = values.astype(str)
+    return bool(text.str.fullmatch(r"\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?").all())
+
 class AddColumnParams(BaseModel):
     dataset_id: str = Field(description="Verinin çekileceği tablo")
     key_column: str = Field(
@@ -314,7 +327,8 @@ class WorkspaceComputeColumnTool(Tool):
         # LAG yanlış). Tarih kolonu tarih tipinde değilse hesap reddedilir (M12/M10).
         for m in re.finditer(r'ORDER\s+BY\s+("([^"]+)"|([A-Za-z_][\w]*))', params.expression, re.I):
             col = m.group(2) or m.group(3)
-            if col in table.columns and not (pd.api.types.is_numeric_dtype(table[col]) or pd.api.types.is_datetime64_any_dtype(table[col])):
+            if col in table.columns and not (pd.api.types.is_numeric_dtype(table[col]) or pd.api.types.is_datetime64_any_dtype(table[col])
+                                             or _chronological_text_or_dates(table[col])):
                 return ToolResult.fail(
                     "INVALID_ARGS", f"'{col}' metin kolonu; ORDER BY metne göre sözlük sırası verir, zaman sırası değil.",
                     hint="Tarih kolonu tarih tipinde olmalı; dosyayı yeniden yükle (tarih biçimi tanınır) ya da tarihi CAST/strptime ile çevir.",

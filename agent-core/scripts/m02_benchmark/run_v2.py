@@ -228,10 +228,22 @@ def execute_case(
     steps: list[Any] = []
     started = time.perf_counter()
     failure: dict[str, str] | None = None
+    user_frame: Any = None
     for turn_index, question in enumerate(case.turns, 1):
         turn_started = time.perf_counter()
         try:
+            before = getattr(getattr(agent, "workspace", None), "table", None)
+            table_before = before.copy() if hasattr(before, "copy") else before
             answer = agent.ask(question)
+            # Kullanıcının gördüğü tablo (arayüz ve CSV/XLSX ile aynı projeksiyon, ADR-0105). Ham çalışma tablosu
+            # kanıt kolonlarını da taşır; ayrıca `workspace_table` olarak kaydedilir.
+            try:
+                from kkb_agent.web_app import project_result_table
+                projected = project_result_table(answer, agent, question=question, table_before=table_before)
+            except Exception:  # noqa: BLE001 — projeksiyon hatası koşuyu düşürmez; ham tablo kalır
+                projected = None
+            if projected is not None and not getattr(projected, "empty", True):
+                user_frame = projected
             turn_steps = list(getattr(answer, "steps", []) or [])
             steps.extend(turn_steps)
             usage = dict(getattr(answer, "usage", {}) or {})
@@ -264,7 +276,8 @@ def execute_case(
     frame = getattr(workspace, "table", None) if workspace is not None else None
     if frame is not None and getattr(frame, "empty", False):
         frame = None
-    table = _table_record(frame, artifact_dir, case.id, repetition)
+    workspace_table = _table_record(frame, artifact_dir, case.id + "-workspace", repetition)
+    table = _table_record(user_frame, artifact_dir, case.id, repetition) if user_frame is not None else workspace_table
     llm_failed = any(
         int((turn.get("usage") or {}).get("failed_llm_calls", 0) or 0) > 0
         for turn in turn_results
@@ -291,6 +304,7 @@ def execute_case(
         "turns": turn_results,
         "steps": [_step_record(step) for step in steps],
         "table": table,
+        "workspace_table": workspace_table,
         "reference": {
             "answer_mode": case.reference.get("answer_mode"),
             "reference_answer": case.reference.get("reference_answer"),

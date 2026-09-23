@@ -86,6 +86,24 @@ def test_verified_absolute_change_is_one_deterministic_operation() -> None:
     assert list(workspace.table.columns) == list(result.frame.columns)
 
 
+def test_preparatory_workspace_query_cannot_finalize_without_change_columns() -> None:
+    """A date cast/sort step is completed by the harness before narration."""
+    from types import SimpleNamespace
+
+    workspace = _workspace()
+    agent = AnalyticsAgent(object(), ToolRegistry(), workspace=workspace)
+    question = "Bu verilerin bir önceki aya göre aylık değişimlerini göster."
+    agent._follow_up_resolution = _resolution(question)
+    agent._active_table_reuse_allowed = True
+    agent._catalog_specs = lambda: [_spec()]
+    steps = [SimpleNamespace(ok=True, tool_name="workspace_query")]
+
+    assert agent._complete_pending_verified_transform(question, steps)
+    assert any(step.tool_name == "workspace_compute_column" for step in steps)
+    assert "metric_a_change" in workspace.table.columns
+    assert "metric_b_change" in workspace.table.columns
+
+
 def test_verified_percentage_change_handles_zero_base_deterministically() -> None:
     workspace = AnalysisWorkspace()
     workspace.set_table(

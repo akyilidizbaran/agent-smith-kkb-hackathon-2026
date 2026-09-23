@@ -1,0 +1,145 @@
+{
+ "numeric": {
+  "F01": [
+   {
+    "id": "F01",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: ihracat_kredisi_bakiye_mln_tl (0%)",
+     "istenen kolonlardan biri yok (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 17.5,
+     "complete": 10.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F01",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: ihracat_kredisi_bakiye_mln_tl (0%)",
+     "istenen kolonlardan biri yok (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 17.5,
+     "complete": 10.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F01",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: ihracat_kredisi_bakiye_mln_tl (0%)",
+     "kolon eşleşmedi: toplam_mevduat_bakiye_mln_tl (0%)",
+     "fazla kolon: value",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 40,
+    "parts": {
+     "period": 25.0,
+     "values": 0.0,
+     "complete": 0.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "F03": [
+   {
+    "id": "F03",
+    "mode": "numeric",
+    "notes": [
+     "tufe_index: endeks bazı farklı, orantılı eşleşti"
+    ],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F03",
+    "mode": "numeric",
+    "notes": [
+     "tufe_index: endeks bazı farklı, orantılı eşleşti"
+    ],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F03",
+    "mode": "numeric",
+    "notes": [
+     "tufe_index: endeks bazı farklı, orantılı eşleşti"
+    ],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "Q05": [
+   {
+    "id": "Q05",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "Q05",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "Q05",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ]
+ },
+ "review": []
+}

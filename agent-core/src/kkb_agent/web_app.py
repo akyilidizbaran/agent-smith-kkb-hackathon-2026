@@ -33,6 +33,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from .core.turn_intent import classify
 from .conversations import ConversationStore, conversation_title, new_conversation_id, now_iso
 from .core.workspace import AnalysisWorkspace
 from .labels import display_column_labels, readable_source, rename_frame_columns
@@ -157,9 +158,31 @@ def _table_touched(answer: Any, before: Any, after: Any) -> bool:
 
 
 _ALL_COLUMNS_REQUEST = re.compile(r"\b(?:tüm|tum|bütün|butun|all|entire|full)\s+(?:sütun|sutun|kolon|columns?|table|tablo)", re.I)
+# Both the source values and the derived change must be asked for, joined by
+# a connective. Either order is accepted ("orijinal bakiyeleri de aylık
+# değişimlerle birlikte", "değişimleri ve orijinal değerleri"), but a phrase
+# without a connective ("değişim değerlerini göster") asks only for the change.
+_BASE_WORD = r"(?:orijinal|original|baz\s+de[gğ]er|base\s+values?|bakiy(?:e|eleri|eler)|de[gğ]erleri|de[gğ]erler|values)"
+_CHANGE_WORD = r"(?:de[gğ]i[sş]im\w*|fark\w*|change\w*|growth|y[uü]zde\w*|percent\w*|pct)"
+_JOIN_WORD = r"(?:\bve\b|\band\b|\bile\b|\bwith\b|\btogether\b|\bbirlikte\b|\bberaber\b|\byan[ıi]nda\b|\bde\b|\bda\b|\w+(?:le|la|yle|yla)\b)"
 _BASE_AND_DERIVED_REQUEST = re.compile(
-    r"(?:hem|both|orijinal|original|baz|base|bakiy(?:e|eleri)|değer(?:leri)?|values?).*"
-    r"(?:ve|and|ile|together|birlikte).*(?:değiş|degis|fark|change|growth|yüzde|yuzde|percent|pct)", re.I,
+    r"\bhem\b.*\bhem\b|\bboth\b"
+    rf"|{_BASE_WORD}.*{_JOIN_WORD}.*{_CHANGE_WORD}"
+    rf"|{_BASE_WORD}.*{_CHANGE_WORD}\w*.*{_JOIN_WORD}"
+    rf"|{_CHANGE_WORD}.*{_JOIN_WORD}.*{_BASE_WORD}",
+    re.I,
+)
+_BASE_DATA_REQUEST = re.compile(
+    r"\bekle\b|\beklensin\b|\bekleyin\b|ekler\s+misin|\bbakiy|\bstok|seviye|nominal|orijinal|original|"
+    # "Aylık farkı hesapla" tabloya kolon ekler; tabloyu değişime indirmez (son 3×: F07, Q05, I08). "Göster" indirir.
+    r"\bhesapla|\bcompute\b|\bcalculate\b|"
+    r"\bbalances?\b|\blevels?\b|\bstocks?\b", re.I,
+)
+_ONLY_DERIVED_REQUEST = re.compile(
+    # "yalnız" değişime en çok bir kelime uzakta olmalı: "yalnız aylık değişimleri göster". "Yalnız komşu takvim ayları için
+    # değişim hesapla" (Q05) ay kısıtıdır, kolon kısıtı değil.
+    r"\b(?:yalnız|yalniz|yalnızca|yalnizca|sadece|only|just)\s+(?:\w+\s+)?"
+    r"(?:değiş|degis|fark|yüzde|yuzde|change|growth|pct|percent)", re.I,
 )
 _BASE_REQUEST = re.compile(r"orijinal|original|baz değer|baz deger|base value|base metric|ana değer|ana deger", re.I)
 _PERCENT_REQUEST = re.compile(r"yüzde|yuzde|oran|percent|percentage|pct|growth rate|büyüme hızı", re.I)
@@ -298,9 +321,15 @@ def _compute_result_projection(frame: pd.DataFrame, compute_steps: list[Any], qu
                 operations[name] = _derived_operation(expression)
     if not added:
         return _clean_user_projection(frame, question)
+    # Kullanıcı bu turda türetme istemediyse hesaplanan kolonlar görünümü tanımlamaz; tablo olduğu gibi gösterilir (son 3×:
+    # F08 dışa aktarma turu, T05 "nominal ve reel aynı tabloda" — kaynak kolonlar düşüyordu).
+    if not (_CHANGE_REQUEST.search(question or "") or _PERCENT_REQUEST.search(question or "")):
+        return _clean_user_projection(frame, question)
     requested_operation = "percent_change" if _PERCENT_REQUEST.search(question or "") else (
         "change" if _CHANGE_REQUEST.search(question or "") else None
     )
+    if classify(question or "").absolute_and_percent:
+        requested_operation = None   # ADR-0105: iki işlem birlikte istendi; ikisi de gösterilir (F04)
     selected = [name for name in added if requested_operation is None or operations.get(name) == requested_operation]
     if not selected:
         selected = added
@@ -310,7 +339,13 @@ def _compute_result_projection(frame: pd.DataFrame, compute_steps: list[Any], qu
         if str(column) not in added
         and any(str(column) in _expression_columns(expression, list(frame.columns)) for expression in expressions)
     ]
-    base = referenced if _BASE_AND_DERIVED_REQUEST.search(question or "") else []
+    # ADR-0105: kullanıcı kaynak veriyi de istiyorsa (bakiye/stok/seviye/nominal/orijinal adı geçiyor ya da mevcut tabloya
+    # "ekle" diyor) hesaplanan kolon dayandığı kaynak kolonla birlikte gösterilir: F02 "aynı tabloya aylık farkı ekle",
+    # F04 "tabloda üç bakiye, fark ve yüzde olsun", L05 "stokları getir, aylık değişimi hesapla". "Aylık değişimleri göster"
+    # yalnız değişimi ister; o turda yalnız değişim gösterilmeye devam eder. "Yalnız/sadece değişim" her zaman kazanır.
+    wants_base = (_BASE_AND_DERIVED_REQUEST.search(question or "") or _BASE_DATA_REQUEST.search(question or "")) \
+        and not _ONLY_DERIVED_REQUEST.search(question or "")
+    base = referenced if wants_base else []
     columns = list(dict.fromkeys([*identity, *base, *selected]))
     return _clean_user_projection(frame.loc[:, columns] if columns else frame, question)
 

@@ -139,8 +139,16 @@ def test_red_gold_refused_tekrar_denenmez_ve_turkce_sebep_tasir(env) -> None:
     assert not r.error.is_retryable
     assert "NOT_DECOMPOSABLE" in r.content and "birikimli değil" in r.content
     assert "gold_align" in r.content  # alternatif öneri
-    assert "TEKRAR DENEMEYLE ÇÖZÜLMEZ" in r.content
+    # ADR-0104: ret uygulanabilir bir alternatif gösteriyorsa tur bitmez; aynı çağrı yine tekrar denenmez.
+    assert r.error.terminal is False and "TEKRAR DENEMEYLE ÇÖZÜLMEZ" not in r.content and "Tur devam ediyor" in r.content
     assert ws.table is None
+
+
+def test_onay_gerektiren_gold_reddi_turu_kapatir(env) -> None:
+    lake, ws, runner = env
+    runner.refusal = ("UNVERIFIED_SEMANTICS", "semantics not verified")
+    r = GoldDecomposeTool(lake, ws).validate_and_run({"series_id": "bddk_monthly:konut", "purpose": "akıma çöz"})
+    assert not r.ok and r.error.terminal is not False and "TEKRAR DENEMEYLE ÇÖZÜLMEZ" in r.content
 
 
 def test_adaptor_reddi_typed_exception_olarak_yukseltir(env) -> None:

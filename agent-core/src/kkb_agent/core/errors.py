@@ -152,7 +152,12 @@ class ToolError:
             parts.append(f"ADAYLAR: {shown}{more}")
         if self.hint:
             parts.append(f"YAPACAĞIN: {self.hint}")
-        if not self.is_retryable:
+        if self.terminal is False:
+            # Turu bitirmeyen ret (ör. netleştirme yasağı): "kullanıcıya durumu açıkla" kapanış cümlesi modeli durdurup
+            # hazır veriyle devam etmesini engelliyordu (ADR-0104).
+            parts.append("BU HATA TEKRAR DENEMEYLE ÇÖZÜLMEZ; aynı çağrıyı tekrarlama. Tur devam ediyor: "
+                         "başka bir yolla ya da eldeki doğrulanmış veriyle sürdür.")
+        elif not self.is_retryable:
             parts.append(
                 "BU HATA TEKRAR DENEMEYLE ÇÖZÜLMEZ. Aynı çağrıyı farklı biçimde deneme; "
                 "kullanıcıya durumu açıkla."

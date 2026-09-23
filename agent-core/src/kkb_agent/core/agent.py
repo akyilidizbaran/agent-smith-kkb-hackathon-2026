@@ -47,6 +47,11 @@ from .facets import extract_facets, province_of, source_matches
 from .period_intent import choose_containing_window, parse_period_intent
 from .table_summary import deterministic_table_summary
 from .narration_facts import NarrationFacts, build_narration_facts
+from .source_summary import build_source_summary
+from .turn_intent import (  # noqa: F401 — desenler _REQUESTED_CAPABILITIES ve dış kullanıcılar için yeniden dışa açılır
+    _ANALYTICS_ASK, _CHART_ASK, _COMPARISON_ASK, _EXPLICIT_INTERPRETATION_ASK, _FILE_REF, _JOIN_ASK,
+    _NARRATIVE_OR_ANALYSIS_ASK, _TABLE_DELIVERY_ASK, _TRANSFORMATION_ASK, _is_read_only_source_question, classify,
+)
 from .token_budget import TokenBudgetPolicy
 from .web_routing import catalog_ids_in_sql, public_fallback_plan
 from .workspace_fastpath import (
@@ -59,50 +64,6 @@ from .workspace_fastpath import (
     WorkspaceTransformSatisfaction,
 )
 
-# Kullanıcının grafik isteği (Türkçe çekimli: grafiği, grafiğini, çiz, çizer misin, görselleştir).
-_CHART_ASK = re.compile(r"grafi|çiz|gorselle|görselle|\bplot\b|\bchart\b|harita", re.I)
-# Analitik isteği: aykırılık / kırılma / öncülük (ADR-0040). Araç çalışmadan iddia yazılmaz.
-_ANALYTICS_ASK = re.compile(r"anomali|aykır|sapan|sapma|olağan ?dışı|sıra ?dışı|kırılma|rejim değişi|öncül|önden mi|korelasyon|granger|mevsimsel|seasonal|\bmad\b|medyan mutlak", re.I)
-# A table transformation request is distinct from a new retrieval request.
-# These phrases describe work that must be performed on the verified active
-# table (for example, monthly deltas and a common date axis), even when the
-# user does not say "add a column" explicitly.
-_TRANSFORMATION_ASK = re.compile(
-    r"aylık\s+değiş|aylik\s+degis|değişim|degisim|yüzde\s+değiş|yuzde\s+degis|"
-    r"analiz\s+etmeye\s+uygun|aynı\s+tarih\s+ekseni|aylık\s+bazda\s+hizala|"
-    r"hizala|normalleştir|normalestir|dönüştür|donustur|oran|sütun|kolon",
-    re.I,
-)
-# A direct table delivery is already a complete answer when the user asks to
-# retrieve/list/export data without asking for interpretation.  In that case
-# the model's post-query "peek then narrate" turns only add latency; the
-# structured table and downloads are the primary deliverable.
-_TABLE_DELIVERY_ASK = re.compile(
-    r"\b(getir|getirebilir|göster|goster|listele|sırala|sirala|sun|ver|dök|dok|aktar|indir|"
-    r"get|show|list|fetch|retrieve|return|export|download|provide)\b|"
-    r"tablo(?:yu|su| halinde| olarak)?",
-    re.IGNORECASE,
-)
-_NARRATIVE_OR_ANALYSIS_ASK = re.compile(
-    r"analiz|yorum|özet|ozet|açıkla|acikla|değerlendir|degerlendir|karşılaştır|karsilastir|"
-    r"değişim|degisim|artış|artis|azalış|azalis|büyüme|buyume|trend|eğilim|egilim|"
-    r"anomali|aykır|aykir|kırılma|kirilma|öncül|oncul|korelasyon|nedensel|neden|etkisi|"
-    r"stok|akış|akis|birim|seri türü|seri tipi|neye göre|ilişki",
-    re.IGNORECASE,
-)
-_EXPLICIT_INTERPRETATION_ASK = re.compile(
-    r"\b(?:yorumla|açıkla|acikla|özetle|ozetle|değerlendir|degerlendir|"
-    r"analiz\s+et|analizini\s+çıkar|analizini\s+cikar|bulguları\s+yorumla|"
-    r"explain|interpret|summari[sz]e|analy[sz]e|insights?)\b|"
-    r"\b(?:neden|niçin|nicin)\b",
-    re.IGNORECASE,
-)
-# A comparison request wants prose about the result, not only the table.
-# Measured (PR #18 jenerik, 21 Sep): transform/delivery fast paths answered
-# comparison questions with two fixed sentences and no interpretation.
-_COMPARISON_ASK = re.compile(
-    r"karşılaştır|karsilastir|kıyasla|kiyasla|\bvs\b|yorumla|değerlendir|degerlendir", re.IGNORECASE,
-)
 # Katalog semantic_type → kullanıcı dili (deterministik teslim özeti).
 _SEMANTIC_TYPE_TR = {
     "stock": "dönem sonu stok", "flow": "dönem içi akım", "rate": "oran", "index": "endeks",
@@ -134,7 +95,21 @@ from .registry import ToolRegistry
 from .tool import ToolResult
 from .workspace import AnalysisWorkspace
 
+
 log = logging.getLogger(__name__)
+
+# Çağrının hiç yürütülmediği retler (ADR-0104): netleştirme yasağı, tekrar çağrı, arama bütçesi. Bunlar veri ya da çalışma
+# alanını değiştirmez; doğrulanmış tablo teslimini ve deterministik tamamlamayı engellememelidir. DeepSeek 76 vakada
+# (A03, F01, P02, Q05) tek bir CLARIFY_NOT_ALLOWED adımı, hazır tabloyu teslim eden yolları kapatıyordu.
+# ADR-0105: CLARIFY_NOT_ALLOWED listeden çıktı. Model netleştirme denediyse söyleyecek bir şeyi vardır (politika reddi,
+# belirsizlik); ADR-0104'te bu ret teslimi kapatmayınca şablon teslim A05/Q08/A08 politika cevaplarını ezdi.
+_ADVISORY_REFUSALS = frozenset({"DUPLICATE_CALL", "CATALOG_SEARCH_BUDGET"})
+
+
+def _has_blocking_failure(steps: list[Any]) -> bool:
+    """Başarısız adım var mı; yürütülmemiş çağrı retleri sayılmaz (doğrulama geri göndermeleri sayılır)."""
+    return any(not step.ok and (getattr(step, "error_code", None) or "") not in _ADVISORY_REFUSALS for step in steps)
+
 
 SYSTEM_PROMPT = """Sen {domain} alanında çalışan bir veri analisti ajansın; muhatabın {audience}. Soruyu doğru araçlarla yanıtla ve sonucu kanıta dayandır.
 
@@ -239,7 +214,6 @@ def _web_outage_summary(artifacts: list[dict[str, Any]]) -> str | None:
 _ACTION_CLAIM = re.compile(
     r"\b(yüklendi|yükledim|birleştirildi|birleştirdim|eklendi|ekledim|hesaplandı|hesapladım|oluşturuldu|oluşturdum|"
     r"kaydedildi|kaydettim|getirdim|çektim|okudum|indirdim|sorguladım|güncellendi|güncelledim)\b", re.I)
-_FILE_REF = re.compile(r"(?:^|\n)\s*Dosya:\s*\S+|https?://\S+", re.I)
 ACTION_CLAIM_NOTE = ("Bu turda HİÇBİR ARAÇ ÇALIŞMADI; yapılmamış bir işlemi (yükleme, birleştirme, ekleme, hesap) yapılmış gibi "
                      "yazamazsın ve sayı veremezsin. Soruda dosya ya da adres varsa önce web_url ile oku; birleştirme "
                      "isteniyorsa workspace_join çağır; sonra cevabını yaz.")
@@ -247,8 +221,12 @@ ACTION_CLAIM_NOTE = ("Bu turda HİÇBİR ARAÇ ÇALIŞMADI; yapılmamış bir i�
 # K03 hedefli canlı tekrar bulgusu (14 Eyl): birleştirme istenen turda model iki tabloyu okudu, workspace_join'i hiç çağırmadan
 # "birebir eşleşme yalnız Adana'da tutar, İzmir vs Izmir" yazıp kural sordu; iki iddia da yanlıştı (tam eşleşen yalnız İzmir).
 # Anahtar eşleşmesi bilgisi aracın kartından gelir; model tahmin etmez (D01, ADR-0065).
-_JOIN_ASK = re.compile(r"birleştir|birlestir|eşleştir|eslestir|\bjoin\b", re.I)
 _MATCH_TALK = re.compile(r"eşleş|esles|uyuş|uyus|birleştir|birlestir|anahtar|yazılmış|yazilmis|biçim|bicim", re.I)
+STALE_TABLE_NOTE = ("Son soru aktif tablodaki verilerle karşılanamıyor (başka seri, kaynak ya da kapsam istiyor) ve bu turda veri "
+                    "çekilmedi; bu hâliyle cevap yazılamaz. Soru: {q}\n"
+                    "Gerekli veriyi çek: lakehouse_describe ile seriyi doğrula, lakehouse_query ile getir; aktif tabloya yeni kaynak "
+                    "ekleniyorsa workspace_add_column ya da workspace_join kullan. Yalnız dönem süzme ya da hesap isteniyorsa "
+                    "workspace_query / workspace_compute_column çağır. Sonra cevabını yaz.")
 JOIN_NOTE = ("Birleştirme istendi ama bu turda workspace_join çağrılmadı; iki tablonun anahtarlarının eşleşip eşleşmediğini ya da "
              "hangi satırların tuttuğunu tahminle yazamazsın. Önce workspace_join çağır; araç kural seçeneklerini ve eşleşme sayılarını "
              "döndürür, kullanıcıya onları aktar.")
@@ -571,7 +549,7 @@ class AnalyticsAgent:
     # Katalog araçları (search/describe/distinct_values) da DataFrame döndürür
     # ama bunlar keşif adımıdır; cevabın dayanağı olamaz.
     DUPLICATE_LIMIT = 2
-    MAX_CATALOG_SEARCH_CALLS = 5
+    MAX_CATALOG_SEARCH_CALLS = 8   # ADR-0105: 5 idi; il bazlı ve çok serili sorular aday bulamadan tükeniyordu
     """Kaç tekrardan sonra araçların geri alınacağı. Bir tane fazla iyimser (model bazen
     ikinci denemede argümanı düzeltiyor), üç tane fazla cömert: ölçümde döngü ikinci
     tekrardan sonra kendiliğinden çıkmıyordu."""
@@ -829,7 +807,13 @@ class AnalyticsAgent:
         if clarify is not None:
             return clarify
         self._prepare_follow_up(question)
-        self._active_table_reuse_allowed = self._active_table_is_compatible(question)
+        # A provenance question is a read-only request about the committed
+        # table. It should not force a new catalog/LLM turn unless it also
+        # asks to retrieve, transform or otherwise change the data. It still
+        # passes the same compatibility checks as any follow-up (province,
+        # source, frequency): only the "short follow-up" wording rule is relaxed.
+        source_read_only = _is_read_only_source_question(question)
+        self._active_table_reuse_allowed = self._active_table_is_compatible(question, source_read_only=source_read_only)
         self._active_table_composition_allowed = bool(
             self.workspace.has_table and is_active_table_composition(question, self._follow_up_resolution)
         )
@@ -858,7 +842,9 @@ class AnalyticsAgent:
         ]
         self._truncated = False
         self._ask_deadline = (time.perf_counter() + self.time_budget_s) if self.time_budget_s else None
-        fast_answer = self._try_verified_transform_chart_fastpath(question)
+        fast_answer = self._try_verified_source_fastpath(question)
+        if fast_answer is None:
+            fast_answer = self._try_verified_transform_chart_fastpath(question)
         if fast_answer is None:
             fast_answer = self._try_verified_workspace_fastpath(question)
         try:
@@ -1314,7 +1300,7 @@ class AnalyticsAgent:
             return False
         # A failed current-turn mutation invalidates the old-table fallback: it
         # may have changed the semantic scope or partially changed workspace state.
-        return not any(step.tool_name and not step.ok for step in steps)
+        return not any(step.tool_name and not step.ok and (step.error_code or '') not in _ADVISORY_REFUSALS for step in steps)
 
     def _append_verified_reuse_artifact(self, artifacts: list[dict[str, Any]]) -> None:
         proof = self._verified_workspace_satisfaction
@@ -1353,14 +1339,22 @@ class AnalyticsAgent:
         steps: list[AgentStep],
     ) -> bool:
         """Whether a verified structured result can finish without model narration."""
-        if not _TABLE_DELIVERY_ASK.search(question):
+        intent = classify(question)
+        if not intent.table_delivery or intent.narrative_or_analysis or intent.sensitive:
             return False
-        if _NARRATIVE_OR_ANALYSIS_ASK.search(question):
+        # ADR-0105: bu turda yalnız tabloya bakıldıysa (workspace_show) ve istek yeni bir şey içeriyorsa (birleştirme,
+        # dönüşüm, değişen dönem/kaynak/seri) önceki turun tablosu "hazırlandı" diye teslim edilmez (F01.2, F03.2).
+        produced_now = any(step.ok and step.tool_name in self.DATA_PRODUCING_TOOLS and step.tool_name != "workspace_show"
+                           for step in steps)
+        resolution = self._follow_up_resolution
+        asks_new = intent.join or intent.transformation or bool(
+            resolution is not None and (resolution.overridden or resolution.extended or resolution.cleared))
+        if not produced_now and asks_new and not self._is_verified_workspace_reuse(steps):
             return False
         # A blocked/failed step (including an unresolved clarify/fitness gate)
         # needs its normal recovery or user-facing explanation, even if an
         # earlier URL/file tool happened to leave a table in the workspace.
-        if any(not step.ok for step in steps):
+        if _has_blocking_failure(steps):
             return False
         fitness = getattr(self.registry, "last_fitness", None) or {}
         if (fitness.get("turn") == getattr(self.registry, "turn", None)
@@ -1378,10 +1372,26 @@ class AnalyticsAgent:
         steps: list[AgentStep],
     ) -> bool:
         """Skip prose generation when verified structured work is the deliverable."""
-        if (not _TRANSFORMATION_ASK.search(question) or _EXPLICIT_INTERPRETATION_ASK.search(question)
-                or _COMPARISON_ASK.search(question)):
+        if (not classify(question).transformation or classify(question).interpretation
+                or classify(question).comparison):
             return False
-        if any(not step.ok for step in steps):
+        # A successful workspace_query can prepare a date axis, but it is not
+        # itself a monthly-change result.  Previously that preparatory table
+        # satisfied the generic "transformation tool ran" check and the model
+        # was allowed to finalize with a 24-row table that had no LAG column.
+        # For the two deterministic change operations require the derived
+        # projection to be present before treating the structured result as
+        # complete.  Other transformations (filter/alignment/join) retain the
+        # existing tool-based completion contract.
+        operation = getattr(self._follow_up_resolution, "operation", None)
+        if operation in {"period_change", "percent_change"}:
+            frame = self.workspace.table
+            if not isinstance(frame, pd.DataFrame) or frame.empty:
+                return False
+            suffix = "_pct_change" if operation == "percent_change" else "_change"
+            if not any(str(column).endswith(suffix) for column in frame.columns):
+                return False
+        if _has_blocking_failure(steps):
             return False
         if not any(
             step.ok and step.tool_name in self.TRANSFORMATION_TOOLS for step in steps
@@ -1400,10 +1410,117 @@ class AnalyticsAgent:
             return False
         return True
 
+    def _complete_pending_verified_transform(self, question: str, steps: list[AgentStep]) -> bool:
+        """Finish a safe active-table change after a preparatory workspace query.
+
+        Models often cast/sort a date column with ``workspace_query`` and then
+        stop.  That query is useful preparation, but it does not answer a
+        request for month-over-month change.  When the follow-up context and
+        per-column provenance still prove the active table, perform the same
+        deterministic fast path used at turn entry before accepting narration.
+        This is intentionally generic: no series names, sources, or prompt
+        wording are hard-coded here.
+        """
+        if (
+            not self._active_table_reuse_allowed
+            or classify(question).absolute_and_percent
+            or classify(question).interpretation
+            or classify(question).comparison
+            or not classify(question).transformation
+            or getattr(self._follow_up_resolution, "operation", None)
+            not in {"period_change", "percent_change"}
+            or any(step.ok and step.tool_name == "workspace_compute_column" for step in steps)
+        ):
+            return False
+        frame = self.workspace.table
+        if not isinstance(frame, pd.DataFrame) or frame.empty:
+            return False
+        operation = self._follow_up_resolution.operation
+        suffix = "_pct_change" if operation == "percent_change" else "_change"
+        if any(str(column).endswith(suffix) for column in frame.columns):
+            return False
+        plan = plan_verified_workspace_transform(
+            question,
+            self._follow_up_resolution,
+            self.workspace,
+            active_specs=self._active_table_specs(),
+        )
+        if plan is None:
+            return False
+        started = time.perf_counter()
+        result = execute_verified_workspace_transform(self.workspace, plan)
+        if result is None:
+            return False
+        label = "yüzde değişim" if operation == "percent_change" else "dönemsel değişim"
+        steps.append(AgentStep(
+            index=len(steps) + 1,
+            role="execute",
+            thought="tarih hazırlama sorgusundan sonra doğrulanmış deterministik dönüşüm tamamlandı",
+            tool_name="workspace_compute_column",
+            tool_args={
+                "operation": operation,
+                "column_names": list(plan.derived_columns),
+                "expressions": list(plan.expressions),
+                "purpose": label,
+                "deterministic": True,
+            },
+            result_summary=(
+                f"{len(plan.derived_columns)} sütun {label} olarak hesaplandı; "
+                f"{result.validation}."
+            ),
+            duration_ms=(time.perf_counter() - started) * 1000,
+            result_data=result.frame.copy(),
+        ))
+        self._usage["deterministic_completion_repairs"] = (
+            self._usage.get("deterministic_completion_repairs", 0) + 1
+        )
+        return True
+
+    def _try_verified_source_fastpath(self, question: str) -> AgentAnswer | None:
+        """Answer a read-only source question from the active table metadata."""
+        if (
+            not _is_read_only_source_question(question)
+            or not self.workspace.has_table
+            or not self._active_table_reuse_allowed
+        ):
+            return None
+        text = build_source_summary(
+            self.workspace.table,
+            workspace=self.workspace,
+            specs=self._active_table_specs(),
+        )
+        if text is None:
+            return None
+        self._begin_registry_turn(question, self._retry_source_question or question)
+        self._usage["deterministic_source_summaries"] = (
+            self._usage.get("deterministic_source_summaries", 0) + 1
+        )
+        step = AgentStep(
+            index=1,
+            role="narrate",
+            thought="kaynak/provenance özeti doğrulanmış metadatalardan üretildi; LLM çağrılmadı",
+            result_summary=text[:200],
+        )
+        # Diğer kısayollar gibi konuşma hafızasına yazılır. Yazılmazsa ask() içindeki sonradan düzenlemeler
+        # (_history[-1] güncellemesi) bir önceki turun cevabını ezer (envanter bulgusu, 23 Eyl).
+        self._history.append(ChatMessage(role="user", content=question))
+        self._history.append(ChatMessage(role="assistant", content=text))
+        return AgentAnswer(
+            text=text,
+            steps=[step],
+            workspace=self.workspace,
+            grounding="OK",
+            availability_status="FOUND",
+            reused_verified_table=True,
+            usage=dict(self._usage),
+        )
+
     def _try_verified_transform_chart_fastpath(self, question: str) -> AgentAnswer | None:
         """Reuse a provenance-verified monthly transform and render its requested chart."""
-        if (not self._active_table_reuse_allowed or not _CHART_ASK.search(question)
-                or _EXPLICIT_INTERPRETATION_ASK.search(question)
+        if classify(question).absolute_and_percent:
+            return None   # ADR-0105: iki işlem istendi; hızlı yol tek işlem yapar, model iki kolonu da hesaplar
+        if (not self._active_table_reuse_allowed or not classify(question).chart
+                or classify(question).interpretation
                 or re.search(r"harita|map", question, re.IGNORECASE)):
             return None
         chart_tool = self.registry.get("chart")
@@ -1536,9 +1653,11 @@ class AnalyticsAgent:
 
     def _try_verified_workspace_fastpath(self, question: str) -> AgentAnswer | None:
         """Use one deterministic workspace operation when semantic reuse is proven safe."""
+        if classify(question).absolute_and_percent:
+            return None   # ADR-0105: iki işlem istendi; hızlı yol tek işlem yapar, model iki kolonu da hesaplar
         if (not self._active_table_reuse_allowed
-                or _CHART_ASK.search(question)
-                or _EXPLICIT_INTERPRETATION_ASK.search(question)):
+                or classify(question).chart
+                or classify(question).interpretation):
             return None
         try:
             proof = self._verified_workspace_satisfaction
@@ -1747,6 +1866,22 @@ class AnalyticsAgent:
             log.debug("teslim özeti kimlik çevirisi atlandı: %s", exc)
         return text
 
+    def _verified_source_summary(self, steps: list[AgentStep]) -> str | None:
+        """Render source questions from verified provenance, without narration LLM."""
+        frame = self._verified_active_result(steps)
+        if frame is None and self._active_table_reuse_allowed and self.workspace.has_table:
+            # A source/provenance follow-up is a read-only question about the
+            # committed active table. Reuse is allowed only after the semantic
+            # follow-up resolver accepted that table for this turn.
+            frame = self.workspace.table
+        if frame is None:
+            return None
+        return build_source_summary(
+            frame,
+            workspace=self.workspace,
+            specs=self._active_table_specs(),
+        )
+
     def _is_bare_tool_name(self, text: str) -> bool:
         """A final answer that is only a tool name is a failed narration, not an answer (C04, PR #18 jenerik)."""
         stripped = (text or "").strip().strip("`'\"*_ .:").strip()
@@ -1763,25 +1898,37 @@ class AnalyticsAgent:
         base_question = self._retry_source_question or question
         self._follow_up_resolution = resolve_follow_up(base_question, self._follow_up_context, specs)
 
-    def _active_table_is_compatible(self, question: str) -> bool:
+    def _active_table_is_compatible(self, question: str, *, source_read_only: bool = False) -> bool:
         """Return whether the current table may be used as this turn's data.
 
         Follow-up resolution is intentionally conservative here. A table is
         reusable only for an unambiguous follow-up with no semantic override;
         explicit geography/source/frequency/date changes require a fresh
         retrieval or a documented transformation tool.
+
+        ``source_read_only``: a provenance question ("bu verinin kaynağı tam
+        olarak ne, hangi serilere dayanıyor?") is often too long for the
+        resolver's short-follow-up rule and is then classified as a new
+        question that clears the old context. Such a question may still use
+        the table when it names nothing new itself; the remaining facet checks
+        below apply unchanged.
         """
         if not self.workspace.has_table or self._follow_up_resolution is None:
             return False
         resolution = self._follow_up_resolution
-        if not resolution.is_follow_up or resolution.clarification_required:
-            return False
         semantic_fields = {
             "domain", "source", "metric", "series", "entity", "geography",
             "date_range", "frequency", "aggregation",
         }
+        if resolution.clarification_required:
+            return False
+        if not resolution.is_follow_up:
+            if not source_read_only or any(resolution.context.non_empty(f) for f in semantic_fields):
+                return False
+            semantic_changes: set[str] = set()   # only the old context was cleared; nothing new was named
+        else:
+            semantic_changes = set(resolution.overridden + resolution.cleared)
         period_range = requested_month_range(question, resolution)
-        semantic_changes = set(resolution.overridden + resolution.cleared)
         if "date_range" in semantic_changes and period_range is None:
             return False
         if semantic_fields.intersection(semantic_changes) - {"date_range"}:
@@ -1945,9 +2092,11 @@ class AnalyticsAgent:
         if state.failures and status == "UNKNOWN":
             status = "RETRIEVAL_FAILED"
         if needs_truthful_failure_text(answer.text, state):
-            answer.text = (
-                "Bu turdaki veri sorgusu başarısız olduğu için isteği doğrulayamadım. "
-                "Verinin mevcut olmadığı sonucuna varmadım."
+            # ADR-0105: cevap silinmez, sınırı not olarak eklenir. Önceden bütün metin değiştiriliyordu; R03'te doğru
+            # "REER serisi katalogda yok, nominal kurla ikame etmedim" cevabı bir sorgu hatası yüzünden kayboldu.
+            answer.text = answer.text.rstrip() + (
+                "\n\n(Not: bu turda bir veri sorgusu başarısız oldu; yukarıdaki 'yok/bulunamadı' ifadeleri yalnız "
+                "incelenen katalog adaylarına dayanır, verinin havuzda hiç olmadığı anlamına gelmez.)"
             )
             if self._history and self._history[-1].role == "assistant":
                 self._history[-1] = ChatMessage(role="assistant", content=answer.text)
@@ -2070,6 +2219,7 @@ class AnalyticsAgent:
         seen.update(self._retry_failed_signatures)
         duplicates = 0                       # kilidin kaç kez devreye girdiği
         budget_refusals = 0                  # katalog arama sınırı kaç kez reddetti (ilk red turu bitirmez)
+        search_candidates: list[str] = []    # bu turdaki katalog aramalarının bulduğu seri kimlikleri (bütçe reddinde modele verilir)
         terminal: ToolError | None = None    # tekrar denemeyle çözülmeyen hata
         public_fallback_pending: dict[str, Any] | None = None
         stuck_note: str | None = None        # son tura verilecek özel yönerge
@@ -2084,6 +2234,7 @@ class AnalyticsAgent:
         rejected: list[str] = []             # D02: cevaptan çıkarılan, doğrulanamayan iddialar (dışa aktarılmaz)
         action_claim_nudged = False          # araçsız işlem iddiası / okunmamış dosya bir kez geri gönderilir
         join_nudged = False                  # K03: birleştirme turunda araçsız eşleşme anlatısı bir kez geri gönderilir
+        stale_nudged = False                 # takip turu aktif tabloyla karşılanmıyorsa veri çekmeden cevap bir kez geri gönderilir
         general_nudged = False               # ADR-0078: genel bilgiden cevap bir kez geri gönderilir
         self._inflight_artifacts = artifacts
 
@@ -2098,6 +2249,10 @@ class AnalyticsAgent:
                 else self._select_call_phase(produced_data=produced_data, acted=acted, requested=requested, steps=steps)
             )
             recovery_round_pending = False
+            if phase == "narration" and self._stale_follow_up_pending(steps):
+                # Son 3× (23 Eyl, F03): takipte workspace_show "veri üretildi" sayılıp araçsız anlatıma geçiliyordu; aktif tablo
+                # soruya uymuyorsa model yeni veriyi çekebilmek için araçları görmeye devam eder.
+                phase = "tool"
             # Web research keeps the longer tool deadline until the model stops
             # requesting evidence. Once a source has been read, however, the
             # response instructions should already be the concise narration
@@ -2293,7 +2448,7 @@ class AnalyticsAgent:
                 # Tabloda olmayan sayı ve okunmamış dosya kapısı kullanım sorusunda da sürer.
                 claim = bool(_ACTION_CLAIM.search(response.content or "")) and not is_usage_question(question)
                 if not acted_this_turn and not action_claim_nudged and (
-                    claim or _FILE_REF.search(question) or len(loose_numbers) >= 1
+                    claim or classify(question).file_ref or len(loose_numbers) >= 1
                 ):
                     action_claim_nudged = True
                     steps.append(AgentStep(index=i, role="validate", ok=False,
@@ -2303,7 +2458,7 @@ class AnalyticsAgent:
                     messages.append(ChatMessage(role="assistant", content=response.content))
                     messages.append(ChatMessage(role="user", content=LAST_QUESTION_NOTE.format(q=question[:300]) + (
                         NO_TOOL_NUMBERS_NOTE.format(nums=", ".join(loose_numbers[:10])) if len(loose_numbers) >= 1
-                        and not (claim or _FILE_REF.search(question))
+                        and not (claim or classify(question).file_ref)
                         else ACTION_CLAIM_NOTE)))
                     continue
 
@@ -2316,7 +2471,7 @@ class AnalyticsAgent:
                     messages.append(ChatMessage(role="user", content=GENERAL_KNOWLEDGE_NOTE))
                     continue
 
-                if (not join_nudged and _JOIN_ASK.search(question) and len(self.workspace.sources()) >= 2
+                if (not join_nudged and classify(question).join and len(self.workspace.sources()) >= 2
                         and not any(s.tool_name == "workspace_join" for s in steps)
                         and _MATCH_TALK.search(self._strip_reasoning(response.content or ""))):
                     join_nudged = True
@@ -2326,6 +2481,19 @@ class AnalyticsAgent:
                                            llm_duration_ms=llm_duration_ms))
                     messages.append(ChatMessage(role="assistant", content=response.content))
                     messages.append(ChatMessage(role="user", content=JOIN_NOTE))
+                    continue
+
+                # Son 3× (23 Eyl, F01/F03): takip turu yeni seri ya da kaynak istiyor, model veri çekmeden cevap yazdı; aşağıdaki
+                # bayat tablo kapısı cevabı "uyumlu değil" sabit metniyle kapatıyordu. Kapanmadan önce bir kez yol gösterilir.
+                if (not stale_nudged and i < self.max_steps and self._stale_follow_up_pending(steps)
+                        and not pending_question(self._history, question)):
+                    stale_nudged = True
+                    steps.append(AgentStep(index=i, role="validate", ok=False,
+                                           thought="takip turu aktif tabloyla karşılanmıyor, veri çekilmeden cevap denendi — geri gönderildi",
+                                           duration_ms=(time.perf_counter() - started) * 1000,
+                                           llm_duration_ms=llm_duration_ms))
+                    messages.append(ChatMessage(role="assistant", content=response.content))
+                    messages.append(ChatMessage(role="user", content=STALE_TABLE_NOTE.format(q=question[:300])))
                     continue
 
                 answer_text = self._strip_reasoning(response.content)
@@ -2346,6 +2514,15 @@ class AnalyticsAgent:
                         duration_ms=(time.perf_counter() - started) * 1000,
                         llm_duration_ms=llm_duration_ms,
                     ))
+                # Source/provenance questions have a deterministic contract:
+                # do not publish the model's paragraph when the verified table
+                # already carries catalog and column provenance.
+                source_summary_used = False
+                if _is_read_only_source_question(question) and not _has_blocking_failure(steps):
+                    source_text = self._verified_source_summary(steps)
+                    if source_text is not None:
+                        answer_text = source_text
+                        source_summary_used = True
                 research_state = getattr(self.registry, "web_research", None)
                 if research_state is not None and research_state.control_active:
                     research_state.mark_complete()
@@ -2471,6 +2648,8 @@ class AnalyticsAgent:
                 reused = self._is_verified_workspace_reuse(steps)
                 if reused:
                     self._append_verified_reuse_artifact(artifacts)
+                if source_summary_used:
+                    recovery.availability_status = "FOUND"
                 return self._finish_recovery(
                     AgentAnswer(text=answer_text, steps=steps, workspace=self.workspace,
                                 grounding=grounding, artifacts=artifacts, rejected_claims=rejected,
@@ -2491,6 +2670,9 @@ class AnalyticsAgent:
                 # Döngü kilidi: model aynı çağrıyı tekrarlıyorsa sonuç değişmez.
                 # Ölçülmüş hata modu: aynı sorgunun art arda 7 kez çalıştırılması.
                 signature = (call.name, json.dumps(call.arguments, sort_keys=True, default=str))
+                if call.name in self.ACTIVE_TABLE_ACTION_TOOLS or call.name.startswith("workspace_"):
+                    # Aktif tabloya bağlı çağrı: tablo yeniden kurulduysa aynı argüman yeni bir işlemdir.
+                    signature = (*signature, str(getattr(self.workspace, "generation", 0)))
                 repeated = False
                 if signature in seen:
                     repeated = True
@@ -2515,12 +2697,15 @@ class AnalyticsAgent:
                         )
                 elif call.name == "lakehouse_search" and recovery.catalog_search_budget_exhausted:
                     budget_refusals += 1
+                    # Ölçüldü (DeepSeek 76 vaka, 7 başarısız vakada bu ret): model adayları önceki çıktılarda arayıp
+                    # bulamayınca döngüye giriyordu. Bu turda bulunan kimlikler reddin içinde ADAYLAR olarak verilir.
                     result = ToolResult.fail(
                         "CATALOG_SEARCH_BUDGET",
                         f"Bu turda {recovery.catalog_search_budget} katalog araması yapıldı; yeni arama durduruldu.",
-                        hint=("Yeni arama yapma. Önceki arama çıktılarındaki adaylarla devam et: lakehouse_describe ile "
-                              "şemayı doğrula, lakehouse_query ile veriyi çek; yeterli aday yoksa doğrulanamayan kısmı "
-                              "açıkça belirt."),
+                        hint=("Yeni arama yapma. Aşağıdaki ADAYLAR bu turdaki aramaların bulduğu serilerdir: soruya uyanı "
+                              "lakehouse_describe ile doğrula, lakehouse_query ile çek; yeterli aday yoksa doğrulanamayan "
+                              "kısmı açıkça belirt."),
+                        candidates=list(dict.fromkeys(search_candidates))[:12] or None,
                         layer="harness",
                         retryable=False,
                     )
@@ -2544,6 +2729,8 @@ class AnalyticsAgent:
                         recovery.record_catalog_search()
                         self._usage["catalog_search_calls"] = recovery.catalog_search_calls
                     result = self.registry.execute(call.name, call.arguments)
+                    if call.name == "lakehouse_search" and result.ok:
+                        search_candidates.extend(re.findall(r"^- ([^\s:][^\s]*?:[^\s:]+):", result.content or "", re.M))
                 if repeated:
                     tool_duration = 0.0
                 else:
@@ -2690,6 +2877,19 @@ class AnalyticsAgent:
                 log.info("adım %d: %s -> %s", i, call.name, "ok" if result.ok else "HATA")
                 messages.append(self._result_message(call, result, native=native))
 
+            # A model may use workspace_query only to normalize/sort the date
+            # axis and then emit a final answer.  Complete a verified monthly
+            # change deterministically before the structured-result gate can
+            # accept that preparatory table as the answer.
+            if (
+                terminal is None
+                and produced_data
+                and not _has_blocking_failure(steps)
+                and not web_search_succeeded
+                and not web_page_succeeded
+            ):
+                self._complete_pending_verified_transform(planning_question, steps)
+
             if public_fallback_pending is not None and terminal is None:
                 self.registry.public_web_fallback_plan = dict(public_fallback_pending)
                 self.registry.public_web_fallback_consumed = False
@@ -2730,6 +2930,36 @@ class AnalyticsAgent:
             # turn peeking at a few rows and then fail while narrating a table
             # that is already available to the user. Explicit analysis and
             # interpretation requests continue through the normal narration path.
+            if terminal is None and _is_read_only_source_question(question):
+                source_text = self._verified_source_summary(steps)
+                if source_text is not None and not _has_blocking_failure(steps):
+                    text = self._coverage_note(self._source_note(source_text, steps, artifacts), artifacts)
+                    steps.append(AgentStep(
+                        index=len(steps) + 1,
+                        role="narrate",
+                        thought="kaynak/provenance özeti doğrulanmış metadatalardan üretildi; model anlatımı atlandı",
+                        result_summary=text[:200],
+                    ))
+                    self._history.append(ChatMessage(role="user", content=question))
+                    self._history.append(ChatMessage(role="assistant", content=text))
+                    reused = self._is_verified_workspace_reuse(steps)
+                    if reused:
+                        self._append_verified_reuse_artifact(artifacts)
+                    return self._finish_recovery(
+                        AgentAnswer(
+                            text=text,
+                            steps=steps,
+                            workspace=self.workspace,
+                            grounding=grounding,
+                            artifacts=artifacts,
+                            rejected_claims=rejected,
+                            availability_status="FOUND",
+                            reused_verified_table=reused,
+                        ),
+                        recovery,
+                        finalization_reason="verified_source_summary",
+                    )
+
             if terminal is None and (
                 self._is_table_delivery_complete(question, requested, steps)
                 or self._is_structured_transform_complete(question, requested, steps)
@@ -2803,8 +3033,20 @@ class AnalyticsAgent:
                 # Skip that extra provider call when this turn produced no
                 # verified table; a deterministic status is faster and cannot
                 # turn a failed search into either absence or a guessed result.
+                # ADR-0105: aday bulunmuşsa sabit metin yerine araçsız kurtarma çağrısı anlatır (adaylar, eksik ölçüm,
+                # sonraki adım). Ölçüldü: D01/T07/T08/P05/Q02 sabit "doğrulanamadı" ile kapanıp "stok var, akış yok"
+                # tespitini yazamadı.
+                if search_candidates and terminal.error_code in {"DUPLICATE_CALL", "CATALOG_SEARCH_BUDGET"}:
+                    stuck_note = (
+                        "Arama bu turda durdu. ARAÇ ÇAĞIRMA ve sayı yazma. Bu turda bulunan adaylar: "
+                        + ", ".join(list(dict.fromkeys(search_candidates))[:12])
+                        + ". Kullanıcıya kısaca şunları yaz: hangi adayların soruya uyduğu ya da uymadığı ve neden "
+                        "(ör. ölçüm türü stok ama istenen akış; frekans ya da coğrafya farklı), istenen serinin katalogda "
+                        "doğrulanıp doğrulanamadığı ve kullanıcının atabileceği somut sonraki adım."
+                    )
                 if (
                     terminal.error_code in {"DUPLICATE_CALL", "CATALOG_SEARCH_BUDGET"}
+                    and not search_candidates
                     and not produced_data
                     and self._verified_active_result(steps) is None
                     and not self.workspace.has_table
@@ -3133,7 +3375,7 @@ class AnalyticsAgent:
     def _needs_extended_narration(self) -> bool:
         """Use a larger prose ceiling for substantive analysis, not large artifacts."""
         question = str(getattr(self.registry, "active_question", "") or "")
-        analysis = _EXPLICIT_INTERPRETATION_ASK.search(question) or _ANALYTICS_ASK.search(question)
+        analysis = classify(question).interpretation or classify(question).analytics
         if analysis:
             return True
         requested = getattr(self, "_inflight_requested", []) or []
@@ -3146,6 +3388,14 @@ class AnalyticsAgent:
             if str(getattr(spec, "source", ""))
         }
         return len(source_ids) > 1
+
+    def _stale_follow_up_pending(self, steps: list[AgentStep]) -> bool:
+        """Takip turu aktif tabloyla karşılanmıyor ve bu turda henüz yeni veri ya da aktif tablo işlemi yapılmadı mı?"""
+        return bool(
+            self.workspace.has_table and self._has_confirmed_follow_up_context()
+            and not self._active_table_reuse_allowed
+            and not any(s.ok and s.tool_name in (self.FRESH_DATA_TOOLS | self.ACTIVE_TABLE_ACTION_TOOLS) for s in steps)
+        )
 
     def _select_call_phase(
         self,

@@ -65,6 +65,9 @@ _ALTERNATIVE_TR: dict[str, str] = {
     "UPSAMPLING_REFUSED": "Kaynağın kendi frekansında göster.",
 }
 
+# Retten sonra modelin kendisinin yürütebileceği alternatifler (kullanıcı onayı gerektirmez).
+_ACTIONABLE_ALTERNATIVES = frozenset({"NOT_DECOMPOSABLE", "DECOMPOSITION_REQUIRED", "INACTIVE_SERIES", "UPSAMPLING_REFUSED"})
+
 GOLD_PROMPT_RULES = """
 
 FREKANS DÖNÜŞÜMÜ KURALI (Gold):
@@ -247,7 +250,7 @@ class _GoldTool(Tool):
             reason = exc.reason
             tr = REASON_TR.get(reason, exc.detail)
             alt = _ALTERNATIVE_TR.get(reason, "")
-            return ToolResult.fail(
+            refused = ToolResult.fail(
                 "GOLD_REFUSED",
                 f"Gold reddetti [{reason}]{f' ({exc.series_id})' if exc.series_id else ''}: {tr} "
                 f"(veri katmanı: {exc.detail})",
@@ -255,6 +258,15 @@ class _GoldTool(Tool):
                       "yapmaya kalkma. " + alt).strip(),
                 layer="policy", retryable=False,
             )
+            # Ret bir sonraki doğru aracı gösteriyorsa (ör. "önce gold_decompose çağır") tur bitmez: önceden hata
+            # tekrar denenemez sayıldığı için tur terminale düşüyor, model önerilen aracı çağıramıyordu (envanter, 23 Eyl).
+            # Kullanıcı onayı gereken ret (UNVERIFIED_SEMANTICS) ve alternatifsiz retler turu yine kapatır.
+            if reason in _ACTIONABLE_ALTERNATIVES and refused.error is not None:
+                refused.error.terminal = False
+                refused.content = "\n".join(
+                    line for line in refused.content.split("\n") if not line.startswith("BU HATA TEKRAR DENEMEYLE")
+                ) + "\nTur devam ediyor: önerilen araçla sürdür; aynı çağrıyı tekrarlama."
+            return refused
         except LakehouseError as exc:
             return ToolResult.fail("TOOL_FAILED", str(exc), layer="harness", retryable=False,
                                    hint="Kullanıcıya hesabın yapılamadığını söyle.")

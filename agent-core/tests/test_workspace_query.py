@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -32,7 +31,47 @@ def test_bakis_modu_tabloyu_degistirmez_kirpma_modu_degistirir() -> None:
     assert r.ok and len(ws.table) == 3 and "artık AKTİF TABLO bu" in r.content
     prov = ws.column_provenance("population")
     assert prov.sql.startswith("workspace_query:") and prov.source_urls == ["https://owid.example/p.csv"]
+    assert prov.dataset_ids == []  # fixture is source-backed but has no catalog id
     assert ws.revert() and len(ws.table) == 4   # önceki tablo geçmişte
+
+
+def test_aktif_tablo_sorgusu_seri_kimliklerini_korur() -> None:
+    """Date preparation must not make a verified series look like an unknown table."""
+    ws = AnalysisWorkspace()
+    ws.set_table(
+        pd.DataFrame({
+            "observation_date": pd.to_datetime(["2022-01-31", "2022-02-28"]),
+            "need": [100.0, 110.0],
+            "card": [50.0, 55.0],
+        }),
+        description="BDDK aylık",
+        column_provenance={
+            "observation_date": QueryProvenance(
+                sql="SELECT observation_date", dataset_ids=["bddk_monthly:date"], sources=["BDDK"]
+            ),
+            "need": QueryProvenance(
+                sql="SELECT need", dataset_ids=["bddk_monthly:1536"], sources=["BDDK"]
+            ),
+            "card": QueryProvenance(
+                sql="SELECT card", dataset_ids=["bddk_monthly:1539"], sources=["BDDK"]
+            ),
+        },
+    )
+
+    result = WorkspaceQueryTool(ws).validate_and_run({
+        "sql": (
+            "SELECT CAST(observation_date AS DATE) AS observation_date, need, card "
+            "FROM t ORDER BY observation_date"
+        ),
+        "purpose": "tarihi düzelt ve sırala",
+        "as_active_table": True,
+    })
+
+    assert result.ok, result.content
+    assert ws.column_provenance("need").dataset_ids == ["bddk_monthly:1536"]
+    assert ws.column_provenance("card").dataset_ids == ["bddk_monthly:1539"]
+    assert ws.column_provenance("observation_date").dataset_ids == ["bddk_monthly:date"]
+    assert "workspace_query:" in ws.column_provenance("need").sql
 
 
 def test_aktif_tablo_yoksa_ve_t_okunmuyorsa_durur() -> None:

@@ -43,6 +43,7 @@ _COMPACT_MONTH_RANGE = re.compile(
     re.IGNORECASE,
 )
 _COMPARISON = re.compile(r"karşılaştır|karsilastir|kıyasla|kiyasla|\bvs\b|\bgöre\b|gore", re.IGNORECASE)
+_CONVERSATION_LABEL = re.compile(r"^\s*(?:takip|ilk\s+mesaj|devam|soru|follow[\s-]?up|first\s+message)\s*:\s*", re.IGNORECASE)
 _FOLLOW_UP = re.compile(
     r"\b(peki|aynı|ayni|bunu|buna|onu|şunu|sunu|diğeri|digeri|ikisini|önceki|onceki|"
     r"burada|böyle|boyle|yap|çevir|cevir|değiştir|degistir)\b|"
@@ -524,6 +525,9 @@ def resolve_follow_up(
     pronouns are surfaced instead of being silently bound to stale context.
     """
     previous = previous or FollowUpContext()
+    # Satır başındaki konuşma etiketi ("Takip:", "İlk mesaj:") içerik değildir. Ölçüldü (ADR-0105, F04): "Takip:" etiketi
+    # "takip" ölçüsü sanıldı; tur yeni veri isteği sayılıp "takipteki alacaklar" serileri seçildi.
+    question = _CONVERSATION_LABEL.sub("", question or "", count=1)
     explicit = _extract(question, catalog)
     if explicit.series in ("buying", "selling") and previous.metric:
         variant = "alış" if explicit.series == "buying" else "satış"

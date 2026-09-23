@@ -1,0 +1,356 @@
+{
+ "numeric": {
+  "T03": [
+   {
+    "id": "T03",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "T03",
+    "mode": "numeric",
+    "notes": [
+     "fazla dönem 23",
+     "kolon eşleşmedi: end_value_pct (0%)",
+     "kolon eşleşmedi: change_pp (0%)",
+     "kolon eşleşmedi: relative_change_pct (0%)",
+     "fazla kolon: aylik_degisim_puan",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 24,
+    "parts": {
+     "period": 0.0,
+     "values": 8.8,
+     "complete": 5.0,
+     "projection": 0.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "T03",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "T05": [
+   {
+    "id": "T05",
+    "mode": "numeric",
+    "notes": [
+     "cpi_index: endeks bazı farklı, orantılı eşleşti",
+     "fazla kolon: nominal_aylik_degisim, nominal_aylik_yuzde, reel_aylik_yuzde"
+    ],
+    "score": 95,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "T05",
+    "mode": "numeric",
+    "notes": [
+     "cpi_index: endeks bazı farklı, orantılı eşleşti",
+     "fazla kolon: reel_mevduat_2022_01_milyon_tl_endeks, reel_aylik_degisim_milyon_tl, reel_aylik_degisim_yuzde"
+    ],
+    "score": 95,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "T05",
+    "mode": "numeric",
+    "notes": [
+     "cpi_index: endeks bazı farklı, orantılı eşleşti",
+     "fazla kolon: real_deposit_2022_01_million_tl_endeks, nominal_aylik_degisim_milyon_tl, reel_aylik_degisim_milyon_tl"
+    ],
+    "score": 95,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "F07": [
+   {
+    "id": "F07",
+    "mode": "numeric",
+    "notes": [
+     "monthly_abs_change: referansta dolu 1 hücre çıktıda boş",
+     "veri kaybı: dolu olması gereken hücre boş (en çok kısmi)"
+    ],
+    "score": 84,
+    "parts": {
+     "period": 25.0,
+     "values": 34.8,
+     "complete": 15.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F07",
+    "mode": "numeric",
+    "notes": [
+     "monthly_abs_change: referansta dolu 1 hücre çıktıda boş",
+     "veri kaybı: dolu olması gereken hücre boş (en çok kısmi)"
+    ],
+    "score": 84,
+    "parts": {
+     "period": 25.0,
+     "values": 34.8,
+     "complete": 15.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F07",
+    "mode": "numeric",
+    "notes": [
+     "monthly_abs_change: referansta dolu 1 hücre çıktıda boş",
+     "veri kaybı: dolu olması gereken hücre boş (en çok kısmi)"
+    ],
+    "score": 84,
+    "parts": {
+     "period": 25.0,
+     "values": 34.8,
+     "complete": 15.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "F08": [
+   {
+    "id": "F08",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F08",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F08",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "Q05": [
+   {
+    "id": "Q05",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: value (0%)",
+     "istenen kolonlardan biri yok (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 23.3,
+     "complete": 13.3,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "Q05",
+    "mode": "numeric",
+    "notes": [
+     "tablo yok"
+    ],
+    "score": 0,
+    "parts": {
+     "period": 0,
+     "values": 0,
+     "complete": 0,
+     "projection": 0,
+     "narrative": 0
+    }
+   },
+   {
+    "id": "Q05",
+    "mode": "numeric",
+    "notes": [],
+    "score": 100,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "I08": [
+   {
+    "id": "I08",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: raw_value (0%)",
+     "kolon eşleşmedi: value_mln_try (0%)",
+     "kolon eşleşmedi: absolute_change_mln_try (0%)",
+     "fazla kolon: value_million_try, absolute_change_million_try",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 40,
+    "parts": {
+     "period": 25.0,
+     "values": 0.0,
+     "complete": 0.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "I08",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: raw_value (0%)",
+     "kolon eşleşmedi: value_mln_try (0%)",
+     "kolon eşleşmedi: absolute_change_mln_try (0%)",
+     "fazla kolon: value, mutlak_degisim_milyon_tl",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 40,
+    "parts": {
+     "period": 25.0,
+     "values": 0.0,
+     "complete": 0.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "I08",
+    "mode": "numeric",
+    "notes": [
+     "fazla kolon: conversion_divisor"
+    ],
+    "score": 95,
+    "parts": {
+     "period": 25.0,
+     "values": 35.0,
+     "complete": 20.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   }
+  ]
+ },
+ "review": [
+  {
+   "id": "P05",
+   "run": "v2_deepseek_final_fix_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "P05",
+   "run": "v2_deepseek_final_fix_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "P05",
+   "run": "v2_deepseek_final_fix_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "A06",
+   "run": "v2_deepseek_final_fix_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "A06",
+   "run": "v2_deepseek_final_fix_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "A06",
+   "run": "v2_deepseek_final_fix_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "D08",
+   "run": "v2_deepseek_final_fix_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "D08",
+   "run": "v2_deepseek_final_fix_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "D08",
+   "run": "v2_deepseek_final_fix_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "S06",
+   "run": "v2_deepseek_final_fix_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "S06",
+   "run": "v2_deepseek_final_fix_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "S06",
+   "run": "v2_deepseek_final_fix_r3_20260923.jsonl",
+   "repetition": 3
+  }
+ ]
+}

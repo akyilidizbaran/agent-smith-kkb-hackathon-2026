@@ -129,7 +129,8 @@ def test_sql_failed_never_becomes_confirmed_absent() -> None:
 
     assert answer.availability_status == "RETRIEVAL_FAILED"
     assert answer.availability_status != "CONFIRMED_ABSENT"
-    assert "doğrulayamadım" in answer.text
+    # ADR-0105: cevap silinmez; yokluk ifadesinin yalnız incelenen adaylara dayandığı notu eklenir.
+    assert "veri sorgusu başarısız oldu" in answer.text and "hiç olmadığı anlamına gelmez" in answer.text
     assert answer.error_codes() == {"SQL_FAILED": 1}
 
 
@@ -696,3 +697,88 @@ def test_lakehouse_search_streak_is_turn_scoped() -> None:
 
     assert first.ok and second.ok
     assert tool._empty_streak == 1
+
+
+def test_catalog_search_budget_refusal_lists_this_turns_candidates() -> None:
+    """ADR-0104 (DeepSeek 76 vaka): bütçe reddinde model adayları önceki çıktılarda bulamayıp döngüye giriyordu;
+    ret, bu turdaki aramaların bulduğu seri kimliklerini ADAYLAR olarak taşır."""
+    search = _QueueTool(
+        "lakehouse_search",
+        [ToolResult(content="Bulunan tablolar:\n- bddk_monthly:1160_Toplam: Krediler, Toplam. x\n    katalog semantik güveni: yüksek\n"
+                            "- evds:TP.KTF12: Konut faizi. y")],
+    )
+    describe = _QueueTool("lakehouse_describe", [ToolResult(content="Şema: dönem, değer")])
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[_call("lakehouse_search", "toplam kredi", "s1")]),
+        LLMResponse(content="", tool_calls=[_call("lakehouse_search", "ulusal aylık kredi", "s2")]),
+        LLMResponse(content="", tool_calls=[_call("lakehouse_describe", "bddk_monthly:1160_Toplam", "d1")]),
+        LLMResponse(content="Aday seri şeması doğrulandı; veri çekilmedi."),
+    ])
+    registry = ToolRegistry()
+    registry.register_all([search, describe])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), tool_gate=False, max_catalog_search_calls=1)
+
+    answer = agent.ask("Katalogda ulusal aylık toplam kredi serisini seç")
+
+    assert answer.error_codes()["CATALOG_SEARCH_BUDGET"] == 1
+    seen_by_model = "\n".join(str(m.content) for m in llm.messages[2] if getattr(m, "role", "") == "tool")
+    assert "HATA[CATALOG_SEARCH_BUDGET]" in seen_by_model
+    assert "ADAYLAR: bddk_monthly:1160_Toplam, evds:TP.KTF12" in seen_by_model
+
+
+def test_unexecuted_refusals_do_not_block_verified_delivery() -> None:
+    """ADR-0104/0105: tekrar çağrı ve arama bütçesi retleri çağrıyı yürütmez; teslimi kapatmaz.
+    Veri adımı hatası ve doğrulama geri göndermesi kapatmaya devam eder."""
+    from kkb_agent.core.agent import AgentStep, _has_blocking_failure
+
+    ok = AgentStep(index=1, role="execute", tool_name="lakehouse_query", ok=True)
+    # ADR-0105: netleştirme reddi yine kapatır (model netleştirmeye çalıştıysa söyleyecek bir şeyi var).
+    assert _has_blocking_failure([ok, AgentStep(index=2, role="execute", tool_name="clarify", ok=False, error_code="CLARIFY_NOT_ALLOWED")])
+    assert not _has_blocking_failure([ok, AgentStep(index=2, role="execute", tool_name="lakehouse_search", ok=False, error_code="DUPLICATE_CALL")])
+    assert not _has_blocking_failure([ok, AgentStep(index=2, role="execute", tool_name="lakehouse_search", ok=False, error_code="CATALOG_SEARCH_BUDGET")])
+    assert _has_blocking_failure([ok, AgentStep(index=2, role="execute", tool_name="lakehouse_query", ok=False, error_code="SQL_FAILED")])
+    assert _has_blocking_failure([ok, AgentStep(index=2, role="validate", ok=False)])
+
+
+def test_budget_close_with_candidates_lets_model_explain_found_and_missing() -> None:
+    """ADR-0105: aday bulunmuşsa bütçe kapanışı sabit metin değil, araçsız kurtarma çağrısıdır (D01/T07/T08/P05/Q02)."""
+    found = "Bulunan tablolar:\n- bddk_monthly:1534_Toplam: Konut kredisi stoku. x"
+    search = _QueueTool("lakehouse_search", [ToolResult(content=found)])
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[_call("lakehouse_search", "konut kullandırım akışı", "s1")]),
+        LLMResponse(content="", tool_calls=[_call("lakehouse_search", "konut akış", "s2")]),
+        LLMResponse(content="", tool_calls=[_call("lakehouse_search", "kullandırım", "s3")]),
+        LLMResponse(content="Katalogda yalnız konut kredisi stoku (1534_Toplam) var; kullandırım akışı serisi bulunamadı, stok farkını akış yerine kullanmadım."),
+    ])
+    registry = ToolRegistry()
+    registry.register_all([search])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), tool_gate=False, max_catalog_search_calls=1)
+
+    answer = agent.ask("Aylık konut kredisi kullandırım akışında sıra dışı ayları bul")
+
+    assert llm.calls == 4, "son çağrı araçsız kurtarma anlatımı"
+    assert "yalnız konut kredisi stoku" in answer.text
+    recovery_prompt = "\n".join(str(m.content) for m in llm.messages[-1])
+    assert "bddk_monthly:1534_Toplam" in recovery_prompt and "ARAÇ ÇAĞIRMA" in recovery_prompt
+    assert "deterministic_recovery_shortcuts" not in answer.usage
+
+
+def test_duplicate_lock_releases_workspace_call_after_table_is_rebuilt() -> None:
+    """Son 3× (23 Eyl, T06): gold_join tabloyu yeniden kurunca aynı LAG hesabı yeni tabloda gerekir; kilit onu
+    DUPLICATE_CALL diye reddediyor, tur türetilmiş kolonsuz kapanıyordu. Aynı tabloda tekrar hâlâ kilitlidir."""
+    workspace = AnalysisWorkspace()
+    join = _QueueTool("gold_join", [_data(), _data()], workspace=workspace)
+    compute = _QueueTool("workspace_compute_column", [ToolResult(content="kolon eklendi")] * 3)
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[_call("gold_join", "2019-12", "j1")]),
+        LLMResponse(content="", tool_calls=[_call("workspace_compute_column", "lag", "c1")]),
+        LLMResponse(content="", tool_calls=[_call("gold_join", "2021-01", "j2")]),
+        LLMResponse(content="", tool_calls=[_call("workspace_compute_column", "lag", "c2")]),
+        LLMResponse(content="", tool_calls=[_call("workspace_compute_column", "lag", "c3")]),
+        LLMResponse(content="Tablo hazır."),
+    ])
+
+    answer = _agent(llm, join, compute, workspace=workspace).ask("Üç seriyi birleştir ve aylık farkı hesapla")
+
+    assert compute.calls == ["lag", "lag"]
+    assert answer.error_codes().get("DUPLICATE_CALL") == 1

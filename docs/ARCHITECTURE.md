@@ -205,7 +205,7 @@ protokolü konuştuğu için kod değişmez, yalnız `.env` değişir:
 
 ```
 LLM_BASE_URL=https://mia.csp.kloudeks.com/v1
-LLM_MODEL=kkbhackathon2026/Qwen3.8-27B
+LLM_MODEL=deepseek-ai/DeepSeek-V4.1-Flash   # ADR-0103; önceki: kkbhackathon2026/Qwen3.8-27B
 ```
 
 **`reasoning_effort: "none"`** varsayılan olarak gönderilir (`LLM_DISABLE_THINKING`).

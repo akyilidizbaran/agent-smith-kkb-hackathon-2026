@@ -905,3 +905,77 @@ def test_k02_t07_erisilemeyen_kaynaktan_sonra_kullanilan_kaynak_adlandirilir() -
     assert "Kaynak notu: a.example adresine erişilemedi; veriler b.example kaynağından alındı." in silent.text
     named = run("2025 değeri 42 (kaynak: b.example).")
     assert "Kaynak notu" not in named.text, "cevap kaynağı zaten adlandırıyorsa not eklenmez"
+
+
+class _FakeQuery(Tool):
+    name = "lakehouse_query"
+    role = "execute"
+    description = "sahte sorgu"
+    Params = _Params
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def run(self, params: _Params) -> ToolResult:
+        self.calls += 1
+        return ToolResult(content="Sorgu: 2 satır", data=pd.DataFrame({"ay": ["2022-01", "2022-02"], "tufe": [1.0, 2.0]}))
+
+
+def test_uyumsuz_takip_turu_kapanmadan_once_bir_kez_veri_cekmeye_yonlendirilir() -> None:
+    """Son 3× (23 Eyl, F03): yeni kaynak isteyen takip turunda model veri çekmeden cevap yazınca tur doğrudan
+    'uyumlu değil' sabit metniyle kapanıyordu. Önce bir kez yönlendirilir; model veriyi çekerse cevap geçer."""
+    query = _FakeQuery()
+    registry = ToolRegistry()
+    registry.register(query)
+    llm = _ScriptedLLM([
+        LLMResponse(content="TÜFE endeksi katalogda var."),
+        LLMResponse(content="", tool_calls=[ToolCall(id="q", name="lakehouse_query", arguments={})]),
+        LLMResponse(content="TÜFE eklendi."),
+    ])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=6)
+    agent._catalog_specs = lambda: []
+    agent._follow_up_context = FollowUpContext(metric="mevduat", series="bddk_monthly:1357", frequency="monthly")
+    agent.workspace.set_table(pd.DataFrame({"ay": ["2022-01", "2022-02"], "mevduat": [100.0, 110.0]}), description="mevduat")
+    agent._has_confirmed_follow_up_context = lambda: True
+    agent._active_table_is_compatible = lambda *a, **k: False
+
+    answer = agent.ask("EVDS TÜFE genel endeksini yeni kaynak olarak getir")
+
+    assert query.calls == 1
+    assert any("takip turu aktif tabloyla karşılanmıyor" in (s.thought or "") for s in answer.steps)
+    assert "mevcut analiz tablosuyla uyumlu değil" not in answer.text
+
+
+class _FakeShow(Tool):
+    name = "workspace_show"
+    role = "retrieve"
+    description = "sahte tablo gösterimi"
+    Params = _Params
+
+    def run(self, params: _Params) -> ToolResult:
+        return ToolResult(content="Analiz tablosu: 2 satır", data=pd.DataFrame({"ay": ["2022-01"], "mevduat": [100.0]}))
+
+
+def test_uyumsuz_takipte_tablo_gosterimi_araclari_kapatmaz() -> None:
+    """Son 3× (23 Eyl, F03): takipte workspace_show 'veri üretildi' sayılıp araçsız anlatıma geçiliyor, model TÜFE'yi
+    ekleyemiyordu. Aktif tablo soruya uymuyorsa sonraki çağrıda araçlar sunulmaya devam eder."""
+    query = _FakeQuery()
+    registry = ToolRegistry()
+    registry.register(_FakeShow())
+    registry.register(query)
+    llm = _ScriptedLLM([
+        LLMResponse(content="", tool_calls=[ToolCall(id="s", name="workspace_show", arguments={})]),
+        LLMResponse(content="", tool_calls=[ToolCall(id="q", name="lakehouse_query", arguments={})]),
+        LLMResponse(content="TÜFE eklendi."),
+    ])
+    agent = AnalyticsAgent(llm=llm, registry=registry, workspace=AnalysisWorkspace(), max_steps=6)
+    agent._catalog_specs = lambda: []
+    agent._follow_up_context = FollowUpContext(metric="mevduat", series="bddk_monthly:1357", frequency="monthly")
+    agent.workspace.set_table(pd.DataFrame({"ay": ["2022-01", "2022-02"], "mevduat": [100.0, 110.0]}), description="mevduat")
+    agent._has_confirmed_follow_up_context = lambda: True
+    agent._active_table_is_compatible = lambda *a, **k: False
+
+    agent.ask("EVDS TÜFE genel endeksini yeni kaynak olarak getir")
+
+    assert llm.seen_tool_counts[1] > 0, "workspace_show sonrası araçlar kapatıldı"
+    assert query.calls == 1

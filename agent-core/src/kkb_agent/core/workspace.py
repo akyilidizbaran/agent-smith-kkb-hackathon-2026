@@ -58,6 +58,9 @@ class AnalysisWorkspace:
         self._snapshots: list[pd.DataFrame] = []
         self._column_sources: dict[str, QueryProvenance] = {}
         self.title: str = ""
+        # Tablo kuşağı: tablo yeniden kurulunca (set/replace/revert) artar, kolon eklemede değişmez. Harness döngü kilidi
+        # aynı hesap çağrısını yeni tabloda tekrar serbest bırakır (son 3×, T06: gold_join sonrası LAG çağrıları kilitlendi).
+        self.generation: int = 0
         self._peeks: list[tuple[str, pd.DataFrame]] = []      # bakış sorguları (tabloyu değiştirmeyen)
         self.web_pages: dict[str, dict[str, object]] = {}     # url → sha256/fetched_at/status; turlar arası kalır
         self._sources: dict[str, SourceTable] = {}             # k1, k2, … — join ve workspace_query için
@@ -109,6 +112,7 @@ class AnalysisWorkspace:
         """Yeni bir analiz başlatır. Önceki tablo geçmişe alınır; tablo kimlikli kaynak olarak kaydedilir."""
         self._snapshot()
         self._table = df.copy()
+        self.generation += 1
         if provenance:
             for col in df.columns:
                 self._column_sources[col] = provenance
@@ -138,6 +142,7 @@ class AnalysisWorkspace:
             raise ValueError("Önce bir tablo oluşturulmalı (set_table).")
         self._snapshot()
         self._table = df.copy()
+        self.generation += 1
         for column, provenance in (column_provenance or {}).items():
             if provenance is not None:
                 self._column_sources[str(column)] = provenance
@@ -266,6 +271,7 @@ class AnalysisWorkspace:
         if not self._snapshots:
             return False
         self._table = self._snapshots.pop()
+        self.generation += 1
         if self._history:
             self._history.pop()
         return True

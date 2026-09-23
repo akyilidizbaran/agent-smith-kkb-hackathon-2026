@@ -1,0 +1,208 @@
+{
+ "numeric": {
+  "T06": [
+   {
+    "id": "T06",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: tufe_yillik_yuzde_degisimi (82%)"
+    ],
+    "score": 96,
+    "parts": {
+     "period": 25.0,
+     "values": 33.9,
+     "complete": 16.7,
+     "projection": 10.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "T06",
+    "mode": "numeric",
+    "notes": [
+     "fazla dönem 1",
+     "kolon eşleşmedi: tufe_yillik_yuzde_degisimi (82%)"
+    ],
+    "score": 78,
+    "parts": {
+     "period": 12.6,
+     "values": 33.9,
+     "complete": 16.7,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "T06",
+    "mode": "numeric",
+    "notes": [
+     "fazla dönem 1",
+     "kolon eşleşmedi: tufe_yillik_yuzde_degisimi (82%)"
+    ],
+    "score": 78,
+    "parts": {
+     "period": 12.6,
+     "values": 33.9,
+     "complete": 16.7,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "F01": [
+   {
+    "id": "F01",
+    "mode": "numeric",
+    "notes": [
+     "eksik dönem 24",
+     "fazla dönem 1",
+     "kolon eşleşmedi: ihracat_kredisi_bakiye_mln_tl (0%)",
+     "kolon eşleşmedi: toplam_mevduat_bakiye_mln_tl (0%)",
+     "fazla kolon: gozlem_sayisi, ok_sayisi, sorunlu_sayisi",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 5,
+    "parts": {
+     "period": 0.0,
+     "values": 0.0,
+     "complete": 0.0,
+     "projection": 0.0,
+     "narrative": 5.0
+    }
+   },
+   {
+    "id": "F01",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: ihracat_kredisi_bakiye_mln_tl (0%)",
+     "kolon eşleşmedi: toplam_mevduat_bakiye_mln_tl (0%)",
+     "fazla kolon: value",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 40,
+    "parts": {
+     "period": 25.0,
+     "values": 0.0,
+     "complete": 0.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   },
+   {
+    "id": "F01",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: ihracat_kredisi_bakiye_mln_tl (0%)",
+     "kolon eşleşmedi: toplam_mevduat_bakiye_mln_tl (0%)",
+     "fazla kolon: value",
+     "değerlerin çoğu eşleşmedi (en çok başarısız)"
+    ],
+    "score": 40,
+    "parts": {
+     "period": 25.0,
+     "values": 0.0,
+     "complete": 0.0,
+     "projection": 5.0,
+     "narrative": 10.0
+    }
+   }
+  ],
+  "F03": [
+   {
+    "id": "F03",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: tufe_index (0%)",
+     "istenen kolonlardan biri yok (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 17.5,
+     "complete": 10.0,
+     "projection": 10.0,
+     "narrative": 5.0
+    }
+   },
+   {
+    "id": "F03",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: tufe_index (0%)",
+     "istenen kolonlardan biri yok (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 17.5,
+     "complete": 10.0,
+     "projection": 10.0,
+     "narrative": 5.0
+    }
+   },
+   {
+    "id": "F03",
+    "mode": "numeric",
+    "notes": [
+     "kolon eşleşmedi: tufe_index (0%)",
+     "istenen kolonlardan biri yok (en çok başarısız)"
+    ],
+    "score": 49,
+    "parts": {
+     "period": 25.0,
+     "values": 17.5,
+     "complete": 10.0,
+     "projection": 10.0,
+     "narrative": 5.0
+    }
+   }
+  ]
+ },
+ "review": [
+  {
+   "id": "F06",
+   "run": "v2_deepseek_final_fix2_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "F06",
+   "run": "v2_deepseek_final_fix2_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "F06",
+   "run": "v2_deepseek_final_fix2_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "D08",
+   "run": "v2_deepseek_final_fix2_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "D08",
+   "run": "v2_deepseek_final_fix2_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "D08",
+   "run": "v2_deepseek_final_fix2_r3_20260923.jsonl",
+   "repetition": 3
+  },
+  {
+   "id": "O04",
+   "run": "v2_deepseek_final_fix2_r3_20260923.jsonl",
+   "repetition": 1
+  },
+  {
+   "id": "O04",
+   "run": "v2_deepseek_final_fix2_r3_20260923.jsonl",
+   "repetition": 2
+  },
+  {
+   "id": "O04",
+   "run": "v2_deepseek_final_fix2_r3_20260923.jsonl",
+   "repetition": 3
+  }
+ ]
+}

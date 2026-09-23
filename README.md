@@ -122,7 +122,8 @@ işi bırakın."* Buna göre model:
 - **hatasını yutmaz** — hata metni kendisine döner, çağrısını düzeltir.
 
 Geliştirmede küçük yerel modelle de çalışan bu yapı, demoda KKB'nin MIA/Kloudeks üzerinden verdiği
-modellerle (Qwen3.8-27B metin, Unlimited-OCR belge/görsel, Qwen3-Embedding-8B) çalışır; sağlayıcı yalnız `.env` ile değişir.
+modellerle (DeepSeek-V4.1-Flash metin, Unlimited-OCR belge/görsel, Qwen3-Embedding-8B) çalışır; sağlayıcı ve model
+yalnız `.env` ile değişir (ADR-0103).
 
 ### Güven katmanı
 
