@@ -37,14 +37,9 @@ _PROVINCES = ("ISTANBUL", "ANKARA", "IZMIR", "BURSA", "ANTALYA", "KOCAELI", "KON
 _FINTURK_COLUMNS = ("KonutKredisi", "TasitKredisi", "DigerTuketiciKredileri", "KrediliMevduatHesabi",
                     "BireyselKrediKartlari", "TakiptekiTasitKredisi", "TakiptekiKonutKredisi",
                     "TakiptekiDigerTuketiciKredileri")
-#: Mevduat vade dilimleri (23 Eyl): "3 aya kadar" = Vadesiz + BirAyaKadar + BirAyUcAy, "3 aydan fazla" = UcAyAltiAy +
-#: AltiAyBirYil + BirYil; kalemler 520 (TP), 524 (DTH/YP), 543 (toplam). Katalog: bddk_monthly.yml, elle eklenen bölüm.
-_MATURITY_ITEMS = (520, 524, 543)
-_MATURITY_COLUMNS = ("Vadesiz", "BirAyaKadar", "BirAyUcAy", "UcAyAltiAy", "AltiAyBirYil", "BirYil")
 DEMO_SERIES = (
     *(f"bddk_monthly:{i}_Toplam" for i in _MONTHLY_ITEMS),
     *(f"bddk_monthly:{i}_Rasyo" for i in _MONTHLY_RATIOS),
-    *(f"bddk_monthly:{i}_{c}" for i in _MATURITY_ITEMS for c in _MATURITY_COLUMNS),
     "bddk_weekly:5690_3",
     *(f"evds:{c}" for c in _EVDS),
     *(f"bddk_finturk:{p}_{c}" for p in _PROVINCES for c in _FINTURK_COLUMNS),
