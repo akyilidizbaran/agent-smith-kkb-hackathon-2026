@@ -1,7 +1,7 @@
-"""MIA capability probe — measures what the deployment actually supports (see docs/ARCHITECTURE_V3.md §5, E1–E3).
+"""MIA capability probe — measures what the deployment actually supports (see docs/calisma-notlari/ARCHITECTURE_V3.md §5, E1–E3).
 
 Usage:
-    MIA_API_KEY=... python scripts/mia_probe.py --out docs/mia_capability_matrix.md
+    MIA_API_KEY=... python scripts/mia_probe.py --out docs/calisma-notlari/mia_capability_matrix.md
     python scripts/mia_probe.py --only parallel_tools,thinking_tools,prefix_cache
     python scripts/mia_probe.py --image sample.png --ocr page1.png
 
@@ -466,7 +466,7 @@ TESTS = {
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default="docs/mia_capability_matrix.md")
+    ap.add_argument("--out", default="docs/calisma-notlari/mia_capability_matrix.md")
     ap.add_argument("--only", default="", help="comma-separated subset of: " + ",".join(TESTS))
     ap.add_argument("--image", default="", help="image file for the vision test")
     ap.add_argument("--ocr", default="", help="page image (PNG) for the OCR test")

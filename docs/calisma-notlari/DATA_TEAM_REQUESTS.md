@@ -3,7 +3,7 @@
 > **Tarih:** 10 Eylül 2026 · **Teslime:** 10 gün
 > **İncelenen dallar:** `feature/silver-v1` (4cba3bf), `feature/lakehouse-integration` (2f9234d),
 > `feature/lakehouse-ingestion-observability` (29bbf6f), `feature/lakehouse-metadata-catalog`
-> **Bağlam:** `docs/LAKEHOUSE_CONTRACT.md` (sözleşme), `docs/LAKEHOUSE_BUILD_PLAN.md` (inşa planı),
+> **Bağlam:** `docs/LAKEHOUSE_CONTRACT.md` (sözleşme), `docs/calisma-notlari/LAKEHOUSE_BUILD_PLAN.md` (inşa planı),
 > `lakehouse-core/docs/audits/…denetim-raporu-2026-09-10.md` (kendi denetiminiz)
 
 Bu belge "ne yapmalısınız" değil, **"agent şu an neyi yapamıyor ve neden"** listesidir.

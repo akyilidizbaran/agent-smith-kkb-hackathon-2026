@@ -16,7 +16,7 @@ sessizce ilk sayfa alınıyordu; ingest okuyucusu yönlendirmeleri kütüphaneye
 3. **Excel:** openpyxl eklendi; çok sayfada `sheet` istenir (ad ya da indeks), `.xls` reddedilir.
 4. **İngest okuyucusu** HTTP'de `guarded_get` kullanır (M05 ile aynı sınır); `FetchRefused` →
    `ReadRefused` olarak yüzeye çıkar.
-5. Format matrisi ve sınırlar `docs/M10_DOSYA_GIRISI.md`'de; "her belgeyi doğru okuma" vaadi yok,
+5. Format matrisi ve sınırlar `docs/calisma-notlari/M10_DOSYA_GIRISI.md`'de; "her belgeyi doğru okuma" vaadi yok,
    ret ve soru da başarılı davranıştır.
 
 6. **Tarih kolonu gerçek tarihe çevrilir** (`convert_dates`, tablo yüklemede): canlı provada "31.01.2025"

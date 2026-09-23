@@ -3,7 +3,7 @@
 **Durum:** Kabul edildi · **Tarih:** 2026-09-13 · **Milestone:** M02 · **Karar (K01, kullanıcı):** baseline `feature/agent-engine`
 
 ## Bağlam
-11 Eylül kıyası (`docs/MOTOR_KARSILASTIRMA_YANIT.md`) eski agent commit'ine aitti; bugünkü motor OCR,
+11 Eylül kıyası (`docs/calisma-notlari/MOTOR_KARSILASTIRMA_YANIT.md`) eski agent commit'ine aitti; bugünkü motor OCR,
 web, analitik, retrieval kademesi, araç kapısı ve kanıt paneli taşıyor. Kullanıcı baseline'ı seçti;
 M02'nin sorusu artık "hangi motor" değil, "V3'ten ne aktarılır ve bugünkü fark nedir".
 

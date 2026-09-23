@@ -1,6 +1,6 @@
 """`check_premise` — sorunun varsaydığı yönü veriden doğrular (V3 §3.9; Büşra, 16 Eyl).
 
-Neden var (ölçüldü, 14 Eyl UEB A09/A10, docs/HUMAN_ERROR_RESEARCH_2026-09-14.md PART 19/37): "2025'te konut
+Neden var (ölçüldü, 14 Eyl UEB A09/A10, docs/calisma-notlari/HUMAN_ERROR_RESEARCH_2026-09-14.md PART 19/37): "2025'te konut
 kredisi bakiyesi DÜŞTÜĞÜ için ihtiyaç kredileri arttı mı?" — konut 2025'te 512.259 → 678.970 ARTTI. Model iki
 koşuda da öncülü düzeltti ama bu modele bağlıydı: harness'ta öncülü sınayan hiçbir şey yoktu; soru ön-koşulu
 (core/question_preflight) yalnız "soru bir yön varsayıyor" der. Bu araç o yönü DETERMİNİSTİK sınar: serinin

@@ -1,4 +1,4 @@
-"""V3 harness — Batched ReAct + sınır doğrulama (docs/ARCHITECTURE_V3.md §3.1).
+"""V3 harness — Batched ReAct + sınır doğrulama (docs/calisma-notlari/ARCHITECTURE_V3.md §3.1).
 
 Ekip döngüsünün omurgası korunur (model araç seçer, hesap DuckDB'de, hata
 modele döner). Eklenenler, her biri Blok C'de ölçülmüş [EMP]:

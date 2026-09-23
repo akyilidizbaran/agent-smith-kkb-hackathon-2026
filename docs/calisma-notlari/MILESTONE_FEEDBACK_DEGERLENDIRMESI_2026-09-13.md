@@ -2,7 +2,7 @@
 
 Tarih: 13 Eylül 2026. İncelenen yerel commit: `67cd6f9`.
 
-Dayanak: [milestone planı](MILESTONE_PLANI_2026-09-13.md), [ADR-0039](adr/0039-architect-ikinci-kapi-ve-sohbette-kalan-analiz.md), kullanıcının bu tur eklediği dört maddelik arkadaş geri bildirimi.
+Dayanak: [milestone planı](MILESTONE_PLANI_2026-09-13.md), [ADR-0039](../adr/0039-architect-ikinci-kapi-ve-sohbette-kalan-analiz.md), kullanıcının bu tur eklediği dört maddelik arkadaş geri bildirimi.
 
 Bu belge değerlendirme ve revizyon önerisidir; aşağıdaki ilk değerlendirme, bölüm 5'teki kullanıcı yanıtlarıyla birlikte okunmalıdır. Kullanıcı rol ve iki tablo kapsamını netleştirdi; bunlar ana plana işlendi. Motor ve 45 görevlik kapsam seçimi kararlaştırılmadı. Uygulama kodu değiştirilmedi; canlı model çağrısı, veri yayını veya merge yapılmadı.
 

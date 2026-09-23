@@ -4,8 +4,8 @@
 
 - Kullanıcının repo incelemesindeki 14 soruya bu konuşmada verdiği cevaplar.
 - [Kullanıcının paylaştığı mentör soru/cevapları](mentor/2026-09-13-kullanici-paylasimi.txt): ilk dört konuya tam yanıt var. Dosya ikinci soru grubunun “2. soru cevabı” başlığında bitiyor; o yanıt ekli değil.
-- [Kick-off transkripti](../KKB_Hackathon_2026_Kick_Off_Tam_Transkript.md): otomatik transkripsiyon, konuşmacı ayrımı yok. Kritik ifadeler için dosyanın kendi notu gereği video zaman damgası esas alınabilir; bu tur video incelenmedi.
-- Önceki [ADR-0021](adr/0021-mia-search-retrieval-ayristirma.md) kota/arama/yardımcı modellere ilişkin mentör yanıtının özetini içeriyor. Bu, yeni ekte ikinci yanıtın bulunduğu anlamına gelmez. Transkript 32:19 başlangıç limitlerinden söz eder; güncel sayısal kota bu yeni kaynaklardan kesinleştirilemez.
+- [Kick-off transkripti](KKB_Hackathon_2026_Kick_Off_Tam_Transkript.md): otomatik transkripsiyon, konuşmacı ayrımı yok. Kritik ifadeler için dosyanın kendi notu gereği video zaman damgası esas alınabilir; bu tur video incelenmedi.
+- Önceki [ADR-0021](../adr/0021-mia-search-retrieval-ayristirma.md) kota/arama/yardımcı modellere ilişkin mentör yanıtının özetini içeriyor. Bu, yeni ekte ikinci yanıtın bulunduğu anlamına gelmez. Transkript 32:19 başlangıç limitlerinden söz eder; güncel sayısal kota bu yeni kaynaklardan kesinleştirilemez.
 
 ## Kullanıcının kesinleştirdiği kapsam
 

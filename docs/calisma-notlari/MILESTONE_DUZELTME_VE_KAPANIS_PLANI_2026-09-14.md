@@ -37,7 +37,7 @@ Numaralar katı seri geliştirme sırası değildir. Aynı dosyada D01/D07 ve D0
 
 **Neden:** `_norm_key` anahtarları float64'e çeviriyor. `9007199254740992` ve `9007199254740993` eşleşiyor; metin `001` ile `1` de örtük olarak aynı kabul ediliyor. Bu hata başarılı görünen yanlış analiz üretir.
 
-**İlgili kod:** [workspace_join.py](../agent-core/src/kkb_agent/tools/workspace_join.py).
+**İlgili kod:** [workspace_join.py](../../agent-core/src/kkb_agent/tools/workspace_join.py).
 
 - [x] **D01-T01** (ADR-0065 ve modül belgesi: tamsayı/metin/tarih/zaman/boş/farklı tip davranışı): Anahtar tipleri için destek sözleşmesi yaz: tam sayı, metin, tarih, zaman damgası, eksik değer ve iki tarafta farklı tip.
 - [x] **D01-T02** (tamsayı Python int; ondalık okunmuş ≥2^53 kimlik reddedilir; test büyük ardışık ve float kimlik): Tam sayı kimliklerini float64 üzerinden dönüştürme; kaynakta mevcut hassasiyeti koru. Kaynak okuyucu kimliği önceden bozmuşsa sonradan doğruluk iddia etme.
@@ -64,7 +64,7 @@ Numaralar katı seri geliştirme sırası değildir. Aynı dosyada D01/D07 ve D0
 
 **Neden:** İki yeniden yazımdan sonra 999 iddiası, doğru Aralık değeri 110 olmasına rağmen uyarıyla nihai cevapta kalıyor. Tek temiz canlı koşu bu çıkış yolunu kapatmaz.
 
-**İlgili kod:** [agent.py](../agent-core/src/kkb_agent/core/agent.py), [grounding.py](../agent-core/src/kkb_agent/core/grounding.py), [agent döngüsü testleri](../agent-core/tests/test_agent_loop.py).
+**İlgili kod:** [agent.py](../../agent-core/src/kkb_agent/core/agent.py), [grounding.py](../../agent-core/src/kkb_agent/core/grounding.py), [agent döngüsü testleri](../../agent-core/tests/test_agent_loop.py).
 
 - [x] **D02-T01** (MISS = desteklenmeyen iddia → çıkar; kaynak zinciri eksik ama tabloda olan sayı rozetle uyarılı kalır (ADR-0066)): Eksik kaynak kanıtı ile yanlış/hesapla desteklenmeyen sayısal iddiayı ayır. Doğru hesap, eksik kaynak uyarısıyla sunulabilir; yanlış değer aynı şekilde korunamaz.
 - [x] **D02-T02** (_final_exit: birim çıkarma, anlam kalmazsa tablo özeti + 'güvenilir açıklama üretemedim'; tablo yoksa sınır cümlesi): Yeniden yazma bütçesi bittiğinde uygulanacak deterministik çıkışı tanımla: doğrulanmış tablo/hesap ve sınırlama mesajı veya ilgili iddiayı verememe.
@@ -80,7 +80,7 @@ Numaralar katı seri geliştirme sırası değildir. Aynı dosyada D01/D07 ve D0
 
 **Neden:** Birikmiş metindeki eski onay, güncel “yayınlama” isteğini aşabiliyor. Analyst araç kaydının kapalı olması Architect'in yanlış işlem yapmasını önlemiyor.
 
-**İlgili kod:** [promote.py](../agent-core/src/kkb_agent/tools/promote.py), [registry.py](../agent-core/src/kkb_agent/core/registry.py), [agent.py](../agent-core/src/kkb_agent/core/agent.py), [web_app.py](../agent-core/src/kkb_agent/web_app.py).
+**İlgili kod:** [promote.py](../../agent-core/src/kkb_agent/tools/promote.py), [registry.py](../../agent-core/src/kkb_agent/core/registry.py), [agent.py](../../agent-core/src/kkb_agent/core/agent.py), [web_app.py](../../agent-core/src/kkb_agent/web_app.py).
 
 - [x] **D03-T01** (PendingOp: seri, işlem, kapsam özeti, gösterildiği tur (core/approvals.py, ADR-0068)): Bekleyen işlem için hedef seri/katalog, işlem türü ve gösterilmiş kapsamı taşıyan durum tanımla. İşlem kimliği veya kapsam özeti yaklaşımı seçilebilir.
 - [x] **D03-T02** (registry.current_message ve tur sayacı; onay yalnız güncel mesajdan): Güncel kullanıcı mesajını geçmiş açıklama bağlamından ayır. Eski onay + yeni seri adı birleştirilerek yetki üretilmesin.
@@ -97,7 +97,7 @@ Numaralar katı seri geliştirme sırası değildir. Aynı dosyada D01/D07 ve D0
 
 **Neden:** Mevcut reset callback'i bootstrap ile 2.214 finans serisini geri getiriyor. Kullanıcı “veriyi boşaltıp yeni alanı kurma” hedefini açıkça belirledi.
 
-**İlgili kod:** [web_app.py](../agent-core/src/kkb_agent/web_app.py), [bootstrap.py](../lakehouse-core/src/lakehouse/db/bootstrap.py), [application.py](../lakehouse-core/src/lakehouse/application.py), [CLI](../lakehouse-core/src/lakehouse/cli.py).
+**İlgili kod:** [web_app.py](../../agent-core/src/kkb_agent/web_app.py), [bootstrap.py](../../lakehouse-core/src/lakehouse/db/bootstrap.py), [application.py](../../lakehouse-core/src/lakehouse/application.py), [CLI](../../lakehouse-core/src/lakehouse/cli.py).
 
 - [x] **D04-T01** (meta.lakehouse_setting + bootstrap_database(catalog_mode) + run_bootstrap/CLI `bootstrap --catalog none|default` (ADR-0069); lakehouse tests/catalog/test_catalog_mode.py): Şema kurma ve başlangıç veri kataloğunu yükleme işlemlerini CLI/uygulama sözleşmesinde ayır. Mevcut `catalog_root=None` yeteneğini uygun giriş yoluna taşı.
 - [x] **D04-T02** (arayüz sıfırlaması varsayılan `--catalog none`; başlangıç kataloğu ayrı açık seçim (ResetRequest.catalog); doğrulama seri 0 + kip none): Tam veri sıfırlaması sonrasında şema mevcut, kullanıcı/veri kataloğu boş durumda başlat. Finans kataloğu yüklemek ayrı açık seçim olsun.
@@ -113,7 +113,7 @@ Numaralar katı seri geliştirme sırası değildir. Aynı dosyada D01/D07 ve D0
 
 **Neden:** `charts/` kapsam dışında kalıyor; `ignore_errors=True` başarısız silmeyi gizleyebiliyor. Onaylanan hedefleri listelemek ile gerçekten temizlemek ayrı işlerdir.
 
-**İlgili kod:** [web_app.py](../agent-core/src/kkb_agent/web_app.py), [config.py](../agent-core/src/kkb_agent/config.py).
+**İlgili kod:** [web_app.py](../../agent-core/src/kkb_agent/web_app.py), [config.py](../../agent-core/src/kkb_agent/config.py).
 
 - [x] **D05-T01** (ResetPaths.from_settings: DB+WAL, raw/bronze/silver/quarantine, INGEST_ALLOWED_ROOT/uploads, CHART_DIR, önbellek kökü): DB/WAL, RAW/Bronze/Silver/Gold materyalleri, yüklemeler, grafikler, üretilmiş raporlar ve cache için mevcut konfigürasyon yollarını çıkar; var olmayan depolama katmanı icat etme.
 - [x] **D05-T02** (veri kökü dışı ayar önizlemede listelenir, sıfırlama reddedilir; test): Yönetilen veri kökü dışına ayarlanmış hedefleri sessizce atlayıp “tam sıfırlandı” deme. Korunan/kapsam dışı yolu açık göster veya reseti kontrollü reddet.
@@ -130,7 +130,7 @@ Numaralar katı seri geliştirme sırası değildir. Aynı dosyada D01/D07 ve D0
 
 **Neden:** Bronze yolu doluysa `file_present=True`; dosya silinse bile mevcut kanıt nesnesi tam kalabiliyor. RAW yokken Bronze var olması tam ham kaynak zinciri değildir.
 
-**İlgili kod:** [evidence sözleşmesi](../agent-core/src/kkb_agent/contracts/evidence.py), [Silver adaptörü](../agent-core/src/kkb_agent/adapters/silver_lakehouse.py), [evidence oluşturucu](../agent-core/src/kkb_agent/core/evidence.py).
+**İlgili kod:** [evidence sözleşmesi](../../agent-core/src/kkb_agent/contracts/evidence.py), [Silver adaptörü](../../agent-core/src/kkb_agent/adapters/silver_lakehouse.py), [evidence oluşturucu](../../agent-core/src/kkb_agent/core/evidence.py).
 
 - [x] **D06-T01** (Silver/adhoc gözlemi RAW+Bronze+özet; web/belge URL+sha256+zaman (ADR-0070)): Kaynak türüne göre gerekli halkaları yaz: Silver gözlemi için metadata/RAW/Bronze; web/belge için kendi kaynak baytı sözleşmesi. Her kaynağa yanlışlıkla aynı zorunluluk dayatma.
 - [x] **D06-T02** (yol metni, canlı varlık/okunabilirlik, raw_digest_ok ve checked_at ayrı alanlar): Yol metni, dosyanın varlığı, okunabilirliği, hash doğruluğu ve denetim zamanını ayrı bilgiler olarak taşı.
@@ -146,7 +146,7 @@ Numaralar katı seri geliştirme sırası değildir. Aynı dosyada D01/D07 ve D0
 
 **Neden:** Kullanıcının `__k` alanı geçici anahtarla ezilip sonuçtan düşüyor. Genel veri agent'ı kolon adından dolayı sessiz veri kaybedemez.
 
-**İlgili kod:** [workspace_join.py](../agent-core/src/kkb_agent/tools/workspace_join.py).
+**İlgili kod:** [workspace_join.py](../../agent-core/src/kkb_agent/tools/workspace_join.py).
 
 - [x] **D07-T01** (yardımcı adlar (__k, _merge, sonekler) çakışma listesi ADR-0065): `__k`, `_merge`, otomatik sağ sonekleri ve diğer yardımcı adların her iki tablodaki kolonlarla çakışabileceğini listele.
 - [x] **D07-T02** (yardımcı kolon hiç kullanılmıyor: anahtar sözlüğüyle eşleme): Çakışmayan geçici adlar üret veya yardımcı kolonsuz eşleme kullan; sadece tek rezerv adı başka sabit adla değiştirme.

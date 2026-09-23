@@ -14,7 +14,7 @@ hostlarını ve kurum adlarını kodda taşıyordu; `small_talk.py`'de alan söz
    render edilmiş sistem promptu + tüm araç şemaları).
 3. **Uyum testi:** `LakehouseClient` sözleşmesini sağlayan bellek-içi, finans dışı (sentetik sağlık) bir adaptör ajan
    koduna dokunmadan araçlara takılır; arama, tanım, kolon ekleme ve anomali beklenen sonuçla çalışır. REST/DB/stream
-   adaptörleri uygulanmadı; eklenme yeri ve sözleşmesi bu test ve `docs/M03_VERI_SOZLESMESI.md`.
+   adaptörleri uygulanmadı; eklenme yeri ve sözleşmesi bu test ve `docs/calisma-notlari/M03_VERI_SOZLESMESI.md`.
 4. Destek matrisi ve sınır: zaman serisi Silver'da; tarihsiz/işlem tabloları oturumda, otomatik yayına girmez.
 
 ## Sonuçlar

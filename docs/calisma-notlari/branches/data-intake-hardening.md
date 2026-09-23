@@ -34,8 +34,8 @@ Borsa İstanbul "piyasa verileri" ve `endeks/xtumy` adresleri sayfa, dosya deği
 dosyası yapılandırılmış PATH'ten çözülür. Yeni bağımlılık `pdfplumber` (`uv.lock` değişti; Elif'in PR #17'si aynı
 işi `pypdfium2` ile yapıyor, ikisi birlikte de zararsız). Canlı: Risk Merkezi Temmuz 2026 bülteni sayfa → ek 1 →
 sayfa 4 → "Nakdi Krediler" satırı → 5 kurum taslak (Bankalar 27.790, Toplam 28.963 milyar TL), ikinci koşu
-idempotent; Borsa PDF adresi bugün 404 → `SOURCE_NOT_FOUND`, uydurma yok. Belgeler: `docs/ARCHITECT_URL_KAYIT.md`,
-`docs/PDF_ERISIM_TESHISI.md`.
+idempotent; Borsa PDF adresi bugün 404 → `SOURCE_NOT_FOUND`, uydurma yok. Belgeler: `docs/calisma-notlari/ARCHITECT_URL_KAYIT.md`,
+`docs/calisma-notlari/PDF_ERISIM_TESHISI.md`.
 
 ### 1b. Şekil düzeltmeleri: kolon seçimi ve beyan edilen dönem (21 Eylül)
 
