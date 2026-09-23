@@ -12,7 +12,9 @@ bot engeli, giriş sayfası, 404 burada sınıflandırılır, yorumlanmaz.
 
 from __future__ import annotations
 
+import csv
 import io
+from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -25,6 +27,10 @@ from ..core.access_policy import classify_access
 from .tabular import TabularParseError, TabularParseResult, parse_tabular_bytes
 
 MAX_BYTES_DEFAULT = 25 * 1024 * 1024
+
+MAX_PREAMBLE_ROWS = 20
+"""Başlıktan önce atlanabilecek en fazla önsöz satırı. Daha uzun bir giriş rapor önsözü
+değildir; orada tahmin etmek yerine dosya olduğu gibi okunur."""
 
 
 class ReadRefused(Exception):
@@ -57,6 +63,116 @@ def excel_sheets(content: bytes) -> list[str]:
         raise ReadRefused(f"Excel dosyası okunamadı: {type(exc).__name__}", code="XLSX_CORRUPT") from exc
 
 
+def _tag_preamble(frame: pd.DataFrame, preamble: list[str]) -> pd.DataFrame:
+    """Atlanan önsözü tabloya iliştir: kaybolmaz, ama sütun adı da olmaz.
+
+    Kanıt zinciri için önemlidir — "Dışa Aktarım Tarihi" dosyanın ne zaman çekildiğini söyler —
+    ama veri değildir, bu yüzden tabloya değil `attrs`'a yazılır.
+    """
+    if preamble:
+        frame.attrs["preamble"] = list(preamble)
+    return frame
+
+
+def _table_width(counts: Iterable[int]) -> int:
+    """Tablonun gerçek genişliği: en sık görülen alan sayısı (eşitlikte geniş olan).
+
+    Tek alanlı satırlar (boş satır, serbest metin) sayılmaz; bir tablo en az iki sütundur.
+    """
+    tally = Counter(count for count in counts if count >= 2)
+    if not tally:
+        return 0
+    return max(tally, key=lambda width: (tally[width], width))
+
+
+def _header_index(counts: list[int], width: int) -> int:
+    """Başlık satırının indeksi. Önsöz varsa >0, yoksa 0.
+
+    Başlık, tablo genişliğinde olan **ilk** satırdır. Önündeki her satır kesinlikle daha dar
+    olmalı: bu sayede tam genişlikte bir satır asla veri kaybı pahasına atılmaz. Ölçüt
+    tutmuyorsa 0 döner ve dosya bugünkü gibi okunur — belirsizlikte tahmin yok.
+    """
+    if width < 2:
+        return 0
+    for index, count in enumerate(counts):
+        if count != width:
+            continue
+        if 0 < index <= MAX_PREAMBLE_ROWS and all(earlier < width for earlier in counts[:index]):
+            return index
+        return 0
+    return 0
+
+
+def strip_preamble_rows(rows: list[list[str]]) -> tuple[list[list[str]], list[str]]:
+    """Hazır bir hücre ızgarasından rapor önsözünü ayır: (tablo satırları, atılan satırlar).
+
+    CSV/XLSX ile aynı ölçüt; PDF'ten çıkarılmış ızgara gibi zaten ayrıştırılmış veride kullanılır.
+    """
+    counts = [sum(1 for cell in row if str(cell).strip()) for row in rows]
+    index = _header_index(counts, _table_width(counts))
+    if index == 0:
+        return rows, []
+    skipped = [", ".join(str(cell).strip() for cell in row if str(cell).strip()) for row in rows[:index]]
+    return rows[index:], [line for line in skipped if line]
+
+
+def frame_from_grid(rows: list[list[Any]]) -> tuple[pd.DataFrame, list[str]]:
+    """Hücre ızgarası (PDF tablosu gibi) → metin tablo: önsöz ayrılır, ilk satır başlık olur.
+
+    Boş başlık `sutun_N`, tekrar eden başlık `ad_2` olur; pandas'ın sessiz yeniden adlandırması
+    yerine burada açıkça yapılır. Başlık + en az bir veri satırı yoksa ReadRefused.
+    """
+    grid = [["" if cell is None else str(cell) for cell in row] for row in rows]
+    body_rows, preamble = strip_preamble_rows(grid)
+    if len(body_rows) < 2:
+        raise ReadRefused("tabloda başlık ve en az bir veri satırı yok")
+    width = max(len(row) for row in body_rows)
+    header = [str(cell).strip() for cell in list(body_rows[0]) + [""] * (width - len(body_rows[0]))]
+    header = [name or f"sutun_{position + 1}" for position, name in enumerate(header)]
+    seen: dict[str, int] = {}
+    for position, name in enumerate(header):
+        seen[name] = seen.get(name, 0) + 1
+        if seen[name] > 1:
+            header[position] = f"{name}_{seen[name]}"
+    body = [[(row[i] if i < len(row) else "") for i in range(width)] for row in body_rows[1:]]
+    frame = pd.DataFrame(body, columns=header, dtype=str).fillna("")
+    return _tag_preamble(frame, preamble), preamble
+
+
+def _preamble_lines(content: bytes, suffix: str, result: TabularParseResult) -> list[str]:
+    """Ayrıştırıcının başlık satırından önce atladığı rapor satırları ("Dışa Aktarım Tarihi" gibi).
+
+    Başlık tespiti `tabular.py`'de (PR #26); burada yalnız atlanan satırların metni kanıt için
+    `attrs["preamble"]`'a taşınır (dosyanın ne zaman çekildiği gibi), veri sayılmaz.
+    """
+    quality = result.quality
+    header_row = getattr(quality, "header_row", None) or 1
+    if header_row <= 1:
+        return []
+    rows: list[list[str]] = []
+    if suffix in (".xlsx", ".xlsm"):
+        import openpyxl
+
+        workbook = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        try:
+            sheet = workbook[quality.sheet] if getattr(quality, "sheet", None) in workbook.sheetnames else workbook.active
+            for position, row in enumerate(sheet.iter_rows(values_only=True)):
+                if position >= header_row - 1:
+                    break
+                rows.append(["" if cell is None else str(cell) for cell in row])
+        finally:
+            workbook.close()
+    else:
+        text = content.decode(getattr(quality, "encoding", None) or "utf-8-sig", errors="replace")
+        reader = csv.reader(io.StringIO(text, newline=""), delimiter=getattr(quality, "delimiter", None) or ",")
+        for position, row in enumerate(reader):
+            if position >= header_row - 1:
+                break
+            rows.append(row)
+    lines = [", ".join(cell.strip() for cell in row if cell.strip()) for row in rows]
+    return [line for line in lines if line]
+
+
 def _table_from_bytes(content: bytes, name: str, *, sheet: str | int | None = None) -> pd.DataFrame:
     """Tip çıkarımı YOK: her hücre metin. Boş hücre boş kalır, NaN olmaz.
 
@@ -72,9 +188,10 @@ def _table_from_bytes(content: bytes, name: str, *, sheet: str | int | None = No
         frame = pd.read_json(io.StringIO(text), dtype=False)
         return frame.astype(str).where(frame.notna(), "")
     try:
-        return parse_tabular_bytes(content, source_name=name, sheet=sheet).raw_frame
+        result = parse_tabular_bytes(content, source_name=name, sheet=sheet)
     except TabularParseError as exc:
         raise ReadRefused(str(exc), code=exc.code, details=exc.details) from exc
+    return _tag_preamble(result.raw_frame, _preamble_lines(content, suffix, result))
 
 
 def read_tabular_bytes(content: bytes, name: str, *, sheet: str | int | None = None) -> TabularParseResult:
@@ -242,10 +359,13 @@ def read_tabular_for_profiling(
 
 __all__ = [
     "MAX_BYTES_DEFAULT",
+    "MAX_PREAMBLE_ROWS",
     "ReadRefused",
     "excel_sheets",
+    "frame_from_grid",
     "read_bytes_for_profiling",
     "read_table_for_profiling",
     "read_tabular_bytes",
     "read_tabular_for_profiling",
+    "strip_preamble_rows",
 ]

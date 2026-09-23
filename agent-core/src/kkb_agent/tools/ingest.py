@@ -15,10 +15,12 @@ kalır; yazan, ayrı bir süreçte çalışan veri ekibinin CLI'ıdır ve o da y
 
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 from typing import Any, Literal
 
+import pandas as pd
 from pydantic import BaseModel, Field
 
 from ..adapters.duckdb_lakehouse import release_connections
@@ -26,7 +28,7 @@ from ..builder.crosscheck import cross_check, file_points
 from ..builder.ingest import LakehouseCLI
 from ..builder.profile import profile_table, propose
 from ..builder.quality import table_quality
-from ..builder.read import ReadRefused, read_bytes_for_profiling, read_table_for_profiling
+from ..builder.read import ReadRefused, frame_from_grid, read_bytes_for_profiling, read_table_for_profiling
 from ..builder.relevance import assess as assess_relevance
 from ..builder.relevance import catalog_entries, user_confirmed
 from ..builder.unit_guess import guess_unit
@@ -52,6 +54,12 @@ class IngestParams(BaseModel):
     table_index: int | None = Field(default=None, description="PDF/görselde birden çok tablo varsa hangisi (0 tabanlı); boşsa en büyük tablo")
     pages: str | None = Field(default=None, description="PDF için hangi sayfalar: '3', '2-4' (varsayılan ilk 5)")
     sheet: str | None = Field(default=None, description="Excel'de sayfa adı ya da 0 tabanlı indeks; birden çok sayfa varsa zorunlu")
+    value_column: str | None = Field(
+        default=None,
+        description=("Dosyada birden çok değer kolonu varsa hangisi seri olacak (kolon adı, dosyadaki gibi). "
+                     "Soru kolonları adıyla sayıyorsa kullanıcıya SORMA: her kolon için bu alanı ve farklı bir "
+                     "series_key'i vererek aracı ayrı ayrı çağır. Boşsa profilci en güçlü adayı seçer."),
+    )
     name: str = Field(description="Serinin okunabilir adı, ör. 'İl bazında konut satışları'")
     series_key: str | None = Field(
         default=None,
@@ -93,6 +101,26 @@ def _locator_names(text: str) -> str:
     return _LOCATOR_RE.sub(name, text or "")
 
 
+_AGGREGATE_LABELS = {"toplam", "genel toplam", "ara toplam", "total", "grand total", "sum"}
+
+
+def _drop_aggregate_rows(frame):
+    """Dışa aktarmaların en altındaki 'Toplam' satır(lar)ını ayır: (tablo, düşen etiketler).
+
+    Yalnız SONDAKİ satırlar ve yalnız ilk dolu hücresi bilinen bir toplam sözcüğü olanlar; başka
+    hiçbir satıra dokunulmaz. Ölçüldü (23 Eyl, TEFAS): 61. satır 'Toplam' iken profilci tarih
+    kolonunu reddediyor ve ekleme "tarih ve değer kolonu birlikte bulunamadı" ile düşüyordu.
+    """
+    dropped: list[str] = []
+    while len(frame) > 1:
+        first = next((str(v).strip() for v in frame.iloc[-1].tolist() if str(v).strip()), "")
+        if first.rstrip(":").casefold() not in _AGGREGATE_LABELS:
+            break
+        dropped.append(first)
+        frame = frame.iloc[:-1]
+    return frame, dropped
+
+
 def _slug(text: str) -> str:
     tr = str.maketrans("çğıöşüÇĞİÖŞÜ ", "cgiosuCGIOSU_")
     s = re.sub(r"[^A-Za-z0-9_]+", "_", text.translate(tr)).strip("_").lower()
@@ -100,7 +128,10 @@ def _slug(text: str) -> str:
 
 
 _MEASURE_WORDS = {
-    "stock": ("stok", "bakiye", "stock"), "flow_periodic": ("akım", "akim", "dönemlik", "flow"),
+    "stock": ("stok", "bakiye", "stock"),
+    # "hacim/işlem hacmi/hareket": dönem içinde olan biten — TEFAS işlem hacmi, aylık mevduat hareketi
+    # (ölçüldü 23 Eyl: soru "aylık Toplam İşlem Hacmi" derken beyan sözlükte yok diye reddediliyordu)
+    "flow_periodic": ("akım", "akim", "dönemlik", "flow", "hacim", "hacmi", "işlem hacmi", "hareket", "aylık toplam"),
     "flow_ytd": ("yıl başından", "ytd", "birikimli"), "flow_cumulative": ("kümülatif", "kumulatif", "cumulative"),
     "rate": ("oran", "faiz", "yüzde", "rate", "%"), "ratio": ("rasyo", "ratio"),
     "index": ("endeks", "index", "seviye"), "count": ("adet", "sayı", "sayi", "count"),
@@ -162,7 +193,9 @@ class IngestFromUrlTool(Tool):
         "veri havuzuna TASLAK seri olarak ekler ve ne yaptığını belgeler. Dosyanın hangi kolonunun "
         "tarih, hangisinin değer olduğunu veriye bakarak kanıtıyla önerir; belirsizse eklemeden "
         "önce kullanıcıya sorar. Kullanıcı 'bu dosyayı ekle', 'şu linkteki veriyi yükle' dediğinde "
-        "BU aracı kullan."
+        "BU aracı kullan. Her çağrı TEK seri yazar: dosyada birden çok değer kolonu varsa ve soru "
+        "hangilerini istediğini adıyla söylüyorsa kullanıcıya sorma — her kolon için value_column "
+        "ve farklı series_key ile aracı ayrı ayrı çağır."
     )
     Params = IngestParams
 
@@ -185,13 +218,27 @@ class IngestFromUrlTool(Tool):
         Veri ekibinin CLI'ı yalnız tablo dosyası alır; RAW'a OCR tablosunun CSV'si girer, belgenin
         sha256'sı ve OCR modeli katalog açıklamasında ve kartta taşınır. Belge bayt bayt izinli
         kökte saklanır ki kanıt zinciri geriye doğru izlenebilsin."""
-        if self.ocr is None:
-            raise OcrUnavailable("PDF/görsel belge OCR istemcisi olmadan okunamaz (VISION_MODEL yapılandırılmamış).")
         content, media, outcome = read_bytes_for_profiling(
             params.locator, allowed_roots=[self.allowed_root], session=self.session
         )
         if content is None or not outcome.ok:
             return None, outcome, None, params.locator
+
+        # Sayısal üretilmiş PDF'in tablosu zaten dosyanın içinde yazılı; OCR'a sormak hem
+        # yavaş hem de hücreleri tahmine çevirir. Metin katmanı varsa oradan okunur.
+        native = self._read_pdf_native(params, content)
+        if native is not None:
+            frame, note, csv_path = native
+            return frame, outcome, note, csv_path
+
+        # Okuyucu eksikse OCR'a düşüş sessiz olmasın: kartta ve hatada söylenir.
+        from ..vision.pdf import MISSING_BACKEND_HINT, table_backend
+        missing = ""
+        if Path(params.locator.split("?")[0]).suffix.lower() == ".pdf" and table_backend() is None:
+            missing = "UYARI: " + MISSING_BACKEND_HINT
+
+        if self.ocr is None:
+            raise OcrUnavailable(missing + "PDF/görsel belge OCR istemcisi olmadan okunamaz (VISION_MODEL yapılandırılmamış).")
         doc = ocr_document(content, media, client=self.ocr, url=params.locator.split("?")[0], pages=params.pages)
         page = extract_ocr_page(params.locator, doc)
         if not page.tables:
@@ -208,12 +255,51 @@ class IngestFromUrlTool(Tool):
         (self.allowed_root / f"{stem}{suffix}").write_bytes(content)
         csv_path = self.allowed_root / f"{stem}_p{page_no}_t{idx}.csv"
         table.to_csv(csv_path, index=False)
-        note = (f"Belge {params.locator} (sha256 {doc.sha256}) OCR ile okundu: model {doc.model}, sayfa {page_no}, "
+        note = (missing + f"Belge {params.locator} (sha256 {doc.sha256}) OCR ile okundu: model {doc.model}, sayfa {page_no}, "
                 f"tablo #{idx} ({len(table)}×{len(table.columns)}); sayılar doğrulanmadı, kaynağın kendisiyle "
                 f"karşılaştırılmalı. Belge kopyası: {stem}{suffix}.")
         # OCR tablosu sayıya çevrilmiş DataFrame; profilci metin hücre bekler.
         frame = table.astype(str).where(table.notna(), "")
         return frame, outcome, note, str(csv_path)
+
+    def _read_pdf_native(self, params: IngestParams, content: bytes):
+        """PDF'in kendi metin katmanındaki tabloyu oku; yoksa None döner ve OCR'a düşülür.
+
+        OCR dalıyla aynı sözleşme: belge baytları ve tablonun CSV'si izinli köke yazılır, kart
+        sha256'yı taşır. Fark, hücrelerin tahmin değil dosyanın kendi metni olmasıdır — bu
+        yüzden kart "sayılar doğrulanmadı" uyarısını taşımaz.
+        """
+        if Path(params.locator.split("?")[0]).suffix.lower() != ".pdf":
+            return None
+        from ..vision.pdf import extract_pdf_tables
+
+        tables = extract_pdf_tables(content, pages=params.pages)
+        if not tables:
+            return None
+        idx = params.table_index if params.table_index is not None else max(
+            range(len(tables)), key=lambda i: tables[i].shape[0] * tables[i].shape[1])
+        if idx < 0 or idx >= len(tables):
+            raise OcrUnavailable(
+                f"table_index {idx} yok; belgenin metin katmanında {len(tables)} tablo var.")
+        table = tables[idx]
+
+        # Dışa aktarma önsözü ("Dışa Aktarım Tarihi", "Toplam Kayıt Sayısı") tablo çizgisinin
+        # içine düşmüşse başlık sanılmasın: CSV/XLSX ile aynı ölçütle ayrılır.
+        try:
+            frame, preamble = frame_from_grid(table.rows)
+        except ReadRefused:
+            return None
+
+        sha256 = hashlib.sha256(content).hexdigest()
+        stem = f"pdf_{sha256[:12]}"
+        self.allowed_root.mkdir(parents=True, exist_ok=True)
+        (self.allowed_root / f"{stem}.pdf").write_bytes(content)
+        csv_path = self.allowed_root / f"{stem}_p{table.page}_t{table.index}.csv"
+        frame.to_csv(csv_path, index=False)
+        note = table.note(sha256, params.locator) + f" Belge kopyası: {stem}.pdf."
+        if preamble:
+            note += " Tablo üstündeki rapor satırları veri değil not sayıldı: " + " | ".join(preamble) + "."
+        return frame, note, str(csv_path)
 
     # ------------------------------------------------------------------ hooks
     def _user_text(self) -> str:
@@ -276,12 +362,60 @@ class IngestFromUrlTool(Tool):
         # prompts or uploaded contents.
         parse_quality = getattr(frame, "attrs", {}).get("tabular_quality")
 
+        # 1b. rapor süsleri veri değildir: üstteki önsöz okuyucuda ayrıldı, alttaki 'Toplam' burada
+        # ayrılır. Veri ekibinin CLI'ı dosyayı ham okur; o da aynı şeyleri başlık/tarih sanmasın diye
+        # ikisinden biri varsa CLI'a temiz bir kopya gider, kaynağın kendisi yerinde kalır.
+        preamble = list(frame.attrs.get("preamble", []))
+        frame, dropped = _drop_aggregate_rows(frame)
+        if dropped or (preamble and cli_locator == params.locator):
+            self.allowed_root.mkdir(parents=True, exist_ok=True)
+            clean = self.allowed_root / f"{Path(cli_locator.split('?')[0]).stem}_temiz.csv"
+            frame.to_csv(clean, index=False)
+            cli_locator = str(clean)
+            prep = []
+            if preamble:
+                prep.append("tablo üstündeki rapor satırları veri sayılmadı: " + " | ".join(preamble))
+            if dropped:
+                prep.append(f"alttaki toplam satırı ({', '.join(dropped)}) veri sayılmadı")
+            prep_note = "; ".join(prep) + f". Havuza giden temiz kopya: {clean.name}."
+            doc_note = f"{doc_note} {prep_note}" if doc_note else prep_note
+
         # 2. profil + öneri
-        key = params.series_key or _slug(_UPLOAD_PREFIX.sub("", Path(params.locator.split("?")[0]).stem))
+        stem = _UPLOAD_PREFIX.sub("", Path(params.locator.split("?")[0]).stem)
+        # Aynı dosyadan ikinci bir kolon eklenirken anahtar çakışmasın: kolon adı anahtara girer.
+        key = params.series_key or _slug(stem + (f"_{params.value_column}" if params.value_column else ""))
         series_id = f"adhoc:{key}"
         profile = profile_table(frame)
         mapping, semantics = propose(profile, frame, series_id=series_id)
+        if params.value_column is not None and mapping is not None:
+            # Kullanıcı/soru kolonu adıyla istedi: profilcinin sıralaması değil, o kolon yazılır.
+            # Ölçüldü (23 Eyl, TEFAS): üç değer kolonlu dosyada araç kolon seçtiremeyince model
+            # soruda adı geçen kolonları kullanıcıya yeniden soruyordu.
+            if params.value_column not in frame.columns:
+                return ToolResult.fail(
+                    "TOOL_FAILED",
+                    f"value_column {params.value_column!r} dosyada yok; kolonlar: {', '.join(map(str, frame.columns))}.",
+                    hint="Kolon adını dosyadaki gibi ver.", layer="data", retryable=False,
+                )
+            from dataclasses import replace
+            from ..builder.profile import Evidence
+            evidence = [e for e in mapping.evidence if e.field != "value_column"]
+            evidence.append(Evidence("value_column", params.value_column, "kullanıcı/soru bu kolonu adıyla istedi", "strong"))
+            mapping = replace(
+                mapping, value_column=params.value_column, evidence=tuple(evidence),
+                alternatives={k: v for k, v in mapping.alternatives.items() if k != "value_column"},
+            )
         invented = undeclared(params, self._user_text())
+        if invented and semantics is not None:
+            # Profilcinin VERİDEN kanıtıyla çıkardığı sonuçla örtüşen beyan uydurma değildir: model
+            # yeni bir şey söylemiyor, veriye bakan katmanla aynı şeyi söylüyor. Yalnız veriden
+            # çıkmayan beyan kullanıcıya sorulur.
+            corroborated = {
+                f"{field}={getattr(params, field)!r}"
+                for field in ("measure_type", "frequency", "default_agg", "unit")
+                if getattr(params, field) is not None and getattr(semantics, field, None) == getattr(params, field)
+            }
+            invented = [item for item in invented if item not in corroborated]
         if invented:
             # Kullanıcının söylemediği beyan yok sayılır; alan boş kalır ve aşağıda sorulur.
             params = params.model_copy(update={k.split("=")[0]: None for k in invented})
@@ -378,6 +512,9 @@ class IngestFromUrlTool(Tool):
             lines += [f"  {e.field} = {e.value!r}  [{e.confidence}] {e.reason}" for e in semantics.evidence]
             if mapping.alternatives:
                 lines.append("ALTERNATİFLER: " + "; ".join(f"{k}: {', '.join(v)}" for k, v in mapping.alternatives.items()))
+                if "value_column" in mapping.alternatives:
+                    lines.append("  (soru bu kolonlardan birini/birkaçını adıyla istiyorsa kullanıcıya sorma: her biri için "
+                                 "value_column + farklı series_key ile ayrı çağrı yap)")
             lines.append("\nYAPACAĞIN: yukarıdaki soruları kullanıcıya sor; cevap gelince aynı aracı "
                          "series_key ile yeniden çağır. Sayı uydurma, seriyi eklenmiş sayma.")
             return ToolResult(content="\n".join(lines), ok=True,
