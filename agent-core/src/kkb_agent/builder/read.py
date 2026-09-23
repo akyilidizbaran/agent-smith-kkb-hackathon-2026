@@ -106,6 +106,29 @@ def strip_preamble_rows(rows: list[list[str]]) -> tuple[list[list[str]], list[st
     return rows[index:], [line for line in skipped if line]
 
 
+def frame_from_grid(rows: list[list[Any]]) -> tuple[pd.DataFrame, list[str]]:
+    """Hücre ızgarası (PDF tablosu gibi) → metin tablo: önsöz ayrılır, ilk satır başlık olur.
+
+    Boş başlık `sutun_N`, tekrar eden başlık `ad_2` olur; pandas'ın sessiz yeniden adlandırması
+    yerine burada açıkça yapılır. Başlık + en az bir veri satırı yoksa ReadRefused.
+    """
+    grid = [["" if cell is None else str(cell) for cell in row] for row in rows]
+    body_rows, preamble = strip_preamble_rows(grid)
+    if len(body_rows) < 2:
+        raise ReadRefused("tabloda başlık ve en az bir veri satırı yok")
+    width = max(len(row) for row in body_rows)
+    header = [str(cell).strip() for cell in list(body_rows[0]) + [""] * (width - len(body_rows[0]))]
+    header = [name or f"sutun_{position + 1}" for position, name in enumerate(header)]
+    seen: dict[str, int] = {}
+    for position, name in enumerate(header):
+        seen[name] = seen.get(name, 0) + 1
+        if seen[name] > 1:
+            header[position] = f"{name}_{seen[name]}"
+    body = [[(row[i] if i < len(row) else "") for i in range(width)] for row in body_rows[1:]]
+    frame = pd.DataFrame(body, columns=header, dtype=str).fillna("")
+    return _tag_preamble(frame, preamble), preamble
+
+
 def _delimited_preamble(text: str) -> tuple[int, list[str]]:
     """(atlanacak fiziksel satır sayısı, atlanan satırlar) — sınırlayıcıyı kendisi bulur.
 
@@ -329,5 +352,5 @@ def read_table_for_profiling(
     return frame, classify_access(str(path), http_status=200, environ=environ)
 
 
-__all__ = ["MAX_BYTES_DEFAULT", "MAX_PREAMBLE_ROWS", "ReadRefused", "excel_sheets",
+__all__ = ["MAX_BYTES_DEFAULT", "MAX_PREAMBLE_ROWS", "ReadRefused", "excel_sheets", "frame_from_grid",
            "read_bytes_for_profiling", "read_table_for_profiling", "strip_preamble_rows"]
