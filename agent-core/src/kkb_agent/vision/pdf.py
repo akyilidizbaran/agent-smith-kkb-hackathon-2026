@@ -197,6 +197,26 @@ def extract_pdf_tables(
     return merge_continuations(found)
 
 
+def table_backend() -> str | None:
+    """Kurulu tablo okuyucusunun adı; hiçbiri yoksa None.
+
+    Çağıran bunu sesli yapar: okuyucu yoksa PDF sessizce OCR'a düşer ve kimse fark etmez —
+    bu, 23 Eylül'de proje ortamında pymupdf eksikken tam olarak yaşandı.
+    """
+    for name in ("pdfplumber", "pymupdf", "fitz"):
+        try:
+            __import__(name)
+        except ImportError:
+            continue
+        return name
+    return None
+
+
+MISSING_BACKEND_HINT = (
+    "PDF tablo okuyucusu (pdfplumber) kurulu değil; `cd agent-core && uv sync` çalıştır. "
+)
+
+
 def _selected_pages(pages: str | Sequence[int] | None, total: int, max_pages: int) -> list[int]:
     from .ocr import parse_pages
 
@@ -262,7 +282,9 @@ __all__ = [
     "PdfTable",
     "PdfTextLayer",
     "PdfTextLayerError",
+    "MISSING_BACKEND_HINT",
     "extract_pdf_tables",
     "extract_pdf_text_layer",
     "merge_continuations",
+    "table_backend",
 ]

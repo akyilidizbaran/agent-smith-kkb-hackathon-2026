@@ -198,8 +198,14 @@ class IngestFromUrlTool(Tool):
             frame, note, csv_path = native
             return frame, outcome, note, csv_path
 
+        # Okuyucu eksikse OCR'a düşüş sessiz olmasın: kartta ve hatada söylenir.
+        from ..vision.pdf import MISSING_BACKEND_HINT, table_backend
+        missing = ""
+        if Path(params.locator.split("?")[0]).suffix.lower() == ".pdf" and table_backend() is None:
+            missing = "UYARI: " + MISSING_BACKEND_HINT
+
         if self.ocr is None:
-            raise OcrUnavailable("PDF/görsel belge OCR istemcisi olmadan okunamaz (VISION_MODEL yapılandırılmamış).")
+            raise OcrUnavailable(missing + "PDF/görsel belge OCR istemcisi olmadan okunamaz (VISION_MODEL yapılandırılmamış).")
         doc = ocr_document(content, media, client=self.ocr, url=params.locator.split("?")[0], pages=params.pages)
         page = extract_ocr_page(params.locator, doc)
         if not page.tables:
@@ -216,7 +222,7 @@ class IngestFromUrlTool(Tool):
         (self.allowed_root / f"{stem}{suffix}").write_bytes(content)
         csv_path = self.allowed_root / f"{stem}_p{page_no}_t{idx}.csv"
         table.to_csv(csv_path, index=False)
-        note = (f"Belge {params.locator} (sha256 {doc.sha256}) OCR ile okundu: model {doc.model}, sayfa {page_no}, "
+        note = (missing + f"Belge {params.locator} (sha256 {doc.sha256}) OCR ile okundu: model {doc.model}, sayfa {page_no}, "
                 f"tablo #{idx} ({len(table)}×{len(table.columns)}); sayılar doğrulanmadı, kaynağın kendisiyle "
                 f"karşılaştırılmalı. Belge kopyası: {stem}{suffix}.")
         # OCR tablosu sayıya çevrilmiş DataFrame; profilci metin hücre bekler.
