@@ -87,3 +87,24 @@ def test_every_registered_source_builds_a_spec_for_its_own_catalog_row(
 
     assert spec.source_id == row.source_id
     assert spec.dataset_id == row.dataset_id
+
+
+def test_monthly_request_for_an_older_schema_id_carries_the_catalogued_series_key() -> None:
+    """BDDK re-keys an item when its schema changes; the older id still answers for the older months.
+
+    Measured 21 Sept 2026: 63 of the 70 monthly series whose loaded data starts after 2021-01 have
+    their earlier months under an older id (``1842?Toplam`` was ``1626?Toplam`` until 2021-10). The
+    request goes out with the OLD id; the response must land on the CATALOGUED series, so the row
+    carries the publish key and the spec forwards it — as metadata, never as a wire field.
+    """
+
+    current = _row("bddk_monthly:1534_Toplam")
+    old = SeriesRow(series_id=current.series_id, source_id=current.source_id, native_code="288?Toplam",
+                    dataset_id=current.dataset_id, name_tr=current.name_tr, series_key="1534_Toplam")
+
+    spec = CONNECTOR_REGISTRY["bddk_monthly"].build_spec(old, date(2021, 1, 1), date(2021, 10, 31))
+
+    assert spec.parameters["kalemSutun"] == "288?Toplam"
+    assert spec.parameters["series_key"] == "1534_Toplam"
+    plain = CONNECTOR_REGISTRY["bddk_monthly"].build_spec(current, date(2021, 1, 1), date(2021, 10, 31))
+    assert "series_key" not in plain.parameters, "no override → nothing extra in the spec"

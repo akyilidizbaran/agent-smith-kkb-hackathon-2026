@@ -22,6 +22,20 @@ from datetime import datetime
 
 import pandas as pd
 
+
+def _plain_float(v: float) -> str:
+    """Modele giden tablolarda bilimsel gösterim yok: 1.513497e+11 → 151349741325 (ölçüldü, 21 Eyl: model
+    cevaba '1.513497e+11 TL' yazdı, kanıt zinciri de bu biçimi tabloda buldu)."""
+    v = float(v)
+    if v != v or v in (float("inf"), float("-inf")):
+        return str(v)
+    if v.is_integer() and abs(v) < 1e15:
+        return f"{v:.1f}"          # 110.0 — kolon ondalıklı olduğu için ".0" kalır, sadece bilimsel gösterim gider
+    return repr(v)
+
+
+pd.set_option("display.float_format", _plain_float)
+
 from ..contracts.lakehouse import QueryProvenance
 
 

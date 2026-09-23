@@ -133,3 +133,23 @@ def test_bddk_monthly_maturity_buckets_are_additive_children_of_their_total() ->
     assert by_id["bddk_monthly:1160_BirYil"].parent_series_id is None
     assert by_id["bddk_monthly:1160_Toplam"].additivity == "unknown"
     assert by_id["bddk_monthly:729_Toplam"].relation_type == "standalone"
+
+
+def test_thousands_of_relations_are_written_in_one_batch_quickly(tmp_path) -> None:
+    """Ölçüldü (22 Eyl, Windows, DuckDB 1.5.5): satır satır `executemany` + `INSERT OR REPLACE` süperlineer
+    büyüyordu (300 satır 5,9 sn; tam katalog 6.694 satır dakikalar); bootstrap çağıran her test ve CLI bekliyordu.
+    Toplu ekleme aynı satırları saniyenin altında yazar; liste kolonu (dimension_path) korunur."""
+    connection = bootstrap_database(tmp_path / "relations.duckdb", catalog_root=None)
+    rows = [_row(f"bddk_finturk:IL{i:04d}_Kredi", "bddk_finturk", f"IL{i:04d}_Kredi", f"İl {i} kredi") for i in range(6000)]
+
+    started = time.perf_counter()
+    assert _upsert_series_relations(connection, rows) == 6000
+    elapsed = time.perf_counter() - started
+
+    assert elapsed < 20, f"6.000 ilişki {elapsed:.1f} sn sürdü; toplu ekleme bozulmuş olabilir"
+    count, with_path = connection.execute(
+        "SELECT count(*), count(*) FILTER (WHERE len(dimension_path) > 0) FROM meta.series_relation"
+    ).fetchone()
+    assert count == 6000 and with_path == 6000
+    assert _upsert_series_relations(connection, rows) == 6000          # değişmeyen katalog: yeniden yazılmaz
+

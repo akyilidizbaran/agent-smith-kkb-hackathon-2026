@@ -105,8 +105,11 @@ def _under(path: Path, roots: Iterable[Path]) -> bool:
     return False
 
 
-def excel_sheets(content: bytes) -> list[str]:
-    """XLSX sayfa adları (M10-T05): birden çok sayfa varsa kullanıcı/model seçer, sessizce ilki alınmaz."""
+def excel_sheets(content: bytes, *, engine: str | None = None) -> list[str]:
+    """XLSX/XLS sayfa adları (M10-T05): birden çok sayfa varsa kullanıcı/model seçer, sessizce ilki alınmaz."""
+    if engine == "xlrd":   # eski .xls (PR #21)
+        with pd.ExcelFile(io.BytesIO(content), engine="xlrd") as xf:
+            return [str(n) for n in xf.sheet_names]
     try:
         from openpyxl import load_workbook
         wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True, keep_links=False)
@@ -229,9 +232,28 @@ def _table_from_bytes(content: bytes, name: str, *, sheet: str | int | None = No
     """Tip çıkarımı YOK: her hücre metin. Boş hücre boş kalır, NaN olmaz.
 
     XLSX: `sheet` ad ya da 0-tabanlı indeks; verilmemişse ve birden çok sayfa varsa ReadRefused ile
-    sayfa listesi döner (belirsizlik sorulur). Legacy .xls desteklenmez (xlrd yok) — açıkça söylenir.
+    sayfa listesi döner (belirsizlik sorulur). Eski .xls xlrd ile okunur (21 Eyl: TÜİK/TBB dosyaları);
+    veri havuzu .xls almaz, ingest yolu türetilmiş CSV'yi sahneler.
     """
     suffix = Path(name.split("?")[0]).suffix.lower()
+    if suffix == ".xls":
+        # Eski Excel (PR #21, xlrd): PR #26 ayrıştırıcısı .xls okumaz; sayfa seçimi aynı kuralla.
+        try:
+            names = excel_sheets(content, engine="xlrd")
+        except Exception as exc:  # noqa: BLE001 — bozuk/şifreli/yanlış uzantılı dosya: sebebi söylenir, tahmin yok
+            raise ReadRefused(f"Excel dosyası ({suffix}) okunamadı: {type(exc).__name__}: {str(exc)[:120]}; "
+                              "dosya bozuk, şifreli ya da uzantısı yanlış olabilir") from exc
+        if sheet is None and len(names) > 1:
+            raise ReadRefused("Excel dosyasında birden çok sayfa var: " + ", ".join(names) + " — `sheet` ile birini seç")
+        target: str | int = 0 if sheet is None else sheet
+        if isinstance(target, str) and target.isdigit():
+            target = int(target)
+        if isinstance(target, str) and target not in names:
+            raise ReadRefused(f"sayfa '{target}' yok; sayfalar: {', '.join(names)}")
+        if isinstance(target, int) and not (0 <= target < len(names)):
+            raise ReadRefused(f"sayfa indeksi {target} yok; {len(names)} sayfa var")
+        frame = pd.read_excel(io.BytesIO(content), sheet_name=target, dtype=str, keep_default_na=False, engine="xlrd")
+        return frame.fillna("")
     if suffix == ".json":
         try:
             text = content.decode("utf-8-sig")
@@ -256,6 +278,34 @@ def read_tabular_bytes(content: bytes, name: str, *, sheet: str | int | None = N
     except TabularParseError as exc:
         raise ReadRefused(str(exc), code=exc.code, details=exc.details) from exc
 
+
+
+
+def _preamble_rows(text: str, sep: str | None) -> int:
+    """Başlık öncesi üst bilgi satırlarının sayısı ("Dışa Aktarım Tarihi:,23.09.2026", "Toplam Kayıt Sayısı:,261", boş).
+
+    Gerçek başlık, tablonun alan sayısına (satırların çoğunluğundaki alan sayısı) sahip ilk satırdır; ondan önceki
+    satırlar atlanır. Ölçüldü (23 Eyl, rapor CSV dışa aktarımı): ilk satır başlık sanıldı, "Dönem" kolonu görünmedi,
+    kayıt reddedildi. Düzenli dosyada 0 döner."""
+    import csv
+    from collections import Counter
+    lines = text.splitlines()[:200]
+    if len(lines) < 3:
+        return 0
+    delim = sep
+    if delim is None:
+        try:
+            delim = csv.Sniffer().sniff("\n".join(lines[-20:]), delimiters=",;\t|").delimiter
+        except csv.Error:
+            delim = ","
+    counts = [len(row) for row in csv.reader(lines, delimiter=delim)]
+    wide = [c for c in counts if c >= 2]
+    if not wide:
+        return 0
+    modal = Counter(wide).most_common(1)[0][0]
+    if sum(1 for c in counts if c == modal) < max(3, len(counts) // 2):
+        return 0
+    return next((i for i, c in enumerate(counts) if c == modal), 0)
 
 def _private_host(host: str) -> bool:
     """Web getirmeyle aynı kural (M05-T03); `web.addresses` paket içinden import etmez, döngü yok."""
@@ -307,8 +357,8 @@ def read_bytes_for_profiling(
             locator, http_status=resp.status_code, final_url=getattr(resp, "url", None),
             body_excerpt=content[:4096].decode("utf-8", errors="ignore"), environ=environ,
         )
-        headers = getattr(resp, "headers", {}) or {}
-        media = str(headers.get("Content-Type") or headers.get("content-type") or "").split(";")[0].strip().lower()
+        headers = {str(k).lower(): v for k, v in (getattr(resp, "headers", {}) or {}).items()}
+        media = str(headers.get("content-type") or "").split(";")[0].strip().lower()
         return (content if outcome.ok else None), media, outcome
     if parsed.scheme not in ("", "file"):
         raise ReadRefused(f"desteklenmeyen şema: {parsed.scheme}")

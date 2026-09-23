@@ -1,0 +1,377 @@
+# BDDK Aylık Bülten — aynı kalemin ESKİ şema kimlikleri ve her birinin cevapladığı aylar.
+#
+# BDDK bir kalemin şemasını değiştirince kimliğini de değiştirir; Gelişmiş sayfadaki <option value="1842,1626,...">
+# değeri bu kimlikleri yeniden eskiye sıralar. Eski aylar eski kimlikte kalır: bu dosya olmadan 70 aylık seri
+# 2021 başı yerine kimlik değişim ayından başlıyordu (ölçüm 21 Eylül 2026, gerçek DB).
+# Kaynak: her kimlik için canlı GelismisRaporGetir sorgusu (2021-01 → yüklü başlangıç yılı), 21 Eylül 2026.
+# Pencereler örtüşmez: geçiş ayı yalnız daha yeni kimlikten alınır (Silver aynı gözlem için iki farklı değeri
+# 'revizyon çatışması' sayar). scripts/run_catalog_ingestion.py bu dosyayı okur ve eski kimliği aynı seri için,
+# istenen pencereye kırparak ayrıca çeker; parser yanıtı katalogdaki seri anahtarı altında yayınlar.
+#
+# Kapsam dışı (kaynakta hiçbir kimlikte 2021 başı yok, 7 seri): bddk_monthly:1840_Toplam, bddk_monthly:1892_Toplam, bddk_monthly:1893_Toplam, bddk_monthly:1891_Toplam, bddk_monthly:1936_Toplam, bddk_monthly:1913_Toplam, bddk_monthly:1914_Toplam
+
+- series_id: bddk_monthly:1848_Toplam
+  native_code: "1632?Toplam"
+  start: 2021-01-01
+  end: 2021-10-31
+  # Risk Ağırlığı %1250 Olan Kalemler Toplamı (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1843_Toplam
+  native_code: "1627?Toplam"
+  start: 2021-01-01
+  end: 2021-10-31
+  # Risk Ağırlığı %75 Olan Kalemler Toplamı (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1841_Toplam
+  native_code: "1625?Toplam"
+  start: 2021-01-01
+  end: 2021-10-31
+  # Risk Ağırlığı %35 Olan Kalemler Toplamı (G.menkul İpoteği ile Teminatlandırılanlar) (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1845_Toplam
+  native_code: "1629?Toplam"
+  start: 2021-01-01
+  end: 2021-10-31
+  # Risk Ağırlığı %150 Olan Kalemler Toplamı (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1844_Toplam
+  native_code: "1628?Toplam"
+  start: 2021-01-01
+  end: 2021-10-31
+  # Risk Ağırlığı %100 Olan Kalemler Toplamı (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1846_Toplam
+  native_code: "1630?Toplam"
+  start: 2021-01-01
+  end: 2021-10-31
+  # Risk Ağırlığı %200 Olan Kalemler Toplamı (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1847_Toplam
+  native_code: "1631?Toplam"
+  start: 2021-01-01
+  end: 2021-10-31
+  # Risk Ağırlığı %250 Olan Kalemler Toplamı (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1842_Toplam
+  native_code: "1626?Toplam"
+  start: 2021-01-01
+  end: 2021-10-31
+  # Risk Ağırlığı %50 Olan Kalemler Toplamı (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1895_Toplam
+  native_code: "1811?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Kıymetli Maden Kredileri (Krediler, Sektör)
+- series_id: bddk_monthly:1870_Toplam
+  native_code: "1781?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Kredi Faiz (Kar Payı) ve Gelir Tah. Reeskontları (Bilanço, Sektör)
+- series_id: bddk_monthly:1896_Toplam
+  native_code: "1812?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Müşteri Adına Menkul Değer Alım Kredileri (Krediler, Sektör)
+- series_id: bddk_monthly:1884_Toplam
+  native_code: "1801?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Nakdi Kredilerden Alınan Ücret ve Komisyonlar (Kar Zarar, Sektör)
+- series_id: bddk_monthly:1882_Toplam
+  native_code: "1799?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Taksitli Ticari Kredilerden Alınan Faizler (Kar Payları) (Kar Zarar, Sektör)
+- series_id: bddk_monthly:1871_Toplam
+  native_code: "1782?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Menkul Değerler Faiz (Gelir) Reeskontları (Bilanço, Sektör)
+- series_id: bddk_monthly:1872_Toplam
+  native_code: "1783?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Diğer Faiz (Kar Payı) ve Gelir Reeskontları (Bilanço, Sektör)
+- series_id: bddk_monthly:1880_Toplam
+  native_code: "1797?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Tüketici Kredilerinden Alınan Faizler (Kar Payları) (Kar Zarar, Sektör)
+- series_id: bddk_monthly:1889_Toplam
+  native_code: "1807?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Diğer Krediler (Krediler, Sektör)
+- series_id: bddk_monthly:1897_Toplam
+  native_code: "1813?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Kredi Kartları (Krediler, Sektör)
+- series_id: bddk_monthly:1879_Toplam
+  native_code: "1790?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Kredi Riskinde Önemli Artış (İkinci Aşama) (Bilanço, Sektör)
+- series_id: bddk_monthly:1877_Toplam
+  native_code: "1788?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Bankalar Mevduatı (Bilanço, Sektör)
+- series_id: bddk_monthly:1903_Toplam
+  native_code: "203?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # İthalat Kredileri (Krediler, Sektör)
+- series_id: bddk_monthly:1875_Toplam
+  native_code: "1786?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Mevduat (Katılım Fonu) Faiz (Kar Payı) Reeskontları (Bilanço, Sektör)
+- series_id: bddk_monthly:1883_Toplam
+  native_code: "1800?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Diğer Kredilerden Alınan Faizler (Kar Payları) (Kar Zarar, Sektör)
+- series_id: bddk_monthly:1900_Toplam
+  native_code: "206?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # İşletme Kredileri (Krediler, Sektör)
+- series_id: bddk_monthly:1876_Toplam
+  native_code: "1787?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Diğer Faiz (Kar Payı) ve Gider Reeskontları (Bilanço, Sektör)
+- series_id: bddk_monthly:1894_Toplam
+  native_code: "1808?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Ortaklık Finansmanı (Krediler, Sektör)
+- series_id: bddk_monthly:1904_Toplam
+  native_code: "202?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # İhracat Kredileri (Krediler, Sektör)
+- series_id: bddk_monthly:1899_Toplam
+  native_code: "1817?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Taksitli Ticari Krediler (Krediler, Sektör)
+- series_id: bddk_monthly:1881_Toplam
+  native_code: "1798?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Kredi Kartlarından Alınan Faizler (Kar Payları) (Kar Zarar, Sektör)
+- series_id: bddk_monthly:1873_Toplam
+  native_code: "1784?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Vadesiz Mevduat (Katılım Fonu) (Bilanço, Sektör)
+- series_id: bddk_monthly:1885_Toplam
+  native_code: "1802?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Gayrinakdi Kredilerden Alınan Ücret ve Komisyonlar (Kar Zarar, Sektör)
+- series_id: bddk_monthly:1888_Toplam
+  native_code: "1806?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Toplam Krediler (Krediler, Sektör)
+- series_id: bddk_monthly:1898_Toplam
+  native_code: "1814?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Tüketici Kredileri (Krediler, Sektör)
+- series_id: bddk_monthly:1902_Toplam
+  native_code: "204?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # İhracat Garantili Yatırım Kredileri (Krediler, Sektör)
+- series_id: bddk_monthly:1901_Toplam
+  native_code: "205?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Diğer Yatırım Kredileri (Krediler, Sektör)
+- series_id: bddk_monthly:1874_Toplam
+  native_code: "1785?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Vadeli Mevduat (Katılım Fonu) (Bilanço, Sektör)
+- series_id: bddk_monthly:1878_Toplam
+  native_code: "1789?Toplam"
+  start: 2021-01-01
+  end: 2021-12-31
+  # Ay Beklenen Zarar Karşılığı (Birinci Aşama) (Bilanço, Sektör)
+- series_id: bddk_monthly:1938_Toplam
+  native_code: "1838?Toplam"
+  start: 2021-01-01
+  end: 2021-05-31
+  # Piyasa Riskine Esas Tutar (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1938_Toplam
+  native_code: "1633?Toplam"
+  start: 2021-06-01
+  end: 2021-10-31
+  # Piyasa Riskine Esas Tutar (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1938_Toplam
+  native_code: "1850?Toplam"
+  start: 2021-11-01
+  end: 2022-05-31
+  # Piyasa Riskine Esas Tutar (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1937_Toplam
+  native_code: "1849?Toplam"
+  start: 2021-11-01
+  end: 2022-05-31
+  # KDA Riskine Esas Tutar (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1939_Toplam
+  native_code: "1634?Toplam"
+  start: 2021-01-01
+  end: 2021-05-31
+  # Operasyonel Riske Esas Tutar (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1939_Toplam
+  native_code: "1839?Toplam"
+  start: 2021-06-01
+  end: 2021-10-31
+  # Operasyonel Riske Esas Tutar (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1939_Toplam
+  native_code: "1851?Toplam"
+  start: 2021-11-01
+  end: 2022-05-31
+  # Operasyonel Riske Esas Tutar (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1941_Toplam
+  native_code: "1837?Toplam"
+  start: 2021-01-01
+  end: 2021-05-31
+  # Kredi Riskine Esas Tutar (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1941_Toplam
+  native_code: "1932?Toplam"
+  start: 2021-06-01
+  end: 2021-10-31
+  # Kredi Riskine Esas Tutar (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1941_Toplam
+  native_code: "1905?Toplam"
+  start: 2021-11-01
+  end: 2022-05-31
+  # Kredi Riskine Esas Tutar (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1940_Toplam
+  native_code: "1933?Toplam"
+  start: 2021-01-01
+  end: 2021-05-31
+  # Risk Ağırlıklı Kalemler Toplamı (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1940_Toplam
+  native_code: "1934?Toplam"
+  start: 2021-06-01
+  end: 2021-10-31
+  # Risk Ağırlıklı Kalemler Toplamı (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1940_Toplam
+  native_code: "1935?Toplam"
+  start: 2021-11-01
+  end: 2022-05-31
+  # Risk Ağırlıklı Kalemler Toplamı (Sermaye Yeterliliği, Sektör)
+- series_id: bddk_monthly:1908_Toplam
+  native_code: "1639?Toplam"
+  start: 2021-01-01
+  end: 2022-08-31
+  # REPO KONUSU MENKUL DEĞERLER (Menkul Kıymetler, Sektör)
+- series_id: bddk_monthly:1912_Toplam
+  native_code: "441?Toplam"
+  start: 2021-01-01
+  end: 2022-08-31
+  # Merkez Bankasınca İhraç Edilen Likidite Senetleri (Menkul Kıymetler, Sektör)
+- series_id: bddk_monthly:1909_Toplam
+  native_code: "1955?Toplam"
+  start: 2021-01-01
+  end: 2022-08-31
+  # Diğer Menkul Kıymetler (Menkul Kıymetler, Sektör)
+- series_id: bddk_monthly:1911_Toplam
+  native_code: "442?Toplam"
+  start: 2021-01-01
+  end: 2022-08-31
+  # Krediye Bağlı Tahvil (Menkul Kıymetler, Sektör)
+- series_id: bddk_monthly:1910_Toplam
+  native_code: "1640?Toplam"
+  start: 2021-01-01
+  end: 2022-08-31
+  # Özel Sektör Tarafından İhraç Edilen Kira Sertifikaları (Sukuk) (Menkul Kıymetler, Sektör)
+- series_id: bddk_monthly:1907_Toplam
+  native_code: "1638?Toplam"
+  start: 2021-01-01
+  end: 2022-08-31
+  # TEMİNATA VERİLEN MENKUL DEĞERLER (Menkul Kıymetler, Sektör)
+- series_id: bddk_monthly:1924_Toplam
+  native_code: "1132?Toplam"
+  start: 2021-01-01
+  end: 2022-12-31
+  # Yabancı Para Net Genel Pozisyon / Yasal Özkaynak Standart Oranı (Yüzde) (Yabancı Para Pozisyonu, Sektör)
+- series_id: bddk_monthly:1920_Toplam
+  native_code: "1124?Toplam"
+  start: 2021-01-01
+  end: 2022-12-31
+  # Döviz Varlıkları Toplamı (Yabancı Para Pozisyonu, Sektör)
+- series_id: bddk_monthly:1926_Toplam
+  native_code: "1131?Toplam"
+  start: 2021-01-01
+  end: 2022-12-31
+  # Yasal Özkaynak (Yabancı Para Pozisyonu, Sektör)
+- series_id: bddk_monthly:1916_Toplam
+  native_code: "1126?Toplam"
+  start: 2021-01-01
+  end: 2022-12-31
+  # Bilanço Dışı Varlıklar (Yabancı Para Pozisyonu, Sektör)
+- series_id: bddk_monthly:1922_Toplam
+  native_code: "1125?Toplam"
+  start: 2021-01-01
+  end: 2022-12-31
+  # Dövize Endeksli Varlıklar (Yabancı Para Pozisyonu, Sektör)
+- series_id: bddk_monthly:1918_Toplam
+  native_code: "1743?Toplam"
+  start: 2021-01-01
+  end: 2022-12-31
+  # Bilanço İçi Varlıklar (Yabancı Para Pozisyonu, Sektör)
+- series_id: bddk_monthly:1921_Toplam
+  native_code: "1127?Toplam"
+  start: 2021-01-01
+  end: 2022-12-31
+  # Döviz Yükümlülükleri Toplamı (Yabancı Para Pozisyonu, Sektör)
+- series_id: bddk_monthly:1923_Toplam
+  native_code: "1128?Toplam"
+  start: 2021-01-01
+  end: 2022-12-31
+  # Dövize Endeksli Yükümlülükler (Yabancı Para Pozisyonu, Sektör)
+- series_id: bddk_monthly:1925_Toplam
+  native_code: "1130?Toplam"
+  start: 2021-01-01
+  end: 2022-12-31
+  # Yabancı Para Net Genel Pozisyonu (Yabancı Para Pozisyonu, Sektör)
+- series_id: bddk_monthly:1917_Toplam
+  native_code: "1129?Toplam"
+  start: 2021-01-01
+  end: 2022-12-31
+  # Bilanço Dışı Yükümlülükler (Yabancı Para Pozisyonu, Sektör)
+- series_id: bddk_monthly:1919_Toplam
+  native_code: "1742?Toplam"
+  start: 2021-01-01
+  end: 2022-12-31
+  # Bilanço İçi Yükümlülükler (Yabancı Para Pozisyonu, Sektör)
+- series_id: bddk_monthly:1952_Toplam
+  native_code: "1642?Toplam"
+  start: 2021-01-01
+  end: 2024-01-31
+  # Hazinece Yurt Dışında İhraç Edilen Eurobond ve Benz.Tahviller (Menkul Kıymetler, Sektör)
+- series_id: bddk_monthly:1951_Toplam
+  native_code: "1643?Toplam"
+  start: 2021-01-01
+  end: 2024-01-31
+  # Devlet Tahvilleri (Menkul Kıymetler, Sektör)
+- series_id: bddk_monthly:1954_Toplam
+  native_code: "1574?Toplam"
+  start: 2021-01-01
+  end: 2022-08-31
+  # TOPLAM MENKUL DEĞERLER (Menkul Kıymetler, Sektör)
+- series_id: bddk_monthly:1954_Toplam
+  native_code: "1906?Toplam"
+  start: 2022-09-01
+  end: 2024-01-31
+  # TOPLAM MENKUL DEĞERLER (Menkul Kıymetler, Sektör)
+- series_id: bddk_monthly:1953_Toplam
+  native_code: "1573?Toplam"
+  start: 2021-01-01
+  end: 2022-08-31
+  # Menkul Değerler (Menkul Kıymetler, Sektör)
+- series_id: bddk_monthly:1953_Toplam
+  native_code: "1915?Toplam"
+  start: 2022-09-01
+  end: 2024-01-31
+  # Menkul Değerler (Menkul Kıymetler, Sektör)

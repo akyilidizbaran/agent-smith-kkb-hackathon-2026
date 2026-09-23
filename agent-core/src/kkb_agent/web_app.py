@@ -44,13 +44,17 @@ log = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 MAX_ROWS = 200
 
-# Dosya girişi (M10, ADR-0054): desteklenen türler ve sınır. Legacy .xls bilerek yok (xlrd yok);
+# Dosya girişi (M10, ADR-0054): desteklenen türler ve sınır. Eski .xls 21 Eyl'den beri okunur (xlrd), CSV'ye çevrilerek kaydedilir;
 # .html/.htm dosyası web_url ile açılır (tablo çıkarımı orada). Kullanıcının yerel yolu sunucuya gelmez:
 # dosya oturuma özel dizine güvenli adla yazılır, ajana verilen yol o kopyadır.
-UPLOAD_KINDS = {".csv": "tablo", ".tsv": "tablo", ".txt": "tablo", ".xlsx": "tablo (Excel)", ".xlsm": "tablo (Excel)",
+UPLOAD_KINDS = {".csv": "tablo", ".tsv": "tablo", ".txt": "tablo", ".xlsx": "tablo (Excel)", ".xls": "tablo (eski Excel)",
                 ".json": "tablo (JSON)", ".pdf": "belge (OCR)", ".png": "görsel (OCR)", ".jpg": "görsel (OCR)",
                 ".jpeg": "görsel (OCR)", ".webp": "görsel (OCR)"}
-UPLOAD_REFUSED = {".xls": "eski Excel (.xls) desteklenmiyor; dosyayı .xlsx olarak kaydedin",
+# .xlsm burada reddedilir: ajan okuyucu açabiliyordu ama veri ekibinin CLI'ı makrolu dosyayı ilke gereği
+# reddediyor (lakehouse/generic/formats.py); yükleme kabul edilip kayıt son adımda düşüyordu.
+UPLOAD_REFUSED = {
+                  ".xlsm": "makro içeren Excel (.xlsm) veri havuzuna alınmıyor; dosyayı .xlsx olarak kaydedin",
+                  ".xlsb": "ikili Excel (.xlsb) desteklenmiyor; dosyayı .xlsx olarak kaydedin",
                   ".html": "HTML dosyası için sayfa adresini verin ya da tabloyu CSV olarak kaydedin",
                   ".htm": "HTML dosyası için sayfa adresini verin ya da tabloyu CSV olarak kaydedin",
                   ".doc": "Word desteklenmiyor; tabloyu CSV/XLSX ya da PDF olarak verin",
@@ -363,6 +367,10 @@ def project_result_table(answer: Any, agent: Any, *, question: str = "", table_b
         return None
     if _ALL_COLUMNS_REQUEST.search(question or ""):
         return current.copy()
+    if any(isinstance(a, dict) and a.get("kind") == "candidates" for a in (getattr(answer, "artifacts", []) or [])):
+        # Aday listesi turu (core/search_ledger, 22 Eyl): teslim edilen tablo tam aday listesidir; modelin kısa anlatısı
+        # ya da bu turda çekilen tek serinin sorgu sonucu onun yerine geçmez. İndirme de bu tabloyu verir.
+        return current.copy()
 
     steps = [s for s in getattr(answer, "steps", []) if getattr(s, "ok", False)]
     reuse_proof = next(
@@ -578,6 +586,7 @@ def answer_to_dict(answer: Any, agent: Any, *, table_before: Any = None, questio
             None,
         ),
         "grounding": getattr(answer, "grounding", "") or "",
+        "completion": dict(getattr(answer, "completion", {}) or {}),
         "follow_up": follow_up.as_dict() if follow_up is not None else None,
         "hit_step_limit": bool(getattr(answer, "hit_step_limit", False)),
         "gate": {"allowed": sorted(gate.allowed), "opened": list(gate.opened), "closed": list(gate.closed)} if gate else None,

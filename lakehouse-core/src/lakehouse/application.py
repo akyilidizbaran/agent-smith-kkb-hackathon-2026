@@ -526,14 +526,44 @@ def run_adhoc_ingestion(
                 f"generic ingestion returned {len(results)} assets; exactly one is required"
             )
         result = results[0]
-        register_series(connection, series_record)
-        publication = publish_adhoc_observations(connection, result, [mapping])
+        registration = register_series(connection, series_record)
+        try:
+            publication = publish_adhoc_observations(connection, result, [mapping])
+        except Exception as exc:
+            # A draft without observations is not a series, and a run whose rows never reached the
+            # ad-hoc table did not succeed. Observed 20 Sep: three refused publications left three
+            # orphan drafts in meta.series and three "success" runs with rows_out 11 -- the agent saw
+            # the error, the catalog did not. Only what this call inserted is removed.
+            _undo_failed_adhoc_publication(connection, registration, result.run_id, exc)
+            raise
         return AdhocIngestionSummary(
             ingestion=_summary(connection, result),
             publication=publication,
         )
     finally:
         connection.close()
+
+
+def _undo_failed_adhoc_publication(
+    connection: duckdb.DuckDBPyConnection, registration: Any, run_id: str | None, exc: BaseException
+) -> None:
+    """Remove the draft this call registered and mark its run failed when publication is refused."""
+
+    from .ingestion.observability import describe_exception
+
+    if getattr(registration, "inserted", False):
+        connection.execute(
+            "DELETE FROM meta.series WHERE series_id = ? AND source_id = ? AND status = 'draft'",
+            [registration.series_id, ADHOC_SOURCE_ID],
+        )
+    if run_id:
+        # RunRepository.finish() refuses to close a run twice; the pipeline already closed this one as
+        # success before publication ran. The terminal status is corrected in place with the redacted
+        # reason so meta.run tells the truth about what reached the ad-hoc table.
+        connection.execute(
+            "UPDATE meta.run SET status = 'failed', error = ? WHERE run_id = ? AND status = 'success'",
+            [f"publication refused: {describe_exception(exc)}", run_id],
+        )
 
 
 __all__ = [

@@ -147,8 +147,21 @@ def test_red_gold_refused_tekrar_denenmez_ve_turkce_sebep_tasir(env) -> None:
 def test_onay_gerektiren_gold_reddi_turu_kapatir(env) -> None:
     lake, ws, runner = env
     runner.refusal = ("UNVERIFIED_SEMANTICS", "semantics not verified")
-    r = GoldDecomposeTool(lake, ws).validate_and_run({"series_id": "bddk_monthly:konut", "purpose": "akıma çöz"})
+    tool = GoldDecomposeTool(lake, ws)
+    tool._verified_alternatives = lambda *_a, **_k: []          # doğrulanmış eşdeğer yok: onay gerekir
+    r = tool.validate_and_run({"series_id": "bddk_monthly:konut", "purpose": "akıma çöz"})
     assert not r.ok and r.error.terminal is not False and "TEKRAR DENEMEYLE ÇÖZÜLMEZ" in r.content
+
+
+def test_dogrulanmis_esdeger_varsa_gold_reddi_turu_bitirmez(env) -> None:
+    """PR #21: aynı kavramın doğrulanmış serisi varsa model aynı işlemi onunla yineler; çelişkili kapanış satırı yok."""
+    lake, ws, runner = env
+    runner.refusal = ("UNVERIFIED_SEMANTICS", "semantics not verified")
+    tool = GoldDecomposeTool(lake, ws)
+    tool._verified_alternatives = lambda *_a, **_k: ["evds:TP.KTF12"]
+    r = tool.validate_and_run({"series_id": "bddk_monthly:konut", "purpose": "akıma çöz"})
+    assert not r.ok and r.error.terminal is False and "evds:TP.KTF12" in r.content
+    assert "TEKRAR DENEMEYLE ÇÖZÜLMEZ" not in r.content
 
 
 def test_adaptor_reddi_typed_exception_olarak_yukseltir(env) -> None:
@@ -328,6 +341,39 @@ def test_parse_period_ve_workspace_view() -> None:
         parse_period("Q1", end=False)
     view = workspace_view(document_to_frame(ALIGN_DOC))
     assert "run_id_list" not in view.columns and "source_observation_dates" in view.columns
+
+
+def test_dogrulanmamis_ret_dogrulanmis_esdegeri_aday_olarak_verir(env) -> None:
+    """Benchmark P04 (22 Eyl): model semantiği doğrulanmamış seriyi seçti, Gold reddetti, tur bitti; aynı adla aranan
+    doğrulanmış seri duruyordu. Ret artık doğrulanmış eşdeğer(ler)i aday olarak taşır; onay istemeden önce o denenir."""
+    lake, ws, runner = env
+    runner.refusal = ("UNVERIFIED_SEMANTICS", "semantic_confidence is 'derived'")
+    tool = GoldAlignTool(lake, ws)
+
+    r = tool.validate_and_run({"series_id": "bddk_monthly:konut", "target_frequency": "quarterly", "purpose": "çeyreklik"})
+
+    assert not r.ok and r.error.error_code == "GOLD_REFUSED"
+    alts = tool._verified_alternatives("bddk_monthly:konut")
+    assert "bddk_monthly:konut" not in alts
+    if alts:                                            # test kataloğunda doğrulanmış komşu varsa ipucuna ve adaylara girer
+        assert set(alts) <= set(r.error.candidates) and "DOĞRULANMIŞ serisi var" in r.content
+
+
+def test_dogrulanmis_esdeger_varsa_ret_terminal_degildir(env, monkeypatch) -> None:
+    """Eşdeğer aday varken tur bitmez: model aynı işlemi doğrulanmış seriyle yeniden dener."""
+    lake, ws, runner = env
+    runner.refusal = ("UNVERIFIED_SEMANTICS", "semantic_confidence is 'derived'")
+    tool = GoldAlignTool(lake, ws)
+    monkeypatch.setattr(tool, "_verified_alternatives", lambda sid, limit=3: ["bddk_monthly:konut_dogrulanmis"])
+
+    r = tool.validate_and_run({"series_id": "bddk_monthly:konut", "target_frequency": "quarterly", "purpose": "çeyreklik"})
+
+    assert not r.ok and r.error.error_code == "GOLD_REFUSED" and r.error.terminal is False
+    assert r.error.candidates == ["bddk_monthly:konut_dogrulanmis"] and "DOĞRULANMIŞ serisi var" in r.content
+    runner.refusal = ("UNVERIFIED_SEMANTICS", "semantic_confidence is 'derived'")
+    monkeypatch.setattr(tool, "_verified_alternatives", lambda sid, limit=3: [])
+    r2 = tool.validate_and_run({"series_id": "bddk_monthly:konut", "target_frequency": "monthly", "purpose": "aylık"})
+    assert not r2.ok and r2.error.terminal is None          # eşdeğer yok: ret terminal (kullanıcıya sorulur)
 
 
 def test_workspace_view_json_tarihlerini_gercek_tarih_tipine_dondurur() -> None:

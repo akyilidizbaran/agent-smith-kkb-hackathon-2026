@@ -46,16 +46,26 @@ def _to_dt(s: pd.Series) -> pd.Series:
 
 
 def _date_column(frame: pd.DataFrame) -> str | None:
-    """≥%80 tarihe ayrışan ilk kolon (sayısal kolonlar denenmez: 2025 gibi yıl sayıları tarih sanılmasın)."""
+    """≥%80 tarihe ayrışan tarih kolonu (sayısal kolonlar denenmez: 2025 gibi yıl sayıları tarih sanılmasın).
+
+    Birden çok tarih kolonu varsa dönemin ETİKETİ olan seçilir: Gold tabloları `period_start` + `period_end` taşır ve
+    değer dönemin sonuna aittir ("2025Q1" = 2025-03). Ölçüldü (benchmark P04, 22 Eyl): ilk kolon (`period_start`)
+    alınınca modelin doğru "2025-03" etiketi "tabloda 2025-01 döneminde" diye yanlış çelişki notu aldı."""
+    found: list[str] = []
     for c in frame.columns:
         s = frame[c]
         if pd.api.types.is_datetime64_any_dtype(s):
-            return str(c)
+            found.append(str(c)); continue
         if pd.api.types.is_numeric_dtype(s) or s.dropna().empty:
             continue
         if float(_to_dt(s).notna().mean()) >= 0.8:
-            return str(c)
-    return None
+            found.append(str(c))
+    if not found:
+        return None
+    for c in found:
+        if re.search(r"end|son|observation_date|tarih|donem|dönem", c, re.I) and not re.search(r"start|başlangıç|baslangic", c, re.I):
+            return c
+    return found[0]
 
 
 def _periods_in(line: str) -> list[tuple[int, int, int]]:

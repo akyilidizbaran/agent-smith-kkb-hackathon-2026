@@ -52,9 +52,21 @@ class MiaEmbedder:
         return out
 
 
+def record_digest(record_id: str, text: str) -> str:
+    """Tek kaydın parmak izi: kimlik + metin. Katalog sürümleri arasında değişmeyen kayıt aynı izi taşır."""
+    return hashlib.sha256(record_id.encode("utf-8") + b"\x1e" + text.encode("utf-8")).hexdigest()[:20]
+
+
 class EmbeddingCache:
     """Katalog vektörleri diskte: anahtar model + kimlik listesi + metinlerin sha256'sı.
-    Katalog değişince anahtar değişir, eski dosya kalır (küçük), yenisi yazılır."""
+
+    Katalog değişince tam anahtar değişir; ama yan dosyada (`.json`) her kaydın parmak izi durduğu için
+    değişmeyen kayıtların vektörleri en yeni önceki sürümden alınır ve yalnız yeni/değişen kayıtlar
+    hesaplanır (`reuse`). Ölçüldü (20 Eyl): Architect bir taslak seri ekleyince 6.305 serinin tamamı
+    yeniden gömülüyor, ~600 sn sürüyor ve soru bütçesi (300 sn) döngüye girmeden doluyordu; artımlı
+    yolda yalnız yeni seri gömülür. Eski sürüm dosyaları `prune` ile sınırlı sayıda tutulur (her biri ~100 MB)."""
+
+    KEEP_VERSIONS = 3
 
     def __init__(self, directory: Path) -> None:
         self.directory = Path(directory)
@@ -71,15 +83,87 @@ class EmbeddingCache:
         if not path.is_file():
             return None
         arr = np.load(path)
+        self._adopt_sidecar(path, model, ids, texts, arr.shape[0])
         return arr.astype(np.float32).tolist()
+
+    def _adopt_sidecar(self, path: Path, model: str, ids: Sequence[str], texts: Sequence[str], rows: int) -> None:
+        """Bu değişiklikten önce yazılmış sürümün yan dosyasına kayıt izlerini ekle (tam anahtar tuttuğu için
+        kimlik/metin listesi elimizde). Böylece mevcut ~100 MB'lık önbellek yeniden hesaplanmadan artımlı yola girer."""
+        sidecar = path.with_suffix(".json")
+        try:
+            meta = json.loads(sidecar.read_text(encoding="utf-8")) if sidecar.is_file() else {}
+        except (OSError, ValueError):
+            meta = {}
+        if isinstance(meta.get("records"), list) or rows != len(ids):
+            return
+        meta.update({"model": model, "count": len(ids), "records": [record_digest(i, t) for i, t in zip(ids, texts)]})
+        try:
+            sidecar.write_text(json.dumps(meta), encoding="utf-8")
+        except OSError:
+            pass
+
+    def reuse(self, model: str, ids: Sequence[str], texts: Sequence[str]) -> dict[str, list[float]]:
+        """Aynı modelin en yeni önbellek sürümünden, parmak izi tutan kayıtların vektörleri: {parmak izi: vektör}.
+
+        Yan dosyası kayıt izlerini taşımayan eski sürümler (bu değişiklikten önce yazılanlar) atlanır; onlar
+        için davranış eskisi gibi tam hesaptır. Bozuk/eksik dosya sessizce yok sayılır: önbellek hızlandırıcıdır,
+        doğruluk kaynağı değil."""
+        wanted = {record_digest(i, t) for i, t in zip(ids, texts)}
+        if not wanted or not self.directory.is_dir():
+            return {}
+        sidecars = sorted(self.directory.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        for sidecar in sidecars:
+            try:
+                meta = json.loads(sidecar.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            digests = meta.get("records")
+            if meta.get("model") != model or not isinstance(digests, list):
+                continue
+            npy = sidecar.with_suffix(".npy")
+            if not npy.is_file():
+                continue
+            try:
+                arr = np.load(npy, mmap_mode="r")
+            except (OSError, ValueError):
+                continue
+            if arr.shape[0] != len(digests):
+                continue
+            hits = {d: arr[row].astype(np.float32).tolist() for row, d in enumerate(digests) if d in wanted}
+            if hits:
+                return hits
+        return {}
 
     def put(self, model: str, ids: Sequence[str], texts: Sequence[str], vectors: Sequence[Sequence[float]]) -> Path:
         self.directory.mkdir(parents=True, exist_ok=True)
         path = self.directory / f"{self._key(model, ids, texts)}.npy"
         np.save(path, np.asarray(vectors, dtype=np.float32))
         (self.directory / f"{path.stem}.json").write_text(
-            json.dumps({"model": model, "count": len(ids), "dimension": len(vectors[0]) if vectors else 0}), encoding="utf-8")
+            json.dumps({"model": model, "count": len(ids), "dimension": len(vectors[0]) if vectors else 0,
+                        "records": [record_digest(i, t) for i, t in zip(ids, texts)]}), encoding="utf-8")
+        self.prune(model, keep=self.KEEP_VERSIONS, current=path)
         return path
 
+    def prune(self, model: str, *, keep: int, current: Path) -> int:
+        """Aynı modelin en yeni `keep` sürümü dışındakileri sil (her sürüm ~100 MB). Silinen dosya sayısı döner."""
+        versions = []
+        for sidecar in self.directory.glob("*.json"):
+            try:
+                meta = json.loads(sidecar.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if meta.get("model") == model:
+                versions.append(sidecar)
+        versions.sort(key=lambda p: (p.with_suffix(".npy") == current, p.stat().st_mtime), reverse=True)
+        removed = 0
+        for sidecar in versions[keep:]:
+            for p in (sidecar, sidecar.with_suffix(".npy")):
+                try:
+                    p.unlink()
+                    removed += 1
+                except OSError:
+                    pass
+        return removed
 
-__all__ = ["EmbeddingCache", "MiaEmbedder"]
+
+__all__ = ["EmbeddingCache", "MiaEmbedder", "record_digest"]

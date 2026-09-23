@@ -17,22 +17,25 @@ from __future__ import annotations
 
 import hashlib
 import re
-from pathlib import Path
+from dataclasses import replace
+from datetime import date
+from pathlib import Path, PureWindowsPath
 from typing import Any, Literal
+from urllib.parse import urlparse
 
-import pandas as pd
 from pydantic import BaseModel, Field
 
 from ..adapters.duckdb_lakehouse import release_connections
 from ..builder.crosscheck import cross_check, file_points
 from ..builder.ingest import LakehouseCLI
-from ..builder.profile import profile_table, propose
+from ..builder.profile import RANGE_END, profile_table, propose
 from ..builder.quality import table_quality
-from ..builder.read import ReadRefused, frame_from_grid, read_bytes_for_profiling, read_table_for_profiling
+from ..builder.read import ReadRefused, read_bytes_for_profiling, read_table_for_profiling
 from ..builder.relevance import assess as assess_relevance
 from ..builder.relevance import catalog_entries, user_confirmed
 from ..builder.unit_guess import guess_unit
 from ..builder.verify import verify_mapping
+from ..builder.web_source import SourceSelection, measure_row_to_long, read_web_source
 from ..contracts.lakehouse import LakehouseClient
 from ..core.access_policy import decide, detect_source_constraint, render_for_model, to_tool_error
 from ..core.errors import ToolError
@@ -50,16 +53,12 @@ class OcrUnavailable(RuntimeError):
 
 
 class IngestParams(BaseModel):
-    locator: str = Field(description="Yerel dosya yolu ya da http(s) URL'i (CSV, TSV, XLSX, JSON; PDF/PNG/JPG belgeler OCR ile okunur)")
-    table_index: int | None = Field(default=None, description="PDF/görselde birden çok tablo varsa hangisi (0 tabanlı); boşsa en büyük tablo")
+    locator: str = Field(description="Kullanıcının verdiği yerel dosya veya http(s) URL: veri dosyası ya da rapor ekleri içeren HTML sayfası. Sayfanın #bölüm kısmını koru.")
+    resource_index: int | None = Field(default=None, ge=0, description="HTML sayfasında listelenen indirilebilir eklerden hangisi (0 tabanlı). İlk çağrıda boş bırak; seçeneklerden isteğe uygun raporu seç.")
+    table_index: int | None = Field(default=None, ge=0, description="Listelenen PDF/HTML tablolarından hangisi (0 tabanlı). URL'de birden çok tablo varsa seçenekler döner.")
+    value_row: str | None = Field(default=None, description="Aylık raporda ölçümler satırdaysa kaydedilecek ölçümün tam satır etiketi; seçenekler araç çıktısında verilir.")
     pages: str | None = Field(default=None, description="PDF için hangi sayfalar: '3', '2-4' (varsayılan ilk 5)")
     sheet: str | None = Field(default=None, description="Excel'de sayfa adı ya da 0 tabanlı indeks; birden çok sayfa varsa zorunlu")
-    value_column: str | None = Field(
-        default=None,
-        description=("Dosyada birden çok değer kolonu varsa hangisi seri olacak (kolon adı, dosyadaki gibi). "
-                     "Soru kolonları adıyla sayıyorsa kullanıcıya SORMA: her kolon için bu alanı ve farklı bir "
-                     "series_key'i vererek aracı ayrı ayrı çağır. Boşsa profilci en güçlü adayı seçer."),
-    )
     name: str = Field(description="Serinin okunabilir adı, ör. 'İl bazında konut satışları'")
     series_key: str | None = Field(
         default=None,
@@ -76,6 +75,14 @@ class IngestParams(BaseModel):
     frequency: Literal["daily", "business_daily", "weekly", "biweekly", "monthly", "quarterly", "semiannual", "yearly"] | None = Field(
         default=None, description="Kullanıcı söylediyse frekans")
     date_format: str | None = Field(default=None, description="Kullanıcı söylediyse tarih biçimi, ör. '%d/%m/%Y' (belirsiz gün/ay için)")
+    # Kolon seçimi (21 Eyl): çok kolonlu dosyada hangi kolonun seri olacağını kullanıcı söyler; araç önerdiği
+    # seçeneklerden birini kullanıcı anmadan model seçemez (beyan kuralıyla aynı).
+    value_column: str | None = Field(default=None, description="Kaydedilecek DEĞER kolonunun adı (araç seçenekleri listeler; kullanıcının andığı kolon). Soru kolonları adıyla sayıyorsa SORMA: her kolon için bu alanı vererek aracı ayrı ayrı çağır.")
+    date_column: str | None = Field(default=None, description="TARİH kolonunun adı; birden çok tarih kolonu varsa ya da öneri yanlışsa")
+    entity_column: str | None = Field(default=None, description="Varlık/boyut kolonu (il, kurum, ülke); tarih başına birden çok satır varsa")
+    # Beyan edilen dönem (21 Eyl): tarih kolonu olmayan kesit tablolarında (il × değer, kurum × tutar) kullanıcı
+    # dönemi söyler ('Ağustos 2026', '2026-06-30', '2025', '2026Q2'); tüm satırlar o döneme bağlanır.
+    period: str | None = Field(default=None, description="Tarih kolonu yoksa kullanıcının söylediği dönem: 'Ağustos 2026', '2026-08', '2026-06-30', '2025', '2026Q2'. Tabloda ay adları sütunu varsa (Ocak, Şubat…) yılı ver ('2026'): satırlar aylara bağlanır.")
     # İlgi kapısı (V3 §3.9): dosya soruyla ilgisiz görünürse yazılmaz ve sorulur. Kullanıcı
     # "yine de ekle / doğru dosya bu" derse model bu bayrağı açar; bayrak yalnız kullanıcı
     # metninde onay sözü varsa geçerlidir (beyan kuralıyla aynı: modelin sözü yetmez).
@@ -158,7 +165,318 @@ def undeclared(params: IngestParams, user_text: str) -> list[str]:
             w in text for w in {"daily": ("günlük",), "weekly": ("haftalık",), "monthly": ("aylık",),
                                 "quarterly": ("çeyreklik",), "yearly": ("yıllık",)}.get(params.frequency, ())):
         bad.append(f"frequency={params.frequency!r}")
+    # Kolon seçimi ve dönem de beyandır: model, aracın listelediği seçenekten kullanıcı anmadan seçemez.
+    for field_name in ("value_column", "date_column", "entity_column"):
+        value = getattr(params, field_name)
+        if value and not _mentioned(value, text):
+            bad.append(f"{field_name}={value!r}")
+    if params.period:
+        year = re.search(r"(19|20)\d{2}", params.period)
+        if not year or year.group(0) not in text:
+            bad.append(f"period={params.period!r}")
     return bad
+
+
+_TR_MONTHS = {name: i + 1 for i, name in enumerate(
+    ("ocak", "şubat", "mart", "nisan", "mayıs", "haziran", "temmuz", "ağustos", "eylül", "ekim", "kasım", "aralık"))}
+_TR_MONTHS.update({"subat": 2, "mayis": 5, "agustos": 8, "eylul": 9, "kasim": 11, "aralik": 12})
+
+
+def parse_period(text: str | None) -> tuple[str, str | None] | None:
+    """Kullanıcının söylediği dönemi (dönem sonu tarihi, frekans) çiftine çevirir; anlaşılmazsa None.
+
+    Kabul edilen yazımlar: '2026-06-30' (gün), '2026-08' ve 'Ağustos 2026' / '2026 Ağustos' (ay → ay sonu, monthly),
+    '2026Q2' / '2026 Ç2' (çeyrek → çeyrek sonu, quarterly), '2025' (yıl → yıl sonu, yearly). Tahmin yok: iki
+    okuması olan yazım ('06/08/2026') kabul edilmez."""
+    import calendar
+    from datetime import date as _date
+
+    s = (text or "").strip().lower().replace("i̇", "i")
+    if not s:
+        return None
+    if m := re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", s):
+        y, mo, d = map(int, m.groups())
+        try:
+            return _date(y, mo, d).isoformat(), None
+        except ValueError:
+            return None
+    if m := re.fullmatch(r"(\d{4})[-/](\d{1,2})", s):
+        y, mo = int(m[1]), int(m[2])
+    elif m := re.fullmatch(r"([a-zçğıöşü]+)\s+(\d{4})", s) or re.fullmatch(r"(\d{4})\s+([a-zçğıöşü]+)", s):
+        a, b = m.groups()
+        name, y = (a, int(b)) if a.isalpha() else (b, int(a))
+        mo = _TR_MONTHS.get(name)
+        if not mo:
+            return None
+    elif m := re.fullmatch(r"(\d{4})\s*[qç]\s*([1-4])", s):
+        y, q = int(m[1]), int(m[2])
+        mo = q * 3
+        return f"{y:04d}-{mo:02d}-{calendar.monthrange(y, mo)[1]:02d}", "quarterly"
+    elif m := re.fullmatch(r"(\d{4})", s):
+        y = int(m[1])
+        return f"{y:04d}-12-31", "yearly"
+    else:
+        return None
+    if not 1 <= mo <= 12:
+        return None
+    return f"{y:04d}-{mo:02d}-{calendar.monthrange(y, mo)[1]:02d}", "monthly"
+
+
+def _mentioned(name: str | None, user_text: str) -> bool:
+    """Kolon adının anlamlı bir parçası (≥3 harf) kullanıcı metninde geçiyor mu — 'TL hacim' → 'Hacim/Volume (TL)'."""
+    if not name:
+        return False
+    text = (user_text or "").lower()
+    words = [w for w in re.split(r"[^0-9a-zçğıöşü]+", name.lower()) if len(w) >= 3]
+    return any(w in text for w in words) or name.lower() in text
+
+
+def _entity_label(user_text: str) -> str:
+    """Satır-ölçüm matrisinde sütunlardan satıra inen varlık kolonunun adı, kullanıcının sözüyle: 'il bazında' → il,
+    'kurum' → kurum, 'ülke' → ulke; söylenmediyse 'kurum' (Risk Merkezi örneği). Ölçüldü (21 Eyl, KFE.pdf): iller
+    'kurum' başlığıyla dönünce model haklı olarak teyit istedi."""
+    text = (user_text or "").lower()
+    if re.search(r"il(ler|lere|lerin|de)?|il baz|şehir|sehir|bölge|bolge", text):
+        return "il"
+    if re.search(r"ülke|ulke|country", text):
+        return "ulke"
+    if re.search(r"banka|kurum|kuruluş|sektör", text):
+        return "kurum"
+    return "kurum"
+
+
+_MONTH_TOKENS = {**{k: v for k, v in _TR_MONTHS.items()},
+                 **{m: i + 1 for i, m in enumerate(("january", "february", "march", "april", "may", "june", "july",
+                                                     "august", "september", "october", "november", "december"))},
+                 **{m: i + 1 for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))},
+                 **{m: i + 1 for i, m in enumerate(("oca", "şub", "mar", "nis", "may", "haz", "tem", "ağu", "eyl", "eki", "kas", "ara"))}}
+
+
+def _month_of(cell: str) -> int | None:
+    """'Ocak / January', 'Şubat/February', 'Mart', 'Aug' → ay numarası; 'TOPLAM / TOTAL' → None."""
+    for token in re.split(r"[^0-9a-zçğıöşü]+", str(cell).lower().replace("i̇", "i")):
+        if token in _MONTH_TOKENS:
+            return _MONTH_TOKENS[token]
+    return None
+
+
+def month_names_to_dates(frame: Any, year: int) -> tuple[Any, str] | None:
+    """Ay adı sütunu + beyan edilen yıl → ISO ay sonu tarihleri (21 Eyl; Borsa altın PDF'i: 'AY/MONTH' sütunu, yıl başlıkta).
+
+    En az 6 farklı ay adı taşıyan ilk metin sütunu tarih sütunu olur; ay okunamayan satırlar (TOPLAM/TOTAL) düşürülür
+    ve notta sayılır. Böyle bir sütun yoksa None (çağıran sabit dönem yoluna düşer)."""
+    import calendar
+
+    for column in frame.columns:
+        values = [str(v) for v in frame[column].tolist()]
+        months = [_month_of(v) for v in values]
+        distinct = {m for m in months if m}
+        if len(distinct) >= 6:
+            keep = [m is not None for m in months]
+            dropped = [values[i] for i, k in enumerate(keep) if not k and values[i].strip()]
+            out = frame.loc[keep].copy()
+            out[column] = [f"{year:04d}-{m:02d}-{calendar.monthrange(year, m)[1]:02d}" for m, k in zip(months, keep) if k]
+            note = (f"'{column}' sütunundaki ay adları kullanıcının beyan ettiği {year} yılıyla ay sonu tarihlerine çevrildi"
+                    + (f"; ay olmayan {len(dropped)} satır düşürüldü ({', '.join(d[:20] for d in dropped[:3])})" if dropped else "") + ".")
+            return out, note
+    return None
+
+
+def year_column_to_dates(frame: Any, column: str) -> tuple[Any, str]:
+    """Çıplak yıl sütunu → ISO yıl sonu tarihi (1960 → 1960-12-31); yıllık serinin dönem sonu kuralı (aylıkta ay sonu gibi).
+    Veri ekibinin CLI'ı yalnız tam tarih alır; dönüşüm sahnelenen CSV'de, kaynak dosya değişmez."""
+    out = frame.copy()
+    out[column] = [f"{int(str(v).strip()):04d}-12-31" for v in out[column].tolist()]
+    return out, f"'{column}' sütunundaki yıllar yıl sonu tarihine çevrildi (1960 → 1960-12-31); frekans yıllık."
+
+
+def _week_anchor_from_dates(semantics, frame: Any, date_column: str | None):
+    """Haftalık seride hafta çapası (veri ekibi sözleşmesi: 'friday' gibi) tarihlerin haftanın gününden türetilir;
+    beyan varsa dokunulmaz. Ölçüldü (23 Eyl, haftalık rapor PDF'i): çapa yokken CLI kaydı reddetti."""
+    if getattr(semantics, "frequency", None) != "weekly" or getattr(semantics, "week_anchor", None) or not date_column:
+        return semantics
+    try:
+        import pandas as pd
+        days = pd.to_datetime(frame[date_column], errors="coerce").dropna().dt.day_name().str.lower()
+    except Exception:  # noqa: BLE001
+        return semantics
+    if days.empty:
+        return semantics
+    from ..builder.profile import Evidence
+    anchor = days.mode().iloc[0]
+    return replace(semantics, week_anchor=anchor,
+                   evidence=tuple(semantics.evidence) + (Evidence("week_anchor", anchor, "tarih sütunundaki haftanın günü (dönem sonu)", "strong"),))
+
+
+_FOOTER_RE = re.compile(r"^\s*(?:genel\s+)?(?:toplam|total|ortalama|average|sum|ara\s+toplam)\s*:?\s*$", re.I)
+
+
+def drop_footer_rows(frame: Any) -> tuple[Any, str | None]:
+    """Dışa aktarımların sonundaki 'Toplam' / 'Ortalama' satırları zaman serisi gözlemi değildir; ilk sütunu bu
+    etiketlerden biri olan SONDAKİ satırlar atılır (ölçüldü 23 Eyl, rapor CSV: 261. satır 'Toplam' yüzünden tarih
+    kolonu tanınmadı). Ortadaki satırlara dokunulmaz; kaynak dosya değişmez."""
+    if frame is None or len(frame) == 0 or len(frame.columns) == 0:
+        return frame, None
+    first = frame.columns[0]
+    labels = [str(v) for v in frame[first].tolist()]
+    n = 0
+    while n < len(labels) and n < 3 and _FOOTER_RE.match(labels[len(labels) - 1 - n] or ""):
+        n += 1
+    if not n:
+        return frame, None
+    dropped = ", ".join(repr(labels[len(labels) - 1 - i].strip()) for i in range(n))
+    return frame.iloc[: len(frame) - n].copy(), f"Sondaki özet satırı atıldı ({dropped}); zaman serisi gözlemi değil."
+
+
+def month_column_to_dates(frame: Any, column: str) -> tuple[Any, str]:
+    """"2021-01" / "2021/01" biçimli ay sütunu → ISO ay sonu (2021-01-31): BDDK/EVDS aylık serilerle aynı tarih ekseni
+    (ölçüldü 23 Eyl, aylık rapor: ayın 1'ine çözülüyordu, ay sonu tarihli BDDK serisiyle birleşmezdi)."""
+    import calendar
+    out = frame.copy()
+    vals = []
+    for v in out[column].tolist():
+        m = re.match(r"^\s*(\d{4})[-/.](\d{1,2})\s*$", str(v))
+        if m:
+            y, mo = int(m.group(1)), int(m.group(2))
+            vals.append(f"{y:04d}-{mo:02d}-{calendar.monthrange(y, mo)[1]:02d}")
+        else:
+            vals.append(str(v))
+    out[column] = vals
+    return out, f"'{column}' sütunundaki yıl-ay değerleri ay sonu tarihine çevrildi (2021-01 → 2021-01-31); frekans aylık."
+
+
+def range_column_to_dates(frame: Any, column: str) -> tuple[Any, str, str | None]:
+    """Dönem + tarih aralığı sütunu ("2021/01 (04.01.21-08.01.21)") → ISO bitiş tarihi; frekans aralık genişliğinden
+    (≤ 7 gün haftalık, ≤ 31 aylık, ≤ 92 çeyreklik, yoksa yıllık). Sahnelenen CSV'de; kaynak dosya değişmez."""
+    from ..builder.profile import _RANGE_RE, range_end_date
+    out = frame.copy()
+    spans: list[int] = []
+    isos: list[str] = []
+    for v in out[column].tolist():
+        text = str(v)
+        end = range_end_date(text)
+        isos.append(end.isoformat() if end else "")
+        m = _RANGE_RE.search(text)
+        if m and end:
+            d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            y = y + (2000 if y < 70 else 1900) if y < 100 else y
+            try:
+                spans.append((end - date(y, mo, d)).days + 1)
+            except ValueError:
+                pass
+    out[column] = isos
+    span = sorted(spans)[len(spans) // 2] if spans else 0
+    freq = "weekly" if 0 < span <= 7 else "monthly" if span <= 31 else "quarterly" if span <= 92 else "yearly" if span else None
+    return out, (f"'{column}' sütunundaki dönem aralıklarının bitiş tarihi alındı (2021/01 (04.01.21-08.01.21) → 2021-01-08)"
+                 + (f"; aralık genişliği {span} gün, frekans {freq}." if freq else ".")), freq
+
+
+def _bare_locator(locator: str) -> bool:
+    """Adres ne http(s), ne file:, ne mutlak yol: yalnız bir dosya adı. Kullanıcı dosyayı eklemeden adını yazmıştır
+    (ölçüldü 20 Eyl: 'bist_altin_2023.csv dosyasını kaydet' → araç düz adla arandı, ACCESS_BLOCKED)."""
+    return not re.match(r"^(?:https?://|file:|[A-Za-z]:[\\/]|[\\/])", (locator or "").strip())
+
+
+def _source_display_name(locator: str) -> str:
+    """Kataloğa giren kaynak adı: yükleme kopyasının rastgele ön eki (`3bcc4cc9_`) kullanıcının dosya adı değildir.
+
+    `PureWindowsPath` her platformda hem eğik hem ters eğik çizgi ayracını tanır: Linux CI'da Windows yolu tek parça kalıyordu
+    (PR #21 ilk koşusu), Windows'ta Linux yolu zaten çalışır.
+    """
+    return _UPLOAD_PREFIX.sub("", PureWindowsPath(locator.split("?")[0]).name)
+
+
+#: Ölçüm tipinden türeyen varsayılan toplama yöntemi (katalog sözleşmesindeki anlam: stok dönem sonu değeri,
+#: dönemlik akım toplanır, yıl içi/kümülatif akım son değeri taşır, oran/endeks ortalanır, sayım toplanır).
+_AGG_BY_MEASURE = {"stock": "last", "flow_periodic": "sum", "flow_ytd": "last", "flow_cumulative": "last",
+                   "count": "sum", "rate": "avg", "ratio": "avg", "index": "avg"}
+
+
+def _default_agg_from_measure(semantics):
+    """Kullanıcı toplama yöntemi söylemediyse ölçüm tipinden türet ve kanıt satırıyla işaretle.
+
+    Ölçüldü (20 Eyl): 'birim kg, aylık, dönemlik akım' beyanıyla kaydedilen taslakta `default_agg` NULL kaldı;
+    Gold'a alınırken hizalama yöntemi belirsiz olurdu. Türetme deterministiktir ve kartta görünür; `unknown`
+    ölçüm tipinde türetilmez (bilinmeyen anlamdan yöntem çıkmaz)."""
+    from dataclasses import replace
+    from ..builder.profile import Evidence
+
+    if getattr(semantics, "default_agg", None) or semantics.measure_type not in _AGG_BY_MEASURE:
+        return semantics
+    agg = _AGG_BY_MEASURE[semantics.measure_type]
+    evidence = [e for e in semantics.evidence if e.field != "default_agg"]
+    evidence.append(Evidence("default_agg", agg, f"ölçüm tipinden türetildi ({semantics.measure_type} → {agg})", "strong"))
+    return replace(semantics, default_agg=agg, evidence=tuple(evidence))
+
+
+class ColumnChoiceError(ValueError):
+    """Kullanıcının seçtiği kolon dosyada yok ya da istenen role uymuyor; kayıt yapılmadan söylenir."""
+
+
+def _column_tokens(name: str) -> frozenset[str]:
+    return frozenset(t for t in _slug(name).split("_") if t)
+
+
+def _resolve_column(profile, name: str, kind: str):
+    """Kullanıcının/modelin yazdığı kolon adını dosyadaki kolona bağlar: önce birebir, sonra büyük/küçük ve
+    Türkçe harf farkı, sonra sözcük kapsaması ("TL Hacim" → "TL | Hacim/Volume (TL)"). Birden çok kolona
+    uyuyorsa seçmez, adayları sayar; hiçbirine uymuyorsa kolon listesiyle reddeder."""
+    col = profile.column(name)
+    if col is not None:
+        return col
+    wanted = name.strip().casefold()
+    hits = [c for c in profile.columns if c.name.strip().casefold() == wanted or _slug(c.name) == _slug(name)]
+    if not hits:
+        tokens = _column_tokens(name)
+        if tokens:
+            hits = [c for c in profile.columns if tokens <= _column_tokens(c.name)]
+    if len(hits) == 1:
+        return hits[0]
+    if len(hits) > 1:
+        raise ColumnChoiceError(f"{kind} kolonu {name!r} birden çok kolona uyuyor: "
+                                + ", ".join(repr(c.name) for c in hits) + " — tam adını ver")
+    raise ColumnChoiceError(f"{kind} kolonu {name!r} dosyada yok; kolonlar: "
+                            + ", ".join(c.name for c in profile.columns))
+
+
+def _apply_columns(mapping, profile, params: IngestParams):
+    """Kullanıcının seçtiği tarih/değer/varlık kolonlarını öneriye uygular; uymayanı açıkça reddeder."""
+    from dataclasses import replace
+
+    from ..builder.profile import Evidence
+
+    updates: dict[str, Any] = {}
+    evidence = list(mapping.evidence)
+
+    def _swap(field_name: str, value: Any, reason: str) -> None:
+        nonlocal evidence
+        updates[field_name] = value
+        evidence = [e for e in evidence if e.field != field_name]
+        evidence.append(Evidence(field_name, value, reason, "strong"))
+
+    if params.date_column:
+        col = _resolve_column(profile, params.date_column, "tarih")
+        if not col.date_formats:
+            raise ColumnChoiceError(f"{params.date_column!r} tarih olarak ayrışmıyor; tarih adayları: "
+                                    + (", ".join(c.name for c in profile.date_candidates) or "yok"))
+        _swap("observation_date_column", col.name, "kullanıcı seçimi")
+        if not params.date_format:
+            _swap("date_format", col.date_formats[0], f"{col.name} kolonunun biçimi")
+    if params.value_column:
+        col = _resolve_column(profile, params.value_column, "değer")
+        if not col.numeric_under:
+            raise ColumnChoiceError(f"{params.value_column!r} sayı olarak ayrışmıyor; sayısal kolonlar: "
+                                    + (", ".join(c.name for c in profile.value_candidates) or "yok"))
+        _swap("value_column", col.name, "kullanıcı seçimi")
+        decimal, thousands = col.numeric_under[0]
+        _swap("decimal_separator", decimal, f"{col.name} kolonu bu ayraçla ayrışıyor")
+        updates["thousands_separator"] = thousands
+    if params.entity_column:
+        col = _resolve_column(profile, params.entity_column, "varlık")
+        _swap("entity_id_column", col.name, "kullanıcı seçimi (varlık/boyut)")
+    if updates:
+        mapping = replace(mapping, **updates, evidence=tuple(evidence))
+    return mapping
 
 
 def _apply_declared(mapping, semantics, params: IngestParams):
@@ -189,13 +507,16 @@ class IngestFromUrlTool(Tool):
     name = "ingest_from_url"
     role = "execute"
     description = (
-        "Kullanıcının getirdiği yeni bir veri dosyasını (yerel yol ya da URL; CSV/TSV/XLSX/JSON) "
+        "Kullanıcının getirdiği veri dosyasını veya rapor sayfasındaki eki (URL; HTML/PDF/CSV/TSV/XLSX/JSON) "
         "veri havuzuna TASLAK seri olarak ekler ve ne yaptığını belgeler. Dosyanın hangi kolonunun "
         "tarih, hangisinin değer olduğunu veriye bakarak kanıtıyla önerir; belirsizse eklemeden "
         "önce kullanıcıya sorar. Kullanıcı 'bu dosyayı ekle', 'şu linkteki veriyi yükle' dediğinde "
-        "BU aracı kullan. Her çağrı TEK seri yazar: dosyada birden çok değer kolonu varsa ve soru "
-        "hangilerini istediğini adıyla söylüyorsa kullanıcıya sorma — her kolon için value_column "
-        "ve farklı series_key ile aracı ayrı ayrı çağır."
+        "BU aracı kullan. HTML sayfası dosyaları resource_index ile, PDF tabloları table_index ve pages "
+        "ile seçilir; ölçümler satırlardaysa value_row kullanılır. Birden çok sayısal kolon varsa kullanıcının "
+        "andığı kolonu value_column ile ver (tarih için date_column, il/kurum için entity_column); tarih kolonu "
+        "olmayan kesit tablosunda kullanıcının söylediği dönemi period ile ver ('Ağustos 2026'). Önceki çağrı "
+        "seçenek döndürdüyse aynı locator ile uygun seçimi yap. Her çağrı TEK seri yazar: soru birden çok kolonu adıyla istiyorsa her biri için ayrı çağır. "
+        "Veri okunması kaydedildiği anlamına gelmez: EKLENDİ kartını bekle."
     )
     Params = IngestParams
 
@@ -223,20 +544,18 @@ class IngestFromUrlTool(Tool):
         )
         if content is None or not outcome.ok:
             return None, outcome, None, params.locator
-
-        # Sayısal üretilmiş PDF'in tablosu zaten dosyanın içinde yazılı; OCR'a sormak hem
-        # yavaş hem de hücreleri tahmine çevirir. Metin katmanı varsa oradan okunur.
-        native = self._read_pdf_native(params, content)
-        if native is not None:
-            frame, note, csv_path = native
-            return frame, outcome, note, csv_path
-
-        # Okuyucu eksikse OCR'a düşüş sessiz olmasın: kartta ve hatada söylenir.
+        # Metin katmanlı PDF: önce pdfplumber tabloları (tüm sayfalar, aynı başlık birleşik), OCR yalnız yedek.
+        # Ölçüldü (23 Eyl, haftalık işlem hacmi raporu PDF'i, 8 sayfa / 261 satır): OCR yolu yalnız 2. sayfanın 34 satırını
+        # aldı ve sayıları "doğrulanmadı" diye işaretledi; metin katmanı sayıları birebir taşır.
+        if content[:5] == b"%PDF-":
+            native = self._native_pdf_table(params, content)
+            if native is not None:
+                return native[0], outcome, native[1], native[2]
+        # Okuyucu eksikse OCR'a düşüş sessiz olmasın: kartta ve hatada söylenir (PR #27).
         from ..vision.pdf import MISSING_BACKEND_HINT, table_backend
         missing = ""
         if Path(params.locator.split("?")[0]).suffix.lower() == ".pdf" and table_backend() is None:
             missing = "UYARI: " + MISSING_BACKEND_HINT
-
         if self.ocr is None:
             raise OcrUnavailable(missing + "PDF/görsel belge OCR istemcisi olmadan okunamaz (VISION_MODEL yapılandırılmamış).")
         doc = ocr_document(content, media, client=self.ocr, url=params.locator.split("?")[0], pages=params.pages)
@@ -262,44 +581,45 @@ class IngestFromUrlTool(Tool):
         frame = table.astype(str).where(table.notna(), "")
         return frame, outcome, note, str(csv_path)
 
-    def _read_pdf_native(self, params: IngestParams, content: bytes):
-        """PDF'in kendi metin katmanındaki tabloyu oku; yoksa None döner ve OCR'a düşülür.
-
-        OCR dalıyla aynı sözleşme: belge baytları ve tablonun CSV'si izinli köke yazılır, kart
-        sha256'yı taşır. Fark, hücrelerin tahmin değil dosyanın kendi metni olmasıdır — bu
-        yüzden kart "sayılar doğrulanmadı" uyarısını taşımaz.
-        """
-        if Path(params.locator.split("?")[0]).suffix.lower() != ".pdf":
+    def _native_pdf_table(self, params: IngestParams, content: bytes):
+        """PDF metin katmanından tablo: (çerçeve, not, csv_yolu) ya da None (tablo yok / okunamadı → OCR'a düşülür)."""
+        try:
+            from ..builder.web_source import _native_pdf
+            tables = _native_pdf(content, params.pages)
+        except Exception:  # noqa: BLE001 — bozuk/taranmış PDF: OCR yedeği denenir
             return None
-        from ..vision.pdf import extract_pdf_tables
-
-        tables = extract_pdf_tables(content, pages=params.pages)
+        tables = [(label, frame) for label, frame in tables if len(frame) >= 2 and len(frame.columns) >= 2]
         if not tables:
             return None
         idx = params.table_index if params.table_index is not None else max(
-            range(len(tables)), key=lambda i: tables[i].shape[0] * tables[i].shape[1])
+            range(len(tables)), key=lambda i: tables[i][1].shape[0] * tables[i][1].shape[1])
         if idx < 0 or idx >= len(tables):
-            raise OcrUnavailable(
-                f"table_index {idx} yok; belgenin metin katmanında {len(tables)} tablo var.")
-        table = tables[idx]
-
-        # Dışa aktarma önsözü ("Dışa Aktarım Tarihi", "Toplam Kayıt Sayısı") tablo çizgisinin
-        # içine düşmüşse başlık sanılmasın: CSV/XLSX ile aynı ölçütle ayrılır.
-        try:
-            frame, preamble = frame_from_grid(table.rows)
-        except ReadRefused:
             return None
-
-        sha256 = hashlib.sha256(content).hexdigest()
-        stem = f"pdf_{sha256[:12]}"
+        label, table = tables[idx]
+        sha = hashlib.sha256(content).hexdigest()
+        stem = f"pdf_{sha[:12]}"
         self.allowed_root.mkdir(parents=True, exist_ok=True)
         (self.allowed_root / f"{stem}.pdf").write_bytes(content)
-        csv_path = self.allowed_root / f"{stem}_p{table.page}_t{table.index}.csv"
-        frame.to_csv(csv_path, index=False)
-        note = table.note(sha256, params.locator) + f" Belge kopyası: {stem}.pdf."
-        if preamble:
-            note += " Tablo üstündeki rapor satırları veri değil not sayıldı: " + " | ".join(preamble) + "."
-        return frame, note, str(csv_path)
+        csv_path = self.allowed_root / f"{stem}_t{idx}.csv"
+        table.to_csv(csv_path, index=False)
+        note = (f"Belge {params.locator} (sha256 {sha}) PDF metin katmanından okundu (pdfplumber): {label}, tablo #{idx} "
+                f"({len(table)}×{len(table.columns)}); OCR kullanılmadı. Belge kopyası: {stem}.pdf.")
+        return table.astype(str).where(table.notna(), ""), note, str(csv_path)
+
+    def _stage_frame(self, frame: Any, locator: str) -> str:
+        """Türetilen tabloyu (dönem eklenmiş kesit, satır-ölçüm matrisi) izinli köke içerik adresli CSV olarak yazar.
+
+        Veri ekibinin CLI'ı yalnız dosya alır; RAW'a bu CSV girer, kaynağın kendisi ve dönüşüm notu katalog
+        açıklamasında ve kartta taşınır (OCR yolundaki `ocr_<sha>_*.csv` ile aynı kural)."""
+
+        self.allowed_root.mkdir(parents=True, exist_ok=True)
+        csv = frame.to_csv(index=False, lineterminator="\n").encode("utf-8")
+        digest = hashlib.sha256(csv).hexdigest()[:12]
+        stem = _UPLOAD_PREFIX.sub("", Path(locator.split("?")[0]).stem) or "tablo"
+        path = self.allowed_root / f"derived_{stem}_{digest}.csv"
+        if not path.exists():
+            path.write_bytes(csv)
+        return str(path)
 
     # ------------------------------------------------------------------ hooks
     def _user_text(self) -> str:
@@ -310,6 +630,18 @@ class IngestFromUrlTool(Tool):
         # Niyet kapısı (ADR-0037): yazma yalnız kullanıcının verdiği kaynağa, kullanıcı istediyse.
         user_text = self._user_text()
         if not locator_from_user(params.locator, user_text):
+            # Kullanıcı metninde hiç adres/dosya yoksa model kaynağı tahmin etmiştir ("… istatistikleri" gibi bir
+            # sayfa adından adres uydurmak; ölçüldü 23 Eyl). Cevap ret değil, soru olmalı: adres ya da indirilmiş dosya.
+            has_source = bool(re.search(r"https?://|Dosya:\s*\S|\.(csv|xlsx?|pdf|json|tsv)", user_text, re.I))
+            if not has_source:
+                return ToolError(
+                    error_code="INTENT_REQUIRED", layer="policy", retryable=False,
+                    message=(f"Kullanıcının mesajında bir adres ya da dosya yok; '{params.locator}' senin tahminin. "
+                             "Havuza yalnız kullanıcının verdiği kaynak yazılır; tahmin edilen adres çekilmez."),
+                    hint=(f"Kullanıcıya SOR: '{params.name}' için kaynağın tam adresini (https://…) yazmasını ya da raporu "
+                          "indirip dosya olarak (Excel/CSV/PDF) vermesini iste. Ret cümlesi yazma; ne gerektiğini tek "
+                          "cümleyle söyle. Web araması açıksa önce adresi bulmayı dene."),
+                )
             return ToolError(
                 error_code="INTENT_REQUIRED", layer="policy", retryable=False,
                 message=(f"'{params.locator}' kullanıcının mesajında geçmiyor; bir araç çıktısındaki "
@@ -338,16 +670,34 @@ class IngestFromUrlTool(Tool):
         # 1. erişim + danışma okuması
         doc_note: str | None = None          # PDF/görselse OCR provenance satırı
         cli_locator = params.locator          # CLI'a giden dosya: belgeyse OCR'dan yazılan CSV
+        web_source = None
         try:
-            if is_document("", params.locator.split("?")[0]):
+            if urlparse(params.locator).scheme in ("http", "https"):
+                web_source = read_web_source(
+                    params.locator, allowed_root=self.allowed_root,
+                    resource_index=params.resource_index, table_index=params.table_index,
+                    pages=params.pages, sheet=params.sheet, value_row=params.value_row,
+                    session=self.session, ocr=self.ocr,
+                    period=parse_period(params.period) if params.period else None,
+                    entity_label=_entity_label(self._user_text()),
+                )
+                frame, outcome = web_source.frame, web_source.outcome
+            elif is_document("", params.locator.split("?")[0]):
                 frame, outcome, doc_note, cli_locator = self._read_document(params)
             else:
                 frame, outcome = read_table_for_profiling(
                     params.locator, allowed_roots=[self.allowed_root], session=self.session, sheet=params.sheet)
+        except SourceSelection as exc:
+            return ToolResult(content=f"EKLENMEDİ — kaynak seçimi veya ek bilgi gerekli:\n{exc}", ok=True)
         except ReadRefused as exc:
+            bare = _bare_locator(params.locator)
             return ToolResult.fail(
                 "ACCESS_BLOCKED", f"Kaynak okunamadı: {exc}",
-                hint="Dosyayı izinli klasöre koy ya da http(s) bir adres ver.", layer="access",
+                hint=("Dosya bu sohbete eklenmemiş: yalnız adı geçiyor, sunucuda kopyası yok. Kullanıcıya dosyayı "
+                      "📎 Dosya düğmesiyle (ya da sürükleyip bırakarak) eklemesini ve isteği aynı mesajda yazmasını söyle; "
+                      "diskte arama yapma, adı tahmin etme." if bare
+                      else "Dosyayı izinli klasöre koy ya da http(s) bir adres ver."),
+                layer="access",
             )
         except OcrUnavailable as exc:
             return ToolResult.fail("TOOL_FAILED", str(exc), layer="harness", retryable=False,
@@ -361,50 +711,11 @@ class IngestFromUrlTool(Tool):
         # explain encoding/delimiter/header decisions without persisting raw
         # prompts or uploaded contents.
         parse_quality = getattr(frame, "attrs", {}).get("tabular_quality")
-
-        # 1b. rapor süsleri veri değildir: üstteki önsöz okuyucuda ayrıldı, alttaki 'Toplam' burada
-        # ayrılır. Veri ekibinin CLI'ı dosyayı ham okur; o da aynı şeyleri başlık/tarih sanmasın diye
-        # ikisinden biri varsa CLI'a temiz bir kopya gider, kaynağın kendisi yerinde kalır.
-        preamble = list(frame.attrs.get("preamble", []))
-        frame, dropped = _drop_aggregate_rows(frame)
-        if dropped or (preamble and cli_locator == params.locator):
-            self.allowed_root.mkdir(parents=True, exist_ok=True)
-            clean = self.allowed_root / f"{Path(cli_locator.split('?')[0]).stem}_temiz.csv"
-            frame.to_csv(clean, index=False)
-            cli_locator = str(clean)
-            prep = []
-            if preamble:
-                prep.append("tablo üstündeki rapor satırları veri sayılmadı: " + " | ".join(preamble))
-            if dropped:
-                prep.append(f"alttaki toplam satırı ({', '.join(dropped)}) veri sayılmadı")
-            prep_note = "; ".join(prep) + f". Havuza giden temiz kopya: {clean.name}."
-            doc_note = f"{doc_note} {prep_note}" if doc_note else prep_note
-
-        # 2. profil + öneri
-        stem = _UPLOAD_PREFIX.sub("", Path(params.locator.split("?")[0]).stem)
-        # Aynı dosyadan ikinci bir kolon eklenirken anahtar çakışmasın: kolon adı anahtara girer.
-        key = params.series_key or _slug(stem + (f"_{params.value_column}" if params.value_column else ""))
-        series_id = f"adhoc:{key}"
-        profile = profile_table(frame)
-        mapping, semantics = propose(profile, frame, series_id=series_id)
-        if params.value_column is not None and mapping is not None:
-            # Kullanıcı/soru kolonu adıyla istedi: profilcinin sıralaması değil, o kolon yazılır.
-            # Ölçüldü (23 Eyl, TEFAS): üç değer kolonlu dosyada araç kolon seçtiremeyince model
-            # soruda adı geçen kolonları kullanıcıya yeniden soruyordu.
-            if params.value_column not in frame.columns:
-                return ToolResult.fail(
-                    "TOOL_FAILED",
-                    f"value_column {params.value_column!r} dosyada yok; kolonlar: {', '.join(map(str, frame.columns))}.",
-                    hint="Kolon adını dosyadaki gibi ver.", layer="data", retryable=False,
-                )
-            from dataclasses import replace
-            from ..builder.profile import Evidence
-            evidence = [e for e in mapping.evidence if e.field != "value_column"]
-            evidence.append(Evidence("value_column", params.value_column, "kullanıcı/soru bu kolonu adıyla istedi", "strong"))
-            mapping = replace(
-                mapping, value_column=params.value_column, evidence=tuple(evidence),
-                alternatives={k: v for k, v in mapping.alternatives.items() if k != "value_column"},
-            )
+        # Rapor önsözü (PR #27): okuyucu başlıktan önceki satırları veri saymadı; kanıt için nota yazılır.
+        preamble = list(getattr(frame, "attrs", {}).get("preamble", []))
+        # Beyanın veriyle örtüşmesi (PR #27): profilcinin veriden çıkardığıyla aynı beyan uydurma sayılmaz.
+        _pre_mapping, semantics = propose(profile_table(frame), frame, series_id="adhoc:_beyan_kontrolu")
+        # 2. beyan kapısı önce: kullanıcının söylemediği alan (birim, ölçüm tipi, kolon seçimi, dönem) yok sayılır ve sorulur.
         invented = undeclared(params, self._user_text())
         if invented and semantics is not None:
             # Profilcinin VERİDEN kanıtıyla çıkardığı sonuçla örtüşen beyan uydurma değildir: model
@@ -417,16 +728,138 @@ class IngestFromUrlTool(Tool):
             }
             invented = [item for item in invented if item not in corroborated]
         if invented:
-            # Kullanıcının söylemediği beyan yok sayılır; alan boş kalır ve aşağıda sorulur.
             params = params.model_copy(update={k.split("=")[0]: None for k in invented})
+
+        # 2a. Şekil düzeltmeleri (21 Eyl): ölçümleri satırda gösteren rapor matrisi uzun tabloya; tarih kolonu olmayan
+        # kesit tablosu kullanıcının beyan ettiği döneme bağlanır. İkisi de kaynağı değiştirmez: türetilen tablo
+        # izinli köke CSV olarak yazılır, kaynak kopyası ve dönüşüm notu provenance'ta taşınır.
+        period = parse_period(params.period) if params.period else None
+        if params.period and period is None:
+            return ToolResult.fail(
+                "TOOL_FAILED", f"Dönem {params.period!r} anlaşılamadı; kabul edilen yazımlar: '2026-06-30', '2026-08', "
+                "'Ağustos 2026', '2026Q2', '2025'.", hint="Kullanıcıya dönemi bu biçimlerden biriyle sor.",
+                layer="data", retryable=False)
+        derived_notes: list[str] = []
+        local_matrix = None
+        if web_source is None and params.value_row:
+            try:
+                local_matrix = measure_row_to_long(frame, params.value_row, period, entity_label=_entity_label(self._user_text()))
+            except SourceSelection as exc:
+                return ToolResult(content=f"EKLENMEDİ — kaynak seçimi veya ek bilgi gerekli:\n{exc}", ok=True)
+            if local_matrix is not None:
+                frame, note, matrix_frequency = local_matrix
+                derived_notes.append(note.strip())
+                if matrix_frequency and not params.frequency:
+                    params = params.model_copy(update={"frequency": matrix_frequency})
+        if web_source is None and Path(params.locator.split("?")[0]).suffix.lower() == ".xls":
+            derived_notes.append("Eski Excel (.xls) xlrd ile okundu ve CSV'ye çevrildi; veri havuzu .xls almaz, "
+                                 "kaynak dosya değiştirilmedi.")
+        frame, footer_note = drop_footer_rows(frame)
+        if footer_note:
+            derived_notes.append(footer_note)
+        if preamble:
+            derived_notes.append("Tablo üstündeki rapor satırları veri sayılmadı: " + " | ".join(preamble) + ".")
+        profile = profile_table(frame)
+        year_cols = [c for c in profile.date_candidates if c.date_formats == ("%Y",)]
+        if year_cols and local_matrix is None:      # yerel dosya da adres de: web kaynağında çerçeve stage() ile gider
+            chosen = params.date_column if params.date_column in {c.name for c in year_cols} else year_cols[0].name
+            frame, note = year_column_to_dates(frame, chosen)
+            derived_notes.append(note)
+            if not params.frequency:
+                params = params.model_copy(update={"frequency": "yearly"})
+            profile = profile_table(frame)
+        month_cols = [c for c in profile.date_candidates if c.date_formats == ("%Y-%m",)]
+        if month_cols and local_matrix is None:
+            chosen = params.date_column if params.date_column in {c.name for c in month_cols} else month_cols[0].name
+            frame, note = month_column_to_dates(frame, chosen)
+            derived_notes.append(note)
+            if not params.frequency:
+                params = params.model_copy(update={"frequency": "monthly"})
+            profile = profile_table(frame)
+        range_cols = [c for c in profile.date_candidates if c.date_formats == (RANGE_END,)]
+        if range_cols and local_matrix is None:
+            chosen = params.date_column if params.date_column in {c.name for c in range_cols} else range_cols[0].name
+            frame, note, inferred = range_column_to_dates(frame, chosen)
+            derived_notes.append(note)
+            if inferred and params.frequency and params.frequency != inferred:
+                # Beyan (aylık) veriyle (haftalık aralıklar) çelişiyor: veri kazanır, beyan not düşülür; istenen frekans
+                # kayıt sonrası gold_align ile üretilir (ölçüldü 23 Eyl: haftalık rapor "monthly" beyanıyla yazılıyordu).
+                derived_notes.append(f"Beyan edilen frekans '{params.frequency}' dosyadaki dönem aralıklarıyla ({inferred}) "
+                                     f"çelişiyor; seri {inferred} olarak kaydedildi, istenen frekans gold_align ile üretilir.")
+                params = params.model_copy(update={"frequency": inferred})
+            elif not params.frequency and inferred:
+                params = params.model_copy(update={"frequency": inferred})
+            profile = profile_table(frame)
+        if period is not None and not profile.date_candidates:
+            by_month = month_names_to_dates(frame, int(period[0][:4])) if local_matrix is None else None
+            if by_month is not None:
+                # Ay adı sütunu + yıl: her satır kendi ayına (Borsa altın PDF'i, TÜİK aylık tabloları).
+                frame, note = by_month
+                derived_notes.append(note)
+                if not params.frequency:
+                    params = params.model_copy(update={"frequency": "monthly"})
+            else:
+                frame = frame.copy()
+                frame.insert(0, "observation_date", period[0])
+                derived_notes.append(f"Kaynakta tarih kolonu yok; tüm satırlar kullanıcının beyan ettiği döneme bağlandı: "
+                                     f"dönem sonu {period[0]} ('{params.period}').")
+                if period[1] and not params.frequency:
+                    params = params.model_copy(update={"frequency": period[1]})
+            profile = profile_table(frame)
+        if derived_notes:
+            if web_source is not None:
+                web_source.frame = frame
+                web_source.note += " " + " ".join(derived_notes)
+            else:
+                cli_locator = self._stage_frame(frame, params.locator)
+                doc_note = ((doc_note + " ") if doc_note else "") + " ".join(derived_notes) + f" Türetilen tablo: {Path(cli_locator).name}."
+
+        # 2b. profil + öneri
+        # Aynı dosyadan ikinci bir kolon eklenirken anahtar çakışmasın: kolon adı anahtara girer (PR #27).
+        key = params.series_key or _slug(_UPLOAD_PREFIX.sub("", Path(params.locator.split("?")[0]).stem)
+                                         + (f"_{params.value_column}" if params.value_column else ""))
+        series_id = f"adhoc:{key}"
+        mapping, semantics = propose(profile, frame, series_id=series_id)
         if mapping is not None and semantics is not None:
+            from ..builder.profile import Evidence
+            matrix_entity = web_source.entity_column if web_source is not None else (_entity_label(self._user_text()) if local_matrix else None)
+            matrix_frequency = web_source.frequency if web_source is not None else (local_matrix[2] if local_matrix else None)
+            turkish = web_source.turkish_numbers if web_source is not None else bool(local_matrix)
+            if matrix_entity:
+                mapping = replace(mapping, entity_id_column=matrix_entity,
+                    evidence=tuple(e for e in mapping.evidence if e.field != "entity_id_column") +
+                    (Evidence("entity_id_column", matrix_entity, "rapor sütunlarından korunan kurum başlıkları", "strong"),))
+            if matrix_frequency:
+                semantics = replace(semantics, frequency=matrix_frequency,
+                    evidence=tuple(e for e in semantics.evidence if e.field != "frequency") +
+                    (Evidence("frequency", matrix_frequency, "kaynak tablonun açık ay/yıl dönem başlığı ya da beyan edilen dönem", "strong"),))
+            if turkish:
+                mapping = replace(mapping, decimal_separator=",", thousands_separator=".",
+                    evidence=tuple(e for e in mapping.evidence if e.field != "decimal_separator") +
+                    (Evidence("decimal_separator", ",", "Türkçe aylık rapor: ondalık virgül, binlik nokta; tüm değerler doğrulanır", "strong"),))
             mapping, semantics = _apply_declared(mapping, semantics, params)
+            try:
+                before = mapping.value_column
+                mapping = _apply_columns(mapping, profile, params)
+                if mapping.value_column != before and params.unit is None:
+                    # Profilci birimi kendi seçtiği kolonun başlığından çıkarmıştı; kolon değişti, birim yeniden okunur.
+                    semantics = replace(semantics, unit=None,
+                                        evidence=tuple(e for e in semantics.evidence if e.field != "unit"))
+            except ColumnChoiceError as exc:
+                return ToolResult.fail("TOOL_FAILED", f"Kolon seçimi uygulanamadı: {exc}",
+                                       hint="Kullanıcıya dosyadaki kolonları göster ve doğru kolonu sor.", layer="data", retryable=False)
+            semantics = _default_agg_from_measure(semantics)
+            semantics = _week_anchor_from_dates(semantics, frame, getattr(mapping, "observation_date_column", None))
         if mapping is None or semantics is None:
+            has_date = bool(getattr(profile, "date_candidates", ()))
             return ToolResult.fail(
                 "TOOL_FAILED",
                 f"Tabloda tarih ve değer kolonu birlikte bulunamadı ({len(frame)} satır, "
-                f"{len(frame.columns)} sütun: {', '.join(map(str, frame.columns))}).",
-                hint="Kullanıcıya hangi kolonun tarih, hangisinin değer olduğunu sor.",
+                f"{len(frame.columns)} sütun: {', '.join(map(str, frame.columns))})."
+                + ("" if has_date else " Tarih kolonu hiç yok: tarihsiz tablolar (il × değer gibi) veri havuzuna "
+                                       "kalıcı seri olarak kaydedilemez; web_url ile oturumda okunup birleştirilebilir."),
+                hint=("Kullanıcıya hangi kolonun tarih, hangisinin değer olduğunu sor." if has_date
+                      else "Kullanıcıya söyle: tablo tarihsiz, kalıcı kayıt yapılamaz; oturumda analiz için web_url ile okuyabilirsin."),
                 layer="data", retryable=False,
             )
 
@@ -479,11 +912,28 @@ class IngestFromUrlTool(Tool):
         # 2d. birim tahmini (builder/unit_guess.py): belgede birim yoksa boş soru yerine kanıtlı aday;
         # yine yazılmaz, kullanıcı onaylar (beyan kuralı: unit= yalnız kullanıcı metninde geçerse).
         unit_hint = None
+        unit_from_source: str | None = None
         if semantics.unit is None:
-            unit_hint = guess_unit(
-                texts=[Path(params.locator.split("?")[0]).name, *map(str, frame.columns), doc_note or ""],
+            # Önce seçilen değer kolonunun kendi başlığı ("TL Hacim (TL)"), sonra dosya adı/öbür kolonlar/belge notu:
+            # öbür kolonun birimi ("Miktar (KG)") seçilen seriye sızmasın (ölçüldü 21 Eyl, altın PDF'i).
+            from ..builder.unit_guess import _from_text as _unit_from_text
+            unit_hint = _unit_from_text([str(mapping.value_column)]) or guess_unit(
+                texts=[Path(params.locator.split("?")[0]).name, *map(str, frame.columns), doc_note or "",
+                       (web_source.note if web_source is not None else "")],
                 crosscheck=crosscheck, values=file_points(frame, mapping).values(),
             )
+            # Kaynak birimi AÇIKÇA yazıyorsa (kolon başlığı "(Milyon TL)", "%", "kg", tablo başlığı "endeks")
+            # sorulmaz, kaynaktan alınır ve kartta söylenir (21 Eyl; "birim vermeden kaydedilebilir mi?").
+            # Ölçek/aralık tahminleri (katalog oranı, 0–100 arası) yine sorulur: onlar kaynağın sözü değil.
+            if unit_hint is not None and unit_hint.confidence == "strong" and unit_hint.reason.startswith("metinde"):
+                from ..builder.profile import Evidence
+                unit_from_source = unit_hint.unit
+                semantics = replace(semantics, unit=unit_hint.unit,
+                                    evidence=tuple(e for e in semantics.evidence if e.field != "unit") +
+                                    (Evidence("unit", unit_hint.unit, f"kaynak metninden alındı: {unit_hint.reason}", "strong"),))
+                unit_hint = None
+        if params.unit is None and semantics.unit is not None:
+            unit_from_source = semantics.unit          # profilci kolon başlığından ("(milyon TL)") ya da yukarıdaki ipucundan
 
         # 3. doğrulama — yayınlama kurallarıyla
         # Çakışma yalnız küratörlü/başka kaynaklı serilerle: aynı dosyanın ikinci ingest'i
@@ -494,18 +944,38 @@ class IngestFromUrlTool(Tool):
         asks: list[str] = []
         if not report.ok:
             asks += [f"{c.name}: {c.detail}" for c in report.failures]
+        # Çok kolonlu dosya (21 Eyl): "en dolu sayısal kolon" sessiz tahminiyle yanlış seri kaydedilir (TLREF'te
+        # kapanış yerine en düşük değer). Birden çok sayısal kolon varsa ve kullanıcı seçmediyse sorulur.
+        numeric_columns = [c.name for c in profile.value_candidates if c.name != mapping.observation_date_column]
+        if len(numeric_columns) > 1 and not params.value_column:
+            asks.append(f"değer kolonu: {len(numeric_columns)} sayısal kolon var ({', '.join(numeric_columns)}); "
+                        f"öneri {mapping.value_column!r}. Kullanıcıya hangisinin kaydedileceğini sor; cevabı value_column ile aktar")
         if semantics.unit is None:
             if unit_hint is not None:
                 asks.append(f"birim: belgede yazmıyor. {unit_hint.line()}. Kullanıcıya 'birim {unit_hint.unit!r} mi?' "
                             f"diye sor; onaylarsa aynı çağrıyı unit={unit_hint.unit!r} ile yap")
             else:
                 asks.append("birim: veriden çıkarılamıyor; kaynağın birimi nedir (ör. milyon TL, %, adet)?")
+        if semantics.frequency == "irregular":
+            asks.append("frekans: gözlemlerden düzenli aralık belirlenemedi; kaynak günlük, aylık veya hangi sıklıkta yayımlanıyor?")
         if crosscheck is not None and crosscheck.verdict == "ÇELİŞİYOR":
             asks.append("çapraz kontrol: " + crosscheck.lines()[0] + " — kullanıcıya söyle; dosya mı katalog mu doğru, o karar versin")
-        if invented:
-            asks.append("beyan kullanıcıdan gelmeli: " + ", ".join(invented) +
+        # Dayanaksız model beyanı (kullanıcı mesajında geçmeyen birim/ölçüm tipi/frekans) zaten yukarıda DÜŞÜRÜLDÜ; seri
+        # kanıttan gelen değerlerle (frekans tarihlerden, birim başlıktan, ölçüm tipi 'unknown') kaydedilir, uydurma değer
+        # saklanmaz. Kaydı durdurmak jüri sorusunu kilitliyordu (ölçüldü 23 Eyl, dış rapor: "haftalık/akım" model çıkarımıydı,
+        # kullanıcı yalnız "aylık … ekle" demişti; üç deneme "EKLENMEDİ"). Kart bu düşürmeyi açıkça yazar.
+        column_invented = [k for k in invented if k.split("=")[0] in ("value_column", "date_column", "entity_column")]
+        semantic_invented = [k for k in invented if k not in column_invented]
+        if column_invented:
+            # Kolon seçimi kanıttan türetilemez: kullanıcının anmadığı kolonu model seçtiyse sorulur (TLREF: kapanış yerine en düşük).
+            asks.append("beyan kullanıcıdan gelmeli: " + ", ".join(column_invented) +
                         " kullanıcı mesajında geçmiyor (model uydurmuş olabilir); kullanıcıya sor")
+        invented_note = ("beyan kullanıcıdan gelmeli — model beyanı (" + ", ".join(semantic_invented) + ") kullanıcı mesajında "
+                         "geçmiyor, KULLANILMADI; değerler kanıttan alındı — yanlışsa 'birim …/ölçüm tipi …/frekans …' diyerek "
+                         "düzeltin") if semantic_invented else None
         if asks:
+            if invented_note:
+                asks.append(invented_note)
             lines = ["EKLENMEDİ — önce kullanıcıya sorulmalı:"] + [f"  - {a}" for a in asks]
             lines.append("\nÖNERİ (kanıtıyla):")
             lines += [f"  {e.field} = {e.value!r}  [{e.confidence}] {e.reason}" for e in mapping.evidence]
@@ -526,8 +996,9 @@ class IngestFromUrlTool(Tool):
         # Ölçüldü: model ikinci koşuda farklı bir 'name' verdi, veri ekibinin sözleşmesi
         # "aynı draft farklı içerikle" diye reddetti (doğru davranış). Kullanıcının verdiği
         # ad karta girer, kataloğa değil; katalog adı dosya ve seri anahtarından türer.
-        source_name = Path(params.locator.split("?")[0]).name
-        catalog_name = f"{key} — {source_name} (taslak)"
+        if web_source is not None:
+            cli_locator, doc_note = web_source.stage(self.allowed_root)
+        catalog_name = f"{key} — {_source_display_name(params.locator)} (taslak)"
         description = (
             f"Kullanıcının getirdiği kaynaktan ({params.locator}) Architect tarafından taslak olarak "
             f"eklendi. Eşleme ve anlam veriden önerildi; ölçüm tipi {semantics.measure_type!r} "
@@ -546,6 +1017,7 @@ class IngestFromUrlTool(Tool):
                 locator=cli_locator, dataset_id=f"{self.dataset_prefix}_{key}",
                 mapping=mapping, semantics=semantics, name=catalog_name, description=description,
                 allowed_root=self.allowed_root,
+                delimiter="," if cli_locator != params.locator else None,   # kendi yazdığımız CSV: ayraç bilinir
             )
         finally:
             self.lakehouse.reload()
@@ -567,18 +1039,29 @@ class IngestFromUrlTool(Tool):
         card = [
             f"EKLENDİ: {series_id} — {params.name}",
             f"katalog adı: {catalog_name}",
-            f"kaynak: {params.locator}" + (f" → OCR tablosu {Path(cli_locator).name}" if doc_note else ""),
-            *([f"OCR: {doc_note}"] if doc_note else []),
+            f"kaynak: {params.locator}" + (f" → çıkarılan tablo {Path(cli_locator).name}" if doc_note else ""),
+            *([f"{'Kaynak işleme' if web_source else 'OCR'}: {doc_note}"] if doc_note else []),
             f"satır: {report.rows_mapped} eşlendi, {report.rows_null_value} boş değer korundu"
             + (f"; yazılan {out.rows_written}, değişmeyen {out.rows_unchanged}" if out.rows_written is not None else ""),
             "katman: adhoc (taslak) — Silver'a ve Gold'a girmez; bir insan onaylayınca kataloğa alınır",
             "eşleme: " + ", ".join(f"{e.field}={e.value!r}" for e in mapping.evidence if e.field in
                                    ("observation_date_column", "date_format", "value_column", "decimal_separator", "entity_id_column")),
             f"anlam: frekans={semantics.frequency} ölçüm={semantics.measure_type} birim={semantics.unit}"
+            + (f" (birim kaynaktan alındı; yanlışsa 'birim …' diyerek düzeltin)" if unit_from_source else "")
+            + (f" toplama={semantics.default_agg}" if getattr(semantics, "default_agg", None) else "")
             + ("  ⚠ ölçüm tipi kanıtsız, 'unknown' olarak kaydedildi" if semantics.measure_type == "unknown" else ""),
             "kanıt: " + " | ".join(f"{e.field}: {e.reason}" for e in semantics.evidence if e.confidence != "none"),
             *out.provenance_lines(),
         ]
+        # Dosyada başka ölçüm sütunları varsa modele söylenir: kullanıcı iki seri istediyse ikinci çağrı gerekir (ölçüldü
+        # 23 Eyl, dış rapor: "Toplam İşlem Hacmi ve Net Takas Tutarı" — ilk seri kaydedilince tur bitti, ikincisi kalmadı).
+        others = [c.name for c in profile.value_candidates if c.name != mapping.value_column]
+        if others:
+            card.append("dosyada kaydedilmeyen başka ölçüm sütunları: " + ", ".join(others)
+                        + " — kullanıcı bunları da istediyse her biri için ayrı ingest_from_url çağır (value_column=…), sorma; "
+                          "istenen frekans dosyadakinden farklıysa kayıt sonrası gold_align ile üret.")
+        if invented_note:
+            card.append(invented_note)
         if out.warnings:
             card.append(f"parser uyarısı: {out.warnings} (quality_flag='source_warning')")
         card.append(fit.lines()[0] + (" — kullanıcı onayıyla eklendi" if confirmed and irrelevant else ""))

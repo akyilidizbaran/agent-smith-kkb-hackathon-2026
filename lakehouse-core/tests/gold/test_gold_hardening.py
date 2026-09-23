@@ -68,13 +68,50 @@ def test_last_does_not_carry_the_previous_value_forward(connection) -> None:
     assert row["missing_observations"] == 1
 
 
-def test_first_is_symmetric_when_the_opening_reading_is_missing(connection) -> None:
+def test_an_index_closing_on_a_holiday_takes_the_last_trading_day(connection) -> None:
+    """BIST 100, March 2025 (22 Sept 2026): 31 March and 1 April were a public holiday and EVDS
+    lists them as NULL rows. The month's closing index is the 28 March close -- taking it is not a
+    forward fill of an unknown balance, it is the definition of a month-end quote. The row says so
+    with ``boundary_shifted`` and names the day it used."""
+
     sid = _series(
         connection,
-        "rate_weekly",
-        series_id="synthetic:rate_first",
-        default_agg="first",
+        "stock_monthly",
+        series_id="synthetic:index_daily",
+        frequency="daily",
+        measure_type="index",
+        unit="index",
+        default_agg="last",
     )
+    materialize_fact_observation_snapshot(
+        connection,
+        staging_rows(
+            sid,
+            [
+                (date(2025, 3, 27), "9612.84"),
+                (date(2025, 3, 28), "9659.48"),
+                (date(2025, 3, 31), None),
+                (date(2025, 4, 1), None),
+                (date(2025, 4, 2), "9523.31"),
+            ],
+        ),
+    )
+
+    aligned = align_frequency(connection, sid, "monthly")
+    march, april = aligned.iloc[0], aligned.iloc[1]
+
+    assert _value(march) == 9659.48
+    assert march["quality_flag"] == "boundary_shifted"
+    assert march["missing_observations"] == 1
+    assert date(2025, 3, 28) in list(march["source_observation_dates"])
+    assert _value(april) == 9523.31 and april["quality_flag"] == "partial_period"   # April's close is present
+    assert "boundary_shifted" in GOLD_QUALITY_FLAGS
+
+
+def test_a_rate_opening_on_a_holiday_takes_the_first_quoted_day(connection) -> None:
+    """Symmetric for `first` on a quoted rate: the period's opening quote is its first quoted day."""
+
+    sid = _series(connection, "rate_weekly", series_id="synthetic:rate_first", default_agg="first")
     materialize_fact_observation_snapshot(
         connection,
         staging_rows(sid, [(date(2026, 1, 2), None), (date(2026, 1, 30), "20.0")]),
@@ -82,9 +119,8 @@ def test_first_is_symmetric_when_the_opening_reading_is_missing(connection) -> N
 
     row = align_frequency(connection, sid, "monthly").iloc[0]
 
-    assert _value(row) is None
-    assert _value(row) != 20.0
-    assert row["quality_flag"] == "boundary_missing"
+    assert _value(row) == 20.0
+    assert row["quality_flag"] == "boundary_shifted"
 
 
 def test_last_selects_the_final_reading_even_when_an_earlier_one_is_missing(

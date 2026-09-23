@@ -535,10 +535,15 @@ def _upsert_series_relations(
     if not changed:
         return len(relations)
 
-    placeholders = ", ".join("?" for _ in _RELATION_WRITE_COLUMNS)
+    # Tek toplu ekleme: satır satır `executemany` + `INSERT OR REPLACE` DuckDB'de süperlineer büyüyor
+    # (ölçüldü 22 Eyl, Windows, DuckDB 1.5.5: 100 satır 1,2 sn, 300 satır 5,9 sn; tam katalog 6.694 satır
+    # dakikalar → bootstrap çağıran her test/CLI o kadar bekliyordu). Aynı satırlar DataFrame'den 0,2 sn.
+    import pandas as pd
+
+    columns = ", ".join(_RELATION_WRITE_COLUMNS)
     sql = (
-        f"INSERT OR REPLACE INTO meta.series_relation ({', '.join(_RELATION_WRITE_COLUMNS)}, updated_at) "
-        f"VALUES ({placeholders}, current_timestamp)"
+        f"INSERT OR REPLACE INTO meta.series_relation ({columns}, updated_at) "
+        f"SELECT {columns}, current_timestamp FROM changed_relations"
     )
     values = [
         [
@@ -554,7 +559,12 @@ def _upsert_series_relations(
         ]
         for relation in changed
     ]
-    connection.executemany(sql, values)
+    changed_relations = pd.DataFrame(values, columns=list(_RELATION_WRITE_COLUMNS))
+    connection.register("changed_relations", changed_relations)
+    try:
+        connection.execute(sql)
+    finally:
+        connection.unregister("changed_relations")
     return len(relations)
 
 

@@ -1,0 +1,250 @@
+"""Şekil düzeltmeleri (21 Eyl): kolon seçimi ve beyan edilen dönem — "istediğimiz veri eklenebilsin".
+
+Ölçülen boşluk: çok kolonlu dosyada profilci "en dolu sayısal kolonu" sessizce alıyordu (TLREF'te kapanış yerine
+en düşük değer); tarih kolonu olmayan kesit tabloları (TCMB KFE.pdf: il × ölçüm, dönem başlıkta) hiç kaydedilemiyordu.
+CLI sahte, ağ yok.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import pandas as pd
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from kkb_agent.builder.ingest import LakehouseCLI  # noqa: E402
+from kkb_agent.builder.web_source import SourceSelection, measure_row_to_long  # noqa: E402
+from kkb_agent.tools.ingest import IngestFromUrlTool, parse_period  # noqa: E402
+from tests.test_ingest_tool import FakeRunner, SpyLakehouse  # noqa: E402
+
+TLREF = (
+    "Tarih;Kod;Kapanış Değeri;En Düşük Değer;En Yüksek Değer\n"
+    "14.06.2019;BISTTLREF;1000;999;1001\n17.06.2019;BISTTLREF;1000,68;1000,1;1001,2\n"
+    "18.06.2019;BISTTLREF;1001,35;1000,9;1002\n19.06.2019;BISTTLREF;1002,1;1001,5;1002,8\n"
+    "20.06.2019;BISTTLREF;1002,9;1002,2;1003,4\n21.06.2019;BISTTLREF;1003,7;1003,0;1004,1\n"
+)
+HASTANE = "il;hastane_sayisi;yatak_sayisi\nAdana;41;7120\nAnkara;96;22310\nİzmir;73;15405\nVan;18;3020\n"
+
+
+def _tool(tmp_path: Path, user_text: str, files: dict[str, str]):
+    core = tmp_path / "lakehouse-core" / "src" / "lakehouse"
+    core.mkdir(parents=True); (core / "cli.py").write_text("# sahte", encoding="utf-8")
+    incoming = tmp_path / "incoming"; incoming.mkdir()
+    for name, body in files.items():
+        (incoming / name).write_text(body, encoding="utf-8")
+    runner = FakeRunner()
+    cli = LakehouseCLI(core_dir=tmp_path / "lakehouse-core", database=tmp_path / "lh.duckdb", data_root=tmp_path, runner=runner)
+    registry = SimpleNamespace(active_question=user_text, user_text=user_text, sanctioned_locators=set())
+    return IngestFromUrlTool(SpyLakehouse(), cli, allowed_root=incoming, registry=registry), runner, incoming
+
+
+def _flag(cmd: list[str], flag: str) -> str | None:
+    return cmd[cmd.index(flag) + 1] if flag in cmd else None
+
+
+def test_cok_kolonlu_dosyada_deger_kolonu_secilmeden_yazilmaz_sorulur(tmp_path: Path) -> None:
+    tool, runner, incoming = _tool(tmp_path, "tlref.csv dosyasını taslak olarak kaydet; birim puan, ölçüm tipi seviye", {"tlref.csv": TLREF})
+    r = tool.validate_and_run({"locator": str(incoming / "tlref.csv"), "name": "TLREF", "unit": "puan", "measure_type": "index"})
+    assert r.ok and r.content.startswith("EKLENMEDİ") and "değer kolonu: 3 sayısal kolon" in r.content, r.content
+    assert "Kapanış Değeri" in r.content and not runner.calls, "sessiz tahminle CLI çağrılmadı"
+
+
+def test_kullanicinin_andigi_deger_kolonu_cliya_gider(tmp_path: Path) -> None:
+    tool, runner, incoming = _tool(tmp_path, "tlref.csv dosyasındaki kapanış değerini taslak olarak kaydet; birim puan, ölçüm tipi seviye", {"tlref.csv": TLREF})
+    r = tool.validate_and_run({"locator": str(incoming / "tlref.csv"), "name": "TLREF", "unit": "puan", "measure_type": "index",
+                               "value_column": "Kapanış Değeri"})
+    assert r.content.startswith("EKLENDİ"), r.content
+    cmd = runner.calls[-1][0]
+    assert _flag(cmd, "--value-column") == "Kapanış Değeri" and _flag(cmd, "--date-column") == "Tarih"
+    assert _flag(cmd, "--decimal-separator") == ","
+
+
+def test_kullanicinin_anmadigi_kolon_secimi_beyan_sayilmaz_ve_sorulur(tmp_path: Path) -> None:
+    tool, runner, incoming = _tool(tmp_path, "tlref.csv dosyasını taslak olarak kaydet; birim puan, ölçüm tipi seviye", {"tlref.csv": TLREF})
+    r = tool.validate_and_run({"locator": str(incoming / "tlref.csv"), "name": "TLREF", "unit": "puan", "measure_type": "index",
+                               "value_column": "En Düşük Değer"})       # model seçti, kullanıcı anmadı
+    assert r.content.startswith("EKLENMEDİ") and "value_column='En Düşük Değer'" in r.content and not runner.calls
+
+
+def test_olmayan_kolon_secimi_acikca_reddedilir(tmp_path: Path) -> None:
+    tool, runner, incoming = _tool(tmp_path, "tlref.csv dosyasındaki hacim kolonunu kaydet; birim puan, ölçüm tipi seviye", {"tlref.csv": TLREF})
+    r = tool.validate_and_run({"locator": str(incoming / "tlref.csv"), "name": "x", "unit": "puan", "measure_type": "index", "value_column": "Hacim"})
+    assert not r.ok and "dosyada yok" in r.content and "Kapanış Değeri" in r.content and not runner.calls
+
+
+def test_kolon_adi_sozcuk_kapsamasiyla_eslenir(tmp_path: Path) -> None:
+    """Canlı ölçüm (21 Eyl, altın PDF'i): model "TL Hacim" yazdı, dosyada "TL | Hacim/Volume (TL)"; birebir ad
+    istemek turu boşa harcıyordu. Sözcük kapsaması tek kolona uyuyorsa o kolon; iki kolona uyarsa seçilmez."""
+    tool, runner, incoming = _tool(tmp_path, "tlref.csv dosyasındaki kapanış kolonunu taslak olarak kaydet; birim puan, ölçüm tipi seviye", {"tlref.csv": TLREF})
+    r = tool.validate_and_run({"locator": str(incoming / "tlref.csv"), "name": "TLREF", "unit": "puan", "measure_type": "index",
+                               "value_column": "kapanış"})
+    assert r.content.startswith("EKLENDİ"), r.content
+    assert _flag(runner.calls[-1][0], "--value-column") == "Kapanış Değeri"
+    assert _flag(runner.calls[-1][0], "--delimiter") is None, "kullanıcının kendi CSV'si: ayraç veri ekibinin koklayıcısına kalır"
+
+    tool, runner, incoming = _tool(tmp_path / "iki", "tlref.csv dosyasındaki değer kolonunu taslak olarak kaydet; birim puan, ölçüm tipi seviye", {"tlref.csv": TLREF})
+    r = tool.validate_and_run({"locator": str(incoming / "tlref.csv"), "name": "TLREF", "unit": "puan", "measure_type": "index",
+                               "value_column": "Değer"})
+    assert not r.ok and "birden çok kolona uyuyor" in r.content and "'En Düşük Değer'" in r.content and not runner.calls
+
+
+def test_kendi_yazdigimiz_csv_ayraci_cliya_acikca_verilir(tmp_path: Path) -> None:
+    """Başlıkta '|' geçen türetilmiş tabloda (Borsa altın PDF'i) veri ekibinin koklayıcısı iki adayı da geçerli
+    bulup reddediyordu; kendi yazdığımız CSV'nin ayracı bellidir, açıkça gider."""
+    pipe = HASTANE.replace("hastane_sayisi", "TL | Hastane/Hospital (adet)")
+    tool, runner, incoming = _tool(
+        tmp_path, "hastane_il.csv dosyasındaki TL hastane sayısını il bazında, dönem Ağustos 2026, taslak olarak kaydet; birim adet, ölçüm tipi sayım",
+        {"hastane_il.csv": pipe})
+    r = tool.validate_and_run({"locator": str(incoming / "hastane_il.csv"), "name": "Hastane", "unit": "adet", "measure_type": "count",
+                               "period": "Ağustos 2026", "value_column": "TL Hastane", "entity_column": "il"})
+    assert r.content.startswith("EKLENDİ"), r.content
+    cmd = runner.calls[-1][0]
+    assert _flag(cmd, "--delimiter") == "," and _flag(cmd, "--value-column") == "TL | Hastane/Hospital (adet)"
+    assert Path(cmd[cmd.index("ingest-file") + 1]).name.startswith("derived_hastane_il_")
+
+
+def test_tarihsiz_kesit_tablosu_beyan_edilen_donemle_kaydedilir(tmp_path: Path) -> None:
+    tool, runner, incoming = _tool(
+        tmp_path, "hastane_il.csv dosyasındaki hastane sayısını il bazında, dönem Ağustos 2026, taslak olarak kaydet; birim adet, ölçüm tipi sayım",
+        {"hastane_il.csv": HASTANE})
+    r = tool.validate_and_run({"locator": str(incoming / "hastane_il.csv"), "name": "Hastane", "unit": "adet", "measure_type": "count",
+                               "period": "Ağustos 2026", "value_column": "hastane_sayisi", "entity_column": "il"})
+    assert r.content.startswith("EKLENDİ"), r.content
+    cmd = runner.calls[-1][0]
+    staged = Path(_flag(cmd, "--file-or-url") or cmd[cmd.index("ingest-file") + 1])
+    assert staged.name.startswith("derived_hastane_il_") and staged.parent == incoming
+    frame = pd.read_csv(staged)
+    assert list(frame.columns)[0] == "observation_date" and set(frame["observation_date"]) == {"2026-08-31"} and len(frame) == 4
+    assert _flag(cmd, "--date-column") == "observation_date" and _flag(cmd, "--value-column") == "hastane_sayisi"
+    assert _flag(cmd, "--entity-column") == "il" and _flag(cmd, "--frequency") == "monthly"
+    assert "dönem sonu 2026-08-31" in r.content and "derived_hastane_il_" in r.content
+
+
+def test_donem_kullanici_metninde_gecmiyorsa_beyan_sayilmaz(tmp_path: Path) -> None:
+    tool, runner, incoming = _tool(tmp_path, "hastane_il.csv dosyasını taslak olarak kaydet; birim adet, ölçüm tipi sayım", {"hastane_il.csv": HASTANE})
+    r = tool.validate_and_run({"locator": str(incoming / "hastane_il.csv"), "name": "Hastane", "unit": "adet", "measure_type": "count",
+                               "period": "Ağustos 2026", "value_column": "hastane_sayisi"})
+    assert not runner.calls and ("period=" in r.content or "tarih kolonu" in r.content.lower()), r.content
+
+
+def test_donem_yazimlari() -> None:
+    assert parse_period("2026-06-30") == ("2026-06-30", None)
+    assert parse_period("2026-08") == ("2026-08-31", "monthly")
+    assert parse_period("Ağustos 2026") == ("2026-08-31", "monthly") and parse_period("2026 Şubat") == ("2026-02-28", "monthly")
+    assert parse_period("2026Q2") == ("2026-06-30", "quarterly") and parse_period("2026 Ç4") == ("2026-12-31", "quarterly")
+    assert parse_period("2025") == ("2025-12-31", "yearly")
+    assert parse_period("06/08/2026") is None and parse_period("gelecek ay") is None and parse_period("2026-13") is None
+
+
+def test_satir_olcum_matrisi_beyan_edilen_donemle_uzun_tabloya_cevrilir() -> None:
+    frame = pd.DataFrame({"": ["Konut Fiyat Endeksi", "Yıllık Değişim", "Aylık Değişim"],
+                          "TÜRKİYE": ["236,8", "%23,0", "%0,9"], "İSTANBUL": ["226,6", "%26,3", "%1,9"],
+                          "ANKARA": ["265,0", "%24,8", "%1,5"], "İZMİR": ["229,6", "%23,3", "%2,7"]})
+    with pytest.raises(SourceSelection, match="period ile"):
+        measure_row_to_long(frame, "Konut Fiyat Endeksi", None)
+    long, note, freq = measure_row_to_long(frame, "Konut Fiyat Endeksi", ("2026-08-31", "monthly"))
+    assert list(long.columns) == ["tarih", "kurum", "Konut Fiyat Endeksi"] and len(long) == 4
+    assert set(long["tarih"]) == {"2026-08-31"} and long["kurum"].tolist() == ["TÜRKİYE", "İSTANBUL", "ANKARA", "İZMİR"]
+    assert long["Konut Fiyat Endeksi"].tolist() == ["236,8", "226,6", "265,0", "229,6"] and freq == "monthly"
+    assert "kullanıcı beyanı" in note
+    with pytest.raises(SourceSelection, match="value_row ile seç"):
+        measure_row_to_long(frame, "Yok", ("2026-08-31", "monthly"))
+    assert measure_row_to_long(frame, None, None) is None, "value_row yoksa dönüşüm istenmiyor"
+
+
+def test_varlik_kolonu_adi_kullanicinin_sozunden() -> None:
+    from kkb_agent.tools.ingest import _entity_label
+    assert _entity_label("KFE satırını il bazında kaydet") == "il"
+    assert _entity_label("kurumlara göre nakdi kredi") == "kurum"
+    assert _entity_label("ülke bazında enflasyon") == "ulke"
+    assert _entity_label("taslak olarak kaydet") == "kurum"
+    frame = pd.DataFrame({"": ["KFE"], "TÜRKİYE": ["236,8"], "ANKARA": ["265,0"]})
+    long, _, _ = measure_row_to_long(frame, "KFE", ("2026-08-31", "monthly"), entity_label="il")
+    assert list(long.columns) == ["tarih", "il", "KFE"]
+
+
+def test_kaynak_birimi_acikca_yaziyorsa_sorulmadan_alinir(tmp_path: Path) -> None:
+    csv = "Tarih;Konut Kredisi (milyon TL)\n31.01.2025;1.234,5\n28.02.2025;1.300,0\n31.03.2025;1.402,75\n30.04.2025;1.450,1\n31.05.2025;1.500,0\n30.06.2025;1.560,9\n"
+    tool, runner, incoming = _tool(tmp_path, "konut.csv dosyasını taslak olarak kaydet; ölçüm tipi stok", {"konut.csv": csv})
+    r = tool.validate_and_run({"locator": str(incoming / "konut.csv"), "name": "Konut", "measure_type": "stock"})
+    assert r.content.startswith("EKLENDİ"), r.content
+    assert _flag(runner.calls[-1][0], "--unit") in ("milyon TL", "TRY_mn") and "birim kaynaktan alındı" in r.content
+    # Kaynak sessizse yine sorulur; tahmin yazılmaz.
+    sessiz = "Tarih;deger\n31.01.2025;1.234,5\n28.02.2025;1.300,0\n31.03.2025;1.402,75\n30.04.2025;1.450,1\n31.05.2025;1.500,0\n30.06.2025;1.560,9\n"
+    tool2, runner2, incoming2 = _tool(tmp_path / "b", "sessiz.csv dosyasını taslak olarak kaydet; ölçüm tipi stok", {"sessiz.csv": sessiz})
+    r2 = tool2.validate_and_run({"locator": str(incoming2 / "sessiz.csv"), "name": "Sessiz", "measure_type": "stock"})
+    assert r2.content.startswith("EKLENMEDİ") and "birim" in r2.content and not runner2.calls
+
+
+def test_ay_adi_sutunu_beyan_edilen_yilla_tarihe_cevrilir() -> None:
+    from kkb_agent.tools.ingest import month_names_to_dates
+    frame = pd.DataFrame({"AY/MONTH": ["Ocak / January", "Şubat / February", "Mart / March", "Nisan / April", "Mayıs / May",
+                                       "Haziran / June", "Temmuz / July", "TOPLAM / TOTAL"],
+                          "TL Hacim": ["93.824.682.381", "90.534.914.196", "1", "2", "3", "4", "5", "999"]})
+    out, note = month_names_to_dates(frame, 2026)
+    assert out["AY/MONTH"].tolist() == ["2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30", "2026-05-31", "2026-06-30", "2026-07-31"]
+    assert "TOPLAM" in note and len(out) == 7 and "999" not in out["TL Hacim"].tolist()
+    assert month_names_to_dates(pd.DataFrame({"il": ["Adana", "Ankara"], "x": ["1", "2"]}), 2026) is None
+
+
+def test_altin_pdf_benzeri_tablo_yilla_kaydedilir(tmp_path: Path) -> None:
+    csv = ("AY/MONTH;TL Hacim (TL);Miktar (KG)\nOcak / January;93.824.682.381;13.837\nŞubat / February;90.534.914.196;12.649\n"
+           "Mart / March;95.000.000.000;14.000\nNisan / April;91.000.000.000;13.000\nMayıs / May;92.000.000.000;13.500\n"
+           "Haziran / June;93.000.000.000;13.600\nTOPLAM / TOTAL;555.359.596.577;80.586\n")
+    tool, runner, incoming = _tool(tmp_path, "altin.csv dosyasındaki TL hacim kolonunu 2026 yılı aylık taslak olarak kaydet; dönemlik akım", {"altin.csv": csv})
+    r = tool.validate_and_run({"locator": str(incoming / "altin.csv"), "name": "Altın TL hacim", "measure_type": "flow_periodic",
+                               "period": "2026", "value_column": "TL Hacim (TL)"})
+    assert r.content.startswith("EKLENDİ"), r.content
+    cmd = runner.calls[-1][0]
+    staged = Path(cmd[cmd.index("ingest-file") + 1])
+    frame = pd.read_csv(staged, sep=",")
+    assert len(frame) == 6 and frame["AY/MONTH"].tolist()[0] == "2026-01-31" and _flag(cmd, "--frequency") == "monthly"
+    assert _flag(cmd, "--unit") in ("TL", "TRY") and "TOPLAM" in r.content
+
+
+def test_yil_sutunlu_tablo_yil_sonu_tarihiyle_sahnelenir_ve_yillik_kaydedilir(tmp_path: Path) -> None:
+    """Boş katalog provası (22 Eyl): ülke × yıl nüfus tablosu; 'Year' tam sayı. Yıl → 12-31, frekans yıllık, varlık ülke."""
+    csv = "Country Name,Country Code,Year,Value\nAruba,ABW,1960,54922\nAruba,ABW,1961,55578\nAruba,ABW,1962,56320\nTurkey,TUR,1960,27472331\nTurkey,TUR,1961,28146893\nTurkey,TUR,1962,28832805\n"
+    tool, runner, incoming = _tool(tmp_path, "population.csv dosyasındaki nüfus verisini ülke bazında yıllık taslak seri olarak kaydet; birim kişi, ölçüm tipi stok, değer kolonu Value, tarih kolonu Year, varlık kolonu Country Name", {"population.csv": csv})
+    r = tool.validate_and_run({"locator": str(incoming / "population.csv"), "name": "Dünya nüfusu", "unit": "kişi", "measure_type": "stock",
+                               "value_column": "Value", "date_column": "Year", "entity_column": "Country Name", "series_key": "dunya_nufus"})
+    assert r.content.startswith("EKLENDİ"), r.content
+    cmd = runner.calls[-1][0]
+    staged = Path(cmd[cmd.index("ingest-file") + 1])
+    assert staged.name.startswith("derived_population_")
+    frame = pd.read_csv(staged, dtype=str)
+    assert set(frame["Year"]) == {"1960-12-31", "1961-12-31", "1962-12-31"}
+    assert _flag(cmd, "--date-column") == "Year" and _flag(cmd, "--date-format") == "%Y-%m-%d" and _flag(cmd, "--frequency") == "yearly"
+    assert _flag(cmd, "--entity-column") == "Country Name" and _flag(cmd, "--delimiter") == ","
+
+
+def test_adresten_gelen_yil_sutunlu_tablo_da_yil_sonuna_cevrilir(tmp_path: Path, monkeypatch) -> None:
+    """Canlı prova (22 Eyl): adres yolunda yıl dönüşümü atlanmış, taslak 1960-01-01 ile yazılmıştı; kural dönem sonu."""
+    import pandas as pd
+    from kkb_agent.builder import web_source as ws_mod
+    from kkb_agent.tools import ingest as ingest_mod
+
+    class _Src:
+        def __init__(self):
+            self.frame = pd.DataFrame({"Country Name": ["Aruba", "Aruba", "Aruba"], "Year": ["1960", "1961", "1962"], "Value": ["1", "2", "3"]})
+            from kkb_agent.core.access_policy import classify_access
+            self.outcome = classify_access("https://example.org/population.csv", http_status=200)
+            self.note = "sahte web kaynağı"; self.entity_column = None; self.assets = []
+            self.frequency = None; self.turkish_numbers = False
+        def stage(self, root):
+            root.mkdir(parents=True, exist_ok=True)
+            path = root / "web_table_test.csv"; self.frame.to_csv(path, index=False)
+            return str(path), self.note
+    monkeypatch.setattr(ingest_mod, "read_web_source", lambda *a, **k: _Src())
+    tool, runner, incoming = _tool(tmp_path, "https://example.org/population.csv adresindeki nüfus verisini ülke bazında yıllık taslak olarak kaydet; birim kişi, ölçüm tipi stok, değer kolonu Value, tarih kolonu Year, varlık kolonu Country Name", {})
+    r = tool.validate_and_run({"locator": "https://example.org/population.csv", "name": "Nüfus", "unit": "kişi", "measure_type": "stock",
+                               "value_column": "Value", "date_column": "Year", "entity_column": "Country Name", "series_key": "nufus"})
+    assert r.content.startswith("EKLENDİ"), r.content
+    cmd = runner.calls[-1][0]
+    staged = pd.read_csv(Path(cmd[cmd.index("ingest-file") + 1]), dtype=str)
+    assert set(staged["Year"]) == {"1960-12-31", "1961-12-31", "1962-12-31"} and _flag(cmd, "--frequency") == "yearly"

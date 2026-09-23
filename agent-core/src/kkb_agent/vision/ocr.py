@@ -37,6 +37,9 @@ _HTML_TAG = re.compile(r"<[^>]+>")
 
 def is_document(media_type: str, url: str) -> bool:
     kind = (media_type or "").split(";")[0].strip().lower()
+    # A PDF-looking URL can return an HTML error/login/landing page.
+    if kind in ("text/html", "application/xhtml+xml"):
+        return False
     suffix = Path(urlparse(url).path).suffix.lower()
     return kind == PDF_MEDIA or kind in IMAGE_MEDIA or suffix in DOC_SUFFIXES
 

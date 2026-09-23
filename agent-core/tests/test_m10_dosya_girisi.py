@@ -1,4 +1,4 @@
-"""M10 (ADR-0054): dosya yükleme yüzeyi, tür/boyut/ad güvenliği, XLSX sayfa seçimi, .xls reddi,
+"""M10 (ADR-0054): dosya yükleme yüzeyi, tür/boyut/ad güvenliği, XLSX/XLS sayfa seçimi, bozuk .xls reddi,
 ingest okuyucusunda yönlendirme sınırı (A10, A11, A20)."""
 
 from __future__ import annotations
@@ -38,12 +38,12 @@ def test_yukleme_tur_boyut_ad_ve_oturum_dizini(tmp_path) -> None:
     assert Path(d["path"]).is_file() and Path(d["path"]).parent.parent == tmp_path / "incoming" / "uploads"
     assert ".." not in d["path"] and "etc" not in Path(d["path"]).name
     assert client.get("/api/uploads").json()[0]["name"] == d["name"]
-    assert client.post("/api/upload", files={"file": ("eski.xls", b"x", "application/vnd.ms-excel")}).status_code == 415
-    assert "xlsx" in client.post("/api/upload", files={"file": ("eski.xls", b"x")}).json()["detail"]
+    assert client.post("/api/upload", files={"file": ("eski.xls", b"x", "application/vnd.ms-excel")}).status_code == 200  # 21 Eyl: xlrd ile okunur
+    assert "xlsx" in client.post("/api/upload", files={"file": ("makro.xlsm", b"x")}).json()["detail"]
     assert client.post("/api/upload", files={"file": ("bos.csv", b"")}).status_code == 400
     assert client.post("/api/upload", files={"file": ("script.exe", b"MZ")}).status_code == 415
     assert client.post("/api/upload", files={"file": ("buyuk.csv", b"x" * (UPLOAD_MAX_BYTES + 1))}).status_code == 413
-    assert client.get("/api/status").json()["uploads"] == 1
+    assert client.get("/api/status").json()["uploads"] == 2          # rapor.csv + eski.xls (21 Eyl: .xls kabul)
     client.post("/api/reset")
     assert client.get("/api/uploads").json() == [] and not Path(d["path"]).exists(), "sıfırlama oturum dosyalarını siler"
     assert safe_filename("") == "dosya" and safe_filename("çok uzun " * 30 + ".pdf").endswith(".pdf") is False or True
@@ -64,7 +64,7 @@ def test_a10_xlsx_coklu_sayfa_sorulur_secilince_okunur(tmp_path) -> None:
     single = tmp_path / "tek.xlsx"; single.write_bytes(_xlsx({"S": pd.DataFrame({"x": [1]})}))
     assert read_table_for_profiling(str(single), allowed_roots=[tmp_path])[0].shape == (1, 1)
     xls = tmp_path / "eski.xls"; xls.write_bytes(b"x")
-    with pytest.raises(ReadRefused, match="xlsx olarak kaydedin"):
+    with pytest.raises(ReadRefused, match="okunamadı"):            # 21 Eyl: .xls xlrd ile okunur; bozuk dosya sebebiyle reddedilir
         read_table_for_profiling(str(xls), allowed_roots=[tmp_path])
 
 

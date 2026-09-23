@@ -21,6 +21,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ..adapters.mia_embedder import record_digest as _record_digest
 from ..contracts.retrieval import Candidate, Embedder, reciprocal_rank_fusion
 from ..source_hints import load_source_hints
 from .facets import (
@@ -37,6 +38,7 @@ MODES = ("auto", "preload_all", "bm25", "hybrid")
 DEFAULT_SMALL_MAX = 60        # bu sayıya kadar katalog kart olarak sığar (≈ 6.000 token bütçesi)
 DEFAULT_HYBRID_MIN = 5000     # bu sayıdan sonra BM25 tek başına yetmez (ölçülecek)
 CANDIDATE_MULTIPLIER = 50     # yüz filtrelerinden önce aday havuzu; il serileri filtrelenmeden önce kaybolmasın
+NEAR_TIE = 0.05               # en iyi puanın %5 altına kadar "eşit"; bu bantta doğrulanmış kayıt öne (ölçüm aşağıda)
 _QUERY_SPLIT = re.compile(r"\b(?:ve|ile|veya)\b|[,;]", re.IGNORECASE)
 _PHRASE_CONTEXT_TERMS = frozenset({
     "aralik", "ay", "aylik", "donem", "donemde", "getir", "getirin", "kapsayan",
@@ -75,6 +77,7 @@ class CatalogRecord:
     frequency: str | None = None
     source: str | None = None
     province: str | None = None    # None → ulusal/il-dışı
+    curated: bool = False          # semantiği insan doğruladı (verified) ya da Gold metriği; otomatik üretilen değil
     concept_id: str | None = None
     parent_series_id: str | None = None
     relation_type: str = "standalone"
@@ -100,6 +103,8 @@ def record_from_spec(spec) -> CatalogRecord:
         for column in spec.measures()
         if getattr(column, "semantic_type", None)
     }))
+    confidence = getattr(spec, "semantic_confidence", None)
+    curated = confidence == "verified" or spec.source == "gold" or str(spec.dataset_id).startswith("gold.")
     return CatalogRecord(id=spec.dataset_id, name=spec.name, description=spec.description, aliases=aliases,
                          tags=tuple(spec.tags), frequency=str(freq) if freq else None, source=spec.source,
                          province=province_of(f"{spec.dataset_id} {spec.name}"),
@@ -112,7 +117,7 @@ def record_from_spec(spec) -> CatalogRecord:
                          relation_source=getattr(spec, "relation_source", None),
                          semantic_confidence=getattr(spec, "semantic_confidence", None),
                          measure_type=getattr(spec, "measure_type", None) or (measure_types[0] if len(measure_types) == 1 else None),
-                         measure_types=measure_types)
+                         measure_types=measure_types, curated=curated)
 
 
 def _query_measure_intents(query: str) -> frozenset[str]:
@@ -180,13 +185,21 @@ class RetrievalPolicy:
 
 def apply_facets(records: Sequence[CatalogRecord], ranked: Sequence[Candidate], facets: Facets, *, k: int) -> list[Candidate]:
     """Yüzler: il varsa yalnız o il (yoksa il-dışı seriler öne); frekans varsa önce o frekans
-    (sonra daha ince olanlar: Gold kaba yapabilir; kaba olanlar en sona); kaynak ipucu varsa öne."""
+    (sonra daha ince olanlar: Gold kaba yapabilir; kaba olanlar en sona); kaynak ipucu varsa öne.
+
+    Eşitlik bandı (21 Eyl): en iyi puanın %5'i içindeki adaylar arasında semantiği doğrulanmış seri ya da
+    Gold metriği, otomatik üretilmiş girişin önüne geçer. Ölçüldü: jürinin "aylık konut kredisi faiz oranı"
+    sorusunda otomatik alias'lı stok serisi 33,84, Gold aylık ortalama tablosu 33,14 puan aldı; puan farkı
+    alias sayısından geliyordu, anlamdan değil. Bant dışında (açıkça daha iyi eşleşen) sıra değişmez."""
     by_id = {r.id: r for r in records}
     kept: list[tuple[tuple, Candidate]] = []
+    top = max((c.score for c in ranked), default=0.0)
+    band = top * (1 - NEAR_TIE) if top > 0 else top
     for pos, cand in enumerate(ranked):
         rec = by_id.get(cand.id)
         if rec is None:
             continue
+        tie_key = 0 if (rec.curated and cand.score >= band) else 1
         if facets.provinces:
             if rec.province is None or rec.province not in facets.provinces:
                 # il soruldu: başka ilin serisi elenir; ulusal seri geride kalır ama düşmez
@@ -214,11 +227,11 @@ def apply_facets(records: Sequence[CatalogRecord], ranked: Sequence[Candidate], 
         else:
             freq_key = 0
         src_key = 0 if (not facets.sources or source_matches(rec.source, facets.sources)) else 1
-        kept.append(((prov_key, freq_key, src_key, pos), cand))
+        kept.append(((prov_key, freq_key, src_key, tie_key, pos), cand))
     kept.sort(key=lambda t: t[0])
     out = []
     for key, cand in kept[:k]:
-        meta = {**cand.meta, "facet_rank": key[:3]}
+        meta = {**cand.meta, "facet_rank": key[:3], "curated_tie": key[3] == 0}
         out.append(Candidate(id=cand.id, text=cand.text, score=cand.score, source=cand.source, meta=meta))
     return out
 
@@ -234,6 +247,8 @@ class CatalogRetriever:
         self._bm25.index([Candidate(id=r.id, text=r.text) for r in self.records])
         self._vectors: list[list[float]] | None = None
         self._cache = embedding_cache
+        self.embedded_fresh = 0      # son vektör kurulumunda MIA'ya gönderilen kayıt sayısı (ölçüm/iz için)
+        self.embedded_reused = 0     # önceki önbellek sürümünden alınan kayıt sayısı
         self.mode = self.policy.resolve(len(self.records), embedder_available=embedder is not None)
         self.last_facets: Facets = Facets()
         self.last_error: str | None = None
@@ -243,13 +258,29 @@ class CatalogRetriever:
         if self._vectors is not None or self.embedder is None:
             return
         texts = [f"{r.name}. {' '.join(r.aliases)}".strip() for r in self.records]
-        cached = self._cache.get(self.embedder.model, [r.id for r in self.records], texts) if self._cache else None
+        ids = [r.id for r in self.records]
+        cached = self._cache.get(self.embedder.model, ids, texts) if self._cache else None
         if cached is None:
-            vectors = []
-            for i in range(0, len(texts), 64):
-                vectors.extend(self.embedder.embed(texts[i:i + 64]))
+            # Artımlı yol: katalog değiştiyse (Architect bir taslak ekledi, alias düzeltildi) yalnız parmak izi
+            # tutmayan kayıtlar gömülür; gerisi en yeni önceki sürümden okunur. Sonuç tam hesapla birebir aynıdır.
+            reused: dict[str, list[float]] = {}
+            if self._cache and hasattr(self._cache, "reuse"):
+                try:
+                    reused = self._cache.reuse(self.embedder.model, ids, texts)
+                except Exception:  # noqa: BLE001 — önbellek hızlandırıcıdır; okunamazsa tam hesap
+                    reused = {}
+            digests = [_record_digest(i, t) for i, t in zip(ids, texts)] if reused else [None] * len(ids)
+            missing = [k for k, d in enumerate(digests) if d not in reused]
+            fresh: dict[int, list[float]] = {}
+            for i in range(0, len(missing), 64):
+                chunk = missing[i:i + 64]
+                for k, vec in zip(chunk, self.embedder.embed([texts[k] for k in chunk])):
+                    fresh[k] = vec
+            vectors = [fresh[k] if k in fresh else reused[digests[k]] for k in range(len(ids))]
+            self.embedded_fresh = len(missing)
+            self.embedded_reused = len(ids) - len(missing)
             if self._cache:
-                self._cache.put(self.embedder.model, [r.id for r in self.records], texts, vectors)
+                self._cache.put(self.embedder.model, ids, texts, vectors)
             cached = vectors
         self._vectors = cached
 
@@ -535,6 +566,7 @@ class CatalogRetriever:
 __all__ = [
     "CANDIDATE_MULTIPLIER",
     "DEFAULT_HYBRID_MIN",
+    "NEAR_TIE",
     "DEFAULT_SMALL_MAX",
     "MODES",
     "CatalogRecord",

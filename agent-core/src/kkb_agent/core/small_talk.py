@@ -152,7 +152,7 @@ _RESET = re.compile(r"(?<![\w])(sıfırla\w*|baştan\s+başla\w*)(?![\w])", re.I
 # Veri isteyen fiil ya da ekli dosya/adres: kullanım sorusu değildir ("risk profilini göster", "Dosya: /…/a.csv").
 _DATA_VERB = re.compile(r"(?<![\w])(göster\w*|hesapla\w*|karşılaştır\w*|getir\w*|çiz\w*|listele\w*|kaç|ne\s+kadar)(?![\w])", re.I)
 _ATTACHED = re.compile(r"(?:^|\n)\s*Dosya:\s*\S|https?://", re.I)
-UPLOAD_HELP_KINDS = ("CSV", "TSV", "TXT", "XLSX", "XLSM", "JSON", "PDF", "PNG", "JPG", "JPEG", "WEBP")   # web_app.UPLOAD_KINDS ile aynı (test)
+UPLOAD_HELP_KINDS = ("CSV", "TSV", "TXT", "XLSX", "XLS", "JSON", "PDF", "PNG", "JPG", "JPEG", "WEBP")   # web_app.UPLOAD_KINDS ile aynı (test)
 UPLOAD_HELP_MB = 25
 
 
@@ -223,8 +223,36 @@ def capability_reply(question: str, *, tools: set[str], datasets) -> str | None:
             return "Kısmen. Bu ortamda web araması kapalı; bir adres verirsen o sayfayı, PDF'i ya da veri dosyasını okuyabilirim."
         return "Hayır. Bu profilde internete erişen araçlar kapalı; yalnız veri havuzundaki serilerle çalışıyorum."
     if _CAP_DATA.search(text):
-        return data_sets_reply(list(datasets()), hints)
+        specs = list(datasets())
+        if _names_a_topic(text, specs):
+            # "Havuzda konut kredisiyle ilgili hangi seriler var" bir envanter sorusu değil, konu belirten liste isteğidir
+            # (benchmark R02b, 22 Eyl): ajana gider, arama defteri tam aday listesini tabloya koyar.
+            return None
+        return data_sets_reply(specs, hints)
     return None
+
+
+def _names_a_topic(text: str, specs: list) -> bool:
+    """Soruda katalogdaki bir seri adı/alias'ında geçen bir konu sözcüğü var mı ("konut", "kredisiyle" ~ "kredi").
+
+    Konu sözcüğü listesi kodda değil katalogda: seri adları ve alias'larının belirteçleri. Soru sözcükleri ("nasıl",
+    "hangi", "veri", "seri", "havuz") konu değildir; katalogda geçseler de dışlanır."""
+    from .fitness import toks
+    stop = {"veri", "veriler", "verileri", "seri", "seriler", "serileri", "kaynak", "kaynaklar", "havuz", "havuzda", "havuzunda",
+            "hangi", "ne", "neler", "nasıl", "tür", "çeşit", "var", "mevcut", "yüklü", "hepsini", "listele", "toplam", "genel", "ile",
+            "ilgili", "için", "elinde", "sende", "sizde", "set", "setleri", "bana", "göster", "söyle"}
+    asked = {t for t in toks(text) if len(t) >= 4 and t not in stop}
+    if not asked:
+        return False
+    vocab: set[str] = set()
+    for spec in specs:
+        vocab |= toks(str(getattr(spec, "name", "") or ""))
+        for col in getattr(spec, "columns", ()) or ():
+            for alias in getattr(col, "aliases", ()) or ():
+                vocab |= toks(str(alias))
+    vocab -= stop
+    roots = {v for v in vocab if len(v) >= 4}
+    return any(a == r or a.startswith(r) or r.startswith(a) for a in asked for r in roots)
 
 
 def data_sets_reply(specs: list, hints: dict) -> str:
