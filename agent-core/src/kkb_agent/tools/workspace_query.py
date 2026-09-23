@@ -126,7 +126,8 @@ class WorkspaceQueryTool(Tool):
         self.workspace.set_table(out, description=params.purpose, provenance=prov)
         self.workspace.title = params.purpose
         content = (
-            f"Sorgu başarılı: {len(out)} satır, {len(out.columns)} sütun — artık AKTİF TABLO bu (veri havuzuna yazılmadı).\n"
+            f"Sorgu başarılı: {len(out)} satır, {len(out.columns)} sütun — artık AKTİF TABLO bu (veri havuzuna yazılmadı; "
+            "kullanıcı 'ekle/kaydet' dediyse kalıcı ekleme ingest_from_url ile yapılır).\n"
             f"Sütunlar: {', '.join(map(str, out.columns))}\n" + preview_table(out)
         )
         return ToolResult(content=content, data=out, provenance=prov)
