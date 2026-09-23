@@ -1,7 +1,7 @@
 # Agentic Analytics Engine — Mimari
 
-> **Güncel özet:** Jüriye yönelik güncel anlatım [01-genel-mimari](01-genel-mimari.md), [02-moduler-kod-yapisi](02-moduler-kod-yapisi.md),
-> [03-agent-karar-ve-gorev-isleme](03-agent-karar-ve-gorev-isleme.md) ve [04-dokuman-okuma](04-dokuman-okuma.md) belgelerindedir. Bu belge
+> **Güncel özet:** Jüriye yönelik güncel anlatım [01-genel-mimari](../01-GENEL-MIMARI.md), [02-moduler-kod-yapisi](../02-MODULER-KOD-YAPISI.md),
+> [03-agent-karar-ve-gorev-isleme](../03-AGENT-KARAR-VE-GOREV-ISLEME.md) ve [04-dokuman-okuma](../04-DOKUMAN-OKUMA.md) belgelerindedir. Bu belge
 > ayrıntılı tarihçeli başvuru olarak korunur.
 >
 > **Durum:** 22 Eylül 2026 · 856 ajan birim testi + ~1.150 lakehouse testi (CI'da) · 80+ ADR · 6.306 seri (2021-01 → 2026-06) canlı yüklü ·

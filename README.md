@@ -24,12 +24,12 @@ Değerlendirme başlıklarının her biri ayrı bir belgede, diyagramlarıyla an
 
 | Başlık | Belge |
 |---|---|
-| Projenin genel mimari tasarımı (diyagram ve akış şemaları) | [docs/01-genel-mimari.md](docs/01-genel-mimari.md) |
-| Projenin modüler kod yapısı | [docs/02-moduler-kod-yapisi.md](docs/02-moduler-kod-yapisi.md) |
-| Agentic mimarinin karar alma ve görev işleme tasarımı | [docs/03-agent-karar-ve-gorev-isleme.md](docs/03-agent-karar-ve-gorev-isleme.md) |
-| Doküman okuma süreçlerinde kullanılan yaklaşım ve agent yapısı | [docs/04-dokuman-okuma.md](docs/04-dokuman-okuma.md) |
-| Kurulum ve çalıştırma | [docs/05-kurulum-ve-calistirma.md](docs/05-kurulum-ve-calistirma.md) |
-| Veri, katalog ve Gold | [docs/06-veri-ve-katalog.md](docs/06-veri-ve-katalog.md) |
+| Projenin genel mimari tasarımı (diyagram ve akış şemaları) | [01-GENEL-MIMARI.md](01-GENEL-MIMARI.md) |
+| Projenin modüler kod yapısı | [02-MODULER-KOD-YAPISI.md](02-MODULER-KOD-YAPISI.md) |
+| Agentic mimarinin karar alma ve görev işleme tasarımı | [03-AGENT-KARAR-VE-GOREV-ISLEME.md](03-AGENT-KARAR-VE-GOREV-ISLEME.md) |
+| Doküman okuma süreçlerinde kullanılan yaklaşım ve agent yapısı | [04-DOKUMAN-OKUMA.md](04-DOKUMAN-OKUMA.md) |
+| Kurulum ve çalıştırma | [05-KURULUM-VE-CALISTIRMA.md](05-KURULUM-VE-CALISTIRMA.md) |
+| Veri, katalog ve Gold | [06-VERI-VE-KATALOG.md](06-VERI-VE-KATALOG.md) |
 | Mimari kararlar (ADR) | [docs/adr/README.md](docs/adr/README.md) |
 
 ## Öne çıkanlar
@@ -68,7 +68,7 @@ make demo-data               # veri havuzunu kaynaklardan kur
 make serve                   # http://127.0.0.1:8765
 ```
 
-Ayrıntılar, ortam değişkenleri ve komut satırı: [docs/05-kurulum-ve-calistirma.md](docs/05-kurulum-ve-calistirma.md).
+Ayrıntılar, ortam değişkenleri ve komut satırı: [05-KURULUM-VE-CALISTIRMA.md](05-KURULUM-VE-CALISTIRMA.md).
 
 ## Neyin nerede olduğu
 
