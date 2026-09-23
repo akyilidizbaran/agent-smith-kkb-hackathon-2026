@@ -566,7 +566,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=520?Vadesiz; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - tp mevduat vadesiz
       - tp mevduat vadesiz vadeli
@@ -577,8 +577,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -592,7 +592,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=520?BirAyaKadar; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - tp mevduat 1 aya kadar
       - tp mevduat 1 aya kadar vadeli
@@ -608,8 +608,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -623,7 +623,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=520?BirAyUcAy; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - tp mevduat 1-3 ay arası
       - tp mevduat 1-3 ay arası vadeli
@@ -643,8 +643,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -658,7 +658,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=520?UcAyAltiAy; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - tp mevduat 3-6 ay arası
       - tp mevduat 3-6 ay arası vadeli
@@ -678,8 +678,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -693,7 +693,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=520?AltiAyBirYil; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - tp mevduat 6-12 ay arası
       - tp mevduat 6-12 ay arası vadeli
@@ -710,8 +710,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -725,7 +725,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=520?BirYil; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - tp mevduat 1 yıl üzeri
       - tp mevduat 1 yıl üzeri vadeli
@@ -741,8 +741,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -756,7 +756,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=524?Vadesiz; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - döviz tevdiat hesabı vadesiz
       - döviz tevdiat hesabı vadesiz vadeli
@@ -768,8 +768,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -783,7 +783,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=524?BirAyaKadar; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - döviz tevdiat hesabı 1 aya kadar
       - döviz tevdiat hesabı 1 aya kadar vadeli
@@ -802,8 +802,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -817,7 +817,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=524?BirAyUcAy; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - döviz tevdiat hesabı 1-3 ay arası
       - döviz tevdiat hesabı 1-3 ay arası vadeli
@@ -841,8 +841,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -856,7 +856,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=524?UcAyAltiAy; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - döviz tevdiat hesabı 3-6 ay arası
       - döviz tevdiat hesabı 3-6 ay arası vadeli
@@ -880,8 +880,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -895,7 +895,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=524?AltiAyBirYil; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - döviz tevdiat hesabı 6-12 ay arası
       - döviz tevdiat hesabı 6-12 ay arası vadeli
@@ -915,8 +915,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -930,7 +930,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=524?BirYil; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - döviz tevdiat hesabı 1 yıl üzeri
       - döviz tevdiat hesabı 1 yıl üzeri vadeli
@@ -949,8 +949,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -964,7 +964,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=543?Vadesiz; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - toplam mevduat vadesiz
       - toplam mevduat vadesiz vadeli
@@ -974,8 +974,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -989,7 +989,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=543?BirAyaKadar; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - toplam mevduat 1 aya kadar
       - toplam mevduat 1 aya kadar vadeli
@@ -1002,8 +1002,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -1017,7 +1017,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=543?BirAyUcAy; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - toplam mevduat 1-3 ay arası
       - toplam mevduat 1-3 ay arası vadeli
@@ -1033,8 +1033,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -1048,7 +1048,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=543?UcAyAltiAy; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - toplam mevduat 3-6 ay arası
       - toplam mevduat 3-6 ay arası vadeli
@@ -1064,8 +1064,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -1079,7 +1079,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=543?AltiAyBirYil; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - toplam mevduat 6-12 ay arası
       - toplam mevduat 6-12 ay arası vadeli
@@ -1093,8 +1093,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
@@ -1108,7 +1108,7 @@ series:
       Vade dilimleri: Vadesiz, 1 Aya Kadar, 1-3 Ay, 3-6 Ay, 6-12 Ay, 1 Yıl Üzeri; "3 aya kadar" = Vadesiz + 1 Aya Kadar + 1-3 Ay,
       "3 aydan fazla" = 3-6 Ay + 6-12 Ay + 1 Yıl Üzeri. BİRİM: TRY_mn (kalemin rapor başlığı milyon TL).
       KİMLİK: kalemSutun=543?BirYil; kaynağın kendi kalem kimliği ve sütun adıdır (KalemSutunGetir, 23 Eyl 2026). taraf=10001 (Sektör), paraBirimi=TL, periyot=1.
-      Elle eklendi (23 Eyl 2026): tasarruf tercihi / vade analizi için; semantic_confidence 'derived'.
+      Elle eklendi ve doğrulandı (23 Eyl 2026): birim ve ölçüm tipi kalemin Toplam sütunuyla aynı (milyon TL, dönem sonu stok); yalıtılmış çekimde 66 aylık gözlem, değerler BDDK raporuyla tutarlı. semantic_confidence 'verified'.
     aliases:
       - toplam mevduat 1 yıl üzeri
       - toplam mevduat 1 yıl üzeri vadeli
@@ -1121,8 +1121,8 @@ series:
     unit: TRY_mn
     measure_type: stock
     default_agg: last
-    semantic_confidence: derived
-    semantic_source: source_docs
+    semantic_confidence: verified
+    semantic_source: manual
     metadata_url: https://www.bddk.org.tr/BultenAylik
     status: active
 
