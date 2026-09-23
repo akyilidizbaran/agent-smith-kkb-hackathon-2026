@@ -224,6 +224,60 @@ def test_web_url_kesfi_onceki_turdan_yeniden_kullanilmaz() -> None:
     assert s.calls.count("https://site.example/tufe") == 2
 
 
+def test_web_url_bos_sayfa_basari_saymaz_acik_hata_doner() -> None:
+    # A1: HTTP 200 ama tablo yok + kullanılabilir metin yok → ok=True DÖNMEMELİ. Aksi halde ajan
+    # "sayfa okundu" (web_page_succeeded) sanıp stale-tablo korumasını yanlış aşar (demo: TEFAS/CSV).
+    empty = b"<html><head><title>Bos</title></head><body></body></html>"
+    s = Session({"https://site.example/bos": Resp(200, empty, url="https://site.example/bos")})
+    tool, ws = _tool(s, "Şu sayfadan verileri getir: https://site.example/bos")
+
+    r = tool.validate_and_run({"url": "https://site.example/bos", "purpose": "veri"})
+    assert not r.ok, "boş sayfa başarı sayılmamalı"
+    assert r.error is not None and r.error.error_code in {"EMPTY_RESULT", "DOCUMENT_EXTRACTION_FAILED"}
+    assert r.artifacts.get("web") is not None
+    assert ws.table is None
+
+
+def test_web_url_enrich_intent_joins_instead_of_overwriting(tmp_path: Path) -> None:
+    # Phase 6: "mevcut veri setine ekle/zenginleştir/hizala" niyetinde YENİ kaynak aktif tabloyu
+    # ÜZERİNE YAZMAMALI; Tarih üzerinden join edilmeli (deterministik). Kazara set_table = BAŞARISIZLIK.
+    import pandas as pd
+    csv = tmp_path / "tefas.csv"
+    csv.write_text("Dönem;TEFAS Hacim (TL);Net Takas (TL)\n2024-11;12000;2500\n2023-03;34000;7800\n", encoding="utf-8")
+    q = f"Mevcut analizi TEFAS verileriyle zenginleştir; aynı aylık tarih ekseninde hizala: {csv}"
+    tool, ws = _tool(Session({}), q, tmp_path=tmp_path)
+    prior = pd.DataFrame({"Tarih": ["2024-11-01", "2023-03-01", "2022-05-01"], "TP Mevduat": [500000, 300000, -8000]})
+    ws.set_table(prior, description="BDDK-EVDS mevduat")
+
+    r = tool.validate_and_run({"url": str(csv), "purpose": "TEFAS işlem hacmi ile zenginleştirme", "table_index": 0})
+    assert r.ok, r.content
+    cols = [str(c) for c in ws.table.columns]
+    assert "TP Mevduat" in cols, f"mevcut BDDK-EVDS kolonu korunmalı (üzerine yazılmamalı) — kolonlar: {cols}"
+    assert "TEFAS Hacim (TL)" in cols and "Net Takas (TL)" in cols, f"TEFAS kolonları eklenmeli — {cols}"
+    assert len(ws.table) == len(prior), "mevcut tablonun satırları korunmalı (left join)"
+    row = ws.table[ws.table["Tarih"] == "2024-11-01"].iloc[0]
+    assert float(row["TEFAS Hacim (TL)"]) == 12000, "eşleşen ayın TEFAS değeri taşınmalı"
+    match = ws.table[ws.table["Tarih"] == "2022-05-01"].iloc[0]
+    assert pd.isna(match["TEFAS Hacim (TL)"]) or match["TEFAS Hacim (TL)"] in ("", None), "TEFAS'ta olmayan ay boş kalmalı"
+
+
+def test_web_url_enrich_join_failure_does_not_overwrite_active_table(tmp_path: Path) -> None:
+    # P5: enrich intent varken join YAPILAMAZSA (ortak ay yok) mevcut tablo ÜZERİNE YAZILMAMALI; açık hata.
+    import pandas as pd
+    csv = tmp_path / "baska.csv"
+    csv.write_text("Dönem;Hacim\n2019-01;5\n2018-03;7\n", encoding="utf-8")  # taban tabloyla ortak ay yok
+    q = f"Mevcut analizi zenginleştir; aynı aylık tarih ekseninde hizala: {csv}"
+    tool, ws = _tool(Session({}), q, tmp_path=tmp_path)
+    prior = pd.DataFrame({"Tarih": ["2024-11-01", "2023-03-01"], "TP Mevduat": [500000, 300000]})
+    ws.set_table(prior, description="BDDK-EVDS")
+
+    r = tool.validate_and_run({"url": str(csv), "purpose": "zenginleştirme", "table_index": 0})
+    assert not r.ok and r.error is not None and r.error.error_code == "JOIN_MISMATCH"
+    cols = [str(c) for c in ws.table.columns]
+    assert cols == ["Tarih", "TP Mevduat"], "join başarısız → mevcut tablo değişmemeli (üzerine yazma yok)"
+    assert len(ws.table) == 2
+
+
 def test_web_url_cache_locator_normalizes_scheme_host_default_port_and_fragment() -> None:
     normalized = WebUrlTool._normalized_locator("HTTPS://SITE.EXAMPLE:443/data?year=2025#table")
     assert normalized == "https://site.example/data?year=2025"
