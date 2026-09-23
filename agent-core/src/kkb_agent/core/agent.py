@@ -1695,11 +1695,16 @@ class AnalyticsAgent:
         sentences gave the user no source, period, unit or stock/flow information (12 cases, A0 had 0).
         Everything below is computed from the verified frame, provenance and catalog; no model call.
         """
-        lead = (
-            "İstenen dönüşüm doğrulanmış aktif tabloya uygulandı; tam sonuç ve indirmeler aşağıda hazır."
-            if is_transform
-            else "İstenen veri tablosu hazırlandı; tam sonuç aşağıdaki tabloda yer alıyor."
-        )
+        contract = getattr(self.workspace, "last_completion", {}) or {}
+        if contract and contract.get("status") != "COMPLETE":
+            failures = contract.get("failures") or ["istenen analitik sözleşme tamamlanmadı"]
+            lead = "KISMI SONUÇ — " + "; ".join(map(str, failures)) + "."
+        else:
+            lead = (
+                "İstenen dönüşüm doğrulanmış aktif tabloya uygulandı; tam sonuç ve indirmeler aşağıda hazır."
+                if is_transform
+                else "İstenen veri tablosu hazırlandı; tam sonuç aşağıdaki tabloda yer alıyor."
+            )
         frame = self._verified_active_result(steps)
         if not isinstance(frame, pd.DataFrame) or frame.empty:
             return lead

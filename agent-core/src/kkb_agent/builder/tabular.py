@@ -60,6 +60,9 @@ class TabularQualityReport:
     confidence: float = 0.0
     status: str = "PARSE_FAILED"
     error_code: str | None = None
+    temporal_frequency: str | None = None
+    temporal_confidence: str | None = None
+    temporal_evidence: tuple[str, ...] = ()
     provenance: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -74,6 +77,9 @@ class TabularQualityReport:
             "suspicious_coercions": {k: list(v) for k, v in self.suspicious_coercions.items()},
             "warnings": list(self.warnings), "confidence": self.confidence,
             "status": self.status, "error_code": self.error_code,
+            "temporal_frequency": self.temporal_frequency,
+            "temporal_confidence": self.temporal_confidence,
+            "temporal_evidence": list(self.temporal_evidence),
             "provenance": dict(self.provenance),
         }
 
@@ -412,8 +418,15 @@ def _parse_rows(rows: list[list[str]], *, source_name: str, parser: str, encodin
         suspicious_coercions=suspicious, warnings=tuple(warnings), confidence=confidence,
         status=status, provenance=provenance,
     )
+    from .temporal import infer_temporal
+    temporal = infer_temporal(raw)
+    quality = TabularQualityReport(
+        **{**quality.__dict__, "temporal_frequency": temporal.frequency,
+           "temporal_confidence": temporal.confidence, "temporal_evidence": temporal.evidence}
+    )
     raw.attrs.update({"tabular_quality": quality, "tabular_provenance": provenance,
-                      "column_quality": tuple(column_quality), "raw_frame": raw.copy()})
+                      "column_quality": tuple(column_quality), "temporal_semantics": temporal,
+                      "raw_frame": raw.copy()})
     typed.attrs.update(raw.attrs)
     return TabularParseResult(raw, typed, quality, tuple(column_quality), provenance)
 
