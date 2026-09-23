@@ -464,14 +464,18 @@ class WebUrlTool(Tool):
                         f"istenen={requested_grain}, {len(raw_table)}→{len(table)} satır; "
                         f"anahtar=period_month."
                     )
-                except TemporalNormalizationError as exc:
+                except (TemporalNormalizationError, ValueError) as exc:
                     # Keep the raw table visible for diagnosis, but make the
                     # incomplete contract explicit.  Never silently claim a
                     # monthly/aggregated result when a safe rule was absent.
+                    # ValueError is caught alongside it — as the sibling call
+                    # site below already does — so a malformed cell degrades to
+                    # the raw table instead of taking the whole tool down.
+                    code = getattr(exc, "code", "VALUE_PARSE_FAILED")
                     temporal_notes.append(
                         f"KISMI SONUÇ: {source_temporal.frequency} kaynak "
                         f"{requested_grain} isteğine güvenli biçimde dönüştürülemedi "
-                        f"({exc.code}); ham tablo gösteriliyor."
+                        f"({code}); ham tablo gösteriliyor."
                     )
             # Uygunluk kapısı (V3 §3.9, 15 Eyl): soru ne istiyor × tablo ne sunuyor — tablo aktif olmadan ÖNCE.
             # Ret → tablo YÜKLENMEZ, kart tabloda ne olduğunu söyler; kullanıcı "yine de yükle" derse aşılır.

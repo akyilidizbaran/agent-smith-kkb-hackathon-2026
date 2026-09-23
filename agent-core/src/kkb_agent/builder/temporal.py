@@ -43,6 +43,10 @@ _MONTH_WORD = re.compile(r"aylık|aylik|her ay|monthly|month", re.IGNORECASE)
 _PERSIST = re.compile(r"lakehouse|veri\s*havuz|katalo(?:ğ|g)a|kalıcı|kalici|persist|ingest|kaydet", re.IGNORECASE)
 _ENRICH = re.compile(r"zenginleştir|zenginlestir|mevcut .*birleştir|mevcut .*ekle|hizala|enrich|join", re.IGNORECASE)
 
+# Bir akım kelimesini toplanamaz kılan niteleyiciler. `_fold_label` çıktısı üzerinde eşleşir,
+# yani küçük harf ve aksansız biçimler yazılır ("başına" değil "basina").
+_PER_UNIT = re.compile(r"fiyat|price|ortalama|average|\bmean\b|medyan|median|birim|unit|basina|\bper\b|\bkur\b|\bkuru\b")
+
 
 class TemporalNormalizationError(ValueError):
     """A safe, user-actionable temporal decision could not be made."""
@@ -304,6 +308,12 @@ def infer_measure_semantics(column: str, *, metadata: Mapping[str, Any] | None =
     if re.search(r"adet|count|sayı|sayi", label):
         return MeasureSemantics(column, "COUNT", "medium", ("column label indicates a count",), True)
     if re.search(r"hacim|volume|satış|satis|revenue|gelir|tutar|amount|işlem|islem|flow|inflow|outflow", label):
+        # Akım kelimesi tek başına toplanabilirliği kanıtlamaz: "İşlem Fiyatı" da "Ortalama Tutar"
+        # da bu kalıba uyar ama toplanırsa anlamsız bir sayı çıkar. Niteleyici varsa kapalı tarafa
+        # düşülür; yanlış toplamaktansa "güvenli kural yok" deyip ham tabloyu göstermek yeğdir.
+        if _PER_UNIT.search(label):
+            return MeasureSemantics(column, "UNKNOWN", "low",
+                                    ("additive keyword is qualified by a per-unit/average word",))
         return MeasureSemantics(column, "FLOW", "medium", ("column label indicates an additive flow/amount",), True)
     return MeasureSemantics(column, "UNKNOWN", "low", ("no conservative semantic label match",))
 
@@ -322,7 +332,18 @@ def _number(value: Any) -> float:
         text = text.replace(".", "").replace(",", ".") if text.rfind(",") > text.rfind(".") else text.replace(",", "")
     elif "," in text:
         text = text.replace(",", ".")
-    return float(text)
+    try:
+        return float(text)
+    except ValueError as exc:
+        # Boş ya da sayı olmayan hücre bu modülün diğer belirsizlikleri gibi ele alınır: çıplak
+        # ValueError çağıranın `TemporalNormalizationError` yakalamasından kaçıp aracı düşürüyordu.
+        # Eksik günü atlayıp toplamayı sürdürmek ayı olduğundan küçük gösterirdi, o yüzden kapalı
+        # tarafa düşülür ve ham tablo gösterilir.
+        raise TemporalNormalizationError(
+            f"sayıya çevrilemeyen değer: {str(value)!r}",
+            code="VALUE_PARSE_FAILED",
+            details={"value": str(value)},
+        ) from exc
 
 
 def _canonical_key(period: PeriodValue, frequency: str) -> str:
@@ -410,8 +431,14 @@ def normalize_frequency(
         if temporal.frequency not in {"daily", "weekly"}:
             raise TemporalNormalizationError(f"{temporal.frequency} → monthly dönüşümü için güvenli kural yok",
                                              code="UNSAFE_FREQUENCY_CONVERSION")
+        # Satırlar dosyadaki sırayla değil, çözülmüş döneme göre gruplanır. Dışa aktarımların
+        # çoğu yeniden eskiye sıralı gelir; dosya sırasına güvenilirse "dönem sonu" değeri ayın
+        # ilk günü olur ve yanlış sayı sessizce üretilir. Toplam ve ortalama sıradan etkilenmez,
+        # bu sıralama yalnız `last_period_end` yolunu doğru kılar ve çıktıyı kronolojik verir.
+        chronological = sorted(range(len(parsed)), key=lambda i: (parsed[i].start, parsed[i].end, i))
         grouped: dict[str, list[int]] = {}
-        for index, period in enumerate(parsed):
+        for index in chronological:
+            period = parsed[index]
             if period.start.month != period.end.month:
                 raise TemporalNormalizationError(
                     f"dönem sınır aşıyor ve güvenli dağıtım kuralı yok: {period.raw}",
