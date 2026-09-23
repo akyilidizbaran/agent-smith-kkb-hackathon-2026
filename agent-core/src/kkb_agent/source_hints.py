@@ -48,6 +48,11 @@ def _load(path: str) -> dict[str, Any]:
                 "canonical_url": str(spec.get("canonical_url") or "") or None,
                 "access_mode": str(spec.get("access_mode") or "") or None,
                 "adapter_key": str(spec.get("adapter_key")) if spec.get("adapter_key") else None,
+                # Otomatik erişim engellenirse kullanıcıya verilecek dışa aktarım yolu (ADR-0111); yoksa None.
+                "name": str(spec.get("name") or "") or None,
+                "manual_export": ({"url": str(spec["manual_export"].get("url") or "") or None,
+                                   "steps": str(spec["manual_export"].get("steps") or "") or None}
+                                  if isinstance(spec.get("manual_export"), dict) else None),
             }
             for k, spec in (data.get("financial_sources") or {}).items()
             if isinstance(spec, dict) and not str(k).startswith("_")

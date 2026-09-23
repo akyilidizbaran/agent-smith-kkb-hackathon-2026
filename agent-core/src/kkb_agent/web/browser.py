@@ -14,8 +14,10 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import logging
 import os
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,10 +25,38 @@ from typing import Any, Callable, Mapping
 from urllib.parse import urlparse
 
 from ..contracts.access import AccessEvidence, AccessOutcome
+from ..core.access_policy import classify_access
 from ..core.web_routing import matched_external_source
 from .crawl import CrawlBudget, CrawlResult, VisitedPage
 from .fetch import FetchResult, private_host
 from .html import extract_page
+
+
+log = logging.getLogger(__name__)
+
+# Bot korumasına takılan host bir süre yeniden denenmez (canlı arayüz, 23 Eyl): TEFAS başsız tarayıcıya "Request Rejected"
+# döndürüyordu; adaptör her çağrıda 30 sn form öğesi bekleyip sessizce düşüyor, model aynı adresi üç kez deniyordu.
+_BLOCK_TTL_S = 600.0
+_BLOCKED_HOSTS: dict[str, tuple[float, AccessOutcome]] = {}
+
+
+class BrowserBlocked(RuntimeError):
+    """Gerçek tarayıcıda açılan sayfa bir erişim engeli (bot denetimi / CAPTCHA). Engel aşılmaz; sonuç olarak döner."""
+
+    def __init__(self, outcome: AccessOutcome) -> None:
+        super().__init__(outcome.message)
+        self.outcome = outcome
+
+
+def _guard_block(page: Any, url: str) -> None:
+    """Açılan sayfa bir engel sayfasıysa hemen dur: erişim sınıflandırıcısıyla aynı işaretler (ADR-0028)."""
+    try:
+        body = page.content()[:20000]
+    except Exception:  # noqa: BLE001 — içerik okunamadıysa karar verilmez
+        return
+    outcome = classify_access(url, http_status=200, final_url=getattr(page, "url", url), body_excerpt=body)
+    if not outcome.ok and outcome.reason in {"bot_challenge", "captcha"}:
+        raise BrowserBlocked(outcome)
 
 
 @dataclass(frozen=True)
@@ -73,6 +103,7 @@ def _tefas(page: Any, url: str, question: str, timeout_ms: int) -> BrowserPayloa
 
     start, end = _period(question)
     page.goto("https://www.tefas.gov.tr/tr/tefas-istatistikleri", wait_until="domcontentloaded", timeout=timeout_ms)
+    _guard_block(page, url)
     page.get_by_role("button", name=re.compile(r"^İşlem Hacmi Raporları")).click()
     _choose(page, "Başlangıç Yılı", start[:4])
     _choose(page, "Başlangıç Ayı", _MONTHS[start[-2:]])
@@ -136,6 +167,10 @@ def browser_crawl_result(
     except ImportError:
         return None
 
+    remembered = _BLOCKED_HOSTS.get(parsed.hostname)
+    if remembered is not None and time.monotonic() - remembered[0] < _BLOCK_TTL_S:
+        return _blocked_result(url, remembered[1])
+
     source = matched_external_source(f"{question}\n{url}") or {}
     adapter_key = str(source.get("adapter_key") or "")
     headless = str(env.get("BROWSER_HEADLESS", "true")).casefold() not in {"0", "false", "no", "off"}
@@ -152,6 +187,7 @@ def browser_crawl_result(
                 else:
                     page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
                     page.wait_for_timeout(750)
+                    _guard_block(page, url)
                     payload = BrowserPayload(
                         content=page.content().encode("utf-8"), media_type="text/html", name="rendered.html",
                         title=page.title(), final_url=page.url,
@@ -159,7 +195,12 @@ def browser_crawl_result(
                     )
             finally:
                 browser.close()
-    except Exception:
+    except BrowserBlocked as blocked:
+        _BLOCKED_HOSTS[parsed.hostname] = (time.monotonic(), blocked.outcome)
+        log.warning("tarayıcı: %s bot denetimiyle engellendi (%s)", parsed.hostname, blocked.outcome.reason)
+        return _blocked_result(url, blocked.outcome)
+    except Exception as exc:  # noqa: BLE001 — tarayıcı yoksa ya da akış bozulduysa statik sonuca dönülür
+        log.warning("tarayıcı: %s açılamadı: %s: %s", parsed.hostname, type(exc).__name__, str(exc)[:200])
         return None
 
     now = datetime.now(timezone.utc)
@@ -184,4 +225,14 @@ def browser_crawl_result(
     )
 
 
-__all__ = ["BrowserPayload", "browser_crawl_result"]
+def _blocked_result(url: str, outcome: AccessOutcome) -> CrawlResult:
+    """Engel, web_url'in erişim sözleşmesine giden yapısal sonuçtur: sayfa yok, sonuç 'blocked'."""
+    fetched = FetchResult(
+        url=url, final_url=url, http_status=200, media_type="text/html", content=b"",
+        sha256=hashlib.sha256(b"").hexdigest(), fetched_at=datetime.now(timezone.utc), outcome=outcome,
+    )
+    return CrawlResult(start_url=url, blocked=[VisitedPage(url=url, depth=0, fetch=fetched, page=None)],
+                       budget=CrawlBudget(max_pages=1, max_depth=0, max_seconds=5.0))
+
+
+__all__ = ["BrowserBlocked", "BrowserPayload", "browser_crawl_result"]

@@ -481,3 +481,26 @@ def test_arama_dizini_her_aramada_kurulmaz_katalog_yenilenince_kurulur(lake: Sil
 
     assert lake._retriever() is not first
     assert "evds:TP.YENI.SERI" in {s.dataset_id for s in lake.search_datasets("yepyeni gösterge")}
+
+
+def test_bronze_path_is_indexed_once_and_sees_new_files(tmp_path, monkeypatch) -> None:
+    """Canlı arayüz (23 Eyl): gözlem başına rglob kanıt panelini ~100 sn bekletti; dizin bir kez taranır."""
+    import time as _time
+
+    from kkb_agent.adapters.silver_lakehouse import SilverLakehouse
+
+    bronze = tmp_path / "bronze" / "evds"
+    bronze.mkdir(parents=True)
+    (bronze / "artifact_sha256=aaa.parquet").write_bytes(b"x")
+    lake = SilverLakehouse.__new__(SilverLakehouse)
+    lake.db_path = tmp_path / "lakehouse.duckdb"
+    assert lake._bronze_path("aaa").endswith("artifact_sha256=aaa.parquet")
+    calls = []
+    original = type(bronze).rglob
+    monkeypatch.setattr(type(bronze), "rglob", lambda self, pattern: calls.append(pattern) or original(self, pattern))
+    for _ in range(50):
+        lake._bronze_path("aaa")
+    assert calls == []                                             # bulunan kimlik için dizin yeniden taranmaz
+    (bronze / "artifact_sha256=bbb.parquet").write_bytes(b"y")
+    lake.__dict__["_bronze_indexed_at"] = _time.monotonic() - 10   # tazeleme aralığı geçti
+    assert lake._bronze_path("bbb").endswith("artifact_sha256=bbb.parquet") and len(calls) == 1

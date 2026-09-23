@@ -859,12 +859,24 @@ class SilverLakehouse:
         return cache[key] == artifact_sha256
 
     def _bronze_path(self, artifact_sha256: str) -> str | None:
-        """Bronze parquet: `<data>/bronze/**/artifact_sha256=<sha>.parquet`. Yoksa None, uydurulmaz."""
+        """Bronze parquet: `<data>/bronze/**/artifact_sha256=<sha>.parquet`. Yoksa None, uydurulmaz.
+
+        Dizin bir kez taranır, kimlik → yol tablosu önbellekte tutulur. Ölçüldü (23 Eyl, canlı arayüz): her gözlem için
+        ayrı `rglob` 16.991 dosyalık ağaçta 0,065 sn sürüyordu; günlük kur serisini taşıyan bir cevapta ~1300 gözlem kanıt
+        panelini ~100 sn bekletti. Bulunamayan kimlikte tablo yeniden kurulur (yeni kayıtlar görünsün), en sık 5 sn'de bir.
+        """
         root = self.db_path.parent / "bronze"
         if not root.is_dir():
             return None
-        matches = sorted(root.rglob(f"artifact_sha256={artifact_sha256}.parquet"))
-        return str(matches[0]) if matches else None
+        index: dict[str, str] | None = self.__dict__.get("_bronze_index")
+        if index is None or (artifact_sha256 not in index
+                             and time.monotonic() - self.__dict__.get("_bronze_indexed_at", 0.0) > 5.0):
+            index = {}
+            for path in sorted(root.rglob("artifact_sha256=*.parquet")):
+                index.setdefault(path.name[len("artifact_sha256="):-len(".parquet")], str(path))
+            self.__dict__["_bronze_index"] = index
+            self.__dict__["_bronze_indexed_at"] = time.monotonic()
+        return index.get(artifact_sha256)
 
     def evidence_for_artifacts(self, artifact_sha256s: list[str]) -> dict[str, dict[str, Any]]:
         if not artifact_sha256s:

@@ -173,9 +173,9 @@ def classify_access(
             if "the requested url was rejected" in hit_bot:
                 return out("blocked", "bot_challenge",
                            "Sunucu HTTP 200 döndürdü ancak istenen dosya/içerik yerine "
-                           "'Request Rejected' erişim engeli sayfası gönderdi. Kaynak dosya "
-                           "alınamadı; bu yanıt dosyanın bozuk olduğunu göstermez. "
-                           "Sayfa numarasını değiştirerek yeniden denemek bu engeli çözmez.")
+                           "'Request Rejected' erişim engeli sayfası gönderdi; kaynak otomatik erişimi "
+                           "engelliyor. Bu yanıt verinin yokluğunu ya da dosyanın bozuk olduğunu göstermez; "
+                           "aynı adresi (farklı sayfa ya da parametreyle) yeniden denemek engeli çözmez.")
             return out("blocked", "bot_challenge", "Sayfa bot denetimi gösteriyor; otomatik olarak geçilmez.")
         if hit_paywall:
             return out("needs_credential", "paywall", "İçerik ücretli üyelik arkasında.")

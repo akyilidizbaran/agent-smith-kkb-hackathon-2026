@@ -251,6 +251,22 @@ class WebUrlParams(BaseModel):
     )
 
 
+def _manual_export_hint(question: str, url: str) -> str | None:
+    """Kaynak kaydındaki dışa aktarım talimatı (source_hints.json → financial_sources[].manual_export).
+
+    Otomatik erişimi engelleyen kaynakta kullanıcının aynı veriyi kendisinin nasıl indireceği kaynağa özgüdür; çekirdek koda
+    kurum adı gömülmez, yapılandırmadan okunur (mentör 12 Eyl: erişilemeyen kaynakta seçenek sun, kontrollü degrade)."""
+    from ..core.web_routing import matched_external_source
+
+    source = matched_external_source(f"{question}\n{url}") or {}
+    export = source.get("manual_export") if isinstance(source, dict) else None
+    if not isinstance(export, dict) or not export.get("steps"):
+        return None
+    where = f" ({export['url']})" if export.get("url") else ""
+    return (f"DOSYA YÜKLEME YOLU — {source.get('name') or 'kaynak'}{where}: {export['steps']} "
+            "İndirilen dosya sohbete yüklenince aynı yoldan işlenir; kaynak değişmez, provenance dosyanın kendisidir.")
+
+
 class WebUrlTool(Tool):
     name = "web_url"
     role = "retrieve"
@@ -468,6 +484,11 @@ class WebUrlTool(Tool):
                     result = rendered
                     reuse_discovery = False
                     self._remember_result(cache_key, result, turn=turn)
+                elif rendered is not None and rendered.blocked:
+                    # Gerçek tarayıcıda sayfa bir bot denetimi döndürdü: boş sonuç değil erişim engelidir (ADR-0028,
+                    # ADR-0111). Engel aşılmaz; kullanıcıya seçenekler ve kaynağın dışa aktarım yolu söylenir.
+                    result = rendered
+                    reuse_discovery = False
         web_artifact = {
             "start_url": params.url,
             "used": None,
@@ -508,6 +529,9 @@ class WebUrlTool(Tool):
                 return failure
             decision = decide(outcome, constraint)
             err = to_tool_error(outcome, decision)
+            export = _manual_export_hint(question, params.url) if outcome.reason in {"bot_challenge", "captcha"} else None
+            if export:
+                err.message = f"{err.message}\n{export}"
             return ToolResult(content=err.render(), ok=False, error=err, artifacts={"web": web_artifact})
 
         # İstenen tablo: aktif analiz tablosu olur, provenance URL + sha + zaman.

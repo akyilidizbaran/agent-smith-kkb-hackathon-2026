@@ -3385,8 +3385,24 @@ class AnalyticsAgent:
                 # source (for example quarterly provincial data). The normal
                 # no-tool path has this guard too; terminal tool failures used
                 # to bypass it and publish plausible but unrelated prose.
+                # Erişim engeli (bot denetimi, 404, üyelik) kendi sonucunu söyler: genel "takip tamamlanamadı" şablonu ve
+                # model anlatısı nedeni, seçenekleri ve dosya yükleme yolunu gizliyordu (canlı arayüz, 23 Eyl; ADR-0111).
+                access_text = self._access_blocked_answer(terminal)
+                if access_text is not None:
+                    steps.append(AgentStep(index=i, role="validate", ok=False, error_code=terminal.error_code,
+                                           thought="erişim engeli: kaynağın kararı ve seçenekler araç kartından",
+                                           result_summary=access_text[:300]))
+                    self._history.append(ChatMessage(role="user", content=question))
+                    self._history.append(ChatMessage(role="assistant", content=access_text))
+                    return self._finish_recovery(
+                        AgentAnswer(text=access_text, steps=steps, workspace=self.workspace,
+                                    grounding=grounding, artifacts=artifacts, rejected_claims=[]),
+                        recovery,
+                        finalization_reason="access_blocked",
+                    )
                 stale_follow_up = (
-                    self.workspace.has_table
+                    getattr(terminal, "layer", None) != "access"
+                    and self.workspace.has_table
                     and self._has_confirmed_follow_up_context()
                     and not any(_step_delivers_fresh_data(s, self.FRESH_DATA_TOOLS) for s in steps)
                     and not any(s.ok and s.tool_name in self.ACTIVE_TABLE_ACTION_TOOLS for s in steps)
@@ -3963,6 +3979,27 @@ class AnalyticsAgent:
             layer="policy",
             retryable=True,
         )
+
+    @staticmethod
+    def _access_blocked_answer(terminal: Any) -> str | None:
+        """Erişim katmanının terminal kararından kullanıcı cevabı (ADR-0028, ADR-0111): neden, seçenekler, dışa aktarım yolu.
+
+        Metin aracın kendi kartından gelir; model yeniden yazmaz, sayı içermez. Aktif tablo değişmez."""
+        if terminal is None or getattr(terminal, "layer", None) != "access":
+            return None
+        lines = str(getattr(terminal, "message", "") or "").splitlines()
+        user = next((ln.split(":", 1)[1].strip() for ln in lines if ln.startswith("KULLANICIYA:")), None)
+        if not user:
+            return None
+        options = next((ln.split(":", 1)[1] for ln in lines if ln.startswith("SEÇENEKLER:")), "")
+        labels = [part.split(":", 1)[1].strip() for part in options.split("|") if ":" in part]
+        export = next((ln for ln in lines if ln.startswith("DOSYA YÜKLEME YOLU")), None)
+        parts = [user]
+        if labels:
+            parts.append("Seçenekler:\n" + "\n".join(f"- {label}" for label in labels))
+        if export:
+            parts.append(export.replace("DOSYA YÜKLEME YOLU — ", "Dosyayı şöyle indirebilirsiniz — ", 1))
+        return "\n\n".join(parts)
 
     _DERIVED_ASK = re.compile(r"\bpay\w*|\boran\w*|yüzde|yuzde|%|\bpct\b|\bshare\b", re.I)
     _PANEL_CARD_LINES = ("PANEL:", "GRUPLAR:", "TABAN AYI:", "DENETİM", "DEĞER TÜRÜ:", "NOT:", "BOŞ HÜCRE:")
