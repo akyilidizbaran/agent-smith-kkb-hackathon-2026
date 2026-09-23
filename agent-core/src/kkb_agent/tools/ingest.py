@@ -301,23 +301,6 @@ def drop_footer_rows(frame: Any) -> tuple[Any, str | None]:
     return frame.iloc[: len(frame) - n].copy(), f"Sondaki özet satırı atıldı ({dropped}); zaman serisi gözlemi değil."
 
 
-def month_column_to_dates(frame: Any, column: str) -> tuple[Any, str]:
-    """"2021-01" / "2021/01" biçimli ay sütunu → ISO ay sonu (2021-01-31): BDDK/EVDS aylık serilerle aynı tarih ekseni
-    (ölçüldü 23 Eyl, TEFAS aylık rapor: ayın 1'ine çözülüyordu, ay sonu tarihli BDDK serisiyle birleşmezdi)."""
-    import calendar
-    out = frame.copy()
-    vals = []
-    for v in out[column].tolist():
-        m = re.match(r"^\s*(\d{4})[-/.](\d{1,2})\s*$", str(v))
-        if m:
-            y, mo = int(m.group(1)), int(m.group(2))
-            vals.append(f"{y:04d}-{mo:02d}-{calendar.monthrange(y, mo)[1]:02d}")
-        else:
-            vals.append(str(v))
-    out[column] = vals
-    return out, f"'{column}' sütunundaki yıl-ay değerleri ay sonu tarihine çevrildi (2021-01 → 2021-01-31); frekans aylık."
-
-
 def range_column_to_dates(frame: Any, column: str) -> tuple[Any, str, str | None]:
     """Dönem + tarih aralığı sütunu ("2021/01 (04.01.21-08.01.21)") → ISO bitiş tarihi; frekans aralık genişliğinden
     (≤ 7 gün haftalık, ≤ 31 aylık, ≤ 92 çeyreklik, yoksa yıllık). Sahnelenen CSV'de; kaynak dosya değişmez."""
@@ -716,14 +699,6 @@ class IngestFromUrlTool(Tool):
             derived_notes.append(note)
             if not params.frequency:
                 params = params.model_copy(update={"frequency": "yearly"})
-            profile = profile_table(frame)
-        month_cols = [c for c in profile.date_candidates if c.date_formats == ("%Y-%m",)]
-        if month_cols and local_matrix is None:
-            chosen = params.date_column if params.date_column in {c.name for c in month_cols} else month_cols[0].name
-            frame, note = month_column_to_dates(frame, chosen)
-            derived_notes.append(note)
-            if not params.frequency:
-                params = params.model_copy(update={"frequency": "monthly"})
             profile = profile_table(frame)
         range_cols = [c for c in profile.date_candidates if c.date_formats == (RANGE_END,)]
         if range_cols and local_matrix is None:
